@@ -1,6 +1,6 @@
 # Claude Office
 
-[![MIT license](https://img.shields.io/badge/license-MIT-ff7a45?style=flat-square)](LICENSE) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?style=flat-square&logo=python&logoColor=white) ![Zero dependencies](https://img.shields.io/badge/zero_dependencies-standard_library_only-38e07b?style=flat-square) ![Local-first](https://img.shields.io/badge/local--first-127.0.0.1_only-5b8def?style=flat-square)
+[![CI](https://github.com/JigarJoshi04/claude-office/actions/workflows/ci.yml/badge.svg)](https://github.com/JigarJoshi04/claude-office/actions/workflows/ci.yml) [![MIT license](https://img.shields.io/badge/license-MIT-ff7a45?style=flat-square)](LICENSE) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?style=flat-square&logo=python&logoColor=white) ![Zero dependencies](https://img.shields.io/badge/zero_dependencies-standard_library_only-38e07b?style=flat-square) ![Local-first](https://img.shields.io/badge/local--first-127.0.0.1_only-5b8def?style=flat-square)
 
 **Your AI coding seats, as a living office.** Every Claude Code account on your machine gets a desk, and so does
 the Codex CLI. Every running session is a little worker at that desk, acting out what it is doing right now. New
