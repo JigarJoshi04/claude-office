@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 
+from .career import XP_MINUTE, XP_REPORT, XP_SESSION, XP_TOOL
 from .live import public
 
 MARKER_KINDS = {"limit", "report", "reset", "hire", "login", "lane", "usage"}
@@ -277,7 +278,13 @@ class HistoryStore:
                                       "minutes": round(duration(longest), 2)} if longest else None,
                   "first_activity": min(activity) if activity else None, "last_activity": max(activity) if activity else None}
         candidates = [sid for sid, s in seats.items() if s["sessions"] or s["reports"] or s["limits"]]
-        winner = max(sorted(candidates), key=lambda sid: (seats[sid]["reports"], seats[sid]["active_min"]), default=None)
+        # The crown goes to the most XP earned today, scored like careers (office/career.py), so a one-minute
+        # report does not beat an hour of work.
+        def xp(sid):
+            s = seats[sid]
+            return (s["tool_calls"] * XP_TOOL + s["active_min"] * XP_MINUTE + s["sessions"] * XP_SESSION
+                    + s["reports"] * XP_REPORT)
+        winner = max(sorted(candidates), key=lambda sid: (xp(sid), seats[sid]["reports"]), default=None)
         def n(count, word):
             return f"{count} {word}{'' if count == 1 else 's'}"
 

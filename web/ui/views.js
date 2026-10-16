@@ -64,12 +64,17 @@ export function renderStats(el, app) {
   const now = new Date(), todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const human = (t) => { let x = String(t); for (const s of snap.seats) { const n = nameOf(s.id); if (n !== s.label) x = x.replace(new RegExp(`\\b${s.label}\\b`, "g"), n); } return x; };
   const hours = Math.round(rows.reduce((a, r) => a + r.active_min, 0) / 6) / 10;
+  // Trophies won on this day, from each seat's career.
+  const d0 = new Date((st.day || todayStr) + "T00:00:00").getTime() / 1000;
+  const cat = Object.fromEntries((snap.achievements || []).map(a => [a.id, a]));
+  const won = snap.seats.flatMap(s => Object.entries((s.career || {}).unlocked || {}).filter(([id, at]) => cat[id] && at >= d0 && at < d0 + 86400)
+    .map(([id, at]) => ({ s, a: cat[id], at }))).sort((a, b) => a.at - b.at);
   el.innerHTML = `<div class="stats-grid">
     <div class="view-head"><div class="grow"><h3>${st.day === todayStr ? "Today" : esc(st.day)}</h3><p>Who did what, from the office's own records.</p></div>
       <button class="btn sm" data-day="${shift(-1)}">${icon("chevronRight", 14, "flip")}Day before</button>${st.day !== todayStr ? `<button class="btn sm" data-day="${shift(1)}">Next day</button><button class="btn sm" data-day="">Today</button>` : ""}</div>
     <div class="stats-top">
       ${mvpSeat ? `<div class="mvp">${avatar("mascot-" + mvpSeat.id, mvpSeat.color, "crown")}<div><div class="eyebrow">Employee of the day</div><h3>${esc(nameOf(mvpSeat.id))}</h3><div class="muted">${esc(st.mvp.why)}</div></div></div>`
-        : `<div class="mvp"><span class="av">${icon("trophy", 40)}</span><div><div class="eyebrow">Employee of the day</div><h3>Nobody yet</h3><div class="muted">The crown goes to the seat with the most reports.</div></div></div>`}
+        : `<div class="mvp"><span class="av">${icon("trophy", 40)}</span><div><div class="eyebrow">Employee of the day</div><h3>Nobody yet</h3><div class="muted">The crown goes to whoever earns the most XP today.</div></div></div>`}
       <div class="tiles">
         <div class="tile"><div class="v">${o.sessions ?? 0}</div><div class="tk">sessions</div></div>
         <div class="tile"><div class="v">${o.reports ?? 0}</div><div class="tk">reports filed</div></div>
@@ -80,15 +85,19 @@ export function renderStats(el, app) {
       </div>
     </div>
     ${(st.digest || []).length ? `<div class="view-card"><div class="section-h"><h4>The day in a few lines</h4></div><ul class="digest">${st.digest.map(x => `<li>${esc(human(x))}</li>`).join("")}</ul></div>` : ""}
+    ${won.length ? `<div class="view-card"><div class="section-h"><h4>Trophies won · ${won.length}</h4><button class="btn sm ghost" data-trophies>${icon("trophy", 14)}Trophy room</button></div>
+      <div class="won">${won.map(w => `<span class="wonchip" style="--seat:${esc(w.s.color)}" title="${esc(w.a.desc)}">${icon(w.a.icon, 15)}<b>${esc(nameOf(w.s.id))}</b>${esc(w.a.name)}<small>${clock(w.at)}</small></span>`).join("")}</div></div>` : ""}
     <div class="view-card"><div class="section-h"><h4>League</h4></div>
-      <table class="league"><thead><tr><th>Seat</th><th style="width:30%">Time at work</th><th class="num">Active</th><th class="num">Sessions</th><th class="num">Reports</th><th class="num">Limits</th><th class="num">Tool calls</th><th class="num">Fresh tokens</th><th class="num">Peak 5 h</th></tr></thead>
+      <div class="table-scroll"><table class="league"><thead><tr><th>Seat</th><th class="num">Level</th><th style="width:28%">Time at work</th><th class="num">Active</th><th class="num">Sessions</th><th class="num">Reports</th><th class="num">Limits</th><th class="num">Tool calls</th><th class="num">Fresh tokens</th><th class="num">Peak 5 h</th></tr></thead>
       <tbody>${rows.map(r => `<tr style="--seat:${r.seat.color}"><td><span class="who"><i data-portrait="mascot-${esc(r.id)}|${esc(r.seat.color)}|${st.mvp && st.mvp.seat === r.id ? "crown" : ""}"></i>${esc(nameOf(r.id))}</span></td>
+        <td class="num">${r.seat.career ? `<span class="lvchip">Lv ${r.seat.career.level}</span>` : "–"}</td>
         <td><div class="bar" style="width:${(r.active_min / maxMin * 100).toFixed(1)}%"></div></td>
         <td class="num">${Math.floor(r.active_min / 60)} h ${String(r.active_min % 60).padStart(2, "0")}</td><td class="num">${r.sessions}</td><td class="num">${r.reports}</td><td class="num">${r.limits}</td>
-        <td class="num">${fmtTok(r.tool_calls)}</td><td class="num">${fmtTok(r.tokens_fresh)}</td><td class="num">${r.peak_p5 == null ? "–" : Math.round(r.peak_p5) + "%"}</td></tr>`).join("")}</tbody></table>
+        <td class="num">${fmtTok(r.tool_calls)}</td><td class="num">${fmtTok(r.tokens_fresh)}</td><td class="num">${r.peak_p5 == null ? "–" : Math.round(r.peak_p5) + "%"}</td></tr>`).join("")}</tbody></table></div>
       ${o.longest_session ? `<div class="hint" style="margin-top:12px">Longest session: <b>${esc(o.longest_session.name)}</b> on ${esc(nameOf(o.longest_session.seat))}, ${Math.floor(o.longest_session.minutes / 60)} h ${Math.round(o.longest_session.minutes % 60)} min.${o.first_activity ? ` First activity ${clock(o.first_activity)}, last ${clock(o.last_activity)}.` : ""}</div>` : ""}
     </div>
   </div>`;
   hydratePortraits(el, 4);
+  el.querySelectorAll("[data-trophies]").forEach(b => b.addEventListener("click", () => app.go({ kind: "trophies" })));
   el.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { app.setPref("statsDay", b.dataset.day || null); app.loadStats(b.dataset.day || null, true); }));
 }

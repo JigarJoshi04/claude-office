@@ -127,7 +127,7 @@ class StatsTests(unittest.TestCase):
             out = reloaded.stats(snap(t + 120, tokens=130), "2026-10-16")
             self.assertEqual(out["seats"]["a"]["tokens_fresh"], 30)
 
-    def test_mvp_reports_then_active_minutes_and_event_boundaries(self):
+    def test_mvp_by_xp_and_event_boundaries(self):
         t = self.start
         for offset in (0, 60, 120):
             row = snap(t + offset, state="idle" if offset == 120 else "working")
@@ -147,6 +147,16 @@ class StatsTests(unittest.TestCase):
         self.assertLessEqual(len(out["digest"]), 5)
         self.clock += 61
         events.append(dict(events[0], ts=t+3))
+        self.assertEqual(self.h.stats(row, "2026-10-16", events)["mvp"]["seat"], "a")
+
+    def test_an_hour_of_work_beats_a_one_minute_report(self):
+        t = self.start
+        for m in range(61):
+            row = snap(t + m * 60, tools=3 * m)
+            if m < 2:
+                row["seats"] += snap(t + m * 60, seat="b", sid="two")["seats"]
+            self.h.record(row)
+        events = [{"ts": t + 30, "kind": "report", "seat": "b", "text": "x", "level": "good"}]
         self.assertEqual(self.h.stats(row, "2026-10-16", events)["mvp"]["seat"], "a")
 
     def test_empty_day_cache_expiry_and_strict_date(self):

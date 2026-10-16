@@ -24,6 +24,13 @@ const SFX = {
   bad: () => { for (let i = 0; i < 3; i++) note(880, i * 0.16, 0.08, "square", 0.05); },
   click: () => note(1200, 0, 0.03, "square", 0.025),
   hire: () => { note(392, 0, 0.08); note(523, 0.08, 0.08); note(784, 0.16, 0.16, "triangle"); },
+  // Level up: a rising run that lands on a held chord, the classic "you got stronger" fanfare.
+  levelup: () => {
+    [392, 523, 659, 784, 1047].forEach((f, i) => note(f, i * 0.07, 0.1, "square", 0.05));
+    [1047, 1319, 1568].forEach(f => note(f, 0.38, 0.55, "triangle", 0.045));
+  },
+  // Achievement: two bright chimes and a sparkle.
+  achievement: () => { note(1319, 0, 0.12, "triangle", 0.06); note(1760, 0.11, 0.22, "triangle", 0.06); [2637, 3136].forEach((f, i) => note(f, 0.3 + i * 0.05, 0.08, "square", 0.02)); },
 };
 
 export const sound = {

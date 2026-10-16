@@ -207,7 +207,7 @@ function onNews(e) {
       const what = lvl ? (text.match(/level (\d+)/) || [])[1] : text.split(" unlocked ")[1];
       office.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
       if (who) office.sayAtSeat(e.seat, line(who, e.kind), 6500);
-      sound.play("report");
+      sound.play(e.kind);
       toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
       notify(lvl ? "Level up" : "Achievement unlocked", text);
       break;
