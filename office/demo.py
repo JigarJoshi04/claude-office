@@ -343,11 +343,11 @@ DEMO_CAREERS = [
     ("astra", 2150, 12.0, 30, 8, 1, 1900, 4_100_000, ["first_hour", "first_report", "hands_1k"], 1),
 ]
 DEMO_UNLOCKS = [
+    ("astra", "levelup", "Astra reached level 6: Engineer"),
     ("claude4", "juggler", "claude4 unlocked Juggler"),
-    ("astra", "levelup", "astra reached level 6: Engineer"),
     ("claude3", "marathon", "claude3 unlocked Marathon"),
     ("claude4", "levelup", "claude4 reached level 8: Engineer"),
-    ("astra", "early_bird", "astra unlocked Early bird"),
+    ("astra", "early_bird", "Astra unlocked Early bird"),
 ]
 
 

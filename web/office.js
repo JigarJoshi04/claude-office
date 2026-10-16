@@ -58,6 +58,7 @@ export function createOffice(stage, handlers) {
   const fresh = new Map();            // session id -> bubble expiry
   const particles = [];
   const pops = [];
+  const xpSeen = new Map();           // seat id -> {xp, pending, at}: XP floaters over each desk
   const elevator = { open: 0, until: 0 };
   const cam = { z: 1, x: 0, y: 0, tz: 1, tx: 0, ty: 0 };
   let first = true, lastT = performance.now(), ceoPace = 0;
@@ -602,7 +603,7 @@ export function createOffice(stage, handlers) {
       const forced = hoverId === sess.id || (selected && selected.session === sess.id) || a.mode === "walking";
       const sayOn = say && say.until > t;
       if (!forced && !sayOn && !(f && f > t)) continue;
-      cands.push({ a, forced, prio: forced ? 1e15 : sayOn ? say.at + 1e12 : f, text: a.mode === "walking" ? (say && say.text) || `On my way to ${a.seatId}` : sayOn ? say.text : bubbleText(sess), persona: sayOn && !forced });
+      cands.push({ a, forced, prio: forced ? 1e15 : sayOn ? say.at + 1e12 : f, text: a.mode === "walking" ? (say && say.text) || `On my way to ${persona ? persona(a.pod.seat).name + "'s desk" : a.seatId}` : sayOn ? say.text : bubbleText(sess), persona: sayOn && !forced });
     }
     cands.sort((x, y) => y.prio - x.prio);
     const perPod = new Set(), want = new Set();
@@ -791,6 +792,36 @@ export function createOffice(stage, handlers) {
     }
     first = false;
     if (relayout) resize(); else renderOverlay();
+    floatXp(t);
+  }
+
+  // "+12 XP" rises from a desk as its people work: at most one every 20 seconds per desk, so it stays a nicety.
+  function floatXp(t) {
+    for (const s of snap.seats) {
+      const xp = s.career && s.career.xp;
+      if (xp == null) continue;
+      const st = xpSeen.get(s.id);
+      if (!st) { xpSeen.set(s.id, { xp, pending: 0, at: t }); continue; }
+      if (xp > st.xp) st.pending += xp - st.xp;
+      st.xp = xp;
+      if (st.pending < 5 || t - st.at < 20000 || reduced || document.hidden) continue;
+      const p = L && L.pods.find(p => p.seat.id === s.id);
+      if (p) { const el = div("pop xp", `+${st.pending} XP`, p.x + POD_W - 26, p.y + 94); el.style.setProperty("--seat", s.color); pops.push({ el, until: t + 2600 }); }
+      st.pending = 0; st.at = t;
+    }
+  }
+
+  // A full-width "LEVEL UP" banner over the floor.
+  function banner(title, sub, color) {
+    if (reduced) return;
+    const old = stage.querySelector(".lvl-banner"); if (old) old.remove();
+    const b = document.createElement("div");
+    b.className = "lvl-banner"; b.setAttribute("aria-hidden", "true");
+    b.style.setProperty("--seat", color || "#ffd24a");
+    b.innerHTML = `<div class="lb-in"><span class="lb-stars">✦ ✦ ✦</span><b>${esc(title)}</b><span class="lb-sub">${esc(sub)}</span></div>`;
+    stage.appendChild(b);
+    stage.classList.add("bannering");
+    setTimeout(() => { b.remove(); if (!stage.querySelector(".lvl-banner")) stage.classList.remove("bannering"); }, 3400);
   }
 
   function celebrate(seatId, sessionId, text) {
@@ -819,7 +850,7 @@ export function createOffice(stage, handlers) {
       const a = [...agents.values()].find(x => x.seatId === seatId && x.mode === "seated");
       if (a) { said.set(a.id, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); }
     },
-    focusSeat, focusSession, fit, celebrate, alarm,
+    focusSeat, focusSession, fit, celebrate, alarm, banner,
     zoom(dir) { const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
     pan(dx, dy) { cam.tx += dx; cam.ty += dy; clampCam(cam); },
   };

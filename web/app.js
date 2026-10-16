@@ -206,6 +206,7 @@ function onNews(e) {
       const lvl = e.kind === "levelup";
       const what = lvl ? (text.match(/level (\d+)/) || [])[1] : text.split(" unlocked ")[1];
       office.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
+      if (lvl && seat && prefs.view === "floor") office.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
       if (who) office.sayAtSeat(e.seat, line(who, e.kind), 6500);
       sound.play(e.kind);
       toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
