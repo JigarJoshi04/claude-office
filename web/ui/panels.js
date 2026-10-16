@@ -73,7 +73,8 @@ export function makePanels(app) {
       ${welcome ? `<div class="welcome"><button class="btn sm ghost x" data-dismiss-welcome aria-label="Dismiss">${icon("x", 16)}</button>
         <h3>Welcome to your office</h3><p>Every AI seat on this machine has a desk. Everyone at a desk is a real session, live.</p>
         <ol><li>Click a person to see what they are doing, and chat with them.</li><li>Click a desk's nameplate to meet that seat's character and its plan.</li>
-        <li>Hire a lane at the front desk; the load divider picks who does it.</li></ol></div>` : ""}
+        <li>Hire a lane at the front desk; the load divider picks who does it.</li>
+        <li>Real work earns XP. Characters level up, upgrade their desks and fill the trophy cabinet on the wall.</li></ol></div>` : ""}
       <h2>${greet}, ${esc(name)}.</h2>
       <p class="lede">${esc(pulse(snap, P, dayTime))}</p>
       ${!snap.seats.length ? `<div class="welcome" style="margin-top:16px"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
