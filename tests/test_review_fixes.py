@@ -5,7 +5,9 @@ import time
 import unittest
 from pathlib import Path
 
-from office import divider, sessions
+from unittest.mock import patch
+
+from office import config, divider, lanes, sessions
 
 
 def seat(sid, lanes=0, p5=50.0, pw=50.0):
@@ -72,6 +74,25 @@ class TranscriptFixes(unittest.TestCase):
         self.assertEqual(sessions.redact(f"merged {sha} in PR #1630"), f"merged {sha} in PR #1630")
         self.assertIn("[hidden]", sessions.redact("password=hunter2hunter2"))
         self.assertIn("[hidden]", sessions.redact("ghp_" + "x" * 36))
+
+
+class LaunchFixes(unittest.TestCase):
+    def test_runner_never_imports_code_from_the_lane_workdir(self):
+        # `python -m office` imports from its current directory first. A lane whose workdir holds an `office/`
+        # package (any checkout of this repo, or a hostile folder) must not get to run that code as the runner.
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "work"
+            (work / "office").mkdir(parents=True)
+            lane = {"id": "x", "workdir": str(work)}
+            ran = []
+            done = type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            with patch.object(lanes, "load_lane", return_value=lane), patch.object(lanes, "save_lane"), \
+                 patch.object(lanes, "unit_active", return_value=False), \
+                 patch.object(lanes.subprocess, "run", side_effect=lambda cmd, **k: ran.append(cmd) or done):
+                lanes.start_unit("x")
+            wd = [a for a in ran[0] if a.startswith("--working-directory=")]
+            self.assertEqual(wd, [f"--working-directory={config.REPO_DIR}"])
+            self.assertEqual(ran[0][-4:], ["-m", "office", "run-lane", "x"])
 
 
 if __name__ == "__main__":

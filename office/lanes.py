@@ -214,7 +214,10 @@ def start_unit(lane_id: str) -> None:
            "--setenv=DISPLAY=", "--setenv=WAYLAND_DISPLAY=",
            f"--setenv=PATH={env_path}", f"--setenv=HOME={config.HOME}",
            f"--setenv=PYTHONPATH={config.REPO_DIR}",
-           f"--working-directory={lane['workdir']}",
+           # The runner starts in the office's own folder: `python -m` imports from the current directory first,
+           # so starting in the lane's workdir would run any `office/` package found there. The agent itself still
+           # works in the lane's workdir (see _command).
+           f"--working-directory={config.REPO_DIR}",
            sys.executable, "-m", "office", "run-lane", lane_id]
     for var in ("CLAUDE_OFFICE_HOME", "CLAUDE_OFFICE_CONFIG", "CLAUDE_OFFICE_STATE", "CLAUDE_OFFICE_DATA"):
         if os.environ.get(var):
