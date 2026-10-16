@@ -55,7 +55,7 @@ def delivery_for(office, x: dict | None) -> str:
         return "followup"
     if not messaging.valid_target(x.get("socket")):
         return "followup" if x.get("kind") != "codex" and x.get("seat") != "astra" else "none"
-    pids = {l.get("pid") for l in office.get().get("lanes", []) if l.get("allow_messages", True) and l.get("pid")}
+    pids = {l.get("pid") for l in office.get().get("lanes", []) if l.get("allow_messages") is True and l.get("pid")}
     return "direct" if x.get("pid") in pids else "review"
 
 

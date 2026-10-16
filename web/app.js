@@ -6,7 +6,7 @@ import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
-import { pulse } from "./ui/personas.js";
+import { pulse, line } from "./ui/personas.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
 const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
@@ -71,7 +71,7 @@ const office = createOffice($("stage"), {
   openStats: () => setView("stats"),
   onCat: () => sound.play("arrive"),
 });
-office.setPersonas((s) => panels.persona(s));
+office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
 
 // ------------------------------------------------------------------------------------------------ prefs
 function setPref(k, v) {
@@ -190,16 +190,16 @@ function onNews(e) {
     case "report": {
       const ok = e.level === "good";
       const sid = findSessionByText(e.text);
-      if (ok) { office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, who.lines.report, 7000); sound.play("report"); }
+      if (ok) { office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, line(who, "report"), 7000); sound.play("report"); }
       else sound.play("bad");
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
       break;
     }
-    case "limit": office.alarm(e.seat, "Out of plan"); if (who) office.sayAtSeat(e.seat, who.lines.limit, 8000); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;
+    case "limit": office.alarm(e.seat, "Out of plan"); if (who) office.sayAtSeat(e.seat, line(who, "limit"), 8000); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;
     case "login": office.alarm(e.seat, "Logged out"); sound.play("bad"); toast(text, "bad"); notify("Seat logged out", text); break;
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
-    case "reset": toast(text, "good"); if (who) office.sayAtSeat(e.seat, "Fresh window. Let's go!", 6000); break;
-    case "stuck": if (who) office.sayAtSeat(e.seat, who.lines.stuck, 7000); break;
+    case "reset": toast(text, "good"); if (who) office.sayAtSeat(e.seat, line(who, "reset"), 6000); break;
+    case "stuck": if (who) office.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
     case "reply": sound.play("arrive"); toast(text, "good"); notify("A session replied", text); for (const k of chats.keys()) chats.get(k).at = 0; break;
     case "lane":
       if (e.level === "good") { office.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); }

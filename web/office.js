@@ -739,7 +739,8 @@ export function createOffice(stage, handlers) {
     if (snap && L) {
       if (applyCam(false)) { clearTimeout(reresTimer); reresTimer = setTimeout(() => reres(false), 160); }
       stepAgents(dt); stepParticles(dt); stepCat(dt, t);
-      if (t - lastDraw >= (reduced ? 250 : 33)) { drawFrame(t); lastDraw = t; }
+      const every = reduced ? 250 : RES <= 2 ? 33 : RES <= 4 ? 50 : 66;   // big canvases draw a little less often
+      if (t - lastDraw >= every) { drawFrame(t); lastDraw = t; }
       moveDynamicDom();
       if (Math.floor(t / 1000) !== lastSec) {
         lastSec = Math.floor(t / 1000);

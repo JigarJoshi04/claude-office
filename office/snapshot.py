@@ -347,7 +347,7 @@ class Office(LiveOffice):
             self._units_at = now
         lane_list = lanes.list_lanes()
         from . import messaging
-        direct = {l.get("pid") for l in lane_list if l.get("allow_messages", True) and l.get("pid")}
+        direct = {l.get("pid") for l in lane_list if l.get("allow_messages") is True and l.get("pid")}
         for s in seats_out:
             for x in s["sessions"]:
                 if s.get("kind") == "codex":

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from .messaging import parse_incoming
 from .sessions import _ts, describe_tool, redact
 
-TAIL_BYTES = 1_500_000
+TAIL_BYTES = 12_000_000
+TYPE_RE = re.compile(rb'"type":"([a-z-]+)"')
 MAX_TEXT = 6000
 
 
@@ -19,7 +21,7 @@ def _text_of(content) -> str:
     return ""
 
 
-def read(path: str | Path | None, limit: int = 80) -> list[dict]:
+def read(path: str | Path | None, limit: int = 60) -> list[dict]:
     """The last ``limit`` items of a transcript: user, assistant, peer, step and notice entries."""
     if not path:
         return []
@@ -37,6 +39,15 @@ def read(path: str | Path | None, limit: int = 80) -> list[dict]:
     seen_text: set = set()
     for line in raw.split(b"\n"):
         if not line:
+            continue
+        # Cheap triage before parsing: tool output (images, file dumps) is most of a transcript's bytes.
+        if line.startswith(b'{"type":"') and not line.startswith((b'{"type":"user"', b'{"type":"assistant"')):
+            continue                                   # api-request blobs, titles, modes, file history
+        head = line[:400]
+        if b'"attachment":{' in head:
+            continue
+        m = TYPE_RE.search(head)
+        if m and m.group(1) == b"user" and b'"type":"tool_result"' in line[:4000]:
             continue
         try:
             d = json.loads(line)
@@ -82,4 +93,12 @@ def read(path: str | Path | None, limit: int = 80) -> list[dict]:
                 elif c.get("type") == "tool_use":
                     text, kind = describe_tool(str(c.get("name") or ""), c.get("input") or {})
                     items.append({"ts": ts, "role": "step", "text": text, "kind": kind})
-    return items[-limit:]
+    # Keep the last `limit` messages (steps between them ride along; they collapse in the page).
+    kept, start = 0, 0
+    for i in range(len(items) - 1, -1, -1):
+        if items[i]["role"] != "step":
+            kept += 1
+            if kept > limit:
+                start = i + 1
+                break
+    return items[start:][-(limit * 6):]

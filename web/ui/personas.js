@@ -17,6 +17,19 @@ const ARCHETYPES = [
 const CODEX = { role: "The Contractor", traits: ["precise", "a little formal", "bills by the window"], motto: "Scope it, ship it, invoice it.",
   lines: { arrive: "Contractor on site.", report: "Deliverable complete.", limit: "Outside contracted hours until reset.", stuck: "Reviewing the specification…", idle: "Available for the next contract.", hello: "Astra, at your service." } };
 const NAMES = ["Ember", "Atlas", "Vega", "Orion", "Nova", "Juno", "Rigel", "Lyra", "Sol", "Iris"];
+// Extra lines shared by everyone, so the office never sounds like a loop.
+const COMMON = {
+  arrive: ["Morning, team.", "Let's get to it.", "Found my desk!", "Plugging in."],
+  report: ["Report's in.", "That's a wrap.", "Ticket closed.", "Done and dusted."],
+  limit: ["Brain full. Back after the reset.", "Out of plan. Nap time.", "Hit the limit. See you at the reset."],
+  stuck: ["Still on it…", "This one's stubborn.", "Bear with me."],
+  reset: ["Fresh window. Let's go!", "Recharged.", "Back in business."],
+};
+export function line(p, key) {
+  const own = p.lines[key] ? [p.lines[key]] : [];
+  const pool = own.concat(own, COMMON[key] || []);       // a character's own line comes up twice as often
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : "";
+}
 
 export function personaFor(seat, index = 0) {
   const base = seat.kind === "codex" ? CODEX : ARCHETYPES[index % ARCHETYPES.length];   // one character per seat, in order
