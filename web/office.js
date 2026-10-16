@@ -476,7 +476,7 @@ export function createOffice(stage, handlers) {
     return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
       (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id),
       [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
-      snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
+      snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, s.career && s.career.level, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
   }
 
   function renderOverlay() {
@@ -523,9 +523,10 @@ export function createOffice(stage, handlers) {
     plate.style.setProperty("--seat", s.color);
     place(plate, pod.x + 8, pod.y + 96, POD_W - 16, null);
     const line = plateLine(s, live);
-    plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}</b><span>${esc(line.main)}</span></span>` +
+    const lv = s.career ? `<em class="lv" title="Level ${s.career.level} ${esc(s.career.title)}">${s.career.level}</em>` : "";
+    plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span>${esc(line.main)}</span></span>` +
       `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>`;
-    plate.setAttribute("aria-label", `${who.name}: ${line.main}, ${line.side}`);
+    plate.setAttribute("aria-label", `${who.name}${s.career ? `, level ${s.career.level}` : ""}: ${line.main}, ${line.side}`);
     plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; handlers.openSeat(s.id); });
     overlay.appendChild(plate);
     const pz = hot("pod", `${who.name}'s desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id));

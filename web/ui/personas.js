@@ -24,6 +24,8 @@ const COMMON = {
   limit: ["Brain full. Back after the reset.", "Out of plan. Nap time.", "Hit the limit. See you at the reset."],
   stuck: ["Still on it…", "This one's stubborn.", "Bear with me."],
   reset: ["Fresh window. Let's go!", "Recharged.", "Back in business."],
+  levelup: ["Level up!", "Moving up in the world.", "New title, same desk.", "Promotion! Drinks on me."],
+  achievement: ["Achievement unlocked!", "Put that on my wall.", "Another one for the trophy shelf."],
 };
 export function line(p, key) {
   const own = p.lines[key] ? [p.lines[key]] : [];

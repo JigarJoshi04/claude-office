@@ -36,6 +36,7 @@ export function renderBoard(el, app) {
         <div><h3>${esc(p.name)}</h3><div class="role">${esc(p.role)} · ${esc(s.label)}</div></div>
         <span class="pill ${m.tone}">${esc(m.mood)}</span></div>
       <div class="moodline">“${esc(p.motto)}”</div>
+      ${s.career ? `<div class="tlevel"><span class="lvchip">Lv ${s.career.level}</span><span>${esc(s.career.title)}</span><div class="xpbar"><i style="width:${Math.round(s.career.progress * 100)}%"></i></div><span class="tro">${icon("trophy", 13)}${Object.keys(s.career.unlocked).length}</span></div>` : ""}
       ${meter("five_hour", "5-hour window")}${meter("weekly", "This week")}
       <div style="margin-top:14px">${L.length ? L.map(x => `<div class="sess" data-seat="${esc(s.id)}" data-id="${esc(x.id)}">${avatar(x.id, s.color, x.kind === "desk" ? "headset" : "")}
         <span class="nm"><span class="sdot ${x.state}"></span>${esc(x.name)}</span><span class="pill">${esc(STATE_LABEL[x.state] || x.state)}</span>

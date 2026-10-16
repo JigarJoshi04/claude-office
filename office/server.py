@@ -9,6 +9,7 @@ import hmac
 import json
 import mimetypes
 import select
+import signal
 import socket
 import threading
 import time
@@ -295,6 +296,13 @@ def serve(port: int, demo: bool = False) -> None:
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
     print(f"Claude Office {'(demo) ' if demo else ''}is open at http://127.0.0.1:{port}", flush=True)
+    def _term(*_):
+        raise KeyboardInterrupt   # systemd stops us with SIGTERM: shut down cleanly so careers and the inbox close
+
+    try:
+        signal.signal(signal.SIGTERM, _term)
+    except ValueError:            # not the main thread (tests)
+        pass
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -303,3 +311,5 @@ def serve(port: int, demo: bool = False) -> None:
         office.stop.set()
         if getattr(office, "inbox", None):
             office.inbox.stop()
+        if getattr(office, "career", None):
+            office.career.flush()

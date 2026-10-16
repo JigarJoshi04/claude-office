@@ -39,6 +39,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   *On holiday*, *Locked out*.
 - They speak up when it matters: when they arrive, when they ship, when they hit a limit, and when a fresh window
   opens.
+- A career that grows with real work. XP comes from tool calls (1 each), minutes at work (2), sessions (10) and
+  filed reports (100). Levels run from Intern to Legend. Fifteen achievements, such as *Night shift*, *Marathon*,
+  *Juggler* and *Week streak*, sit on a trophy wall with a "next up" goal. Level-ups and unlocks get confetti on
+  the floor.
 
 **Talk to a task**
 - Open any session and use the **Chat** tab. It shows the conversation: prompts, replies, collapsed tool steps,
@@ -126,7 +130,7 @@ Everything personal stays outside the repo, in `~/.config/claude-office/`:
 | `token` | The per-install secret the page uses for writes |
 
 The office keeps its own records in `~/.local/state/claude-office/`: the usage cache, 24 hours of minute
-samples, the news and the message log. Lanes and checkpoints go in `~/.local/share/claude-office/`.
+samples, the news, the message log and each seat's career. Lanes and checkpoints go in `~/.local/share/claude-office/`.
 
 ## How it knows things
 

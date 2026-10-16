@@ -15,6 +15,7 @@ from collections import deque
 from pathlib import Path
 
 from . import config, divider, lanes, seats as seatmod, sessions
+from .career import CATALOGUE, Career
 from .history import HistoryStore
 from .live import LiveOffice, public
 from .voice import Announcer
@@ -207,6 +208,7 @@ class Office(LiveOffice):
         self._load_events()
         self.samples = HistoryStore(config.STATE_DIR / "history.jsonl", self._events_path,
                                     lanes_path=config.DATA_DIR / "lanes")
+        self.career = Career(config.STATE_DIR / "career.json")
         self.snapshot: dict = {}
         self._prev: dict | None = None
         self._reported: set[str] = set()
@@ -388,6 +390,11 @@ class Office(LiveOffice):
         }
         snap["attention"] = self._attention(snap)
         snap["totals"] = self._totals(snap)
+        for seat_id, kind, text in self.career.observe(snap):
+            self.emit(kind, text, seat_id, "good")
+        for s in snap["seats"]:
+            s["career"] = self.career.view(s["id"])
+        snap["achievements"] = CATALOGUE
         if self._prev:
             self._diff(self._prev, snap)
         self._prev = snap

@@ -110,11 +110,12 @@ export function drawLogo(canvas) {
 }
 
 let toastEl = null;
-export function toast(msg, level = "info", ms = 4200) {
+export function toast(msg, level = "info", opts = 4200) {
+  const { ms = 4200, ic = null } = typeof opts === "number" ? { ms: opts } : opts || {};
   toastEl = toastEl || $("toasts");
   const t = document.createElement("div");
-  t.className = "toast " + level;
-  t.innerHTML = `${icon({ good: "check", bad: "alert", warn: "alert", info: "chat" }[level] || "chat", 18)}<span>${esc(msg)}</span>`;
+  t.className = "toast " + level + (ic ? " special" : "");
+  t.innerHTML = `${icon(ic || { good: "check", bad: "alert", warn: "alert", info: "chat" }[level] || "chat", 18)}<span>${esc(msg)}</span>`;
   toastEl.appendChild(t);
   while (toastEl.children.length > 4) toastEl.firstChild.remove();
   setTimeout(() => t.remove(), ms);

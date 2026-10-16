@@ -15,7 +15,7 @@ const TEMPLATES = [
   { name: "Refactor", ic: "layers", title: "Refactor: ", brief: "Refactor <module> to <goal> with no behaviour change.\nKeep every existing test green and add tests where coverage is thin.\nDone when: a PR is open with a summary of what moved and why." },
 ];
 const KIND_ICON = { type: "terminal", read: "search", think: "sparkles", talk: "chat", delegate: "bot", wait: "clock" };
-const EVENT_ICON = { arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert",
+const EVENT_ICON = { levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert",
   stuck: "clock", lane: "briefcase", divider: "sliders", checkpoint: "pin", message: "send", reply: "chat", error: "alert" };
 
 export function makePanels(app) {
@@ -129,6 +129,7 @@ export function makePanels(app) {
           <div><h2>${esc(p.name)}</h2><div class="role">${esc(p.role)} · ${esc(s.label)}</div>
           <div style="margin-top:8px">${pill(m.mood, m.tone)}</div></div></div>
         <div class="motto">“${esc(p.motto)}”</div>
+        ${levelRow(s)}
         <div class="traits">${p.traits.map(t => pill(t)).join("")}</div>
         <div class="acct">${app.privacy() ? "Account hidden" : esc([a.name, a.email].filter(Boolean).join(" · "))}${h.tier ? " · " + esc(h.tier) : ""} · ${esc(h.detail || "")}</div>
       </div>
@@ -138,6 +139,7 @@ export function makePanels(app) {
       ${section("Last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
         <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
       ${section(`At the desks · ${L.length}`, L.length ? L.map(x => sessRow(s, x)).join("") : `<div class="muted">${s.status === "limited" ? "Everyone went home: the seat is out of plan." : "Nobody here right now."}</div>`)}
+      ${careerHtml(s)}
       ${section("Load divider", `<div class="row between"><div class="grow"><div style="font-weight:550">${sc.enabled ? "On duty" : "On holiday (benched)"}</div>
         <div class="hint">${sc.enabled ? `Gets ${sc.weight}% of new lanes, up to ${sc.max_lanes} at once. Running ${s.lanes} now.` : "No new lanes go here."}${sc.note ? " " + esc(sc.note) : ""}</div></div>
         <label class="switch" title="On duty"><input type="checkbox" id="seatDuty" ${sc.enabled ? "checked" : ""} aria-label="On duty"><span></span></label></div>`)}
@@ -148,6 +150,7 @@ export function makePanels(app) {
       <div class="row" style="margin-top:18px"><button class="btn sm" data-focus-seat="${esc(s.id)}">${icon("target", 15)}Show on the floor</button></div>`,
       bind(root) {
         bindSparks(root);
+        root.querySelectorAll("[data-badge]").forEach(b => b.addEventListener("click", () => { badgeSel = badgeSel === b.dataset.badge ? null : b.dataset.badge; app.rerender(true); }));
         const duty = root.querySelector("#seatDuty");
         if (duty) duty.addEventListener("change", async () => {
           const cfg = JSON.parse(JSON.stringify(S().divider)); cfg.seats[s.id].enabled = duty.checked;
@@ -155,6 +158,42 @@ export function makePanels(app) {
           catch (e) { toast(e.message, "bad"); duty.checked = !duty.checked; }
         });
       } };
+  }
+  // Career: level, XP and achievements, earned from real work (office/career.py).
+  function levelRow(s) {
+    const c = s.career;
+    if (!c) return "";
+    const pct = Math.round(c.progress * 100), r = 19, len = 2 * Math.PI * r;
+    return `<div class="level">
+      <svg class="ring" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="${r}" class="trk"/><circle cx="24" cy="24" r="${r}" class="val" stroke-dasharray="${(len * c.progress).toFixed(1)} ${len.toFixed(1)}"/><text x="24" y="28.5">${c.level}</text></svg>
+      <div class="grow"><div class="lt"><b>Level ${c.level} · ${esc(c.title)}</b><span>${c.xp.toLocaleString()} XP</span></div>
+        <div class="xpbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progress to level ${c.level + 1}"><i style="width:${pct}%"></i></div>
+        <div class="hint">${(c.next_xp - c.xp).toLocaleString()} XP to level ${c.level + 1}${c.streak > 1 ? ` · ${icon("flame", 13)} ${c.streak}-day streak` : ""}</div></div></div>`;
+  }
+  let badgeSel = null;   // the trophy whose details are open, kept across refreshes
+  // How close each countable achievement is, for the "next up" nudge.
+  const GOALS = { first_hour: (c) => [c.stats.hours, 1, "hour at work"], paper_trail: (c) => [c.stats.reports, 10, "reports"],
+    first_report: (c) => [c.stats.reports, 1, "report"], hands_1k: (c) => [c.stats.tool_calls, 1000, "tool calls"],
+    hands_10k: (c) => [c.stats.tool_calls, 10000, "tool calls"], tokens_10m: (c) => [c.stats.tokens, 1e7, "tokens"],
+    regular: (c) => [c.streak, 3, "days in a row"], week_streak: (c) => [c.streak, 7, "days in a row"], level_10: (c) => [c.level, 10, "levels"] };
+  function careerHtml(s) {
+    const c = s.career, cat = S().achievements || [];
+    if (!c) return "";
+    const st = c.stats, got = cat.filter(a => c.unlocked[a.id]);
+    const big = (n) => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : (+n).toLocaleString();
+    const tiles = [["At work", Math.round(st.hours).toLocaleString() + " h"], ["Tool calls", big(st.tool_calls)], ["Reports", big(st.reports)], ["Tokens", big(st.tokens)]];
+    const order = [...got.sort((a, b) => c.unlocked[b.id] - c.unlocked[a.id]), ...cat.filter(a => !c.unlocked[a.id])];
+    const next = cat.filter(a => !c.unlocked[a.id] && GOALS[a.id]).map(a => { const [have, need, unit] = GOALS[a.id](c); return { a, have, need, unit, f: Math.min(0.99, have / need) }; })
+      .sort((x, y) => y.f - x.f)[0];
+    const sel = order.find(a => a.id === badgeSel);
+    const info = sel ? `<div class="badge-info"><b>${esc(sel.name)}</b> · ${esc(sel.desc)}${c.unlocked[sel.id] ? ` · unlocked ${esc(dayTime(c.unlocked[sel.id]))}` : " · not yet"}</div>` : "";
+    return `<div class="career" style="--seat:${esc(s.color)}">` + section(`Career · ${got.length} of ${cat.length} achievements`,
+      `<div class="cstats">${tiles.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("")}</div>
+      ${next ? `<div class="nextup">${icon("target", 16)}<div class="grow"><div><b>Next up: ${esc(next.a.name)}</b> <span>${big(Math.floor(next.have))} of ${big(next.need)} ${esc(next.unit)}</span></div><div class="xpbar"><i style="width:${Math.round(next.f * 100)}%"></i></div></div></div>` : ""}
+      <div class="badges" role="list">${order.map(a => { const at = c.unlocked[a.id];
+        return `<button class="badge ${at ? "on" : ""} ${a.id === badgeSel ? "sel" : ""}" data-badge="${esc(a.id)}" role="listitem" title="${esc(a.name)}: ${esc(a.desc)}" aria-label="${esc(a.name)}, ${at ? "unlocked" : "locked"}: ${esc(a.desc)}"><span class="b-ic">${icon(at ? a.icon : "lock", 18)}</span><b>${esc(a.name)}</b></button>`; }).join("")}</div>
+      ${info}
+      <div class="hint" style="margin-top:10px">XP: 1 per tool call, 2 per minute at work, 10 per session, 100 per report.${c.since ? ` Counting since ${esc(new Date(c.since * 1000).toLocaleDateString([], { day: "numeric", month: "short" }))}.` : ""}</div>`) + "</div>";
   }
   function sessRow(s, x) {
     const label = x.title && x.kind === "desk" ? x.title : x.activity;

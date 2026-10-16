@@ -200,6 +200,17 @@ function onNews(e) {
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
     case "reset": toast(text, "good"); if (who) office.sayAtSeat(e.seat, line(who, "reset"), 6000); break;
     case "stuck": if (who) office.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
+    case "levelup":
+    case "achievement": {
+      const lvl = e.kind === "levelup";
+      const what = lvl ? (text.match(/level (\d+)/) || [])[1] : text.split(" unlocked ")[1];
+      office.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
+      if (who) office.sayAtSeat(e.seat, line(who, e.kind), 6500);
+      sound.play("report");
+      toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
+      notify(lvl ? "Level up" : "Achievement unlocked", text);
+      break;
+    }
     case "reply": sound.play("arrive"); toast(text, "good"); notify("A session replied", text); for (const k of chats.keys()) chats.get(k).at = 0; break;
     case "lane":
       if (e.level === "good") { office.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); }
@@ -274,7 +285,7 @@ function paintLatest() {
   const ev = (snap && snap.events || []).slice(-5).reverse();
   if (!ev.length) { el.innerHTML = `${icon("coffee", 18)}<span class="txt">Quiet in the office. News shows up here as agents arrive, finish and file reports.</span>`; return; }
   const e = ev[latestIdx % ev.length];
-  const ic = { arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert", lane: "briefcase", reply: "chat", message: "send" }[e.kind] || "news";
+  const ic = { levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert", lane: "briefcase", reply: "chat", message: "send" }[e.kind] || "news";
   el.innerHTML = `${icon(ic, 18, { good: "good", warn: "warn", bad: "bad" }[e.level] || "")}<span class="txt" title="${esc(panels.humanise(e.text))}">${esc(panels.humanise(e.text))}</span><span class="when">${relTime(e.ts)}</span><button class="btn sm ghost" data-go-news>All news</button>`;
   el.querySelector("[data-go-news]").addEventListener("click", () => go({ kind: "news" }));
 }

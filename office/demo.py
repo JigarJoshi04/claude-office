@@ -9,6 +9,7 @@ import time
 from collections import deque
 
 from . import config, divider
+from .career import CATALOGUE, Career, new_seat, xp_for
 from .snapshot import Office
 from .history import HistoryStore
 from .live import LiveOffice, public
@@ -91,6 +92,9 @@ class DemoOffice(LiveOffice):
         self.cfg = dict(config.DEFAULTS, office_name="Claude Office", ceo={"name": "Alex", "title": "CEO"},
                         default_workdir="/home/you/work")
         self.usage = _NoPoll()
+        self.career = _demo_career()
+        self._unlocks = list(DEMO_UNLOCKS)
+        self._unlock_at = time.time() - 100     # the first celebration comes about 20 seconds in
         self.events: deque = deque(maxlen=200)
         self.stop = threading.Event()
         self.snapshot = {}
@@ -230,6 +234,19 @@ class DemoOffice(LiveOffice):
                 "suggested_weights": divider.suggest(seats, div)}
         snap["attention"] = Office._attention(snap)
         snap["totals"] = Office._totals(snap)
+        # Every couple of minutes someone levels up or unlocks something, so the demo shows the celebration.
+        if self._unlocks and now - self._unlock_at >= 120:
+            self._unlock_at = now
+            seat, aid, text = self._unlocks.pop(0)
+            c = self.career.seats[seat]
+            if aid == "levelup":
+                c["xp"] = xp_for(int(text.split()[-2].rstrip(":")))
+            else:
+                c["unlocked"][aid] = now
+            self.emit("levelup" if aid == "levelup" else "achievement", text, seat, "good")
+        for x in seats:
+            x["career"] = self.career.view(x["id"])
+        snap["achievements"] = CATALOGUE
         if not getattr(self, "_seeded", False):
             self._seed_history(snap)
             self._seeded = True
@@ -315,3 +332,32 @@ class DemoOffice(LiveOffice):
                 if s["id"] == seat_id and x["id"] == session_id:
                     return x
         return None
+
+
+# (seat, XP, hours at work, sessions, reports, limits, tool calls, tokens, unlocked achievements, days in a row)
+DEMO_CAREERS = [
+    ("claude", 13200, 61.5, 88, 9, 4, 9200, 38_000_000, ["first_hour", "first_report", "hands_1k", "night_shift", "hit_the_wall", "tokens_10m", "regular", "level_10"], 4),
+    ("claude2", 26500, 140.2, 214, 41, 11, 21800, 96_000_000, ["first_hour", "first_report", "paper_trail", "hands_1k", "hands_10k", "marathon", "night_shift", "juggler", "hit_the_wall", "comeback", "tokens_10m", "regular", "week_streak", "level_10"], 12),
+    ("claude3", 9100, 44.0, 120, 17, 9, 7600, 22_000_000, ["first_hour", "first_report", "paper_trail", "hands_1k", "hit_the_wall", "comeback", "tokens_10m", "regular", "level_10"], 6),
+    ("claude4", 4300, 22.3, 51, 6, 2, 3100, 9_400_000, ["first_hour", "first_report", "hands_1k", "early_bird", "hit_the_wall"], 2),
+    ("astra", 2150, 12.0, 30, 8, 1, 1900, 4_100_000, ["first_hour", "first_report", "hands_1k"], 1),
+]
+DEMO_UNLOCKS = [
+    ("claude4", "juggler", "claude4 unlocked Juggler"),
+    ("astra", "levelup", "astra reached level 6: Engineer"),
+    ("claude3", "marathon", "claude3 unlocked Marathon"),
+    ("claude4", "levelup", "claude4 reached level 8: Engineer"),
+    ("astra", "early_bird", "astra unlocked Early bird"),
+]
+
+
+def _demo_career() -> Career:
+    c = Career(None)
+    now = time.time()
+    for sid, xp, hours, sessions, reports, limits, tools, tokens, unlocked, streak in DEMO_CAREERS:
+        seat = new_seat(now - 40 * 86400)
+        seat.update(xp=xp, active_s=hours * 3600, sessions=sessions, reports=reports, limits=limits, tool_calls=tools,
+                    tokens=tokens, unlocked={a: now - (i + 1) * 86400 * 2.5 for i, a in enumerate(reversed(unlocked))},
+                    days=[time.strftime("%Y-%m-%d", time.localtime(now - d * 86400)) for d in range(streak)])
+        c.seats[sid] = seat
+    return c
