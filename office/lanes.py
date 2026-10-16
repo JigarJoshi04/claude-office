@@ -19,7 +19,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import config, divider
+from . import config, divider, messaging
 
 LANE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 LIMIT_RE = re.compile(r"hit your .*limit|usage limit|limit reached|rate.?limit.*exceeded|session limit", re.I)
@@ -267,7 +267,7 @@ def build_prompt(lane: dict, seat_id: str, cfg: dict) -> str:
     d = lane_dir(lane["id"])
     pre = cfg["lane_defaults"].get("preamble") or ""
     return (
-        f'You are an office lane named "{lane["title"]}" (lane id {lane["id"]}), working headless on the '
+        f'{messaging.LANE_PROMPT_START}{lane["title"]}" (lane id {lane["id"]}), working headless on the '
         f"seat {seat_id} in Claude Office. Nobody is watching this terminal; do not ask questions, decide. "
         f"Do not end your turn while a background task or workflow you still need is running.\n"
         f"Working directory: {lane['workdir']}\n"
@@ -328,7 +328,7 @@ def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[l
         ld = cfg["lane_defaults"]
         if lane.get("resume_session"):
             # A follow-up: continue that session's own conversation with the CEO's message.
-            prompt = "Message from the CEO, sent from Claude Office:\n\n" + (d / "brief.md").read_text()
+            prompt = messaging.FOLLOWUP_PREFIX + (d / "brief.md").read_text()
             cmd = ["claude", "--resume", lane["resume_session"], "-p", prompt, "--permission-mode", lane["permission_mode"],
                    "--allowedTools", ld["allowed_tools"]]
         else:

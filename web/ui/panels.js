@@ -216,7 +216,7 @@ export function makePanels(app) {
 
   function chatHtml(s, x, conv, talk) {
     if (!conv) return `<div class="chat"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:50%;align-self:flex-end"></div><div class="skeleton" style="width:60%"></div></div>`;
-    const who = x ? x.name : conv.name || "agent";
+    const who = s ? P(s).name : x ? x.name : conv.name || "agent";   // replies are signed by the seat's character
     const items = [...(conv.items || [])];
     const inTranscript = new Set(items.filter(i => i.role === "peer").map(i => (i.text || "").trim()));
     for (const t of conv.thread || []) {
@@ -244,6 +244,10 @@ export function makePanels(app) {
         html += `<div class="msg ${ceo ? "ceo" : "peer"}"><span class="who">${ceo ? "You, from the office" : esc(it.from_name || "Another session")}</span>${esc(it.text)}${time}</div>`;
       } else if (it.role === "reply") html += `<div class="msg agent"><span class="who">${esc(who)} replied to you</span>${esc(it.text)}${time}</div>`;
       else if (it.role === "ceo-pending") html += `<div class="msg ceo"><span class="who">You, from the office</span>${esc(it.text)}<span class="meta">${it.status === "review" ? "Waiting for approval in its terminal" : it.status === "followup" ? "Sent as a follow-up lane" : "Sent"} · ${relTime(it.ts)}</span></div>`;
+      else if (it.role === "brief") {
+        const key = "brief:" + (it.ts || i), open = openSteps.has(key);
+        html += `<div class="msg ceo brief${open ? " open" : ""}"><span class="who">${icon("briefcase", 13)} Brief from the office${it.title ? ` · ${esc(it.title)}` : ""}</span><div class="body">${esc(it.text)}</div><button class="more" data-steps="${esc(key)}">${open ? "Show less" : "Show the whole brief"}</button>${time}</div>`;
+      }
       else if (it.role === "notice") html += `<div class="notice">${esc(it.text)}</div>`;
     });
     flush("end");

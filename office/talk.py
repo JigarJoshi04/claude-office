@@ -80,6 +80,17 @@ def conversation_view(office, seat_id: str, session_id: str) -> dict:
     }
 
 
+def followup_title(text: str, fallback: str) -> str:
+    """'Follow-up: <the message's first words>', so the lane reads as what was asked, not as an id."""
+    words = " ".join(text.split())
+    if not words:
+        return f"Follow-up: {fallback}"
+    cut = words[:42]
+    if len(words) > 42:
+        cut = cut[:cut.rfind(" ")] if " " in cut[12:] else cut
+        cut = cut.rstrip(",;:.-") + "…"
+    return f"Follow-up: {cut}"
+
 def send(office, body: dict, seat_ids: list[str]) -> dict:
     seat_id, session_id = str(body.get("seat", "")), str(body.get("id", ""))
     text = str(body.get("text") or "").strip()
@@ -109,7 +120,7 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
     if not path or not cwd:
         raise ValueError("Cannot find that session's transcript to follow up on")
     pick = body.get("seat_choice") or seat_id
-    lane = lanes.create_lane(f"Follow-up: {(x or {}).get('name') or session_id[:8]}", text, cwd, pick,
+    lane = lanes.create_lane(followup_title(text, (x or {}).get("name") or session_id[:8]), text, cwd, pick,
                              office.cfg["lane_defaults"]["model"], office.cfg["lane_defaults"]["permission_mode"],
                              seat_ids, office.cfg, resume_session=session_id)
     office.emit("lane", f"CEO followed up on {(x or {}).get('name') or session_id[:8]} ({lane['id']})", seat_id, "good")

@@ -348,8 +348,13 @@ class Office(LiveOffice):
         lane_list = lanes.list_lanes()
         from . import messaging
         direct = {l.get("pid") for l in lane_list if l.get("allow_messages") is True and l.get("pid")}
+        by_pid = {l["pid"]: l for l in lane_list if l.get("pid") and l.get("status") == "running"}
         for s in seats_out:
             for x in s["sessions"]:
+                lane = by_pid.get(x.get("pid")) if x.get("live", True) else None
+                if lane:
+                    # An office lane goes by the title the CEO gave it, not the folder-derived session name.
+                    x["lane_id"], x["session_name"], x["name"] = lane["id"], x.get("name"), lane.get("title") or x.get("name")
                 if s.get("kind") == "codex":
                     x["talk"] = "none"
                 elif not x.get("live", True):

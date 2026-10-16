@@ -151,6 +151,37 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(items[3]["text"], "Any update?")
         self.assertEqual(items[2]["text"], "Run tests")
 
+    def test_lane_briefs_and_follow_ups_read_as_the_ceo(self):
+        from office import messaging
+        brief = (f'{messaging.LANE_PROMPT_START}Fix "login"" (lane id x), working headless...\nSTATE file: /s\n\n'
+                 "THE BRIEF:\nMake login work.")
+        lines = [{"type": "user", "timestamp": "2026-10-16T10:00:00Z", "message": {"role": "user", "content": brief}},
+                 {"type": "user", "timestamp": "2026-10-16T11:00:00Z",
+                  "message": {"role": "user", "content": messaging.FOLLOWUP_PREFIX + "Any news?"}}]
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "t.jsonl"
+            p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+            items = conversation.read(p)
+        self.assertEqual([i["role"] for i in items], ["brief", "peer"])
+        self.assertEqual((items[0]["title"], items[0]["text"]), ('Fix "login"', "Make login work."))
+        self.assertEqual((items[1]["from_name"], items[1]["text"]), ("Claude Office (CEO)", "Any news?"))
+
+    def test_meta_lines_are_hidden_and_the_brief_stays_on_top(self):
+        from office import messaging
+        lines = [{"type": "user", "timestamp": "2026-10-16T10:00:00Z", "message": {"role": "user", "content":
+                  f'{messaging.LANE_PROMPT_START}T" (lane id x)\nTHE BRIEF:\nShip it.'}},
+                 {"type": "user", "isMeta": True, "timestamp": "2026-10-16T10:00:01Z",
+                  "message": {"role": "user", "content": "[Image: original 10x10, displayed at 10x10.]"}}]
+        lines += [{"type": "assistant", "timestamp": f"2026-10-16T10:{m:02d}:00Z",
+                   "message": {"id": f"a{m}", "model": "m", "content": [{"type": "text", "text": f"note {m}"}]}} for m in range(1, 9)]
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "t.jsonl"
+            p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+            items = conversation.read(p, limit=3)
+        self.assertEqual([i["role"] for i in items], ["brief", "notice", "assistant", "assistant", "assistant"])
+        self.assertEqual(items[-1]["text"], "note 8")
+        self.assertNotIn("Image", json.dumps(items))
+
 
 class FollowUpLaneTests(unittest.TestCase):
     def test_follow_up_lanes_resume_and_accept_messages(self):

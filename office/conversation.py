@@ -5,10 +5,11 @@ import json
 import re
 from pathlib import Path
 
-from .messaging import parse_incoming
+from .messaging import FOLLOWUP_PREFIX, LANE_PROMPT_START, parse_incoming
 from .sessions import _ts, describe_tool, redact
 
 TAIL_BYTES = 12_000_000
+HEAD_BYTES = 256_000
 TYPE_RE = re.compile(rb'"type":"([a-z-]+)"')
 MAX_TEXT = 6000
 
@@ -21,20 +22,7 @@ def _text_of(content) -> str:
     return ""
 
 
-def read(path: str | Path | None, limit: int = 60) -> list[dict]:
-    """The last ``limit`` items of a transcript: user, assistant, peer, step and notice entries."""
-    if not path:
-        return []
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, 2)
-            size = f.tell()
-            f.seek(max(0, size - TAIL_BYTES))
-            if size > TAIL_BYTES:
-                f.readline()
-            raw = f.read()
-    except OSError:
-        return []
+def _parse(raw: bytes) -> list[dict]:
     items: list[dict] = []
     seen_text: set = set()
     for line in raw.split(b"\n"):
@@ -53,7 +41,7 @@ def read(path: str | Path | None, limit: int = 60) -> list[dict]:
             d = json.loads(line)
         except ValueError:
             continue
-        if not isinstance(d, dict) or d.get("isSidechain"):
+        if not isinstance(d, dict) or d.get("isSidechain") or d.get("isMeta"):   # meta: injected, never typed
             continue
         t = d.get("type")
         ts = _ts(d.get("timestamp"))
@@ -66,7 +54,15 @@ def read(path: str | Path | None, limit: int = 60) -> list[dict]:
             if not text:
                 continue
             at = text.find("<cross-session-message")
-            if 0 <= at < 200:
+            if text.startswith(FOLLOWUP_PREFIX):
+                items.append({"ts": ts, "role": "peer", "from_name": "Claude Office (CEO)",
+                              "text": redact(text[len(FOLLOWUP_PREFIX):])[:MAX_TEXT]})
+            elif text.startswith(LANE_PROMPT_START):
+                # A lane's opening prompt: show the CEO's brief, not the office's boilerplate around it.
+                title = text[len(LANE_PROMPT_START):].split('" (lane id ', 1)[0]
+                items.append({"ts": ts, "role": "brief", "title": redact(title)[:120],
+                              "text": redact(text.split("\nTHE BRIEF:\n", 1)[-1])[:MAX_TEXT]})
+            elif 0 <= at < 200:
                 p = parse_incoming(text[at:])
                 items.append({"ts": ts, "role": "peer", "from_name": p["from_name"] or "another session",
                               "text": redact(p["text"])[:MAX_TEXT]})
@@ -93,6 +89,34 @@ def read(path: str | Path | None, limit: int = 60) -> list[dict]:
                 elif c.get("type") == "tool_use":
                     text, kind = describe_tool(str(c.get("name") or ""), c.get("input") or {})
                     items.append({"ts": ts, "role": "step", "text": text, "kind": kind})
+    return items
+
+
+def read(path: str | Path | None, limit: int = 60) -> list[dict]:
+    """The last ``limit`` items of a transcript: user, assistant, peer, step and notice entries."""
+    if not path:
+        return []
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - TAIL_BYTES))
+            if size > TAIL_BYTES:
+                f.readline()
+            raw = f.read()
+    except OSError:
+        return []
+    items = _parse(raw)
+    if size > TAIL_BYTES and not any(x["role"] == "brief" for x in items):
+        # The tail skipped the start of a long session: fetch just its opening brief from the head.
+        try:
+            with open(path, "rb") as f:
+                head = f.read(HEAD_BYTES)
+        except OSError:
+            head = b""
+        first = next((x for x in _parse(head[:head.rfind(b"\n") + 1]) if x["role"] == "brief"), None)
+        if first:
+            items[:0] = [first, {"ts": (first["ts"] or 0) + 0.001, "role": "notice", "text": "Earlier messages are not shown."}]
     # Keep the last `limit` messages (steps between them ride along; they collapse in the page).
     kept, start = 0, 0
     for i in range(len(items) - 1, -1, -1):
@@ -101,4 +125,9 @@ def read(path: str | Path | None, limit: int = 60) -> list[dict]:
             if kept > limit:
                 start = i + 1
                 break
-    return items[start:][-(limit * 6):]
+    out = items[start:][-(limit * 6):]
+    # A lane's brief is what the whole conversation is about: keep it on top even when it scrolled out.
+    brief = next((x for x in items if x["role"] == "brief"), None)
+    if brief and brief not in out:
+        out = [brief, {"ts": (brief["ts"] or 0) + 0.001, "role": "notice", "text": "Earlier messages are not shown."}] + out
+    return out

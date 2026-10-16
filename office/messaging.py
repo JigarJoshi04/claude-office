@@ -28,6 +28,9 @@ from . import config
 from .sessions import redact
 
 MAX_TEXT = 4000
+# How the office opens the prompt of a follow-up lane, so the Chat tab can show it as the CEO's message.
+FOLLOWUP_PREFIX = "Message from the CEO, sent from Claude Office:\n\n"
+LANE_PROMPT_START = 'You are an office lane named "'
 NAME_RE = re.compile(r"^\d+\.sock$")
 WRAP_RE = re.compile(r'<cross-session-message from="([^"]*)"(?: from-session="[^"]*")?(?: hop-chain="[^"]*")?'
                      r'(?: from-name="([^"<>\n\r]*)")?[^>]*>\n([\s\S]*?)\n</cross-session-message>')
