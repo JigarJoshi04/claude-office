@@ -282,6 +282,23 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 .badge.on .b-ic { color: var(--seat, var(--accent)); background: color-mix(in srgb, var(--seat, var(--accent)) 16%, var(--surface-2));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--seat, var(--accent)) 40%, transparent), 0 4px 14px color-mix(in srgb, var(--seat, var(--accent)) 18%, transparent); }
 .badge.on.sel .b-ic { box-shadow: inset 0 0 0 1.5px var(--seat, var(--accent)), 0 4px 14px color-mix(in srgb, var(--seat, var(--accent)) 30%, transparent); }
+.lb-row { display: grid; grid-template-columns: 24px 40px 1fr auto; gap: 10px; align-items: center; width: 100%; padding: 9px 10px; margin-bottom: 6px;
+  border: 0; border-radius: 14px; background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.lb-row:hover { background: var(--surface-3); }
+.lb-row .av { width: 40px; height: 40px; border-radius: 12px; }
+.lb-row .av canvas { width: 26px; height: 33px; margin-top: 8px; }
+.lb-row .rk { font: 700 14px var(--mono); color: var(--medal, var(--muted)); text-align: center; text-shadow: 0 0 10px color-mix(in srgb, var(--medal, transparent) 50%, transparent); }
+.lb-row .nm { display: flex; align-items: center; gap: 7px; font-size: 14px; min-width: 0; }
+.lb-row .nm .muted { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-row .lvchip { font: 700 11px/1 var(--mono); padding: 3px 6px; border-radius: 99px; background: color-mix(in srgb, var(--seat) 22%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--seat) 45%, transparent); }
+.lb-row .xpbar { display: block; height: 5px; margin-top: 6px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
+.lb-row .xpbar i { display: block; height: 100%; border-radius: 99px; background: var(--seat); }
+.lb-row .sc { display: grid; justify-items: end; gap: 2px; }
+.lb-row .sc b { font: 650 14px var(--mono); }
+.lb-row .sc small { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 11.5px; }
+.lb-row .sc small .ic { color: var(--warn); }
+.grabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.grabs .pill { color: var(--muted); }
 .badge-info { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13px; color: var(--text-2); }
 @media (max-width: 520px) { .cstats { grid-template-columns: repeat(2, 1fr); } }
 .tlevel { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; margin-top: 12px; font-size: 12.5px; color: var(--muted); }

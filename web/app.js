@@ -68,6 +68,7 @@ const office = createOffice($("stage"), {
   openHire: () => go({ kind: "hire" }),
   openDivider: () => go({ kind: "divider" }),
   openNews: () => go({ kind: "news" }),
+  openTrophies: () => go({ kind: "trophies" }),
   openStats: () => setView("stats"),
   onCat: () => sound.play("arrive"),
 });
@@ -99,7 +100,7 @@ function viewFromHash() {
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) }; }
   if (k === "lane") return { kind: "lane", id: rest };
-  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings"].includes(k) ? { kind: k } : { kind: "ceo" };
+  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 function go(v, fromHash) {
@@ -463,6 +464,7 @@ function paletteItems() {
     { icon: icon("users", 16), label: "Team", hint: "B", keywords: "board cards", run: () => setView("board") },
     { icon: icon("trophy", 16), label: "Today: stats and MVP", hint: "S", keywords: "league employee of the day", run: () => setView("stats") },
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
+    { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
     { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },

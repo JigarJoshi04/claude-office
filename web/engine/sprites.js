@@ -468,6 +468,25 @@ export function drawFrame(ctx, x, y, w, h, gold) {
   rect(ctx, x, y, w, h, "#20243a");
 }
 
+// A glass trophy cabinet with two shelves of cups, one per unlocked achievement (newest last).
+export function drawCabinet(ctx, x, y, cups, t) {
+  const w = 56, h = 30;
+  rect(ctx, x - 1, y - 1, w + 2, h + 2, "#20150e");
+  rect(ctx, x, y, w, h, "#4a3424"); rect(ctx, x + 2, y + 2, w - 4, h - 4, "#17131f");
+  for (const sy of [y + 14, y + 27]) { rect(ctx, x + 2, sy, w - 4, 1, "#7a5a3c"); rect(ctx, x + 2, sy + 1, w - 4, 1, "#3a2818"); }
+  cups.slice(-12).forEach((c, i) => {
+    const cx = x + 5 + (i % 6) * 8, cy = (i < 6 ? y + 7 : y + 20);
+    rect(ctx, cx, cy, 5, 1, "#fff0a8");
+    rect(ctx, cx, cy + 1, 5, 2, "#ffd24a"); rect(ctx, cx - 1, cy + 1, 1, 1, "#e0a92a"); rect(ctx, cx + 5, cy + 1, 1, 1, "#e0a92a");
+    rect(ctx, cx + 1, cy + 3, 3, 1, "#e0a92a"); rect(ctx, cx + 2, cy + 4, 1, 2, "#b8841c");
+    rect(ctx, cx + 1, cy + 6, 3, 1, c.color || "#c9a227");
+    if (c.glint && Math.floor(t / 260) % 6 === 0) { rect(ctx, cx + 3, cy - 2, 1, 1, "#ffffff"); rect(ctx, cx + 2, cy - 1, 3, 1, "#fff8c0"); }
+  });
+  ctx.globalAlpha = 0.09;                      // the glass
+  for (let i = 0; i < 3; i++) rect(ctx, x + 8 + i * 17, y + 2, 2, h - 4, "#ffffff");
+  ctx.globalAlpha = 1;
+}
+
 export function drawZ(ctx, x, y, t) {
   const phase = (t / 1600) % 1;
   for (let i = 0; i < 3; i++) {

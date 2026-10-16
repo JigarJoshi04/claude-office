@@ -83,7 +83,7 @@ export function makePanels(app) {
           <div class="grow"><div class="t">${esc(humanise(a.text))}</div>${a.resets_at ? `<div class="d">Plan resets ${dayTime(a.resets_at)} (${inWords(a.resets_at)})</div>` : ""}</div></div>`).join("")
         : `<div class="allclear">${icon("check", 18)}All clear. Nothing needs you right now.</div>`,
         att.length > 3 ? `<button class="btn sm ghost" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : "")}
-      ${section("Your team", snap.seats.map(memberRow).join(""), `<button class="btn sm ghost" data-view-go="board">Team view</button>`)}
+      ${section("Your team", snap.seats.map(memberRow).join(""), `<span class="row" style="gap:4px"><button class="btn sm ghost" data-go="trophies">${icon("trophy", 14)}Trophies</button><button class="btn sm ghost" data-view-go="board">Team view</button></span>`)}
       ${section("Up next", `<div class="pick ${next ? "" : "none"}"><b>${next ? `The next lane goes to ${esc(P(next).name)}.` : "No seat can take a new lane right now."}</b>
         <div class="why">${esc(humanise(np.why))}</div>
         <div class="row wrap" style="margin-top:12px"><button class="btn sm primary" data-go="hire">${icon("plus", 15)}Hire a lane</button><button class="btn sm" data-go="divider">${icon("sliders", 15)}Adjust the split</button><button class="btn sm" data-broadcast>${icon("send", 15)}Message all lanes</button></div></div>`)}
@@ -334,6 +334,25 @@ export function makePanels(app) {
   function programmes() {
     return { html: `${crumbs("Meeting room")}<h2>Programmes</h2><p class="lede">Live work grouped by programme. Names and links come from your config.</p>
       ${section("On the whiteboard", (S().programmes || []).map(progCard).join("") || `<div class="muted">No running work belongs to a programme.</div>`)}` };
+  }
+  function trophies() {
+    const seats = S().seats.filter(s => s.career), cat = S().achievements || [];
+    const byId = Object.fromEntries(cat.map(a => [a.id, a]));
+    const ranked = [...seats].sort((a, b) => b.career.xp - a.career.xp);
+    const total = seats.reduce((n, s) => n + Object.keys(s.career.unlocked).length, 0);
+    const recent = seats.flatMap(s => Object.entries(s.career.unlocked).map(([id, at]) => ({ s, a: byId[id], at }))).filter(x => x.a)
+      .sort((a, b) => b.at - a.at).slice(0, 8);
+    const open = cat.filter(a => !seats.some(s => s.career.unlocked[a.id]));
+    const medal = ["#ffd24a", "#c9d1e0", "#d08a4c"];
+    return { html: `${crumbs("Trophy room")}<h2>Trophy room</h2>
+      <p class="lede">${total} ${total === 1 ? "trophy" : "trophies"} across ${seats.length} characters. Everyone earns XP from real work: tool calls, time at work, sessions and reports.</p>
+      ${section("Leaderboard", ranked.map((s, i) => { const c = s.career, p = P(s);
+        return `<button class="lb-row" data-seat-go="${esc(s.id)}" style="--seat:${esc(s.color)}"><span class="rk" ${i < 3 ? `style="--medal:${medal[i]}"` : ""}>${i + 1}</span>${avatar("mascot-" + s.id, s.color)}
+          <span class="grow"><span class="nm"><b>${esc(p.name)}</b><span class="lvchip">Lv ${c.level}</span><span class="muted">${esc(c.title)}</span></span>
+          <span class="xpbar"><i style="width:${Math.round(c.progress * 100)}%"></i></span></span>
+          <span class="sc"><b>${c.xp.toLocaleString()}</b><small>XP · ${icon("trophy", 12)} ${Object.keys(c.unlocked).length}</small></span></button>`; }).join(""))}
+      ${recent.length ? section("Latest unlocks", recent.map(x => `<div class="act good click" data-seat="${esc(x.s.id)}">${icon(x.a.icon, 16)}<span><b>${esc(P(x.s).name)}</b> unlocked <b>${esc(x.a.name)}</b> <span class="muted">· ${esc(x.a.desc)}</span></span><span class="when">${relTime(x.at)}</span></div>`).join("")) : ""}
+      ${open.length ? section(`Still up for grabs · ${open.length}`, `<div class="grabs">${open.map(a => `<span class="pill" title="${esc(a.desc)}">${icon(a.icon, 14)}${esc(a.name)}</span>`).join("")}</div>`) : section("Still up for grabs", `<div class="muted">Every achievement has been unlocked by someone. Legendary.</div>`)}` };
   }
   function lounge() {
     const resting = S().seats.filter(s => ["limited", "benched", "offline"].includes(s.status) || !live(s).length);
@@ -615,6 +634,6 @@ export function makePanels(app) {
       } };
   }
 
-  return { ceo, seat, session, services, programmes, lounge, news, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+  return { ceo, seat, session, services, programmes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && dvDirty) || k === "hire" || k === "settings" };
 }

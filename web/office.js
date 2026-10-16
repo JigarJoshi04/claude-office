@@ -201,7 +201,9 @@ export function createOffice(stage, handlers) {
   function drawWall(t, env, now, lights) {
     S.drawBookshelf(ctx, 8, 18, 44);
     S.drawWindow(ctx, 62, 10, 56, 30, env.sky, t, env.night);
-    S.drawPoster(ctx, 132, 14, 2);
+    const cups = trophies();
+    S.drawCabinet(ctx, 126, 10, cups, t);
+    if (cups.length) lights.push({ x: 154, y: 24, r: 26, c: "#ffd24a", i: cups.some(c => c.glint) ? 0.4 : 0.22 });
     S.drawWindow(ctx, 190, 10, 54, 30, env.sky, t, env.night);
     S.rect(ctx, 254, 10, 92, 24, "#140f1f"); S.rect(ctx, 255, 11, 90, 22, "#1d1530");
     lights.push({ x: 300, y: 22, r: 46, c: "#ff4fd8", i: 0.55 });
@@ -223,6 +225,17 @@ export function createOffice(stage, handlers) {
     S.drawPoster(ctx, 704, 14, 1);
     S.drawWindow(ctx, 732, 10, 28, 30, env.sky, t, env.night);
     if (env.night) for (const wx of [90, 217, 746]) lights.push({ x: wx, y: 46, r: 30, c: "#9bb8ff", i: 0.25 });
+  }
+
+  // Every unlocked achievement in the office, oldest first; ones from the last hour glint.
+  let cupsKey = "", cupsCache = [];
+  function trophies() {
+    const key = snap.now + "|" + snap.seats.length;
+    if (key === cupsKey) return cupsCache;
+    const out = [];
+    for (const s of snap.seats) for (const [id, at] of Object.entries((s.career || {}).unlocked || {})) out.push({ at, color: s.color, glint: snap.now - at < 3600 });
+    cupsKey = key; cupsCache = out.sort((a, b) => a.at - b.at);
+    return cupsCache;
   }
 
   function drawTV(t, lights) {
@@ -495,6 +508,7 @@ export function createOffice(stage, handlers) {
     hot("wallhot", "Whiteboard: programmes", 582, 6, 116, 40, () => handlers.openProgrammes());
     hot("wallhot", "Elevator: office news", ELEVATOR.x - 3, ELEVATOR.y - 6, 32, 46, () => handlers.openNews());
     hot("wallhot", "Employee of the day", 540, 8, 28, 36, () => handlers.openStats());
+    hot("wallhot", "Trophy cabinet: everyone's achievements", 124, 8, 60, 34, () => handlers.openTrophies());
     div("room-label", "CEO", 6, L.ceo.y + 4);
     div("room-label", "SERVER ROOM", 6, L.server.y + 4);
     div("room-label", "MEETING", L.meet.x + 8, L.meet.y + 4);
