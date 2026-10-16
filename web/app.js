@@ -423,8 +423,10 @@ function renderMain(fromSnap) {
   mainDrawn.add(v);
   const el = $({ timeline: "viewTimeline", board: "viewBoard", stats: "viewStats" }[v]);
   if (v === "board") { const sig = JSON.stringify(snap.seats.map(s => [s.status, s.usage && [s.usage.five_hour, s.usage.weekly], live(s).map(x => [x.id, x.state, x.activity])])) + prefs.privacy; if (fromSnap && sig === mainSig) return; mainSig = sig; renderBoard(el, app); }
-  else if (v === "timeline") { if (fromSnap) return; renderTimeline(el, app); }
-  else if (v === "stats") { if (fromSnap) return; renderStats(el, app); }
+  // Timeline and Today come from their own endpoints: refresh them on a clock (they redraw when the data lands),
+  // keeping the old picture on screen meanwhile.
+  else if (v === "timeline") { if (fromSnap) { const c = histCache.get(prefs.tlHours); if (!c || Date.now() - c.at > 60000) loadHistory(prefs.tlHours); return; } renderTimeline(el, app); }
+  else if (v === "stats") { if (fromSnap) { const c = statsCache.get(prefs.statsDay || "today"); if (!prefs.statsDay && (!c || Date.now() - c.at > 120000)) loadStats(null); return; } renderStats(el, app); }
 }
 
 // ------------------------------------------------------------------------------------------------ panel

@@ -487,6 +487,7 @@ export function createOffice(stage, handlers) {
   function hot(cls, label, x, y, w, h, onClick, onDouble) {
     const b = document.createElement("button");
     b.className = "hot " + cls; b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
+    b.dataset.k = cls.split(" ")[0] + ":" + label;          // a stable key, so keyboard focus survives a rebuild
     place(b, x, y, w, h);
     b.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { onDouble ? onDouble() : zoomToEvent(e); return; } onClick(); });
     b.addEventListener("dblclick", (e) => e.stopPropagation());
@@ -511,6 +512,7 @@ export function createOffice(stage, handlers) {
     const sig = overlaySig();
     if (sig === ovKey) { renderBubbles(); return; }
     ovKey = sig;
+    const fk = overlay.contains(document.activeElement) ? document.activeElement.dataset.k : null;
     const keepPops = pops.map(p => p.el);
     overlay.innerHTML = "";
     keepPops.forEach(el => overlay.appendChild(el));
@@ -538,6 +540,7 @@ export function createOffice(stage, handlers) {
     waiting().forEach((l, i) => { const tg = div("tag queue", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 90); tg.title = l.waiting_reason || "Waiting for a seat"; });
     for (const pod of L.pods) renderPod(pod);
     for (const a of leavers) a.tagEl = div("tag ghost", short(a.sess.name), a.x + 5, a.y + 19);
+    if (fk) { const back = [...overlay.querySelectorAll("[data-k]")].find(e => e.dataset.k === fk); if (back) back.focus({ preventScroll: true }); }
     renderBubbles();
   }
 
@@ -546,7 +549,7 @@ export function createOffice(stage, handlers) {
     const live = s.sessions.filter(x => x.live !== false);
     const who = persona ? persona(s) : { name: s.nickname || s.label };
     const plate = document.createElement("button");
-    plate.type = "button";
+    plate.type = "button"; plate.dataset.k = "plate:" + s.id;
     plate.className = `plate st-${s.status}` + (selected && selected.seat === s.id && !selected.session ? " sel" : "");
     plate.style.setProperty("--seat", s.color);
     place(plate, pod.x + 8, pod.y + 96, POD_W - 16, null);
@@ -558,7 +561,7 @@ export function createOffice(stage, handlers) {
     plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { focusSeat(s.id); return; } handlers.openSeat(s.id); });
     plate.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(plate);
-    hot("pod", `${who.name}'s desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id), () => focusSeat(s.id));
+    hot("pod", `${who.name}'s desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id), () => focusSeat(s.id)).dataset.k = "pod:" + s.id;
     for (const a of agents.values()) {
       if (a.seatId !== s.id) continue;
       if (a.mode === "walking") { a.tagEl = div("tag walking", short(a.sess.name), a.x + 5, a.y + 19); continue; }
@@ -566,6 +569,7 @@ export function createOffice(stage, handlers) {
       const isSel = selected && selected.session === sess.id;
       const b = hot("worker" + (isSel ? " sel" : ""), `${sess.name}, ${sess.state}: open`,
         sp.cx - 4, sp.top ? sp.seatY - 4 : sp.seatY - 6, 18, sp.top ? 24 : 22, () => handlers.openSession(s.id, sess.id), () => focusSession(sess.id));
+      b.dataset.k = "worker:" + sess.id;
       const tg = div("tag" + (isSel ? " show" : ""), short(sess.name), sp.cx + 5, sp.top ? pod.y + 45 : pod.y + 86);
       b.addEventListener("mouseenter", () => { hoverId = sess.id; tg.classList.add("show"); renderBubbles(); });
       b.addEventListener("mouseleave", () => { hoverId = null; if (!isSel) tg.classList.remove("show"); renderBubbles(); });
