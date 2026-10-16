@@ -225,6 +225,8 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 .need { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); cursor: pointer; }
 .need + .need { margin-top: 8px; }
 .need:hover { background: var(--surface-3); }
+.need:not([data-seat]):not([data-lane]):not([data-go]):not([data-id]) { cursor: default; }
+.need:not([data-seat]):not([data-lane]):not([data-go]):not([data-id]):hover { background: var(--surface-2); }
 .need .ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; }
 .need.bad .ico { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
 .need.warn .ico { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }

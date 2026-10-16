@@ -79,7 +79,7 @@ export function makePanels(app) {
       <p class="lede">${esc(pulse(snap, P, dayTime))}</p>
       ${!snap.seats.length ? `<div class="welcome" style="margin-top:16px"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
       ${snap.office.config_error ? `<div class="need bad" style="margin-top:14px"><span class="ico">${icon("alert", 16)}</span><div><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
-      ${section(`Needs you${att.length ? ` · ${att.length}` : ""}`, att.length ? shown.map(a => `<div class="need ${a.level}" ${a.seat ? `data-seat="${esc(a.seat)}"` : ""} ${a.session ? `data-id="${esc(a.session)}"` : ""} ${a.lane ? `data-lane="${esc(a.lane)}"` : ""}>
+      ${section(`Needs you${att.length ? ` · ${att.length}` : ""}`, att.length ? shown.map(a => `<div class="need ${a.level}" ${a.unit && !a.seat ? `data-go="services"` : ""} ${a.seat ? `data-seat="${esc(a.seat)}"` : ""} ${a.session ? `data-id="${esc(a.session)}"` : ""} ${a.lane ? `data-lane="${esc(a.lane)}"` : ""}>
           <span class="ico">${icon(a.level === "bad" ? "alert" : a.lane ? "briefcase" : a.resets_at ? "zap" : "clock", 16)}</span>
           <div class="grow"><div class="t">${esc(humanise(a.text))}</div>${a.resets_at ? `<div class="d">Plan resets ${dayTime(a.resets_at)} (${inWords(a.resets_at)})</div>` : ""}</div></div>`).join("")
         : `<div class="allclear">${icon("check", 18)}All clear. Nothing needs you right now.</div>`,
@@ -271,7 +271,7 @@ export function makePanels(app) {
     let html = "", steps = [];
     const flush = (k) => {
       if (!steps.length) return;
-      const key = k + ":" + steps.length;
+      const key = "st:" + (steps[0].ts || k) + ":" + (steps[0].text || "").slice(0, 24);   // stable while the group grows
       html += `<button class="steps-chip" data-steps="${esc(key)}">${icon(openSteps.has(key) ? "chevronDown" : "chevronRight", 14)}<span>${steps.length} step${steps.length === 1 ? "" : "s"} · ${esc(steps[steps.length - 1].text)}</span></button>`;
       if (openSteps.has(key)) html += `<div class="steps-list">${steps.map(st => `<div>${esc(st.text)}</div>`).join("")}</div>`;
       steps = [];

@@ -463,7 +463,7 @@ class Office(LiveOffice):
                               "text": f"Office lane '{l['title']}' is waiting for a seat"})
         for u in snap["units"]:
             if u["active"] == "failed":
-                items.append({"level": "bad", "text": f"Service {u['unit']} failed"})
+                items.append({"level": "bad", "unit": u["unit"], "text": f"Service {u['unit']} failed"})
         return items
 
     @staticmethod

@@ -863,6 +863,7 @@ export function createOffice(stage, handlers) {
       if (a) { said.set(a.id, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); }
     },
     focusSeat, focusSession, fit, celebrate, alarm, banner,
+    picture: () => ({ canvas, W }),    // the whole floor, whatever the camera shows (for "Save a picture")
     zoom(dir) { const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
     pan(dx, dy) { cam.tx += dx; cam.ty += dy; clampCam(cam); },
   };

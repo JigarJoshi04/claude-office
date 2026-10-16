@@ -315,6 +315,50 @@ function renderRightNow() {
 }
 
 // ------------------------------------------------------------------------------------------------ menu
+// A PNG of the floor with a footer naming each character, its level and what it is doing. Only pixel art and
+// character names go in: no session names, topics or accounts, so it is safe to share.
+async function savePicture() {
+  const { canvas: src, W: worldW } = office.picture();
+  if (!src || !snap) return;
+  const k = Math.max(1, Math.round(1600 / src.width)), w = src.width * k, fh = src.height * k, foot = 132;
+  const c = document.createElement("canvas"); c.width = w; c.height = fh + foot;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = "#0a0c12"; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(src, 0, 0, w, fh);
+  try { await Promise.all([document.fonts.load("26px Silkscreen"), document.fonts.load("600 17px Inter"), document.fonts.load("500 15px Inter")]); } catch { /* system fonts */ }
+  const u = w / worldW;                 // the neon sign is page text on the floor, so paint it in (office.js: 254,10 92x24)
+  g.save(); g.font = `${Math.round(6.2 * u)}px Silkscreen, monospace`; g.textAlign = "center"; g.textBaseline = "middle";
+  g.shadowColor = "#ff4fd8"; g.shadowBlur = 5 * u; g.fillStyle = "#ffd8fb";
+  g.fillText((snap.office.name || "Claude Office").toUpperCase(), 300 * u, 22 * u); g.restore();
+  g.fillStyle = "#eef0f6"; g.font = "26px Silkscreen, monospace"; g.textBaseline = "alphabetic";
+  g.fillText((snap.office.name || "Claude Office").toUpperCase(), 32, fh + 50);
+  const t = snap.totals || {};
+  g.font = "500 15px Inter, sans-serif"; g.fillStyle = "#9298ae";
+  g.fillText(`${new Date().toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · ${t.working || 0} working, ${t.sessions || 0} sessions`, 32, fh + 78);
+  g.textAlign = "right"; g.fillText("github.com/JigarJoshi04/claude-office", w - 32, fh + 50); g.textAlign = "left";
+  let x = 32;
+  for (const s of snap.seats) {
+    const p = panels.persona(s), lv = s.career ? ` · Lv ${s.career.level}` : "";
+    const label = `${p.name}${lv}`, mood = (SEAT_LABEL[s.status] || s.status || "").toLowerCase();
+    g.font = "600 17px Inter, sans-serif"; const lw = g.measureText(label).width;
+    g.font = "500 14px Inter, sans-serif"; const mw = g.measureText(mood).width;
+    if (x + 22 + lw + 8 + mw > w - 32) break;
+    g.fillStyle = s.color; g.beginPath(); g.arc(x + 6, fh + 107, 6, 0, Math.PI * 2); g.fill();
+    g.font = "600 17px Inter, sans-serif"; g.fillStyle = "#eef0f6"; g.fillText(label, x + 20, fh + 113);
+    g.font = "500 14px Inter, sans-serif"; g.fillStyle = "#9298ae"; g.fillText(mood, x + 20 + lw + 8, fh + 113);
+    x += 20 + lw + 8 + mw + 34;
+  }
+  c.toBlob((b) => {
+    if (!b) { toast("Could not make the picture.", "bad"); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b); const d = new Date(); a.download = `claude-office-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast("Saved a picture of the office.", "good");
+  }, "image/png");
+}
+
 function openMenu() {
   const old = document.querySelector(".menu"); if (old) { old.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); return; }
   const m = document.createElement("div");
@@ -324,7 +368,7 @@ function openMenu() {
     + item("notify", "bell", "Desktop notifications", prefs.notify ? "On" : "Off", prefs.notify)
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
-    + "<hr>" + item("broadcast", "send", "Message all lanes") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -336,6 +380,7 @@ function openMenu() {
     else if (k === "theme") setPref("theme", { dark: "light", light: "system", system: "dark" }[prefs.theme] || "dark");
     else if (k === "checkpoint") checkpoint();
     else if (k === "broadcast") broadcast();
+    else if (k === "picture") savePicture();
     else go({ kind: k });
     m.remove(); $("btnMenu").setAttribute("aria-expanded", "false");
     if (["sound", "notify", "privacy", "theme"].includes(k)) openMenu();
@@ -381,6 +426,7 @@ function renderPanel(force, keepScroll) {
   if (!force && sel && !sel.isCollapsed && p.contains(sel.anchorNode)) return;
   const active = document.activeElement && p.contains(document.activeElement) ? document.activeElement.id : null;
   if (k === "session" && active === "chatBox" && !force) return;       // don't redraw under someone typing
+  const box = active === "chatBox" ? $("chatBox") : null, caret = box ? [box.selectionStart, box.selectionEnd] : null;
   const out = (panels[k] || panels.ceo)(view);
   if (!force && p.dataset.html === out.html) return;
   const top = p.scrollTop;
@@ -391,7 +437,7 @@ function renderPanel(force, keepScroll) {
   bindCommon(p);
   if (out.bind) out.bind(p);
   if (!force || keepScroll) p.scrollTop = k === "session" && atBottom ? p.scrollHeight : top;
-  if (active && $(active)) { $(active).focus(); if (active === "chatBox") { const ta = $(active); ta.setSelectionRange(ta.value.length, ta.value.length); } }
+  if (active && $(active)) { $(active).focus(); if (caret) $(active).setSelectionRange(caret[0], caret[1]); }   // keep the caret where it was
 }
 function bindCommon(p) {
   p.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => go({ kind: b.dataset.go })));
@@ -467,6 +513,7 @@ function paletteItems() {
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
+    { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
     { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },
     { icon: icon("volume", 16), label: prefs.sound ? "Mute sound effects" : "Turn on sound effects", run: () => setPref("sound", !prefs.sound) },
