@@ -159,6 +159,39 @@ class ServerTests(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden.encode(), body)
 
+    def test_stream_and_settings_never_contain_account_credentials(self):
+        for path in ("/api/stream", "/api/settings"):
+            conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+            try:
+                conn.request("GET", path)
+                response = conn.getresponse()
+                self.assertEqual(response.status, 200)
+                if path == "/api/stream":
+                    self.assertEqual(response.fp.readline(), b"event: state\n")
+                    body = response.fp.readline()
+                else:
+                    body = response.read()
+                for forbidden in (ACCESS, REFRESH, "accessToken", "refreshToken"):
+                    self.assertNotIn(forbidden.encode(), body)
+                response.close()
+            finally:
+                conn.close()
+
+    def test_settings_post_validation_and_authenticated_merge(self):
+        self.assertEqual(self.post(path="/api/settings", body='{"office_name":""}')[0], 400)
+        status, _, raw = self.post(path="/api/settings", body=json.dumps({
+            "office_name": "Test office", "ceo_name": "Alex",
+            "seats": {"claude2": {"label": "Test desk", "nickname": "", "color": "#123456"}}}))
+        self.assertEqual(status, 200)
+        body = json.loads(raw)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["seats"]["claude2"]["label"], "Test desk")
+        settings = json.loads(self.request(path="/api/settings")[2])
+        self.assertEqual(settings["office_name"], "Test office")
+        self.assertEqual(settings["ceo_name"], "Alex")
+        self.assertIsNone(settings["seats"]["claude2"]["nickname"])
+        self.assertEqual((self.root / "config/config.json").stat().st_mode & 0o777, 0o600)
+
     def test_post_without_token_is_forbidden(self):
         status, _, _ = self.request("POST", "/api/divider/preview",
                                     {"Content-Type": "application/json"}, "{}")

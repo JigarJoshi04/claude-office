@@ -1,11 +1,11 @@
-// The office floor: a pixel-art canvas with a DOM overlay for names, speech bubbles and click targets.
-import * as S from "./sprites.js";
+// The office floor engine: a pixel canvas rendered at a whole-number scale, a DOM overlay for names, bubbles
+// and click targets, a camera you can zoom and pan, agents that walk in from the elevator, and night lighting.
+import * as S from "./engine/sprites.js";
+import { W, WALL, POD_W, POD_H, ELEVATOR, computeLayout, seatSpot, pathTo, drawStatic } from "./engine/scene.js";
 
-const W = 600;
-const WALL = 44;
-const COL_L = 150, COL_R = 492;
-const POD_X0 = 156, POD_W = 110, POD_H = 122, ROW0 = 52;
-const SLOTS = [[20, "down"], [68, "down"], [20, "up"], [68, "up"]];
+const SPEED = 46;                 // logical px per second
+const MAX_SLOTS = 6;
+const PROG_COLORS = ["#5b8def", "#3fb68b", "#d97757", "#c678dd", "#e5a50a", "#56b6c2", "#e06c75", "#98c379"];
 
 export function poseFor(sess, seatStatus) {
   if (!sess) return "idle";
@@ -14,513 +14,15 @@ export function poseFor(sess, seatStatus) {
   if (sess.state === "idle" || sess.state === "done") return "idle";
   if (sess.state === "waiting") return "wait";
   const k = sess.activity_kind;
-  if (k === "type" || k === "read" || k === "think" || k === "talk" || k === "delegate" || k === "wait") return k;
-  return "type";
+  return ["type", "read", "think", "talk", "delegate", "wait"].includes(k) ? k : "type";
 }
 
 function skyFor(d) {
   const h = d.getHours() + d.getMinutes() / 60;
-  if (h < 5.5 || h >= 20) return { sky: ["#0b1030", "#1b2350"], night: true, dim: 0.28 };
-  if (h < 7.5) return { sky: ["#3a4a8a", "#f2a65a"], night: false, dim: 0.12 };
-  if (h < 17) return { sky: ["#6fb3ff", "#bfe3ff"], night: false, dim: 0 };
-  if (h < 20) return { sky: ["#3b2f6b", "#f07a5a"], night: false, dim: 0.14 };
-  return { sky: ["#0b1030", "#1b2350"], night: true, dim: 0.28 };
-}
-
-function ago(ts, now) {
-  if (!ts) return "";
-  const s = Math.max(0, Math.round(now - ts));
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.round(s / 60)}m`;
-  return `${Math.floor(s / 3600)}h${String(Math.round((s % 3600) / 60)).padStart(2, "0")}`;
-}
-
-export function createOffice(canvas, overlay, handlers) {
-  const ctx = canvas.getContext("2d");
-  const bg = document.createElement("canvas");
-  const bgx = bg.getContext("2d");
-  let snap = null, layout = null, scale = 2, H = 320, bgKey = "";
-  const fresh = new Map();   // session id -> {text, until}
-  let hoverId = null, selected = null, privacy = false;
-
-  function computeLayout() {
-    const seats = snap ? snap.seats : [];
-    const slots = seats.length + 1;                  // + the hiring desk
-    const rows = Math.max(2, Math.ceil(slots / 3));
-    H = ROW0 + rows * (POD_H + 4) + 4;
-    const pods = seats.map((s, i) => ({ seat: s, x: POD_X0 + (i % 3) * POD_W, y: ROW0 + Math.floor(i / 3) * (POD_H + 4) }));
-    const hi = seats.length;
-    const hire = { x: POD_X0 + (hi % 3) * POD_W, y: ROW0 + Math.floor(hi / 3) * (POD_H + 4) };
-    const splitY = ROW0 + POD_H + 4;
-    return { pods, hire, rows, splitY, ceo: { x: 0, y: WALL, w: COL_L, h: splitY - WALL - 6 },
-             server: { x: 0, y: splitY, w: COL_L, h: H - splitY }, meet: { x: COL_R, y: WALL, w: W - COL_R, h: splitY - WALL - 6 },
-             lounge: { x: COL_R, y: splitY, w: W - COL_R, h: H - splitY } };
-  }
-
-  // ------------------------------------------------------------------------------------------ static layer
-  function drawStatic() {
-    bg.width = W; bg.height = H;
-    const c = bgx;
-    // floor planks
-    for (let y = WALL; y < H; y += 6) {
-      S.rect(c, 0, y, W, 6, ((y / 6) | 0) % 2 ? S.P.floorA : S.P.floorB);
-      for (let x = ((y / 6) | 0) % 2 ? 0 : 18; x < W; x += 36) S.rect(c, x, y, 1, 6, S.P.floorLine);
-    }
-    // back wall
-    S.rect(c, 0, 0, W, WALL, S.P.wall);
-    S.rect(c, 0, WALL - 8, W, 8, S.P.wainscot);
-    S.rect(c, 0, WALL - 9, W, 1, S.P.trim);
-    S.rect(c, 0, WALL, W, 2, "rgba(0,0,0,0.25)");
-    const L = layout;
-    // CEO cabin: carpet + glass walls
-    for (let y = L.ceo.y; y < L.ceo.y + L.ceo.h; y += 4) S.rect(c, 0, y, L.ceo.w, 4, ((y / 4) | 0) % 2 ? S.P.carpet : S.P.carpetB);
-    S.rect(c, L.ceo.w, L.ceo.y, 3, L.ceo.h, S.P.glass);
-    S.rect(c, L.ceo.w + 1, L.ceo.y, 1, L.ceo.h, S.P.glassEdge);
-    S.rect(c, 0, L.ceo.y + L.ceo.h, L.ceo.w - 34, 3, S.P.glass);
-    S.rect(c, 0, L.ceo.y + L.ceo.h + 1, L.ceo.w - 34, 1, S.P.glassEdge);
-    // rug + CEO desk
-    S.rect(c, 26, L.ceo.y + 40, 98, 56, "#7a3f4f"); S.rect(c, 29, L.ceo.y + 43, 92, 50, "#8f4b5d");
-    S.drawBookshelf(c, 8, 12, 46);
-    S.drawPlant(c, 6, L.ceo.y + L.ceo.h - 22, true);
-    S.drawPlant(c, L.ceo.w - 18, L.ceo.y + 8, false);
-    // server room floor
-    for (let y = L.server.y; y < H; y += 8) for (let x = 0; x < L.server.w; x += 8) {
-      S.rect(c, x, y, 8, 8, ((x + y) / 8) % 2 ? S.P.tile : S.P.tileB);
-      S.rect(c, x, y, 8, 1, S.P.tileLine);
-    }
-    S.rect(c, L.server.w, L.server.y, 3, L.server.h, "#1b1d28");
-    // meeting room
-    for (let y = L.meet.y; y < L.meet.y + L.meet.h; y += 4) S.rect(c, L.meet.x, y, L.meet.w, 4, ((y / 4) | 0) % 2 ? S.P.meet : S.P.meetB);
-    S.rect(c, L.meet.x - 3, L.meet.y, 3, L.meet.h, S.P.glass);
-    S.rect(c, L.meet.x - 2, L.meet.y, 1, L.meet.h, S.P.glassEdge);
-    const tx = L.meet.x + 22, ty = L.meet.y + 46;
-    S.rect(c, tx + 2, ty + 34, 62, 3, S.P.shadow);
-    S.rect(c, tx, ty, 64, 34, "#6b4a32"); S.rect(c, tx + 2, ty + 2, 60, 30, "#7d583c");
-    for (let i = 0; i < 3; i++) {
-      S.drawChairFront(c, tx + 6 + i * 20, ty - 12);
-      S.drawChairBack(c, tx + 7 + i * 20, ty + 36);
-    }
-    // lounge
-    for (let y = L.lounge.y; y < H; y += 4) S.rect(c, L.lounge.x, y, L.lounge.w, 4, ((y / 4) | 0) % 2 ? S.P.rug : S.P.rugB);
-    S.rect(c, L.lounge.x - 3, L.lounge.y, 3, L.lounge.h, S.P.glass);
-    S.drawCouch(c, L.lounge.x + 12, L.lounge.y + 22, "#c0564b");
-    S.drawCouch(c, L.lounge.x + 12, L.lounge.y + 74, "#c0564b");
-    S.rect(c, L.lounge.x + 22, L.lounge.y + 46, 26, 14, "#6b4a32");
-    S.drawPlant(c, L.lounge.x + 88, L.lounge.y + 4, true);
-    // pods: team rugs + desk islands
-    for (const p of L.pods) {
-      const col = p.seat.color;
-      c.globalAlpha = 0.22; S.rect(c, p.x + 3, p.y + 6, POD_W - 6, 92, col); c.globalAlpha = 1;
-      S.rect(c, p.x + 3, p.y + 6, POD_W - 6, 1, S.shade(col, 0.9));
-      S.drawDeskIsland(c, p.x + 8, p.y + 36, POD_W - 16, 30);
-      S.drawPlant(c, p.x + POD_W - 16, p.y + 82, false);
-    }
-    // hiring desk
-    const h = L.hire;
-    S.rect(c, h.x + 14, h.y + 30, 80, 22, S.P.deskEdge); S.rect(c, h.x + 14, h.y + 28, 80, 6, S.P.deskTop);
-    S.drawChairFront(c, h.x + 47, h.y + 14);
-    S.drawPlant(c, h.x + 10, h.y + 76, true);
-  }
-
-  // ----------------------------------------------------------------------------------------- dynamic layer
-  function drawFrame(t) {
-    if (!layout) return;
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(bg, 0, 0);
-    const now = new Date();
-    const env = skyFor(now);
-    // windows, clock, wall TV
-    const winY = 8, winH = 22;
-    S.drawWindow(ctx, 62, winY, 60, winH, env.sky, t, env.night);
-    S.drawWindow(ctx, 382, winY, 96, winH, env.sky, t, env.night);
-    S.rect(ctx, 130, 9, 118, 20, "#1a1424"); S.rect(ctx, 131, 10, 116, 18, "#221a30");
-    S.drawClock(ctx, 255, 12, now);
-    drawTV(t);
-    drawWhiteboard();
-    drawCEO(t);
-    drawServerRoom(t);
-    for (const p of layout.pods) drawPod(p, t);
-    drawHire(t);
-    drawLounge(t);
-    drawMeeting(t);
-    S.drawCoffeeMachine(ctx, layout.lounge.x + 70, layout.lounge.y + 46, t);
-    S.drawArcade(ctx, layout.lounge.x + 88, H - 30, t);
-    S.drawWaterCooler(ctx, layout.lounge.x + 4, H - 26, t);
-    if (env.dim) {
-      ctx.fillStyle = `rgba(8,12,40,${env.dim})`; ctx.fillRect(0, WALL, W, H - WALL);
-      for (const p of layout.pods) {
-        const busy = p.seat.sessions.some(x => x.live !== false && (x.state === "working" || x.state === "waiting"));
-        if (busy) S.drawLampGlow(ctx, p.x + POD_W / 2, p.y + 50, 52, "rgba(255,214,140,ALPHA)", 0.22);
-      }
-      S.drawLampGlow(ctx, 75, layout.ceo.y + 64, 56, "rgba(255,214,140,ALPHA)", 0.25);
-    }
-  }
-
-  function drawTV(t) {
-    const x = 274, y = 6, w = 96, h = 28;
-    S.rect(ctx, x - 2, y - 2, w + 4, h + 4, "#0d0e14");
-    S.rect(ctx, x, y, w, h, "#121726");
-    const seats = snap.seats;
-    const bw = Math.max(4, Math.floor((w - 6) / Math.max(1, seats.length)) - 3);
-    seats.forEach((s, i) => {
-      const bx = x + 4 + i * (bw + 3);
-      const u = s.usage || {};
-      for (const [k, off, a] of [["five_hour", 0, 1], ["weekly", Math.ceil(bw / 2), 0.55]]) {
-        const pct = u[k] && u[k].pct != null ? u[k].pct : null;
-        const hh = h - 8;
-        S.rect(ctx, bx + off, y + 3, Math.floor(bw / 2), hh, "#1e2438");
-        if (pct != null) {
-          const left = Math.max(0, 100 - pct) / 100;
-          ctx.globalAlpha = a;
-          S.rect(ctx, bx + off, y + 3 + hh - Math.round(hh * left), Math.floor(bw / 2), Math.round(hh * left), pct >= 90 ? "#ff4d5e" : s.color);
-          ctx.globalAlpha = 1;
-        }
-      }
-      S.rect(ctx, bx, y + h - 4, bw, 1, s.color);
-    });
-    if (Math.floor(t / 900) % 2) S.rect(ctx, x + w - 4, y + 2, 2, 2, "#ff4d5e");
-  }
-
-  function drawWhiteboard() {
-    const x = COL_R + 8, y = 6, w = W - COL_R - 16, h = 30;
-    S.rect(ctx, x - 1, y - 1, w + 2, h + 2, "#9aa3b5");
-    S.rect(ctx, x, y, w, h, "#f5f6f8");
-    const progs = (snap.programmes || []).slice(0, 4);
-    progs.forEach((p, i) => {
-      const done = p.sessions.filter(s => s.report_status).length;
-      S.rect(ctx, x + 3, y + 4 + i * 6, 3, 3, ["#5b8def", "#3fb68b", "#d97757", "#c678dd"][i % 4]);
-      S.rect(ctx, x + 8, y + 5 + i * 6, Math.min(w - 26, 10 + p.name.length * 2), 1, "#39404f");
-      for (let k = 0; k < Math.min(6, p.sessions.length); k++) S.rect(ctx, x + w - 16 + k * 2, y + 4 + i * 6, 1, 3, k < done ? "#3fb68b" : "#e5a50a");
-    });
-    S.rect(ctx, x + w - 10, y + h, 8, 2, "#c94f4f");
-  }
-
-  function drawCEO(t) {
-    const L = layout.ceo;
-    const dx = 36, dy = L.y + 58;
-    const attn = (snap.attention || []).filter(a => a.level !== "info").length;
-    const look = { skin: S.P.skin[1], hair: "#1f1a17", style: 0, shirt: "#24304f", glasses: false };
-    S.drawChairFront(ctx, dx + 31, dy - 22);
-    S.drawPerson(ctx, dx + 33, dy - 18, look, "down", attn ? "talk" : "idle", t);
-    S.rect(ctx, dx + 37, dy - 10, 2, 3, "#c94f4f");     // tie
-    S.rect(ctx, dx + 35, dy - 21, 6, 1, "#ffd24a");     // crown
-    S.rect(ctx, dx + 35, dy - 22, 1, 1, "#ffd24a"); S.rect(ctx, dx + 37, dy - 23, 2, 2, "#ffd24a"); S.rect(ctx, dx + 40, dy - 22, 1, 1, "#ffd24a");
-    S.rect(ctx, dx + 2, dy + 26, 74, 3, S.P.shadow);
-    S.rect(ctx, dx, dy, 78, 24, "#5a3a24"); S.rect(ctx, dx, dy, 78, 3, "#7a5034"); S.rect(ctx, dx + 2, dy + 22, 74, 2, "#41291a");
-    S.drawMonitorBack(ctx, dx + 30, dy - 6, null);
-    S.rect(ctx, dx + 30, dy + 9, 18, 5, "#c8a046"); S.rect(ctx, dx + 31, dy + 10, 16, 3, "#e8c66a");   // nameplate
-    // the phone rings when something needs the CEO
-    const ring = attn && Math.floor(t / 160) % 6 < 3 ? (Math.floor(t / 80) % 2 ? 1 : -1) : 0;
-    S.rect(ctx, dx + 62 + ring, dy + 4, 8, 5, attn ? "#d94a4a" : "#30343f");
-    S.rect(ctx, dx + 61 + ring, dy + 3, 10, 2, attn ? "#ff6b6b" : "#454a5c");
-    S.drawMug(ctx, dx + 10, dy + 6, t, true);
-    S.rect(ctx, dx + 16, dy + 5, 8, 6, S.P.white); S.rect(ctx, dx + 17, dy + 6, 6, 1, "#9aa3b5"); S.rect(ctx, dx + 17, dy + 8, 4, 1, "#9aa3b5");
-  }
-
-  function drawServerRoom(t) {
-    const L = layout.server;
-    const units = (snap.units || []).slice(0, 10);
-    const per = 5;
-    const n = Math.max(units.length, 4);
-    for (let i = 0; i < n; i++) {
-      const u = units[i];
-      const x = 10 + (i % per) * 26, y = L.y + 14 + Math.floor(i / per) * 52;
-      if (y + 40 > H) break;
-      S.drawRack(ctx, x, y, 40, u ? u.active : "inactive", t, u ? u.unit : "spare" + i);
-    }
-  }
-
-  function drawPod(p, t) {
-    const s = p.seat;
-    const live = s.sessions.filter(x => x.live !== false);
-    const status = s.status;
-    const off = status === "offline";
-    SLOTS.forEach(([sx, facing], i) => {
-      const sess = live[i];
-      const x = p.x + sx, look = sess ? S.lookFor(sess.id, s.color) : null;
-      const pose = sess ? poseFor(sess, status) : null;
-      if (facing === "down") {
-        S.drawChairFront(ctx, x - 2, p.y + 14);
-        if (sess) {
-          S.drawPerson(ctx, x, p.y + 18, look, "down", pose, t + i * 777);
-          if (sess.kind === "desk") { S.rect(ctx, x - 1, p.y + 21, 1, 3, "#30343f"); S.rect(ctx, x + 10, p.y + 21, 1, 3, "#30343f"); S.rect(ctx, x, p.y + 17, 10, 1, "#30343f"); }
-        }
-        S.drawMonitorBack(ctx, x - 3, p.y + 29, sess && !off && pose !== "sleep" ? null : null);
-        if (sess && pose !== "sleep") S.drawHands(ctx, x, p.y + 38, look, pose, t + i * 333);
-        if (sess && pose === "sleep") S.drawZ(ctx, x + 8, p.y + 14, t + i * 500);
-        if (sess && (pose === "idle" || pose === "wait")) S.drawMug(ctx, x + 12, p.y + 40, t, pose === "wait");
-      } else {
-        S.drawMonitorFront(ctx, x - 3, p.y + 46, sess && !off ? pose : "off", s.color, t + i * 1234);
-        if (sess) {
-          const by = pose === "sleep" ? p.y + 61 : p.y + 60;
-          S.drawPerson(ctx, x, by, look, "up", pose, t + i * 777);
-          if (sess.kind === "desk") { S.rect(ctx, x, by + 1, 10, 1, "#30343f"); S.rect(ctx, x - 1, by + 3, 1, 3, "#30343f"); S.rect(ctx, x + 10, by + 3, 1, 3, "#30343f"); }
-          if (pose === "sleep") S.drawZ(ctx, x + 8, p.y + 58, t + i * 500);
-        }
-        S.drawChairBack(ctx, x - 1, p.y + 72);
-      }
-      if (sess && pose === "delegate") {     // a helper stands by the desk
-        const hx = x + (facing === "down" ? 12 : 13), hy = facing === "down" ? p.y + 20 : p.y + 70;
-        S.drawPerson(ctx, hx, hy, { ...S.lookFor(sess.id + "h", S.shade(s.color, 1.25)), style: 2 }, "down", "talk", t);
-      }
-      if (sess && pose === "stuck" && Math.floor(t / 500) % 2) {
-        const qy = facing === "down" ? p.y + 10 : p.y + 52;
-        S.rect(ctx, x + 4, qy, 3, 1, "#ffb020"); S.rect(ctx, x + 6, qy + 1, 1, 2, "#ffb020"); S.rect(ctx, x + 5, qy + 3, 1, 1, "#ffb020"); S.rect(ctx, x + 5, qy + 5, 1, 1, "#ffb020");
-      }
-    });
-    if (off) {   // a sticky note: this seat needs a login
-      S.rect(ctx, p.x + 46, p.y + 40, 14, 12, "#ffe066"); S.rect(ctx, p.x + 48, p.y + 43, 10, 1, "#8a6d00"); S.rect(ctx, p.x + 48, p.y + 46, 7, 1, "#8a6d00");
-    }
-    // status lamp on the island
-    const lamp = { working: "#38e07b", idle: "#e5c07b", limited: "#ff4d5e", benched: "#5b8def", offline: "#6b7080" }[status] || "#6b7080";
-    S.rect(ctx, p.x + POD_W / 2 - 1, p.y + 38, 3, 3, lamp);
-    if (status === "working" && Math.floor(t / 600) % 2) S.rect(ctx, p.x + POD_W / 2 - 2, p.y + 37, 5, 5, "rgba(56,224,123,0.25)");
-  }
-
-  function drawHire(t) {
-    const h = layout.hire;
-    S.rect(ctx, h.x + 26, h.y + 4, 56, 12, "#2c3047");
-    const blink = Math.floor(t / 700) % 2;
-    S.rect(ctx, h.x + 28, h.y + 6, 52, 8, blink ? "#3fb68b" : "#2f8a69");
-    for (let i = 0; i < 6; i++) S.rect(ctx, h.x + 32 + i * 8, h.y + 9, 5, 2, "#eafff6");
-    S.rect(ctx, h.x + 40, h.y + 34, 10, 7, S.P.white); S.rect(ctx, h.x + 42, h.y + 36, 6, 1, "#9aa3b5"); S.rect(ctx, h.x + 42, h.y + 38, 4, 1, "#9aa3b5");
-    S.rect(ctx, h.x + 56, h.y + 33, 2, 8, "#2b2f3a");
-  }
-
-  function drawMeeting(t) {
-    // One representative per running programme sits at the table, wearing its whiteboard colour.
-    const tx = COL_R + 22, ty = WALL + 46;
-    const cols = ["#5b8def", "#3fb68b", "#d97757", "#c678dd", "#e5a50a", "#56b6c2"];
-    (snap.programmes || []).slice(0, 6).forEach((p, i) => {
-      const top = i < 3, k = i % 3;
-      const x = tx + 8 + k * 20;
-      const look = S.lookFor("prog-" + p.name, cols[i % cols.length]);
-      if (top) S.drawPerson(ctx, x, ty - 9, look, "down", p.sessions.some(s => s.state === "working") ? "talk" : "idle", t + i * 600);
-      else { S.drawPerson(ctx, x, ty + 30, look, "up", "idle", t); S.drawChairBack(ctx, x - 1, ty + 36); }
-    });
-    if ((snap.programmes || []).length) {   // papers on the table
-      S.rect(ctx, tx + 12, ty + 10, 7, 5, S.P.white); S.rect(ctx, tx + 40, ty + 14, 7, 5, S.P.white);
-    }
-  }
-
-  function drawLounge(t) {
-    // Seats with nobody at their desk take a break here; a seat out of plan sleeps it off.
-    const L = layout.lounge;
-    const resting = snap.seats.filter(s => ["limited", "benched", "offline"].includes(s.status) || s.sessions.filter(x => x.live !== false).length === 0);
-    const spots = [[L.x + 18, L.y + 16], [L.x + 36, L.y + 16], [L.x + 18, L.y + 68], [L.x + 36, L.y + 68]];
-    resting.slice(0, 4).forEach((s, i) => {
-      const [x, y] = spots[i];
-      const pose = s.status === "limited" ? "sleep" : "idle";
-      S.drawPerson(ctx, x, y, S.lookFor("mascot-" + s.id, s.color), "down", pose, t + i * 911);
-      if (pose === "sleep") S.drawZ(ctx, x + 8, y - 2, t + i * 300);
-      else S.drawMug(ctx, x + 11, y + 10, t, true);
-    });
-  }
-
-  // ------------------------------------------------------------------------------------------- overlay
-  function px(v) { return (v * scale / devicePixelRatio) + "px"; }
-
-  function place(el, x, y, w, h) {
-    el.style.left = px(x); el.style.top = px(y);
-    if (w != null) el.style.width = px(w);
-    if (h != null) el.style.height = px(h);
-  }
-
-  function hot(cls, label, x, y, w, h, onClick, key) {
-    const b = document.createElement("button");
-    b.className = "hot " + cls; b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
-    if (key) b.dataset.key = key;
-    place(b, x, y, w, h);
-    b.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
-    overlay.appendChild(b);
-    return b;
-  }
-
-  function renderOverlay() {
-    overlay.innerHTML = "";
-    if (!layout) return;
-    const now = snap.now;
-    const L = layout;
-    // rooms
-    hot("room", "CEO office: briefing, alerts, capacity", L.ceo.x, L.ceo.y, L.ceo.w, L.ceo.h, () => handlers.openCEO(), "ceo");
-    hot("room", "Server room: background services", L.server.x, L.server.y, L.server.w, L.server.h, () => handlers.openServices(), "server");
-    hot("room", "Meeting room: programmes", L.meet.x, 0, L.meet.w, L.meet.h + WALL, () => handlers.openProgrammes(), "meet");
-    hot("room", "Lounge", L.lounge.x, L.lounge.y, L.lounge.w, L.lounge.h, () => handlers.openLounge(), "lounge");
-    hot("tv", "Capacity board: plan left on every seat", 272, 4, 100, 32, () => handlers.openDivider(), "tv");
-    label("room-label", "CEO", 6, L.ceo.y + 4);
-    label("room-label", "SERVER ROOM", 6, L.server.y + 3);
-    label("room-label", "MEETING", L.meet.x + 6, L.meet.y + 4);
-    label("room-label", "LOUNGE", L.lounge.x + 6, L.lounge.y + 3);
-    const sign = label("neon", snap.office.name || "Claude Office", 130, 9);
-    sign.style.width = px(118); sign.style.height = px(20);
-    // whiteboard text
-    const wb = document.createElement("div");
-    wb.className = "wb"; place(wb, COL_R + 10, 7, W - COL_R - 34, 28);
-    (snap.programmes || []).slice(0, 4).forEach(p => { const d = document.createElement("div"); d.textContent = p.name; wb.appendChild(d); });
-    if (!(snap.programmes || []).length) wb.innerHTML = "<div class='muted'>No programmes</div>";
-    overlay.appendChild(wb);
-    // hiring desk
-    hot("hire", "Hiring desk: start a new lane", L.hire.x + 10, L.hire.y + 2, POD_W - 20, POD_H - 10, () => handlers.openHire(), "hire");
-    const ht = label("plate hire-plate", "NOW HIRING", L.hire.x + 30, L.hire.y + 92);
-    ht.style.left = px(L.hire.x + 18); ht.style.width = px(74);
-    // pods
-    for (const p of L.pods) {
-      const s = p.seat;
-      const live = s.sessions.filter(x => x.live !== false);
-      const plate = document.createElement("button");
-      plate.type = "button";
-      plate.className = `plate seat-plate st-${s.status}` + (selected && selected.seat === s.id && !selected.session ? " sel" : "");
-      plate.style.setProperty("--seat", s.color);
-      place(plate, p.x + 6, p.y + 92, POD_W - 12, null);
-      const u = s.usage || {};
-      const pct = (k) => (u[k] && u[k].pct != null ? Math.round(u[k].pct) : null);
-      const p5 = pct("five_hour"), pw = pct("weekly");
-      plate.innerHTML = `<span class="dot"></span><b>${esc(s.label)}</b>` +
-        (s.nickname ? `<i>${esc(s.nickname)}</i>` : "") +
-        `<span class="mini" title="5-hour window used">${p5 == null ? "–" : p5 + "%"}</span>` +
-        `<span class="mini wk" title="Weekly allowance used">${pw == null ? "–" : pw + "%"}</span>` +
-        (live.length > 4 ? `<span class="more">+${live.length - 4}</span>` : "") +
-        ((s.tokens_1h || 0) > 400000 ? `<span class="burn" title="Burning fast: ${fmtTok(s.tokens_1h)} tokens in the last hour">▲</span>` : "");
-      plate.setAttribute("aria-label", `${s.label}: ${s.status}, ${live.length} live sessions`);
-      plate.addEventListener("click", (e) => { e.stopPropagation(); handlers.openSeat(s.id); });
-      overlay.appendChild(plate);
-      hot("pod", `${s.label} desks`, p.x + 4, p.y + 8, POD_W - 8, 82, () => handlers.openSeat(s.id), "pod-" + s.id);
-      SLOTS.forEach(([sx, facing], i) => {
-        const sess = live[i];
-        if (!sess) return;
-        const x = p.x + sx;
-        const top = facing === "down";
-        const b = hot("worker" + (selected && selected.session === sess.id ? " sel" : ""), `${sess.name} (${sess.state}), open details`,
-          x - 4, top ? p.y + 14 : p.y + 56, 18, top ? 26 : 24, () => handlers.openSession(s.id, sess.id), "w-" + sess.id);
-        b.addEventListener("mouseenter", () => { hoverId = sess.id; renderBubbles(); });
-        b.addEventListener("mouseleave", () => { hoverId = null; renderBubbles(); });
-        const tag = document.createElement("div");
-        tag.className = `tag st-${sess.state} k-${sess.kind}`;
-        tag.textContent = shortName(sess.name);
-        tag.dataset.sid = sess.id;
-        place(tag, x + 5, top ? p.y + 41 : p.y + 83, null, null);
-        overlay.appendChild(tag);
-      });
-    }
-    renderBubbles();
-    function label(cls, text, x, y) {
-      const d = document.createElement("div");
-      d.className = cls; d.textContent = text; place(d, x, y);
-      overlay.appendChild(d); return d;
-    }
-  }
-
-  function bubbleText(sess) {
-    if (privacy && sess.kind === "desk") return sess.state === "idle" ? "Idle" : "Working…";
-    if (sess.state === "limited") return "Out of plan: " + (sess.limit_text || "waiting for reset");
-    if (sess.state === "stuck") return `Quiet for ${ago(snap.now - (sess.quiet_s || 0), snap.now)}: ${sess.activity || ""}`;
-    if (sess.state === "waiting") return "⏳ " + (sess.activity || "Waiting");
-    return sess.activity || sess.state;
-  }
-
-  function renderBubbles() {
-    if (!layout) return;
-    const t = performance.now();
-    const want = new Set();
-    for (const p of layout.pods) {
-      const live = p.seat.sessions.filter(x => x.live !== false);
-      SLOTS.forEach(([sx, facing], i) => {
-        const sess = live[i];
-        if (!sess) return;
-        const f = fresh.get(sess.id);
-        const show = hoverId === sess.id || (selected && selected.session === sess.id) || (f && f.until > t);
-        if (!show) return;
-        want.add(sess.id);
-        let b = overlay.querySelector(`.bubble[data-sid="${CSS.escape(sess.id)}"]`);
-        if (!b) { b = document.createElement("div"); b.dataset.sid = sess.id; overlay.appendChild(b); }
-        b.className = "bubble" + (facing === "down" ? "" : " low") + (sess.state === "limited" ? " bad" : sess.state === "stuck" ? " warn" : "");
-        const txt = bubbleText(sess);
-        if (b.textContent !== txt) b.textContent = txt;
-        place(b, p.x + sx + 5, facing === "down" ? p.y + 13 : p.y + 55);
-      });
-    }
-    overlay.querySelectorAll(".bubble").forEach(b => { if (!want.has(b.dataset.sid)) b.remove(); });
-  }
-
-  function shortName(n) {
-    n = (n || "").replace(/^wt-/, "");
-    return n.length > 16 ? n.slice(0, 15) + "…" : n;
-  }
-
-  // -------------------------------------------------------------------------------------------- public
-  function resize() {
-    const box = canvas.parentElement.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const want = box.width * dpr;
-    scale = Math.max(1, want / W);
-    canvas.width = Math.round(W * scale);
-    canvas.height = Math.round(H * scale);
-    canvas.style.width = (W * scale / dpr) + "px";
-    canvas.style.height = (H * scale / dpr) + "px";
-    overlay.style.width = canvas.style.width; overlay.style.height = canvas.style.height;
-    overlay.style.setProperty("--s", scale / dpr);
-    ovKey = "";
-    renderOverlayIfChanged();
-  }
-
-  function update(next) {
-    const prev = snap;
-    snap = next;
-    // pop a bubble whenever an agent starts something new
-    const prevAct = new Map();
-    if (prev) for (const s of prev.seats) for (const x of s.sessions) prevAct.set(x.id, x.activity);
-    const t = performance.now();
-    for (const s of snap.seats) for (const x of s.sessions) {
-      if (x.live === false) continue;
-      const busy = x.state === "working" || x.state === "waiting";
-      if (!prev && busy) fresh.set(x.id, { until: t + 9000 });
-      else if (prev && prevAct.get(x.id) !== x.activity && busy) fresh.set(x.id, { until: t + 7000 });
-    }
-    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color])) + (snap.units || []).length;
-    layout = computeLayout();
-    if (key !== bgKey || bg.height !== H) { drawStatic(); bgKey = key; resize(); }
-    else renderOverlayIfChanged();
-  }
-
-  let ovKey = "";
-  function overlaySig() {
-    return JSON.stringify([selected, snap.office.name, (snap.programmes || []).map(p => p.name), snap.seats.map(s => {
-      const u = s.usage || {};
-      return [s.id, s.label, s.nickname, s.status, u.five_hour && Math.round(u.five_hour.pct), u.weekly && Math.round(u.weekly.pct),
-        (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).map(x => [x.id, x.name, x.state, x.kind])];
-    })]);
-  }
-  function renderOverlayIfChanged() {
-    const sig = overlaySig();
-    if (sig === ovKey) { renderBubbles(); return; }
-    ovKey = sig;
-    renderOverlay();
-  }
-
-  function setSelected(sel) { selected = sel; ovKey = ""; if (snap) renderOverlayIfChanged(); }
-  function setPrivacy(on) { privacy = on; renderBubbles(); }
-
-  let last = 0;
-  function loop(t) {
-    if (t - last > 33) { drawFrame(t); last = t; }
-    if (Math.floor(t / 1000) !== Math.floor((t - 34) / 1000)) renderBubblesIfExpired(t);
-    requestAnimationFrame(loop);
-  }
-  function renderBubblesIfExpired(t) {
-    let changed = false;
-    for (const [k, v] of fresh) if (v.until < t) { fresh.delete(k); changed = true; }
-    if (changed) renderBubbles();
-  }
-  requestAnimationFrame(loop);
-  let lastW = 0;
-  new ResizeObserver((entries) => {
-    const w = Math.round(entries[0].contentRect.width);
-    if (!layout || w === lastW) return;
-    lastW = w;
-    requestAnimationFrame(resize);
-  }).observe(canvas.parentElement);
-  return { update, setSelected, setPrivacy };
+  if (h < 5.5 || h >= 20) return { sky: ["#070b26", "#18204a"], night: true, dark: 0.44 };
+  if (h < 7.5) return { sky: ["#34407e", "#f2a65a"], night: false, dark: 0.24 };
+  if (h < 17) return { sky: ["#5fa8ff", "#bfe3ff"], night: false, dark: 0 };
+  return { sky: ["#35296a", "#f07a5a"], night: false, dark: 0.26 };
 }
 
 export function esc(s) {
@@ -531,4 +33,703 @@ export function fmtTok(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
   if (n >= 1e3) return Math.round(n / 1e3) + "k";
   return String(n);
+}
+
+export function createOffice(stage, handlers) {
+  stage.innerHTML = `<div class="world"><canvas aria-hidden="true"></canvas><div class="overlay"></div></div>
+    <div class="cam" role="group" aria-label="Camera">
+      <button type="button" data-cam="in" title="Zoom in (+)" aria-label="Zoom in">+</button>
+      <button type="button" data-cam="out" title="Zoom out (−)" aria-label="Zoom out">−</button>
+      <button type="button" data-cam="fit" title="Fit the office (0)" aria-label="Fit the office">⤢</button>
+    </div>
+    <div class="cam-hint">Ctrl + scroll or pinch to zoom · drag to pan · double-click a desk to focus</div>`;
+  const world = stage.querySelector(".world");
+  const canvas = stage.querySelector("canvas");
+  const overlay = stage.querySelector(".overlay");
+  const ctx = canvas.getContext("2d");
+  const bg = document.createElement("canvas"), bgx = bg.getContext("2d");
+  const lightC = document.createElement("canvas"), lx = lightC.getContext("2d");
+
+  let snap = null, L = null, H = 340, F = 1, RES = 1, staticKey = "", ovKey = "";
+  let selected = null, privacy = false, reduced = false, mvp = null, hoverId = null;
+  const agents = new Map();          // session id -> agent
+  let leavers = [];                   // agents walking out
+  const fresh = new Map();            // session id -> bubble expiry
+  const particles = [];
+  const pops = [];
+  const elevator = { open: 0, until: 0 };
+  const cam = { z: 1, x: 0, y: 0, tz: 1, tx: 0, ty: 0 };
+  let first = true, lastT = performance.now(), ceoPace = 0;
+
+  // ---------------------------------------------------------------------------------------- agents
+  function assign() {
+    const seen = new Set();
+    for (const pod of L.pods) {
+      const want = pod.seat.sessions.filter(x => x.live !== false).slice(0, MAX_SLOTS);
+      const taken = new Set();
+      const keep = new Set();
+      for (const x of want) {
+        const a = agents.get(x.id);
+        if (a && a.seatId === pod.seat.id && a.slot < MAX_SLOTS && !taken.has(a.slot)) { taken.add(a.slot); keep.add(x.id); }
+      }
+      for (const x of want) {
+        seen.add(x.id);
+        let a = agents.get(x.id);
+        if (a && keep.has(x.id)) { a.sess = x; a.pod = pod; continue; }
+        let slot = 0; while (taken.has(slot)) slot++;
+        taken.add(slot);
+        const look = S.lookFor(x.id, pod.seat.color);
+        if (!a) {
+          a = { id: x.id, seatId: pod.seat.id, slot, sess: x, pod, look, mode: "seated", x: 0, y: 0, path: [], facing: "down" };
+          if (!first && !reduced) {      // a new arrival walks in from the elevator
+            const p = pathTo(L, pod, slot);
+            a.mode = "walking"; a.x = p[0][0]; a.y = p[0][1]; a.path = p.slice(1); openElevator();
+          }
+          agents.set(x.id, a);
+        } else { Object.assign(a, { slot, pod, seatId: pod.seat.id, sess: x, look, mode: "seated", path: [] }); }
+      }
+    }
+    for (const [id, a] of agents) {
+      if (seen.has(id)) continue;
+      agents.delete(id);
+      if (a.mode === "seated" && !reduced) {      // walk out to the elevator
+        const p = pathTo(L, a.pod, a.slot).reverse();
+        const sp = seatSpot(a.pod, a.slot);
+        leavers.push({ ...a, mode: "leaving", x: sp.cx, y: sp.standY, path: p.slice(1), gone: false, tagEl: null });
+      }
+    }
+  }
+
+  function openElevator() { elevator.until = performance.now() + 1600; }
+
+  function stepAgents(dt) {
+    const move = (a) => {
+      if (!a.path.length) return true;
+      const [tx, ty] = a.path[0];
+      const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
+      const step = SPEED * dt;
+      if (Math.abs(dx) > Math.abs(dy)) a.facing = dx > 0 ? "right" : "left"; else a.facing = dy > 0 ? "down" : "up";
+      if (d <= step) { a.x = tx; a.y = ty; a.path.shift(); return !a.path.length; }
+      a.x += dx / d * step; a.y += dy / d * step;
+      return false;
+    };
+    let settled = false;
+    for (const a of agents.values()) if (a.mode === "walking" && move(a)) { a.mode = "seated"; settled = true; }
+    for (const a of leavers) if (move(a)) { a.gone = true; openElevator(); }
+    if (leavers.some(a => a.gone)) { leavers.filter(a => a.gone && a.tagEl).forEach(a => a.tagEl.remove()); leavers = leavers.filter(a => !a.gone); settled = true; }
+    if (settled) { ovKey = ""; renderOverlay(); }
+  }
+
+  // ------------------------------------------------------------------------------------- particles
+  function burst(x, y, n, kind) {
+    const cols = ["#ff5d73", "#ffd24a", "#38e07b", "#5b8def", "#c678dd", "#ff9f43", "#56b6c2"];
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2, v = 30 + Math.random() * 60;
+      particles.push(kind === "spark"
+        ? { x, y, vx: Math.cos(ang) * 25, vy: -Math.random() * 30, g: 60, life: 0, max: 0.5 + Math.random() * 0.3, c: Math.random() > 0.5 ? "#ffd24a" : "#ff7a3d", s: 1 }
+        : { x, y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 50, g: 90, life: 0, max: 1.4 + Math.random() * 0.8, c: cols[i % cols.length], s: 1 + (i % 2) });
+    }
+    if (particles.length > 600) particles.splice(0, particles.length - 600);
+  }
+  function stepParticles(dt) {
+    for (const p of particles) { p.life += dt; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.985; }
+    for (let i = particles.length - 1; i >= 0; i--) if (particles[i].life > particles[i].max) particles.splice(i, 1);
+  }
+  function drawParticles() {
+    for (const p of particles) { ctx.globalAlpha = Math.max(0, 1 - p.life / p.max); S.rect(ctx, p.x, p.y, p.s, p.s, p.c); }
+    ctx.globalAlpha = 1;
+  }
+
+  // ----------------------------------------------------------------------------------------- render
+  function drawFrame(t) {
+    ctx.setTransform(RES, 0, 0, RES, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(bg, 0, 0, W, H);
+    const now = new Date();
+    const env = skyFor(now);
+    const lights = [];
+    drawWall(t, env, now, lights);
+    drawCEO(t, lights);
+    drawServer(t, lights);
+    drawMeeting(t);
+    drawLounge(t, lights);
+    for (const pod of L.pods) drawPod(pod, t, lights);
+    drawHire(t, lights);
+    const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers].sort((a, b) => a.y - b.y);
+    for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
+    drawParticles();
+    if (env.dark > 0) drawLighting(env, lights);
+    else drawSun(t);
+  }
+
+  function drawWall(t, env, now, lights) {
+    S.drawBookshelf(ctx, 8, 18, 44);
+    S.drawWindow(ctx, 62, 10, 56, 30, env.sky, t, env.night);
+    S.drawPoster(ctx, 132, 14, 2);
+    S.drawWindow(ctx, 190, 10, 54, 30, env.sky, t, env.night);
+    S.rect(ctx, 254, 10, 92, 24, "#140f1f"); S.rect(ctx, 255, 11, 90, 22, "#1d1530");
+    lights.push({ x: 300, y: 22, r: 46, c: "#ff4fd8", i: 0.55 });
+    const open = performance.now() < elevator.until ? 1 : 0;
+    elevator.open += (open - elevator.open) * 0.12;
+    S.drawElevator(ctx, ELEVATOR.x, ELEVATOR.y, elevator.open, "", t);
+    lights.push({ x: ELEVATOR.x + 13, y: ELEVATOR.y - 2, r: 12, c: "#ff8f3d", i: 0.5 });
+    drawTV(t, lights);
+    S.drawClock(ctx, 492, 14, now);
+    S.drawPoster(ctx, 516, 14, 0);
+    S.drawFrame(ctx, 544, 12, 20, 22, !!mvp);
+    if (mvp) {
+      const seat = snap.seats.find(s => s.id === mvp.seat);
+      if (seat) S.drawSeated(ctx, 549, 18, S.lookFor("mascot-" + seat.id, seat.color), "down", "idle", t);
+      if (Math.floor(t / 600) % 4 === 0) S.rect(ctx, 546 + (Math.floor(t / 150) % 16), 13, 1, 1, "#fff8c0");
+      lights.push({ x: 554, y: 22, r: 18, c: "#ffd24a", i: 0.35 });
+    }
+    drawWhiteboard();
+    S.drawPoster(ctx, 704, 14, 1);
+    S.drawWindow(ctx, 732, 10, 28, 30, env.sky, t, env.night);
+    if (env.night) for (const wx of [90, 217, 746]) lights.push({ x: wx, y: 46, r: 30, c: "#9bb8ff", i: 0.25 });
+  }
+
+  function drawTV(t, lights) {
+    const x = 388, y = 8, w = 96, h = 32;
+    S.rect(ctx, x - 2, y - 2, w + 4, h + 4, "#0a0b10"); S.rect(ctx, x, y, w, h, "#0f1424");
+    const seats = snap.seats;
+    const bw = Math.max(4, Math.floor((w - 6) / Math.max(1, seats.length)) - 3);
+    seats.forEach((s, i) => {
+      const bx = x + 4 + i * (bw + 3), hh = h - 9;
+      const us = s.usage || {};
+      for (const [k, off, a] of [["five_hour", 0, 1], ["weekly", Math.ceil(bw / 2), 0.5]]) {
+        const pct = us[k] && us[k].pct != null ? us[k].pct : null;
+        S.rect(ctx, bx + off, y + 3, Math.floor(bw / 2), hh, "#1b2236");
+        if (pct != null) {
+          const left = Math.max(0, 100 - pct) / 100;
+          ctx.globalAlpha = a;
+          S.rect(ctx, bx + off, y + 3 + hh - Math.round(hh * left), Math.floor(bw / 2), Math.round(hh * left), pct >= 90 ? "#ff4d5e" : s.color);
+          ctx.globalAlpha = 1;
+        }
+      }
+      S.rect(ctx, bx, y + h - 4, bw, 2, s.color);
+    });
+    S.rect(ctx, x, y + (Math.floor(t / 40) % h), w, 1, "rgba(255,255,255,0.05)");
+    if (Math.floor(t / 900) % 2) S.rect(ctx, x + w - 4, y + 2, 2, 2, "#ff4d5e");
+    lights.push({ x: x + w / 2, y: y + h / 2, r: 46, c: "#5b8def", i: 0.45 });
+  }
+
+  function drawWhiteboard() {
+    const x = 584, y = 8, w = 112, h = 36;
+    S.rect(ctx, x - 2, y - 2, w + 4, h + 4, "#9aa3b5"); S.rect(ctx, x, y, w, h, "#f6f7f9");
+    S.rect(ctx, x + 4, y + h, 30, 2, "#c94f4f"); S.rect(ctx, x + 40, y + h, 10, 2, "#3d6fd6");
+    (snap.programmes || []).slice(0, 5).forEach((p, i) => {
+      const done = p.sessions.filter(s => s.report_status).length;
+      S.rect(ctx, x + 4, y + 4 + i * 6, 3, 3, PROG_COLORS[i % PROG_COLORS.length]);
+      for (let k = 0; k < Math.min(8, p.sessions.length); k++) S.rect(ctx, x + w - 22 + k * 2, y + 4 + i * 6, 1, 3, k < done ? "#3fb68b" : "#e5a50a");
+    });
+  }
+
+  function drawCEO(t, lights) {
+    const c = L.ceo, dx = 40, dy = c.y + 66;
+    const urgent = (snap.attention || []).filter(a => a.level === "bad").length;
+    const attn = (snap.attention || []).filter(a => a.level !== "info").length;
+    const look = S.lookFor("ceo-" + ((snap.office.ceo || {}).name || "CEO"), "#22304f");
+    S.drawChairFront(ctx, dx + 31, dy - 22);
+    if (urgent && !reduced) {                       // pacing behind the desk, on the phone
+      ceoPace += 0.016;
+      const px = dx + 28 + Math.round(Math.sin(ceoPace) * 22);
+      S.drawWalker(ctx, px, dy - 26, look, Math.cos(ceoPace) > 0 ? "right" : "left", t, true);
+      S.rect(ctx, px + 9, dy - 21, 2, 3, "#2a2d38");
+    } else {
+      S.drawSeated(ctx, dx + 33, dy - 18, look, "down", attn ? "talk" : "idle", t);
+      S.rect(ctx, dx + 37, dy - 10, 2, 3, "#c94f4f");
+      S.rect(ctx, dx + 36, dy - 20, 6, 1, "#ffd24a"); S.rect(ctx, dx + 36, dy - 21, 1, 1, "#ffd24a"); S.rect(ctx, dx + 38, dy - 22, 2, 2, "#ffd24a"); S.rect(ctx, dx + 41, dy - 21, 1, 1, "#ffd24a");
+    }
+    S.rect(ctx, dx + 2, dy + 26, 74, 3, S.P.shadow);
+    S.rect(ctx, dx, dy, 78, 24, "#5a3a24"); S.rect(ctx, dx, dy, 78, 3, "#7a5034"); S.rect(ctx, dx + 2, dy + 22, 74, 2, "#41291a");
+    S.drawMonitorBack(ctx, dx + 30, dy - 6);
+    S.rect(ctx, dx + 30, dy + 10, 18, 5, "#c8a046"); S.rect(ctx, dx + 31, dy + 11, 16, 3, "#e8c66a");
+    const ring = attn && Math.floor(t / 160) % 6 < 3 ? (Math.floor(t / 80) % 2 ? 1 : -1) : 0;
+    S.rect(ctx, dx + 62 + ring, dy + 5, 8, 5, attn ? "#d94a4a" : "#30343f"); S.rect(ctx, dx + 61 + ring, dy + 4, 10, 2, attn ? "#ff6b6b" : "#454a5c");
+    if (attn) { S.drawMark(ctx, dx + 64, dy - 4, urgent ? "!" : "?", t); lights.push({ x: dx + 66, y: dy + 6, r: 16, c: "#ff4d5e", i: 0.5 }); }
+    S.drawMug(ctx, dx + 10, dy + 6, t, true, "#e8c66a");
+    S.rect(ctx, dx + 16, dy + 5, 8, 6, S.P.white); S.rect(ctx, dx + 17, dy + 6, 6, 1, "#9aa3b5"); S.rect(ctx, dx + 17, dy + 8, 4, 1, "#9aa3b5");
+    S.drawDeskLamp(ctx, dx + 50, dy - 4, true);
+    lights.push({ x: dx + 39, y: dy + 4, r: 64, c: "#ffcf7a", i: 0.65 });
+  }
+
+  function rackPos(i) { return [10 + (i % 6) * 27, L.server.y + 16 + Math.floor(i / 6) * 56]; }
+  function drawServer(t, lights) {
+    const units = (snap.units || []).slice(0, 12);
+    for (let i = 0; i < Math.max(units.length, 6); i++) {
+      const un = units[i];
+      const [x, y] = rackPos(i);
+      if (y + 42 > H) break;
+      const st = un ? un.active : "inactive";
+      S.drawRack(ctx, x, y, 42, st, t, un ? un.unit : "spare" + i);
+      if (st === "active") lights.push({ x: x + 14, y: y + 20, r: 14, c: "#38e07b", i: 0.25 });
+      if (st === "failed") {
+        lights.push({ x: x + 9, y: y + 10, r: 22, c: "#ff4d5e", i: 0.55 });
+        if (!reduced && Math.random() < 0.04) burst(x + 9, y + 6, 6, "spark");
+      }
+    }
+  }
+
+  function drawMeeting(t) {
+    const tx = L.meet.x + 40, ty = L.meet.y + 52;
+    (snap.programmes || []).slice(0, 8).forEach((p, i) => {
+      const top = i < 4, x = tx + 10 + (i % 4) * 26;
+      const look = S.lookFor("prog-" + p.name, PROG_COLORS[i % PROG_COLORS.length]);
+      const busy = p.sessions.some(s => s.state === "working");
+      if (top) S.drawSeated(ctx, x, ty - 9, look, "down", busy ? "talk" : "idle", t + i * 600);
+      else { S.drawSeated(ctx, x, ty + 32, look, "up", "idle", t); S.drawChairBack(ctx, x - 1, ty + 38); }
+    });
+    if ((snap.programmes || []).length) {
+      S.rect(ctx, tx + 14, ty + 10, 8, 6, S.P.paper); S.rect(ctx, tx + 60, ty + 16, 8, 6, S.P.paper); S.rect(ctx, tx + 88, ty + 8, 10, 7, "#2a2f40");
+    }
+  }
+
+  function restingSeats() {
+    return snap.seats.filter(s => ["limited", "benched", "offline"].includes(s.status) || !s.sessions.some(x => x.live !== false));
+  }
+
+  function drawLounge(t, lights) {
+    const lo = L.lounge;
+    S.drawAquarium(ctx, lo.x + 150, lo.y + 6, t);
+    lights.push({ x: lo.x + 165, y: lo.y + 13, r: 30, c: "#4fb3ff", i: 0.45 });
+    S.drawVending(ctx, lo.x + 166, lo.y + 40, t);
+    lights.push({ x: lo.x + 174, y: lo.y + 52, r: 24, c: "#ffcf7a", i: 0.4 });
+    S.drawCoffeeMachine(ctx, lo.x + 134, lo.y + 44, t);
+    S.drawArcade(ctx, lo.x + 170, H - 30, t);
+    lights.push({ x: lo.x + 177, y: H - 22, r: 22, c: "#ff4fd8", i: 0.45 });
+    S.drawWaterCooler(ctx, lo.x + 150, H - 26, t);
+    const spots = [[lo.x + 22, lo.y + 16], [lo.x + 42, lo.y + 16], [lo.x + 22, lo.y + 64], [lo.x + 42, lo.y + 64], [lo.x + 73, lo.y + 22], [lo.x + 93, lo.y + 34]];
+    restingSeats().slice(0, spots.length).forEach((s, i) => {
+      const [x, y] = spots[i];
+      const look = S.lookFor("mascot-" + s.id, s.color);
+      if (s.status === "offline") ctx.globalAlpha = 0.45;
+      const pose = s.status === "limited" ? "sleep" : "idle";
+      S.drawSeated(ctx, x, y, look, "down", pose, t + i * 911);
+      ctx.globalAlpha = 1;
+      if (pose === "sleep") S.drawZ(ctx, x + 8, y - 2, t + i * 300);
+      else if (s.status === "benched") { S.rect(ctx, x + 2, y + 4, 6, 1, "#101015"); S.rect(ctx, x + 2, y + 4, 2, 2, "#101015"); S.rect(ctx, x + 6, y + 4, 2, 2, "#101015"); }
+      else if (s.status === "offline") S.drawMark(ctx, x + 4, y - 7, "?", t);
+      else S.drawMug(ctx, x + 11, y + 10, t, true);
+    });
+  }
+
+  function drawPod(pod, t, lights) {
+    const s = pod.seat, status = s.status, off = status === "offline";
+    const bySlot = new Map();
+    for (const a of agents.values()) if (a.seatId === s.id && a.mode === "seated") bySlot.set(a.slot, a);
+    const busy = [...bySlot.values()].some(a => a.sess.state === "working" || a.sess.state === "waiting");
+    S.drawDeskLamp(ctx, pod.x + 11, pod.y + 34, busy);
+    if (busy) lights.push({ x: pod.x + 64, y: pod.y + 54, r: 62, c: "#ffd59a", i: 0.5 });
+    for (let slot = 0; slot < MAX_SLOTS; slot++) {
+      const sp = seatSpot(pod, slot), a = bySlot.get(slot), x = sp.cx;
+      const pose = a ? poseFor(a.sess, status) : null;
+      if (sp.top) {
+        S.drawChairFront(ctx, x - 2, pod.y + 16);
+        if (a) {
+          S.drawSeated(ctx, x, sp.seatY, a.look, "down", pose, t + slot * 777);
+          if (a.sess.kind === "desk") { S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x, sp.seatY - 1, 10, 1, "#2a2d38"); }
+        }
+        S.drawMonitorBack(ctx, x - 3, pod.y + 31);
+        if (a && pose !== "sleep") S.drawHands(ctx, x, pod.y + 42, a.look, pose, t + slot * 333);
+        if (a && pose === "sleep") S.drawZ(ctx, x + 8, sp.seatY - 6, t + slot * 500);
+        if (a && (pose === "idle" || pose === "wait")) S.drawMug(ctx, x + 12, pod.y + 43, t, pose === "wait");
+        if (a && pose === "stuck") S.drawMark(ctx, x + 3, sp.seatY - 9, "?", t);
+        if (a && pose === "think") S.drawThought(ctx, x + 8, sp.seatY - 8, t);
+        if (a && pose !== "sleep" && !off) lights.push({ x: x + 5, y: pod.y + 30, r: 12, c: "#9fd0ff", i: 0.35 });
+      } else {
+        S.drawMonitorFront(ctx, x - 3, pod.y + 51, a && !off ? pose : "off", s.color, t + slot * 1234);
+        if (a) {
+          S.drawSeated(ctx, x, sp.seatY, a.look, "up", pose, t + slot * 777);
+          if (a.sess.kind === "desk") { S.rect(ctx, x, sp.seatY + 1, 10, 1, "#2a2d38"); S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); }
+          if (pose === "sleep") S.drawZ(ctx, x + 8, sp.seatY - 4, t + slot * 500);
+          if (pose === "stuck") S.drawMark(ctx, x + 3, sp.seatY - 8, "?", t);
+          if (pose === "think") S.drawThought(ctx, x + 8, sp.seatY - 10, t);
+          if (!off && pose !== "sleep") lights.push({ x: x + 5, y: pod.y + 57, r: 16, c: pose === "read" ? "#e8f0ff" : "#7ec8ff", i: 0.5 });
+          if (pose === "sleep") lights.push({ x: x + 5, y: pod.y + 57, r: 10, c: "#ff4d5e", i: 0.3 });
+        }
+        S.drawChairBack(ctx, x - 1, pod.y + 74);
+      }
+      if (a && pose === "delegate") {
+        const hx = x + 11, hy = sp.top ? sp.seatY - 2 : sp.seatY - 6;
+        S.drawDrone(ctx, hx, hy, s.color, t + slot * 400);
+        lights.push({ x: hx + 3, y: hy + 2, r: 10, c: s.color, i: 0.5 });
+      }
+    }
+    if (off) { S.rect(ctx, pod.x + 56, pod.y + 46, 16, 13, "#ffe066"); S.rect(ctx, pod.x + 58, pod.y + 49, 12, 1, "#8a6d00"); S.rect(ctx, pod.x + 58, pod.y + 52, 8, 1, "#8a6d00"); S.rect(ctx, pod.x + 58, pod.y + 55, 10, 1, "#8a6d00"); }
+    const lamp = { working: "#38e07b", idle: "#e5c07b", limited: "#ff3b4e", benched: "#5b8def", offline: "#6b7080" }[status] || "#6b7080";
+    if (status === "limited") { S.drawBeacon(ctx, pod.x + POD_W - 18, pod.y + 36, t); lights.push({ x: pod.x + POD_W - 16, y: pod.y + 37, r: 34 + Math.sin(t / 220) * 6, c: "#ff3b4e", i: 0.6 }); }
+    else { S.rect(ctx, pod.x + POD_W - 17, pod.y + 40, 3, 3, lamp); if (status === "working" && Math.floor(t / 600) % 2) S.rect(ctx, pod.x + POD_W - 18, pod.y + 39, 5, 5, S.alpha(lamp, 0.3)); }
+  }
+
+  function waiting() { return (snap.lanes || []).filter(l => l.status === "waiting" || l.status === "queued").slice(0, 5); }
+  function drawHire(t, lights) {
+    const h = L.hire;
+    S.rect(ctx, h.x + 34, h.y + 12, 60, 14, "#1f2a28");
+    S.rect(ctx, h.x + 36, h.y + 14, 56, 10, Math.floor(t / 700) % 2 ? "#2fa77b" : "#258763");
+    for (let i = 0; i < 6; i++) S.rect(ctx, h.x + 40 + i * 8, h.y + 18, 5, 2, "#eafff6");
+    lights.push({ x: h.x + 64, y: h.y + 19, r: 34, c: "#3fe0a0", i: 0.45 });
+    S.rect(ctx, h.x + 52, h.y + 47, 10, 7, S.P.white); S.rect(ctx, h.x + 54, h.y + 49, 6, 1, "#9aa3b5");
+    S.rect(ctx, h.x + 70, h.y + 45, 2, 9, "#2b2f3a"); S.rect(ctx, h.x + 68, h.y + 44, 6, 2, "#3fb68b");
+    waiting().forEach((l, i) => {                  // office lanes waiting for a seat queue up here
+      const x = h.x + 34 + i * 14, y = h.y + 70;
+      S.drawWalker(ctx, x, y, S.lookFor("lane-" + l.id, "#6b7a90"), "up", t, false);
+      S.rect(ctx, x + 2, y + 12, 6, 3, "#ffe066");
+    });
+  }
+
+  function drawLighting(env, lights) {
+    if (lightC.width !== W || lightC.height !== H) { lightC.width = W; lightC.height = H; }
+    lx.globalCompositeOperation = "source-over";
+    lx.clearRect(0, 0, W, H);
+    lx.fillStyle = `rgba(4,8,28,${env.dark})`;
+    lx.fillRect(0, 0, W, H);
+    lx.globalCompositeOperation = "destination-out";
+    for (const l of lights) {
+      const g = lx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
+      g.addColorStop(0, `rgba(0,0,0,${Math.min(1, l.i * 1.3)})`); g.addColorStop(1, "rgba(0,0,0,0)");
+      lx.fillStyle = g; lx.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(lightC, 0, 0, W, H);
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = "lighter";
+    for (const l of lights) {
+      const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
+      g.addColorStop(0, S.alpha(l.c, 0.16 * l.i)); g.addColorStop(1, S.alpha(l.c, 0));
+      ctx.fillStyle = g; ctx.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function drawSun(t) {
+    ctx.globalCompositeOperation = "lighter";
+    for (const [wx, ww] of [[62, 56], [190, 54], [732, 28]]) {
+      ctx.fillStyle = "rgba(255,240,200,0.05)";
+      ctx.beginPath(); ctx.moveTo(wx, WALL); ctx.lineTo(wx + ww, WALL); ctx.lineTo(wx + ww + 70, WALL + 120); ctx.lineTo(wx + 50, WALL + 120); ctx.closePath(); ctx.fill();
+      if (!reduced) for (let i = 0; i < 3; i++) {
+        const p = ((t / 9000) + i / 3 + wx / 300) % 1;
+        S.rect(ctx, wx + 20 + i * 12 + p * 40, WALL + p * 110, 1, 1, "rgba(255,250,220,0.5)");
+      }
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  // ---------------------------------------------------------------------------------------- overlay
+  const u = (v) => v * F + "px";
+  function place(el, x, y, w, h) {
+    el.style.left = u(x); el.style.top = u(y);
+    if (w != null) el.style.width = u(w);
+    if (h != null) el.style.height = u(h);
+  }
+  function hot(cls, label, x, y, w, h, onClick) {
+    const b = document.createElement("button");
+    b.className = "hot " + cls; b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
+    place(b, x, y, w, h);
+    b.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; onClick(); });
+    overlay.appendChild(b);
+    return b;
+  }
+  function div(cls, text, x, y) {
+    const d = document.createElement("div");
+    d.className = cls; if (text != null) d.textContent = text; place(d, x, y);
+    overlay.appendChild(d); return d;
+  }
+
+  function overlaySig() {
+    return JSON.stringify([F, selected, privacy, snap.office.name, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
+      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id),
+      [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
+      snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
+  }
+
+  function renderOverlay() {
+    if (!snap || !L) return;
+    const sig = overlaySig();
+    if (sig === ovKey) { renderBubbles(); return; }
+    ovKey = sig;
+    const keepPops = pops.map(p => p.el);
+    overlay.innerHTML = "";
+    keepPops.forEach(el => overlay.appendChild(el));
+    hot("room", "CEO office: briefing and alerts", L.ceo.x, L.ceo.y, L.ceo.w, L.ceo.h, () => handlers.openCEO());
+    hot("room", "Server room: background services", L.server.x, L.server.y, L.server.w, L.server.h, () => handlers.openServices());
+    hot("room", "Meeting room: programmes", L.meet.x, L.meet.y, L.meet.w, L.meet.h, () => handlers.openProgrammes());
+    hot("room", "Lounge: seats on a break", L.lounge.x, L.lounge.y, L.lounge.w, L.lounge.h, () => handlers.openLounge());
+    hot("wallhot", "Capacity board: plan left on every seat", 386, 6, 100, 36, () => handlers.openDivider());
+    hot("wallhot", "Whiteboard: programmes", 582, 6, 116, 40, () => handlers.openProgrammes());
+    hot("wallhot", "Elevator: office news", ELEVATOR.x - 3, ELEVATOR.y - 6, 32, 46, () => handlers.openNews());
+    hot("wallhot", "Employee of the day", 540, 8, 28, 36, () => handlers.openStats());
+    div("room-label", "CEO", 6, L.ceo.y + 4);
+    div("room-label", "SERVER ROOM", 6, L.server.y + 4);
+    div("room-label", "MEETING", L.meet.x + 8, L.meet.y + 4);
+    div("room-label", "LOUNGE", L.lounge.x + 8, L.lounge.y + 4);
+    const neon = div("neon", snap.office.name || "Claude Office", 254, 10); place(neon, 254, 10, 92, 24);
+    if (mvp) place(div("mvp-tag", "MVP", 541, 37), 541, 37, 26, null);
+    const wb = div("wb", null, 590, 9); place(wb, 590, 9, 84, 34);
+    (snap.programmes || []).slice(0, 5).forEach(p => { const d = document.createElement("div"); d.textContent = p.name; wb.appendChild(d); });
+    if (!(snap.programmes || []).length) wb.innerHTML = "<div class='muted'>No programmes</div>";
+    (snap.units || []).slice(0, 12).forEach((un, i) => {
+      const [x, y] = rackPos(i);
+      if (y + 42 <= H) hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices());
+    });
+    hot("hire", "Hiring desk: start a new lane", L.hire.x + 8, L.hire.y + 8, POD_W - 16, POD_H - 14, () => handlers.openHire());
+    place(div("plate hire-plate", "HIRING DESK", 0, 0), L.hire.x + 14, L.hire.y + 98, POD_W - 28, null);
+    waiting().forEach((l, i) => { const tg = div("tag st-waiting", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 90); tg.title = l.waiting_reason || "Waiting for a seat"; });
+    for (const pod of L.pods) renderPod(pod);
+    for (const a of leavers) a.tagEl = div("tag ghost", "👋 " + short(a.sess.name), a.x + 5, a.y + 19);
+    renderBubbles();
+  }
+
+  function renderPod(pod) {
+    const s = pod.seat;
+    const live = s.sessions.filter(x => x.live !== false);
+    const us = s.usage || {};
+    const p5 = us.five_hour && us.five_hour.pct != null ? Math.round(us.five_hour.pct) : null;
+    const pw = us.weekly && us.weekly.pct != null ? Math.round(us.weekly.pct) : null;
+    const sign = div(`pod-sign st-${s.status}`, s.label, 0, 0);
+    sign.style.setProperty("--seat", s.color); place(sign, pod.x + 30, pod.y - 1, POD_W - 60, null);
+    const plate = document.createElement("button");
+    plate.type = "button";
+    plate.className = `plate seat-plate st-${s.status}` + (selected && selected.seat === s.id && !selected.session ? " sel" : "");
+    plate.style.setProperty("--seat", s.color);
+    place(plate, pod.x + 8, pod.y + 98, POD_W - 16, null);
+    const bar = (v) => `<span class="hp${v != null && v >= 90 ? " low" : ""}"><i style="width:${v == null ? 0 : Math.max(0, 100 - v)}%"></i></span>`;
+    const label = { working: "WORKING", idle: "IDLE", limited: "OUT OF PLAN", benched: "BENCHED", offline: "LOGGED OUT" }[s.status] || s.status;
+    plate.innerHTML = `<span class="pl-top"><b>${esc(s.nickname || s.label)}</b><span class="pl-st">${esc(label)}</span>` +
+      `${live.length > MAX_SLOTS ? `<span class="more">+${live.length - MAX_SLOTS}</span>` : ""}${(s.tokens_1h || 0) > 400000 ? `<span class="burn" title="Burning fast">🔥</span>` : ""}</span>` +
+      `<span class="pl-bars"><span class="pl-k">5H</span>${bar(p5)}<span class="pl-k">WK</span>${bar(pw)}</span>`;
+    plate.title = `${s.label}: plan left 5-hour ${p5 == null ? "?" : 100 - p5}%, week ${pw == null ? "?" : 100 - pw}%`;
+    plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; handlers.openSeat(s.id); });
+    overlay.appendChild(plate);
+    const pz = hot("pod", `${s.label} desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id));
+    pz.addEventListener("dblclick", (e) => { e.stopPropagation(); focusSeat(s.id); });
+    for (const a of agents.values()) {
+      if (a.seatId !== s.id) continue;
+      if (a.mode === "walking") { a.tagEl = div(`tag st-${a.sess.state} k-${a.sess.kind} walking`, short(a.sess.name), a.x + 5, a.y + 19); continue; }
+      const sp = seatSpot(pod, a.slot), sess = a.sess;
+      const b = hot("worker" + (selected && selected.session === sess.id ? " sel" : ""), `${sess.name} (${sess.state}): open details`,
+        sp.cx - 4, sp.top ? sp.seatY - 4 : sp.seatY - 6, 18, sp.top ? 24 : 22, () => handlers.openSession(s.id, sess.id));
+      b.addEventListener("mouseenter", () => { hoverId = sess.id; renderBubbles(); });
+      b.addEventListener("mouseleave", () => { hoverId = null; renderBubbles(); });
+      b.addEventListener("dblclick", (e) => { e.stopPropagation(); focusSession(sess.id); });
+      div(`tag st-${sess.state} k-${sess.kind}`, short(sess.name), sp.cx + 5, sp.top ? pod.y + 45 : pod.y + 86);
+    }
+  }
+
+  function short(n, max = 16) {
+    n = (n || "").replace(/^wt-/, "");
+    return n.length > max ? n.slice(0, max - 1) + "…" : n;
+  }
+
+  function bubbleText(sess) {
+    if (privacy && sess.kind === "desk") return sess.state === "idle" ? "Idle" : "Working…";
+    if (sess.state === "limited") return "Out of plan, waiting for the reset";
+    if (sess.state === "stuck") return "Quiet for a while: " + (sess.activity || "");
+    if (sess.state === "waiting") return "⏳ " + (sess.activity || "Waiting");
+    return sess.activity || sess.state;
+  }
+
+  function anchorFor(a) {
+    if (a.mode !== "seated") return [a.x + 5, a.y - 1];
+    const sp = seatSpot(a.pod, a.slot);
+    return [sp.cx + 5, sp.top ? sp.seatY - 3 : sp.seatY - 4];
+  }
+
+  function renderBubbles() {
+    if (!L) return;
+    const t = performance.now();
+    const want = new Set();
+    for (const a of agents.values()) {
+      const sess = a.sess, f = fresh.get(sess.id);
+      const show = hoverId === sess.id || (selected && selected.session === sess.id) || (f && f > t) || a.mode === "walking";
+      if (!show) continue;
+      want.add(sess.id);
+      let b = overlay.querySelector(`.bubble[data-sid="${CSS.escape(sess.id)}"]`);
+      if (!b) { b = document.createElement("div"); b.dataset.sid = sess.id; overlay.appendChild(b); }
+      const top = a.mode !== "seated" || seatSpot(a.pod, a.slot).top;
+      b.className = "bubble" + (top ? "" : " low") + (sess.state === "limited" ? " bad" : sess.state === "stuck" ? " warn" : "") + (a.mode === "walking" ? " hello" : "");
+      const txt = a.mode === "walking" ? `On my way to ${a.seatId}` : bubbleText(sess);
+      if (b.textContent !== txt) b.textContent = txt;
+      const [bx, by] = anchorFor(a);
+      place(b, bx, by);
+    }
+    overlay.querySelectorAll(".bubble").forEach(b => { if (!want.has(b.dataset.sid)) b.remove(); });
+  }
+
+  function moveDynamicDom() {
+    for (const a of agents.values()) {
+      if (a.mode !== "walking") continue;
+      if (a.tagEl) place(a.tagEl, a.x + 5, a.y + 19);
+      const b = overlay.querySelector(`.bubble[data-sid="${CSS.escape(a.id)}"]`);
+      if (b) place(b, a.x + 5, a.y - 1);
+    }
+    for (const a of leavers) if (a.tagEl) place(a.tagEl, a.x + 5, a.y + 19);
+    const now = performance.now();
+    for (let i = pops.length - 1; i >= 0; i--) if (pops[i].until < now) { pops[i].el.remove(); pops.splice(i, 1); }
+  }
+
+  // ----------------------------------------------------------------------------------------- camera
+  function sizes() { const r = stage.getBoundingClientRect(); return { sw: Math.max(1, r.width), sh: Math.max(1, r.height) }; }
+  function clampCam(c) {
+    const { sw, sh } = sizes();
+    const ww = W * F * c.tz, wh = H * F * c.tz;
+    c.tx = ww <= sw ? (sw - ww) / 2 : Math.min(0, Math.max(sw - ww, c.tx));
+    c.ty = wh <= sh ? (sh - wh) / 2 : Math.min(0, Math.max(sh - wh, c.ty));
+  }
+  function zoomAt(z, px, py) {
+    const nz = Math.max(1, Math.min(4, z));
+    const wx = (px - cam.tx) / cam.tz, wy = (py - cam.ty) / cam.tz;
+    cam.tz = nz; cam.tx = px - wx * nz; cam.ty = py - wy * nz;
+    clampCam(cam);
+  }
+  function focusRect(x, y, w, h) {
+    const { sw, sh } = sizes();
+    const z = Math.max(1, Math.min(3.2, Math.min(sw / (w * F * 1.25), sh / (h * F * 1.25))));
+    cam.tz = z; cam.tx = sw / 2 - (x + w / 2) * F * z; cam.ty = sh / 2 - (y + h / 2) * F * z;
+    clampCam(cam);
+  }
+  function focusSeat(id) { const p = L && L.pods.find(p => p.seat.id === id); if (p) focusRect(p.x, p.y - 4, POD_W, POD_H + 4); }
+  function focusSession(id) { const a = agents.get(id); if (!a) return; const [x, y] = anchorFor(a); focusRect(x - 44, y - 24, 88, 70); }
+  function fit() { cam.tz = 1; cam.tx = 0; cam.ty = 0; clampCam(cam); }
+  function applyCam(force) {
+    const dz = cam.tz - cam.z, dx = cam.tx - cam.x, dy = cam.ty - cam.y;
+    if (!force && Math.abs(dz) < 0.001 && Math.abs(dx) < 0.3 && Math.abs(dy) < 0.3) {
+      if (dz || dx || dy) { cam.z = cam.tz; cam.x = cam.tx; cam.y = cam.ty; world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`; }
+      return false;
+    }
+    if (reduced || force) { cam.z = cam.tz; cam.x = cam.tx; cam.y = cam.ty; }
+    else { cam.z += dz * 0.18; cam.x += dx * 0.18; cam.y += dy * 0.18; }
+    world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
+    stage.classList.toggle("zoomed", cam.tz > 1.01);
+    return true;
+  }
+
+  let dragStart = null, dragMoved = false;
+  stage.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest(".cam")) return;
+    dragStart = { x: e.clientX, y: e.clientY, tx: cam.tx, ty: cam.ty }; dragMoved = false;
+  });
+  window.addEventListener("pointermove", (e) => {
+    if (!dragStart) return;
+    const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+    if (!dragMoved && Math.hypot(dx, dy) > 5 && cam.tz > 1.01) { dragMoved = true; stage.classList.add("dragging"); }
+    if (dragMoved) { cam.tx = dragStart.tx + dx; cam.ty = dragStart.ty + dy; clampCam(cam); applyCam(true); }
+  });
+  window.addEventListener("pointerup", () => {
+    if (!dragStart) return;
+    dragStart = null; stage.classList.remove("dragging");
+    setTimeout(() => { dragMoved = false; }, 0);
+  });
+  stage.addEventListener("wheel", (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    zoomAt(cam.tz * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  stage.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".cam")) return;
+    const r = stage.getBoundingClientRect();
+    zoomAt(cam.tz < 1.6 ? 2.2 : 1, e.clientX - r.left, e.clientY - r.top);
+  });
+  stage.querySelectorAll("[data-cam]").forEach(b => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const { sw, sh } = sizes();
+    if (b.dataset.cam === "in") zoomAt(cam.tz * 1.4, sw / 2, sh / 2);
+    else if (b.dataset.cam === "out") zoomAt(cam.tz / 1.4, sw / 2, sh / 2);
+    else fit();
+  }));
+
+  // ------------------------------------------------------------------------------------- resolution
+  function resize() {
+    if (!L) return;
+    const { sw } = sizes();
+    F = sw / W;
+    world.style.width = W * F + "px"; world.style.height = H * F + "px";
+    stage.style.height = H * F + "px";
+    world.style.setProperty("--f", F);
+    clampCam(cam); applyCam(true);
+    reres(true);
+    ovKey = ""; renderOverlay();
+  }
+  function reres(force) {
+    const dpr = window.devicePixelRatio || 1;
+    const want = Math.max(1, Math.min(6, Math.ceil(F * cam.tz * dpr)));
+    if (!force && want === RES) return;
+    RES = want;
+    canvas.width = W * RES; canvas.height = H * RES;
+    canvas.style.width = W * F + "px"; canvas.style.height = H * F + "px";
+    bg.width = W * RES; bg.height = H * RES;
+    bgx.setTransform(RES, 0, 0, RES, 0, 0); bgx.imageSmoothingEnabled = false;
+    drawStatic(bgx, L, snap.seats, snap.units);
+  }
+  let reresTimer = 0;
+
+  // ------------------------------------------------------------------------------------------- loop
+  let lastDraw = 0, lastSec = 0;
+  function loop(t) {
+    const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
+    if (snap && L) {
+      if (applyCam(false)) { clearTimeout(reresTimer); reresTimer = setTimeout(() => reres(false), 160); }
+      stepAgents(dt); stepParticles(dt);
+      if (t - lastDraw >= (reduced ? 250 : 33)) { drawFrame(t); lastDraw = t; }
+      moveDynamicDom();
+      if (Math.floor(t / 1000) !== lastSec) {
+        lastSec = Math.floor(t / 1000);
+        let changed = false;
+        for (const [k, v] of fresh) if (v < t) { fresh.delete(k); changed = true; }
+        if (changed) renderBubbles();
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  let lastW = 0;
+  new ResizeObserver((en) => { const w = Math.round(en[0].contentRect.width); if (w !== lastW) { lastW = w; requestAnimationFrame(resize); } }).observe(stage);
+
+  // ----------------------------------------------------------------------------------------- public
+  function update(next) {
+    const prev = snap;
+    snap = next;
+    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color])) + "|" + (snap.units || []).length;
+    const relayout = key !== staticKey;
+    if (relayout) { L = computeLayout(snap.seats); H = L.H; staticKey = key; }
+    else L.pods.forEach((p, i) => { p.seat = snap.seats[i]; });
+    assign();
+    const t = performance.now();
+    const prevAct = new Map();
+    if (prev) for (const s of prev.seats) for (const x of s.sessions) prevAct.set(x.id, x.activity);
+    for (const s of snap.seats) for (const x of s.sessions) {
+      if (x.live === false) continue;
+      const busy = x.state === "working" || x.state === "waiting";
+      if (first && busy) fresh.set(x.id, t + 9000);
+      else if (prev && prevAct.get(x.id) !== x.activity && busy) fresh.set(x.id, t + 7000);
+    }
+    first = false;
+    if (relayout) resize(); else renderOverlay();
+  }
+
+  function celebrate(seatId, sessionId, text) {
+    if (!L) return;
+    let x, y;
+    const a = sessionId && agents.get(sessionId);
+    if (a) [x, y] = anchorFor(a);
+    else { const p = L.pods.find(p => p.seat.id === seatId); if (!p) return; x = p.x + POD_W / 2; y = p.y + 40; }
+    if (!reduced) burst(x, y, 46, "confetti");
+    pops.push({ el: div("pop good", text || "Shipped!", x, y - 6), until: performance.now() + 2600 });
+  }
+  function alarm(seatId, text) {
+    const p = L && L.pods.find(p => p.seat.id === seatId); if (!p) return;
+    pops.push({ el: div("pop bad", text || "Out of plan", p.x + POD_W / 2, p.y + 30), until: performance.now() + 2600 });
+  }
+
+  return {
+    update,
+    setSelected(sel) { selected = sel; ovKey = ""; renderOverlay(); },
+    setPrivacy(on) { privacy = on; ovKey = ""; renderOverlay(); },
+    setReducedMotion(on) { reduced = on; },
+    setMvp(m) { mvp = m && m.seat ? m : null; ovKey = ""; renderOverlay(); },
+    focusSeat, focusSession, fit, celebrate, alarm,
+    zoom(dir) { const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
+    pan(dx, dy) { cam.tx += dx; cam.ty += dy; clampCam(cam); },
+  };
 }

@@ -1,58 +1,75 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="office-token" content="{{TOKEN}}">
 <meta name="office-demo" content="{{DEMO}}">
+<meta name="color-scheme" content="dark light">
 <title>Claude Office</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Silkscreen&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750&family=Silkscreen&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="/static/app.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='3' width='14' height='12' fill='%233b4060'/%3E%3Crect x='3' y='5' width='3' height='3' fill='%23ffd76a'/%3E%3Crect x='7' y='5' width='3' height='3' fill='%23ffd76a'/%3E%3Crect x='11' y='5' width='2' height='3' fill='%2338e07b'/%3E%3Crect x='3' y='10' width='10' height='5' fill='%23d97757'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23121522'/%3E%3Crect x='3' y='3' width='3' height='3' fill='%23ffd76a'/%3E%3Crect x='7' y='3' width='3' height='3' fill='%23ffd76a'/%3E%3Crect x='11' y='3' width='2' height='3' fill='%2338e07b'/%3E%3Crect x='3' y='9' width='10' height='4' fill='%23ff7a45'/%3E%3C/svg%3E">
 </head>
 <body>
-<header class="top">
+<header class="hud">
   <div class="brand">
-    <span class="logo" aria-hidden="true"></span>
+    <canvas class="logo" id="logo" width="17" height="17" aria-hidden="true"></canvas>
     <div>
       <div class="brand-name" id="officeName">Claude Office</div>
-      <div class="brand-sub" id="summaryLine">Opening the office…</div>
+      <div class="brand-sub"><span class="live off" id="live"><i></i><span>CONNECTING</span></span><span id="summaryLine"></span></div>
     </div>
   </div>
-  <div class="caps" id="caps" aria-label="Plan left on every seat"></div>
-  <div class="actions">
-    <button class="btn ghost" id="btnView" title="Switch between the floor and the board (B)">Board</button>
-    <button class="btn ghost" id="btnPrivacy" title="Hide what interactive sessions are about, for screen sharing (P)">Share-safe</button>
-    <button class="btn ghost" id="btnDivider" title="Load divider (D)">Divider</button>
-    <button class="btn ghost" id="btnCheckpoint" title="Write down every session and how to resume it">Checkpoint</button>
-    <button class="btn primary" id="btnHire" title="Start a new lane (H)">Hire</button>
+  <div class="seats-hud" id="hudSeats" aria-label="Seats"></div>
+  <div class="hud-actions">
+    <button class="search" id="btnPalette" title="Search and commands"><span aria-hidden="true">⌕</span><span class="lbl">Search</span> <kbd>Ctrl K</kbd></button>
+    <button class="iconbtn" id="btnSound" title="Sound effects" aria-label="Sound effects">♪</button>
+    <button class="iconbtn" id="btnNotify" title="Desktop notifications" aria-label="Desktop notifications">🔔</button>
+    <button class="iconbtn" id="btnPrivacy" title="Share-safe: hide what interactive sessions are about (P)" aria-label="Share-safe mode">👁</button>
+    <button class="iconbtn" id="btnTheme" title="Theme" aria-label="Theme">◐</button>
+    <button class="iconbtn" id="btnSettings" title="Settings" aria-label="Settings">⚙</button>
+    <button class="iconbtn cp" id="btnCheckpoint" title="Checkpoint: write down every session and how to resume it" aria-label="Checkpoint">📌</button>
+    <button class="btn primary" id="btnHire" title="Start a new lane (H)">＋ Hire</button>
   </div>
 </header>
 
+<nav class="views" aria-label="Views">
+  <button class="tab on" data-view="floor">▦ Floor</button>
+  <button class="tab" data-view="timeline">≋ Timeline</button>
+  <button class="tab" data-view="board">▤ Board</button>
+  <button class="tab" data-view="stats">★ Today</button>
+  <span class="spacer"></span>
+  <span class="clock" id="clock"></span>
+</nav>
+
 <main class="main">
-  <section class="floor-wrap" id="floorWrap" aria-label="Office floor">
-    <div class="floor-scroll"><div class="floor" id="floor">
-      <canvas id="canvas" aria-hidden="true"></canvas>
-      <div class="overlay" id="overlay"></div>
-    </div></div>
-    <div class="board" id="board" hidden></div>
-    <div class="legend">
-      <span><i class="lg working"></i>Working</span>
-      <span><i class="lg waiting"></i>Waiting on a tool</span>
-      <span><i class="lg idle"></i>Idle</span>
-      <span><i class="lg limited"></i>Out of plan</span>
-      <span><i class="lg stuck"></i>Quiet 15 min+</span>
-      <span class="sep"></span>
-      <span><i class="lg lane"></i>Headless lane</span>
-      <span><i class="lg desk"></i>Interactive session</span>
+  <section class="viewport">
+    <div class="view" id="viewFloor">
+      <div class="stage-scroll"><div class="stage" id="stage" aria-label="Office floor"></div></div>
+      <div class="legend" style="margin-top:10px">
+        <span><i class="lg working"></i>Working</span>
+        <span><i class="lg waiting"></i>Waiting on a tool</span>
+        <span><i class="lg idle"></i>Idle</span>
+        <span><i class="lg limited"></i>Out of plan</span>
+        <span><i class="lg stuck"></i>Quiet 15 min+</span>
+        <span class="sep"></span>
+        <span><i class="lg lane"></i>Headless lane</span>
+        <span><i class="lg desk"></i>Interactive (headset)</span>
+        <span class="sep"></span>
+        <span>🛸 helper drone = a subagent at work</span>
+      </div>
     </div>
+    <div class="view" id="viewTimeline" hidden></div>
+    <div class="view" id="viewBoard" hidden></div>
+    <div class="view" id="viewStats" hidden></div>
   </section>
   <aside class="panel" id="panel" aria-live="polite"></aside>
 </main>
 
-<footer class="ticker" id="ticker" aria-label="Office news"><div class="ticker-in" id="tickerIn"></div></footer>
-<div class="toast" id="toast" role="status" hidden></div>
+<footer class="ticker" aria-label="Office news"><div class="ticker-in" id="tickerIn"></div></footer>
+<div class="toasts" id="toasts" role="status"></div>
+<div class="tip" id="tip" hidden></div>
 <dialog id="dialog"><div id="dialogBody"></div></dialog>
 <script type="module" src="/static/app.js"></script>
 </body>

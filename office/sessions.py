@@ -165,7 +165,7 @@ def _user_text(content) -> str | None:
 class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
-                 "limited_at", "limit_text", "last_text", "partial", "ino")
+                 "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total")
 
     def __init__(self, path: Path):
         self.path = path
@@ -181,6 +181,7 @@ class TranscriptState:
         self.activity_kind = None
         self.recent: list[dict] = []
         self.tool_calls = 0
+        self.fresh_total = 0
         self.ledger: list[tuple[float, int, int]] = []  # (ts, fresh input+output tokens, cache-read tokens)
         self.seen_ids: dict[str, float] = {}
         self.limited_at = None
@@ -238,11 +239,13 @@ class TranscriptState:
             self.model = model
         mid = msg.get("id")
         usage = msg.get("usage") if isinstance(msg.get("usage"), dict) else {}
-        if isinstance(mid, str) and mid not in self.seen_ids and usage and ts:
-            self.seen_ids[mid] = ts
+        if isinstance(mid, str) and mid not in self.seen_ids and usage:
+            self.seen_ids[mid] = ts or 0
             fresh = int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0) \
                 + int(usage.get("cache_creation_input_tokens") or 0)
-            self.ledger.append((ts, fresh, int(usage.get("cache_read_input_tokens") or 0)))
+            self.fresh_total += fresh
+            if ts:
+                self.ledger.append((ts, fresh, int(usage.get("cache_read_input_tokens") or 0)))
         for c in content:
             if not isinstance(c, dict):
                 continue
@@ -270,8 +273,6 @@ class TranscriptState:
         cut = now - LEDGER_SECONDS
         if self.ledger and self.ledger[0][0] < cut:
             self.ledger = [e for e in self.ledger if e[0] >= cut]
-        if len(self.seen_ids) > 4000:
-            self.seen_ids = {k: v for k, v in self.seen_ids.items() if v >= cut}
 
     def tokens(self, since: float) -> dict:
         fresh = sum(e[1] for e in self.ledger if e[0] >= since)
@@ -435,6 +436,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "model": tr.model if tr else None,
             "tool_calls": tr.tool_calls if tr else 0,
             "recent": list(tr.recent[-8:]) if tr else [],
+            "tokens_total": tr.fresh_total if tr else 0,
             "tokens_1h": tr.tokens(now - 3600) if tr else None,
             "tokens_5h": tr.tokens(now - 5 * 3600) if tr else None,
             "cpu_s": proc_cpu_seconds(pid),

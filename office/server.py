@@ -8,13 +8,15 @@ from __future__ import annotations
 import hmac
 import json
 import mimetypes
+import select
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import checkpoint, config, divider, lanes, sessions
+from . import checkpoint, config, divider, lanes, sessions, settings
 
 MAX_BODY = 256 * 1024
 
@@ -24,7 +26,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/1.0"
+    server_version = "ClaudeOffice/2.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -84,6 +86,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._static(url.path[len("/static/"):])
             if url.path == "/api/state":
                 return self._json(200, self.office.get())
+            if url.path == "/api/stream":
+                return self._stream()
+            if url.path == "/api/history":
+                return self._json(200, self.office.samples.query(self.office.get(), int(q.get("hours", "6")),
+                                                               list(self.office.events)))
+            if url.path == "/api/stats":
+                return self._json(200, self.office.samples.stats(self.office.get(), q.get("day"),
+                                                               list(self.office.events)))
+            if url.path == "/api/settings":
+                return self._json(200, settings.view(self.office.cfg, self.office.get().get("seats", [])))
             if url.path == "/api/session":
                 return self._json(200, self._session_detail(q.get("seat", ""), q.get("id", "")))
             if url.path == "/api/lane":
@@ -95,6 +107,57 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # never drop the connection on a surprise; say what kind of failure it was
             return self._json(500, {"error": f"Internal error: {type(e).__name__}"})
         return self._send(404, b"not found", "text/plain")
+
+    def _stream(self):
+        office = self.office
+        subscription = office.subscribe()
+        if subscription is None:
+            return self._json(503, {"error": "Too many stream clients"})
+        client, last_hash, initial = subscription
+        self.close_connection = True
+        try:
+            self.connection.settimeout(5)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Accel-Buffering", "no")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(f"event: state\ndata: {initial}\n\n".encode())
+            self.wfile.flush()
+            last_state = last_write = time.monotonic()
+            while not office.stop.is_set():
+                # Detect FIN without waiting for the next heartbeat to free the slot.
+                if select.select([self.connection], [], [], 0)[0]:
+                    if not self.connection.recv(1, socket.MSG_PEEK):
+                        break
+                with office.condition:
+                    if client.closed:
+                        break
+                    now = time.monotonic()
+                    news = list(client.news)
+                    client.news.clear()
+                    state = None
+                    if office._state_hash != last_hash and now - last_state >= 1.5:
+                        state, last_hash = office._state_json, office._state_hash
+                        last_state = now
+                    ping = now - last_write >= 15
+                    if not news and state is None and not ping:
+                        delay = max(0.01, 1.5 - (now - last_state)) if office._state_hash != last_hash else 0.5
+                        office.condition.wait(min(0.5, delay))
+                        continue
+                for event in news:
+                    self.wfile.write(f"event: news\ndata: {event}\n\n".encode())
+                if state is not None:
+                    self.wfile.write(f"event: state\ndata: {state}\n\n".encode())
+                if ping and not news and state is None:
+                    self.wfile.write(b": ping\n\n")
+                self.wfile.flush()
+                last_write = time.monotonic()
+        except (OSError, ConnectionError):
+            pass
+        finally:
+            office.unsubscribe(client)
 
     def _static(self, rel: str):
         base = config.WEB_DIR.resolve()
@@ -142,6 +205,12 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         try:
             body = self._body()
+            if path == "/api/settings":
+                if self.demo:
+                    return self._json(200, {"ok": True, "demo": True})
+                settings.save(body)
+                self.office.build()
+                return self._json(200, dict(settings.view(self.office.cfg, self.office.get().get("seats", [])), ok=True))
             if self.demo and path not in ("/api/checkpoint", "/api/divider/preview"):
                 return self._json(200, {"ok": True, "demo": True, "note": "Demo office: nothing was changed"})
             snap = self.office.get()

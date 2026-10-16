@@ -15,6 +15,9 @@ from collections import deque
 from pathlib import Path
 
 from . import config, divider, lanes, seats as seatmod, sessions
+from .history import HistoryStore
+from .live import LiveOffice, public
+from .voice import Announcer
 
 try:  # written by the Astra lane; the office still runs without it
     from .codex_seat import read_codex_seat
@@ -187,8 +190,12 @@ def quick_seats(now: float | None = None) -> list[dict]:
     return out
 
 
-class Office:
+class Office(LiveOffice):
     def __init__(self, demo: bool = False):
+        self.init_live()
+        self.demo = demo
+        self.announcer = Announcer()
+        self._build_lock = threading.RLock()
         self.cfg = config.load_config()
         self.claude_seats = config.discover_claude_seats(self.cfg)
         self.codex_meta = config.codex_seat_meta(self.cfg)
@@ -198,13 +205,15 @@ class Office:
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
         self._load_events()
+        self.samples = HistoryStore(config.STATE_DIR / "history.jsonl", self._events_path,
+                                    lanes_path=config.DATA_DIR / "lanes")
         self.snapshot: dict = {}
         self._prev: dict | None = None
+        self._reported: set[str] = set()
         self._units: list[dict] = []
         self._units_at = 0.0
         self._codex: dict | None = None
         self._codex_at = 0.0
-        self._lock = threading.Lock()
         self.stop = threading.Event()
 
     # -- events --------------------------------------------------------------------------------------------
@@ -217,8 +226,11 @@ class Office:
             pass
 
     def emit(self, kind: str, text: str, seat: str | None = None, level: str = "info", ts: float | None = None):
-        ev = {"ts": ts or time.time(), "kind": kind, "text": text, "seat": seat, "level": level}
-        self.events.append(ev)
+        ev = public({"ts": time.time() if ts is None else ts, "kind": kind, "text": text, "seat": seat, "level": level})
+        with self.condition:
+            self.events.append(ev)
+            self.notify_news(ev)
+        self.announcer.announce(ev, self.cfg, demo=self.demo)
         try:
             config.STATE_DIR.mkdir(parents=True, exist_ok=True)
             with open(self._events_path, "a") as f:
@@ -247,7 +259,8 @@ class Office:
                         self.emit("limit", f"{x['name']} on {s['label']} hit the usage limit", s["id"], "warn")
                     if x["state"] == "stuck" and was != "stuck":
                         self.emit("stuck", f"{x['name']} on {s['label']} has been quiet for 15+ minutes", s["id"], "warn")
-                    if x.get("report_status") and not psess[sid].get("report_status"):
+                    if x.get("report_status") and not psess[sid].get("report_status") and sid not in self._reported:
+                        self._reported.add(sid)
                         lvl = "warn" if "BLOCKED" in x["report_status"].upper() else "good"
                         self.emit("report", f"{x['name']} filed its report: {x['report_status']}", s["id"], lvl)
             for sid, x in psess.items():
@@ -277,8 +290,18 @@ class Office:
 
     # -- build ---------------------------------------------------------------------------------------------
     def build(self) -> dict:
+        with self._build_lock:
+            return self._build()
+
+    def _build(self) -> dict:
         now = time.time()
         cfg = self.cfg = config.load_config()
+        self.claude_seats = config.discover_claude_seats(cfg)
+        self.usage.seats = self.claude_seats
+        meta = config.codex_seat_meta(cfg)
+        if meta != self.codex_meta:
+            self._codex = None
+        self.codex_meta = meta
         div_ids = [s["id"] for s in self.claude_seats] + ([self.codex_meta["id"]] if self.codex_meta else [])
         div = divider.load(div_ids)
         seats_out = []
@@ -312,6 +335,10 @@ class Office:
             t1 = sum((x.get("tokens_1h") or {}).get("fresh", 0) for x in live)
             s["tokens_1h"] = t1
             s["status"] = self._seat_status(s, sc, live)
+            # A pace measured while lanes ran says nothing once the seat stops working: don't raise an alarm on it.
+            for fc in (s.get("forecast") or {}).values():
+                if fc.get("state") == "runs_out" and s["status"] != "working":
+                    fc["state"] = "paused"
             for x in s["sessions"]:
                 prog = programme_for(cfg, x.get("unit"), x.get("name"), x.get("cwd"), x.get("task"))
                 x["programme"] = prog
@@ -331,7 +358,7 @@ class Office:
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "2.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -344,12 +371,14 @@ class Office:
         }
         snap["attention"] = self._attention(snap)
         snap["totals"] = self._totals(snap)
+        if self._prev:
+            self._diff(self._prev, snap)
+        self._prev = snap
+        self._reported.update(x["id"] for s in snap["seats"] for x in s["sessions"] if x.get("report_status"))
         with self._lock:
-            if self._prev:
-                self._diff(self._prev, snap)
-            self._prev = snap
             snap["events"] = list(self.events)[-60:]
-            self.snapshot = snap
+            snap = self.publish(snap)
+        self.samples.record(snap)
         return snap
 
     @staticmethod

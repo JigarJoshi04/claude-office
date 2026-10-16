@@ -10,6 +10,8 @@ from collections import deque
 
 from . import config, divider
 from .snapshot import Office
+from .history import HistoryStore
+from .live import LiveOffice, public
 
 ACTIVITY = {
     "orchestrator": [("Reading lane reports", "read"), ("Writing: L12 is green, merging it now", "talk"),
@@ -39,6 +41,7 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "last_text": "Tests pass locally; pushing the branch and opening the PR next.",
         "limit_text": "You've hit your session limit · resets 9:40pm (Asia/Kolkata)" if state == "limited" else None,
         "model": "claude-opus-5-5", "tool_calls": 40 + hash(sid) % 160, "recent": recent,
+        "tokens_total": tokens * 3,
         "tokens_1h": {"fresh": tokens, "cached": tokens * 30, "turns": tokens // 4000},
         "tokens_5h": {"fresh": tokens * 3, "cached": tokens * 90, "turns": tokens // 1300},
         "cpu_s": 312.0, "state_file": "/home/you/work/handover/L12-STATE.md" if kind == "lane" else None,
@@ -55,8 +58,10 @@ class _NoPoll:
         pass
 
 
-class DemoOffice:
+class DemoOffice(LiveOffice):
     def __init__(self):
+        self.init_live()
+        self.samples = HistoryStore()
         self.cfg = dict(config.DEFAULTS, office_name="Claude Office", ceo={"name": "Alex", "title": "CEO"},
                         default_workdir="/home/you/work")
         self.usage = _NoPoll()
@@ -75,7 +80,10 @@ class DemoOffice:
             self.events.append({"ts": t - 600 + i * 90, "kind": "demo", "text": txt, "seat": seat, "level": lvl})
 
     def emit(self, kind, text, seat=None, level="info", ts=None):
-        self.events.append({"ts": ts or time.time(), "kind": kind, "text": text, "seat": seat, "level": level})
+        event = public({"ts": time.time() if ts is None else ts, "kind": kind, "text": text, "seat": seat, "level": level})
+        with self.condition:
+            self.events.append(event)
+            self.notify_news(event)
 
     def build(self):
         now = time.time()
@@ -92,13 +100,13 @@ class DemoOffice:
                     "fetched_at": now - 40, "stale": False, "error": None, "scoped": []}
 
         seats = [
-            dict(id="claude", kind="claude", label="claude", nickname="Main", color="#d97757", config_dir="~/.claude",
+            dict(id="claude", kind="claude", label="claude", nickname="Main", color="#d95926", config_dir="~/.claude",
                  account={"name": "Alex", "email": "alex@example.com", "org": "Acme", "role": "owner"},
                  health={"state": "ok", "detail": "Logged in", "tier": "Max 5x", "subscription": "team"},
                  usage=usage(12, 71, 4 * 3600, 2.5 * 86400),
                  sessions=[_sess("claude", "d-main-1", "ops-desk", "desk", "idle", None, now, 7200,
                                  title="Quarterly planning notes")]),
-            dict(id="claude2", kind="claude", label="claude2", nickname="Atlas", color="#5b8def", config_dir="~/.claude2",
+            dict(id="claude2", kind="claude", label="claude2", nickname="Atlas", color="#3987e5", config_dir="~/.claude2",
                  account={"name": "Seat Two", "email": "seat2@example.com", "org": "Acme", "role": "member"},
                  health={"state": "ok", "detail": "Logged in", "tier": "Max 5x", "subscription": "team"},
                  usage=usage(64, 48, 2.1 * 3600, 3 * 86400),
@@ -109,7 +117,7 @@ class DemoOffice:
                            _sess("claude2", "l-bill", "billing-migration", "lane", "waiting", "billing", now, 2400,
                                  title="Billing tables migration", unit="billing-lane-b3.service",
                                  cwd="/home/you/work/billing", tokens=210000)]),
-            dict(id="claude3", kind="claude", label="claude3", nickname="Vega", color="#3fb68b", config_dir="~/.claude3",
+            dict(id="claude3", kind="claude", label="claude3", nickname="Vega", color="#199e70", config_dir="~/.claude3",
                  account={"name": "Seat Three", "email": "seat3@example.com", "org": "Acme", "role": "member"},
                  health={"state": "ok", "detail": "Logged in", "tier": "Max 5x", "subscription": "team"},
                  usage=usage(100, 62, 38 * 60, 4 * 86400),
@@ -117,11 +125,11 @@ class DemoOffice:
                                  title="Checkout flaky tests", unit="apollo-lane-l13.service"),
                            _sess("claude3", "l-search", "search-index", "lane", "limited", "billing", now, 6100,
                                  title="Search index rebuild", unit="apollo-lane-l14.service")]),
-            dict(id="claude4", kind="claude", label="claude4", nickname="Orion", color="#c678dd", config_dir="~/.claude4",
+            dict(id="claude4", kind="claude", label="claude4", nickname="Orion", color="#9085e9", config_dir="~/.claude4",
                  account={"name": "Seat Four", "email": "seat4@example.com", "org": "Acme", "role": "member"},
                  health={"state": "stale", "detail": "Login refreshes on the next run", "tier": "Max 5x", "subscription": "team"},
                  usage=usage(3, 22, 5 * 3600, 5 * 86400), sessions=[]),
-            dict(id="astra", kind="codex", label="Astra", nickname="Codex", color="#10a37f", config_dir="~/.codex",
+            dict(id="astra", kind="codex", label="Astra", nickname="Codex", color="#008300", config_dir="~/.codex",
                  account={"name": "ChatGPT plan"}, health={"state": "ok", "detail": "Codex CLI", "tier": "gpt"},
                  usage=usage(18, 30, 3 * 3600, 6 * 86400),
                  sessions=[_sess("astra", "c-docs", "docs-refresh", "lane", "working", "docs", now, 1500,
@@ -160,6 +168,11 @@ class DemoOffice:
              "unit": "office-lane-1016-101500-weekly-dependency-bump", "report_status": "STATUS: DONE - 14 packages bumped, PR #480",
              "state_tail": None, "unit_active": False},
         ]
+        lanes.append({"id": "1016-150000-nightly-flake-hunt", "title": "Nightly flake hunt", "workdir": "/home/you/work/apollo",
+                      "seat_pref": "auto", "model": "opus", "permission_mode": "acceptEdits", "created_at": now - 300,
+                      "status": "waiting", "seat": None, "runs": [], "unit": "office-lane-1016-150000-nightly-flake-hunt",
+                      "waiting_reason": "Every seat is busy or at its cap", "report_status": None, "state_tail": None,
+                      "unit_active": True})
         units = [
             {"unit": "apollo-conductor.service", "active": "active", "sub": "running", "description": "Apollo conductor (lanes, integrator)"},
             {"unit": "apollo-lane-l12.service", "active": "active", "sub": "running", "description": "Apollo lane L12"},
@@ -169,7 +182,7 @@ class DemoOffice:
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "2.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,
@@ -177,17 +190,84 @@ class DemoOffice:
                 "suggested_weights": divider.suggest(seats, div)}
         snap["attention"] = Office._attention(snap)
         snap["totals"] = Office._totals(snap)
+        if not getattr(self, "_seeded", False):
+            self._seed_history(snap)
+            self._seeded = True
         snap["events"] = list(self.events)[-60:]
-        self.snapshot = snap
+        snap = self.publish(snap)
+        self.samples.record(snap)
         return snap
+
+    def _seed_history(self, snap):
+        """Six made-up hours so the timeline and today's stats have something to show."""
+        now = snap["now"]
+        start = now - 6 * 3600
+        live = {x["id"]: (s["id"], x) for s in snap["seats"] for x in s["sessions"]}
+        past = [  # finished sessions: (id, seat, name, kind, from_ago, to_ago, report)
+            ("old-deps", "claude4", "dependency-bump", "lane", 5.2 * 3600, 3.3 * 3600, "STATUS: DONE - 14 packages bumped, PR #480"),
+            ("old-l11", "claude2", "apollo-l11-search", "lane", 4.6 * 3600, 2.7 * 3600, "STATUS: READY #477"),
+            ("old-perf", "claude3", "perf-audit", "lane", 5.9 * 3600, 4.1 * 3600, "STATUS: DONE - p95 down 38%"),
+            ("old-astra", "astra", "changelog-draft", "lane", 3.9 * 3600, 3.1 * 3600, "STATUS: DONE - changelog drafted"),
+        ]
+        rows = []
+        t = start
+        while t < now - 60:
+            ago = now - t
+            sessions = {}
+            for sid, (seat, x) in live.items():
+                age = now - (x.get("started_at") or now)
+                if ago > age:
+                    continue
+                k = int(t // 60)
+                if x["state"] == "limited":
+                    state = "limited" if ago < 40 * 60 else ("waiting" if k % 23 < 3 else "working")
+                elif x["kind"] == "desk" and x["state"] == "idle":
+                    state = "working" if (k // 9) % 5 == 0 else "idle"
+                else:
+                    state = "waiting" if k % 19 < 3 else "working"
+                done = max(0.0, (age - ago) / max(age, 1))
+                sessions[sid] = [seat, x["name"], x["kind"], state, x.get("title"), None,
+                                 int(done * x["tokens_5h"]["fresh"] * 1.6), int(done * (x.get("tool_calls") or 0))]
+            for sid, seat, name, kind, a0, a1, rep in past:
+                if a1 <= ago <= a0:
+                    frac = (a0 - ago) / (a0 - a1)
+                    sessions[sid] = [seat, name, kind, "waiting" if int(t // 60) % 17 < 3 else "working", None,
+                                     rep if ago < a1 + 120 else None, int(frac * 900000), int(frac * 240)]
+            hrs = ago / 3600
+            seats = {
+                "claude": [12.0 - min(4, hrs), 71.0 - hrs * 0.4, 0, 0, 0],
+                "claude2": [(64 - (2.1 - hrs) * 0 - hrs * 25.0) if hrs < 2.1 else max(0.0, 88 - (hrs - 2.1) * 22), 48 - hrs * 1.6,
+                            2, 2 if hrs < 0.9 else 1, 420000],
+                "claude3": [100.0 if hrs < 0.66 else max(0.0, 100 - (hrs - 0.66) * 21), 62 - hrs * 1.9, 0 if hrs < 0.66 else 2, 2, 380000],
+                "claude4": [3.0 if hrs < 3.2 else max(0.0, 70 - (hrs - 3.2) * 24), 22 - hrs * 1.1, 0 if hrs < 3.3 else 1, 0 if hrs < 3.3 else 1, 0],
+                "astra": [18.0 - hrs * 3 if hrs < 4 else 6.0, 30 - hrs, 1 if hrs < 0.42 or 3.1 < hrs < 3.9 else 0, 1 if hrs < 0.42 else 0, 90000],
+            }
+            seats = {k: [None if v is None else (round(max(0.0, min(100.0, v)), 1) if i < 2 else v) for i, v in enumerate(vals)]
+                     for k, vals in seats.items()}
+            rows.append({"ts": t, "seats": seats, "sessions": sessions, "first_seen": {}})
+            t += 60
+        with self.samples.lock:
+            self.samples.rows = rows + self.samples.rows
+            for r in rows:
+                for sid in r["sessions"]:
+                    self.samples.first_seen.setdefault(sid, r["ts"])
+        for ago, kind, seat, text, level in [
+            (5.9 * 3600, "lane", "claude3", "perf-audit sat down at claude3 (lane)", "info"),
+            (4.1 * 3600, "report", "claude3", "perf-audit filed its report: STATUS: DONE - p95 down 38%", "good"),
+            (3.3 * 3600, "report", "claude4", "dependency-bump filed its report: STATUS: DONE - 14 packages bumped, PR #480", "good"),
+            (3.1 * 3600, "report", "astra", "changelog-draft filed its report: STATUS: DONE - changelog drafted", "good"),
+            (2.9 * 3600, "reset", "claude2", "claude2 5-hour window reset: back to 0%", "good"),
+            (2.7 * 3600, "report", "claude2", "apollo-l11-search filed its report: STATUS: READY #477", "good"),
+            (0.7 * 3600, "usage", "claude3", "claude3 passed 95% of its 5-hour window", "bad"),
+            (0.66 * 3600, "limit", "claude3", "checkout-tests on claude3 hit the usage limit", "warn"),
+        ]:
+            self.events.append({"ts": now - ago, "kind": kind, "text": text, "seat": seat, "level": level})
+        self.events = deque(sorted(self.events, key=lambda e: e["ts"]), maxlen=200)
 
     def run(self):
         while not self.stop.is_set():
             self.build()
             self.stop.wait(3)
-
-    def get(self):
-        return self.snapshot
 
     def find_session(self, seat_id, session_id):
         for s in self.snapshot.get("seats", []):

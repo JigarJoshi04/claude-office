@@ -215,6 +215,21 @@ class TranscriptTests(unittest.TestCase):
         self.assertEqual(state.tokens(self.now - 1), {"fresh": 30, "cached": 80, "turns": 2})
         self.assertEqual(state.tokens(self.now + 1), {"fresh": 0, "cached": 0, "turns": 0})
 
+    def test_cumulative_fresh_tokens_survive_trim_and_old_duplicates(self):
+        state = sessions.TranscriptState(self.path)
+        for i in range(4002):
+            state.feed_line(self.encoded(self.record(mid=f"m{i}")))
+        state.trim(self.now + sessions.LEDGER_SECONDS + 1)
+        self.assertEqual(state.tokens(0)["fresh"], 0)
+        self.assertEqual(state.fresh_total, 4002 * 15)
+        state.feed_line(self.encoded(self.record(mid="m0")))
+        self.assertEqual(state.fresh_total, 4002 * 15)
+        record = self.record(mid="without-timestamp")
+        del record["timestamp"]
+        state.feed_line(self.encoded(record))
+        state.feed_line(self.encoded(record))
+        self.assertEqual(state.fresh_total, 4003 * 15)
+
     def test_synthetic_limit_marks_limited_then_real_user_clears_it(self):
         record = self.record(text="You've hit your session limit · resets 3am (Asia/Kolkata)")
         record["message"]["model"] = "<synthetic>"
@@ -263,6 +278,7 @@ class ListSessionsTests(unittest.TestCase):
             self.assertEqual(result[0]["state"], "working")
             self.assertEqual(result[0]["cpu_s"], 2.5)
             self.assertEqual(result[0]["unit"], "office-lane-test.service")
+            self.assertEqual(result[0]["tokens_total"], 0)
             for mock in (argv, unit, cpu):
                 mock.assert_called_once_with(103)
             self.assertEqual(sessions.list_sessions({"id": "absent", "config_dir": str(root / "missing")},

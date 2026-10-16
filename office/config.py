@@ -20,9 +20,9 @@ WEB_DIR = REPO_DIR / "web"
 
 DEFAULT_PORT = 7420
 
-# Seat colours: one per desk pod, picked to stay distinct on the office floor in both themes.
-PALETTE = ["#d97757", "#5b8def", "#3fb68b", "#c678dd", "#e5a50a", "#e06c75", "#56b6c2"]
-ASTRA_COLOR = "#10a37f"
+# Seat colours, in fixed order: validated for lightness, chroma, colour-blind separation and contrast on dark.
+PALETTE = ["#d95926", "#3987e5", "#199e70", "#9085e9", "#c98500", "#d55181"]
+ASTRA_COLOR = "#008300"
 
 DEFAULTS: dict = {
     "port": DEFAULT_PORT,
