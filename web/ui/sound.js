@@ -36,6 +36,9 @@ const SFX = {
 export const sound = {
   get on() { return on; },
   set(v) { on = !!v; if (on) ctx(); },
+  preview(name) {                       // the Settings "Play" button: one sound, without switching effects on
+    try { if (SFX[name]) SFX[name](); } catch { /* audio is a nicety */ }
+  },
   play(name) {
     if (!on || !SFX[name]) return;
     const t = performance.now();

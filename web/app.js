@@ -135,7 +135,11 @@ async function loadDetail(key, force) {
   details.set(key, { data: c ? c.data : null, at: Date.now() });
   const url = key.startsWith("s:") ? (() => { const [seat, id] = key.slice(2).split("/"); return `/api/session?seat=${encodeURIComponent(seat)}&id=${encodeURIComponent(id)}`; })()
     : `/api/lane?id=${encodeURIComponent(key.slice(2))}`;
-  try { const r = await fetch(url); if (r.ok) { details.set(key, { data: await r.json(), at: Date.now() }); renderPanel(true); } } catch { /* keep the last copy */ }
+  try {
+    const r = await fetch(url);
+    if (r.ok) { details.set(key, { data: await r.json(), at: Date.now() }); renderPanel(true); }
+    else if (r.status === 400 || r.status === 404) { details.set(key, { data: { missing: true }, at: Date.now() }); renderPanel(true); }   // gone: say so
+  } catch { /* keep the last copy */ }
 }
 async function loadChat(seat, id, force) {
   const k = seat + "/" + id;
@@ -316,7 +320,7 @@ function renderRightNow() {
   rnSig = sig;
   const el = $("rightnow");
   if (!rows.length) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div class="rn-h"><h4>Right now</h4><span class="hint">${rows.length} at work</span></div><div class="rn-grid">${rows.map(({ s, x }) => {
+  el.innerHTML = `<div class="rn-h"><h4>Right now</h4><span class="hint">${(() => { const w = rows.filter(r => r.x.state === "working" || r.x.state === "waiting").length, o = rows.length - w; return `${w} at work${o ? `, ${o} stopped` : ""}`; })()}</span></div><div class="rn-grid">${rows.map(({ s, x }) => {
     const p = panels.persona(s);
     const act = prefs.privacy && x.kind === "desk" ? "Working…" : (x.activity || x.state);
     return `<button class="rn" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" style="--seat:${s.color}">
@@ -510,7 +514,7 @@ async function checkpoint() {
   } catch (e) { toast("Checkpoint failed: " + e.message, "bad"); }
 }
 function broadcast() {
-  const targets = snap.seats.flatMap(s => live(s).filter(x => x.kind === "lane" && x.talk && x.talk !== "none" && x.talk !== "followup").map(x => ({ s, x })));
+  const targets = snap.seats.flatMap(s => live(s).filter(x => x.kind === "lane" && (x.talk === "direct" || x.talk === "review")).map(x => ({ s, x })));
   const who = (s) => panels.persona(s).name;
   $("dialogBody").innerHTML = `<div class="dh"><b>Message all lanes</b><button class="btn sm ghost" id="bClose">${icon("x", 16)}</button></div>
     <div class="db">${targets.length ? `<p class="muted" style="margin-top:0">One message to every running background lane. Lanes you hired here get it straight away; others may wait for approval in their terminal.</p>
@@ -519,6 +523,7 @@ function broadcast() {
       <div class="row" style="margin-top:12px;gap:8px"><button class="btn primary" id="bSend">${icon("send", 16)}Send to selected</button><span class="hint" id="bStatus"></span></div>`
       : `<p class="muted" style="margin-top:0">No running lanes can take a message right now.</p>`}</div>`;
   $("dialog").showModal();
+  if ($("bText")) $("bText").focus();
   $("bClose").addEventListener("click", () => $("dialog").close());
   const send = $("bSend");
   if (send) send.addEventListener("click", async () => {
@@ -560,12 +565,13 @@ function paletteItems() {
     { icon: icon("settings", 16), label: "Settings", run: () => go({ kind: "settings" }) },
     { icon: icon("server", 16), label: "Server room", run: () => go({ kind: "services" }) },
   ];
+  // Share-safe: a terminal session's topic never becomes a search keyword.
   for (const s of snap.seats) {
     const p = panels.persona(s);
     items.push({ icon: icon("users", 16), label: `${p.name} · ${p.role}`, hint: SEAT_LABEL[s.status] || s.status, keywords: s.label, run: () => { go({ kind: "seat", seat: s.id }); if (prefs.view === "floor") office.focusSeat(s.id); } });
     for (const x of live(s)) {
-      items.push({ icon: icon(x.kind === "desk" ? "terminal" : "bot", 16), label: x.name, hint: `${p.name} · ${x.state}`, keywords: (x.title || "") + " " + (prefs.privacy && x.kind === "desk" ? "" : x.activity || ""), run: () => { go({ kind: "session", seat: s.id, id: x.id }); if (prefs.view === "floor") office.focusSession(x.id); } });
-      if (x.talk && x.talk !== "none") items.push({ icon: icon("chat", 16), label: `Message ${x.name}`, hint: p.name, keywords: "chat talk send", run: () => go({ kind: "session", seat: s.id, id: x.id }) });
+      items.push({ icon: icon(x.kind === "desk" ? "terminal" : "bot", 16), label: x.name, hint: `${p.name} · ${x.state}`, keywords: prefs.privacy && x.kind === "desk" ? "" : (x.title || "") + " " + (x.activity || ""), run: () => { go({ kind: "session", seat: s.id, id: x.id }); if (prefs.view === "floor") office.focusSession(x.id); } });
+      if (["direct", "review", "followup"].includes(x.talk)) items.push({ icon: icon("chat", 16), label: `Message ${x.name}`, hint: p.name, keywords: "chat talk send", run: () => go({ kind: "session", seat: s.id, id: x.id }) });
     }
   }
   for (const l of snap.lanes || []) items.push({ icon: icon("briefcase", 16), label: "Lane: " + l.title, hint: l.status, run: () => go({ kind: "lane", id: l.id }) });
@@ -581,11 +587,13 @@ document.querySelectorAll(".tab").forEach(t => {
   t.innerHTML = `${icon(ic, 17)}${label}`;
   t.addEventListener("click", () => { sound.play("click"); setView(t.dataset.view); });
 });
-$("btnPalette").addEventListener("click", () => snap && openPalette(paletteItems()));
+// After a palette command, keyboard focus lands in the inspector instead of falling back to the page.
+const landFocus = (items) => items.map(it => ({ ...it, run: () => { it.run(); setTimeout(() => { if (document.activeElement === document.body) $("panel").focus({ preventScroll: true }); }, 0); } }));
+$("btnPalette").addEventListener("click", () => snap && openPalette(landFocus(paletteItems())));
 $("btnHire").addEventListener("click", () => go({ kind: "hire" }));
 $("btnMenu").addEventListener("click", (e) => { e.stopPropagation(); openMenu(); });
 document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap) openPalette(paletteItems()); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap) openPalette(landFocus(paletteItems())); return; }
   // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).
   if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back, dialog[open]")) return;
   const k = e.key;

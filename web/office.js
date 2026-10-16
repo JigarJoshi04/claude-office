@@ -537,7 +537,7 @@ export function createOffice(stage, handlers) {
     });
     hot("hire", "Hiring desk: start a new lane", L.hire.x + 8, L.hire.y + 8, POD_W - 16, POD_H - 14, () => handlers.openHire());
     place(div("plate hire-plate", "Hiring desk", 0, 0), L.hire.x + 24, L.hire.y + 98, POD_W - 48, null);
-    waiting().forEach((l, i) => { const tg = div("tag queue", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 90); tg.title = l.waiting_reason || "Waiting for a seat"; });
+    waiting().forEach((l, i) => { const tg = div("tag queue", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 80); tg.title = l.waiting_reason || "Waiting for a seat"; });
     for (const pod of L.pods) renderPod(pod);
     for (const a of leavers) a.tagEl = div("tag ghost", short(a.sess.name), a.x + 5, a.y + 19);
     if (fk) { const back = [...overlay.querySelectorAll("[data-k]")].find(e => e.dataset.k === fk); if (back) back.focus({ preventScroll: true }); }
@@ -738,6 +738,9 @@ export function createOffice(stage, handlers) {
     else if (b.dataset.cam === "out") zoomAt(cam.tz / 1.4, sw / 2, sh / 2);
     else fit();
   }));
+  // The camera buttons belong to the visible frame, not the floor: on a phone the floor scrolls sideways inside it.
+  const frame = stage.closest(".floor-frame");
+  if (frame) frame.appendChild(stage.querySelector(".cam"));
 
   // ------------------------------------------------------------------------------------- resolution
   function resize() {

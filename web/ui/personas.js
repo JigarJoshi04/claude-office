@@ -82,7 +82,7 @@ export function pulse(snap, persona, fmtTime) {
   const t = snap.totals;
   const parts = [];
   if (!t.sessions) parts.push("The office is quiet: no agents are running.");
-  else parts.push(`${t.working ? (t.working === 1 ? "One agent is" : `${words(t.working)} agents are`) : "No agents are"} working${t.sessions > t.working ? `, ${t.sessions - t.working} more ${t.sessions - t.working === 1 ? "is" : "are"} idle` : ""}.`);
+  else parts.push(`${t.working ? (t.working === 1 ? "One agent is" : `${words(t.working)} agents are`) : "No agents are"} working${t.sessions > t.working ? `, ${words(t.sessions - t.working).toLowerCase()} more ${t.sessions - t.working === 1 ? "is" : "are"} idle` : ""}.`);
   const tight = snap.seats.filter(s => s.status !== "benched" && s.status !== "offline")
     .map(s => ({ s, b: binding(s) })).filter(x => x.b.left != null).sort((a, b) => a.b.left - b.b.left)[0];
   const spent = snap.seats.filter(s => s.status === "limited");

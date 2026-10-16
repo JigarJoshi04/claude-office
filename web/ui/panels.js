@@ -31,7 +31,10 @@ export function makePanels(app) {
   const nameOf = (id) => { const s = seatById(id); return s ? P(s).name : id; };
   const humanise = (text) => {
     let t = String(text || "");
-    for (const s of S().seats) { const n = P(s).name; if (n !== s.label) t = t.replace(new RegExp(`\\b${s.label}\\b(?![-\\w])`, "g"), n); }
+    for (const s of S().seats) {
+      const n = P(s).name;   // seat labels and seat ids both read as the character's name
+      for (const k of new Set([s.label, s.id])) if (k && k !== n) t = t.replace(new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b(?![-\\w])`, "g"), n);
+    }
     return t;
   };
   const crumbs = (...parts) => `<nav class="crumbs"><button data-go="ceo">Office</button>${parts.map(x => `${icon("chevronRight", 14)}${x}`).join("")}</nav>`;
@@ -229,7 +232,10 @@ export function makePanels(app) {
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
       ${tab === "chat" ? chatHtml(s, x, conv, talk) : overviewHtml(s, x)}`,
       bind(root) {
-        root.querySelectorAll("[data-stab]").forEach(b => b.addEventListener("click", () => { sessTab.set(v.id, b.dataset.stab); app.rerender(true); }));
+        root.querySelectorAll("[data-stab]").forEach(b => b.addEventListener("click", () => {
+          sessTab.set(v.id, b.dataset.stab); app.rerender(true);
+          if (b.dataset.stab === "chat") { const c = root.querySelector(".chat"); if (c && getComputedStyle(c).overflowY !== "visible") c.scrollTop = c.scrollHeight; else root.scrollTop = root.scrollHeight; }   // Chat opens at the newest
+        }));
         root.querySelectorAll("[data-steps]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.steps; if (openSteps.has(k)) openSteps.delete(k); else openSteps.add(k); app.rerender(true); }));
         const ta = root.querySelector("#chatBox"), send = root.querySelector("#chatSend");
         if (ta && send) {
@@ -255,9 +261,10 @@ export function makePanels(app) {
               else if (r.delivery === "followup") toast("Follow-up started as a new lane. It will resume this conversation.", "good");
               else if (r.delivery === "review") toast("Sent. It is waiting for approval in that session's terminal.", "info");
               else toast("Delivered.", "good");
-              app.chatSent(v.seat, v.id, text, r);
+              if (!r.demo) app.chatSent(v.seat, v.id, text, r);   // the demo sends nothing, so it shows nothing sent
             } catch (e) { toast("Could not send: " + e.message, "bad"); }
             send.disabled = false;
+            const box = document.getElementById("chatBox"); if (box) box.focus();   // ready for the next message
           });
           const end = root.querySelector("#chatEnd");
           // Open at the newest message by scrolling the chat (phones) or the panel (desktop), never the whole page.
@@ -396,6 +403,7 @@ export function makePanels(app) {
   function lane(v) {
     const d = app.detailFor("l:" + v.id);
     const l = (S().lanes || []).find(x => x.id === v.id) || (d && d.lane);
+    if (!l && d && d.missing) return { html: crumbs("Lane") + `<div class="allclear">That lane is no longer here.</div><div class="row" style="margin-top:12px"><button class="btn sm" data-go="hire">${icon("briefcase", 15)}Hiring desk</button></div>` };
     if (!l) return { html: crumbs("Lane") + `<div class="skeleton"></div><div class="skeleton" style="width:70%"></div>` };
     const runs = (d && d.lane.runs) || l.runs || [];
     const running = l.unit_active || ["running", "starting", "waiting"].includes(l.status);
@@ -408,7 +416,7 @@ export function makePanels(app) {
       <div class="row wrap" style="gap:8px;margin-top:16px">
         ${sid && l.seat ? `<button class="btn sm primary" data-chat-session="${esc(l.seat)}|${esc(sid)}">${icon("chat", 15)}${running ? "Chat with it" : "Follow up"}</button>` : ""}
         ${running ? `<button class="btn sm danger" id="lStop">${icon("stop", 15)}Stop</button>` : `<button class="btn sm" id="lResume">${icon("play", 15)}Resume</button>`}
-        <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">same seat rule</option><option value="auto">Auto (divider)</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
+        <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">As before</option><option value="auto">Let the divider pick</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
       </div>
       ${l.report_status ? section("Report", `<pre class="pre">${esc((d && d.report) || l.report_status)}</pre>`) : ""}
@@ -485,7 +493,7 @@ export function makePanels(app) {
         const paint = () => {
           split.querySelectorAll(".seg").forEach(seg => { const c = dv.seats[seg.dataset.seg], on = c.enabled && c.weight > 0; seg.style.flexBasis = `calc(${on ? c.weight : 0}% - 3px)`; seg.classList.toggle("narrow", c.weight < 14); const sm = seg.querySelector("small"); if (sm) sm.textContent = c.weight + "%"; });
           let acc = 0; const ids2 = enabledIds();
-          split.querySelectorAll(".handle").forEach((h, i) => { acc += dv.seats[ids2[i]] ? dv.seats[ids2[i]].weight : 0; h.style.left = acc + "%"; h.setAttribute("aria-valuenow", String(acc)); });
+          split.querySelectorAll(".handle").forEach((h, i) => { acc += dv.seats[ids2[i]] ? dv.seats[ids2[i]].weight : 0; h.style.left = `calc(${acc} * (100% - 6px) / 100 + 1.5px)`;   /* segments size against the bar minus its 3px padding */ h.setAttribute("aria-valuenow", String(acc)); });
           root.querySelectorAll("[data-w]").forEach(inp => { if (document.activeElement !== inp) inp.value = dv.seats[inp.dataset.w].weight; });
         };
         paint();
@@ -587,13 +595,19 @@ export function makePanels(app) {
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
         root.querySelectorAll("[data-tpl]").forEach(b => b.addEventListener("click", () => {
           const t = TEMPLATES[+b.dataset.tpl]; save();
+          const mine = (hireDraft.title.trim() || hireDraft.brief.trim()) && !TEMPLATES.some(x => x.brief === hireDraft.brief);
+          if (mine && !confirm(`Replace your title and brief with the "${t.name}" template?`)) return;   // never lose a written brief silently
           hireDraft.title = t.title; hireDraft.brief = t.brief; store.set("hireDraft", hireDraft); app.rerender(true);
           const ti = document.getElementById("hTitle"); if (ti) { ti.focus(); ti.setSelectionRange(ti.value.length, ti.value.length); }
         }));
         q("hClear").addEventListener("click", () => { hireDraft = { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true }; store.set("hireDraft", hireDraft); app.rerender(true); });
         q("hGo").addEventListener("click", async () => {
           save();
-          if (!hireDraft.title.trim() || !hireDraft.brief.trim()) { toast("Give the lane a title and a brief.", "warn"); return; }
+          if (!hireDraft.title.trim() || !hireDraft.brief.trim()) {
+            const miss = !hireDraft.title.trim() ? q("hTitle") : q("hBrief");
+            for (const f of [q("hTitle"), q("hBrief")]) f.toggleAttribute("aria-invalid", !f.value.trim());
+            miss.focus(); toast("Give the lane a title and a brief.", "warn"); return;
+          }
           if (hireDraft.permission_mode === "bypassPermissions" && !confirm("Full trust lets the lane run any command without asking. Start it?")) return;
           q("hGo").disabled = true;
           try {
@@ -644,7 +658,7 @@ export function makePanels(app) {
         root.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => { app.setPref("theme", b.dataset.themeSet); app.rerender(true); }));
         root.querySelectorAll("[data-motion-set]").forEach(b => b.addEventListener("click", () => { app.setPref("motion", b.dataset.motionSet); app.rerender(true); }));
         root.querySelectorAll("[data-pref]").forEach(c => c.addEventListener("change", () => app.setPref(c.dataset.pref, c.checked)));
-        const ts = root.querySelector("[data-test-sound]"); if (ts) ts.addEventListener("click", () => { app.setPref("sound", true); sound.play("report"); app.rerender(true); });
+        const ts = root.querySelector("[data-test-sound]"); if (ts) ts.addEventListener("click", () => sound.preview("levelup"));
         const sv = root.querySelector("#setSave");
         if (sv) sv.addEventListener("click", async () => {
           const body = { office_name: root.querySelector("#setOffice").value.trim(), ceo_name: root.querySelector("#setCeo").value.trim(), seats: {},
