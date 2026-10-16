@@ -66,6 +66,26 @@ export function makePanels(app) {
   }
 
   // ---------------------------------------------------------------------------------------- briefing
+  // "While you were away": counts by kind, then the few things worth reading first.
+  function awayHtml() {
+    const a = app.away();
+    if (!a) return "";
+    const it = a.items, by = (k, pred = () => true) => it.filter(m => m.kind === k && pred(m)).length;
+    const hrs = Math.max(1, Math.round((S().now - a.since) / 3600));
+    const say = (n, one, many) => n === 1 ? one : many;
+    const chips = [[by("report", m => m.level === "good"), "report", "report filed", "reports filed", "check"], [by("levelup"), "levelup", "level-up", "level-ups", "star"],
+      [by("achievement"), "achievement", "trophy", "trophies", "trophy"], [by("lane", m => m.level === "good"), "lane", "lane finished", "lanes finished", "briefcase"],
+      [by("limit"), "limit", "limit hit", "limits hit", "sleep"], [by("report", m => m.level === "warn") + by("lane", m => m.level === "bad"), "bad", "blocked or failed", "blocked or failed", "alert"]]
+      .filter(([n]) => n > 0).map(([n, k, one, many, ic]) => [n, k, say(n, one, many), ic]);
+    const rank = (m) => (m.level === "bad" ? 0 : m.level === "warn" ? 1 : { report: 2, levelup: 3, achievement: 4, lane: 5 }[m.kind] ?? 6);
+    const top = [...it].sort((x, y) => rank(x) - rank(y) || y.ts - x.ts).slice(0, 5);
+    return `<div class="away"><button class="btn sm ghost x" data-dismiss-away aria-label="Dismiss">${icon("x", 16)}</button>
+      <div class="eyebrow">While you were away · ${hrs} h</div>
+      ${it.length ? `<h3>${chips.length ? chips.map(([n, , label]) => `${n} ${label}`).slice(0, 3).join(", ") : `${it.length} updates`}</h3>
+        <div class="away-chips">${chips.map(([n, , label, ic]) => `<span class="pill">${icon(ic, 14)}${n} ${esc(label)}</span>`).join("")}</div>
+        ${top.map(m => `<div class="act ${tone(m.level)} ${m.seat ? "click" : ""}" ${m.seat ? `data-seat="${esc(m.seat)}"` : ""}>${icon(EVENT_ICON[m.kind] || "dot", 16)}<span>${esc(humanise(m.text))}</span><span class="when">${relTime(m.ts)}</span></div>`).join("")}`
+      : `<h3>Quiet while you were away.</h3><div class="muted">No reports, limits or lanes changed.</div>`}</div>`;
+  }
   function ceo() {
     const snap = S(), name = (snap.office.ceo || {}).name || "there";
     const h = new Date().getHours();
@@ -75,7 +95,7 @@ export function makePanels(app) {
     const np = snap.next_pick, next = np.seat && seatById(np.seat);
     const welcome = !store.get("welcomed", false);
     const ev = (snap.events || []).slice(-6).reverse();
-    return { html: `
+    return { html: `${awayHtml()}
       ${welcome ? `<div class="welcome"><button class="btn sm ghost x" data-dismiss-welcome aria-label="Dismiss">${icon("x", 16)}</button>
         <h3>Welcome to your office</h3><p>Every AI seat on this machine has a desk. Everyone at a desk is a real session, live.</p>
         <ol><li>Click a person to see what they are doing, and chat with them.</li><li>Click a desk's nameplate to meet that seat's character and its plan.</li>
@@ -99,6 +119,7 @@ export function makePanels(app) {
       ${section("Activity", ev.length ? ev.map(actRow).join("") : `<div class="muted">Nothing has happened yet.</div>`, `<button class="btn sm ghost" data-go="news">All news</button>`)}`,
       bind(root) {
         const d = root.querySelector("[data-dismiss-welcome]"); if (d) d.addEventListener("click", () => { store.set("welcomed", true); app.rerender(true); });
+        const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         const t = root.querySelector("[data-toggle-needs]"); if (t) t.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         const b = root.querySelector("[data-broadcast]"); if (b) b.addEventListener("click", () => app.broadcast());
       } };

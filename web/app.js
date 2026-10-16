@@ -21,8 +21,29 @@ const seenNews = new Set();
 let lastEventTs = 0;
 
 // ------------------------------------------------------------------------------------------------ app api
+// "While you were away": when this viewer last had the office open (a per-browser convenience), and what happened since.
+let away = null;
+const AWAY_AFTER = 3600;
+function markSeen() { if (snap && !document.hidden) store.set("lastSeen", snap.now); }
+async function checkAway() {
+  const since = store.get("lastSeen", null);
+  if (!snap || !since || snap.now - since < AWAY_AFTER) return;
+  const hours = Math.max(1, Math.min(24, Math.ceil((snap.now - since) / 3600)));
+  try {
+    const r = await fetch(`/api/history?hours=${hours}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    away = { since: Math.max(since, d.from || since), items: (d.markers || []).filter(m => m.ts > since) };
+    renderPanel(true);
+  } catch { /* the briefing works without it */ }
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) markSeen(); else checkAway().then(markSeen); });
+setInterval(markSeen, 30000);
+
 const app = {
   demo: DEMO,
+  away: () => away,
+  dismissAway: () => { away = null; renderPanel(true); },
   broadcast: () => broadcast(),
   snap: () => snap,
   prefs: () => prefs,
@@ -188,7 +209,7 @@ function apply(next) {
   office.update(snap);
   renderTop(); renderLatest(); renderRightNow(); renderMain(true);
   renderPanel(false);
-  if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); }
+  if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) onNews(e);
   lastEventTs = Math.max(lastEventTs, ...(snap.events || []).map(e => e.ts));
   if (view.kind === "session") { loadDetail("s:" + view.seat + "/" + view.id); app.chatFor(view.seat, view.id); }
