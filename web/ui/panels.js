@@ -235,6 +235,9 @@ export function makePanels(app) {
           grow();
           ta.addEventListener("input", () => { app.setDraft(v.id, ta.value); grow(); });
           ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send.click(); } });
+          root.querySelectorAll("[data-quick]").forEach(b => b.addEventListener("click", () => {
+            ta.value = QUICK[+b.dataset.quick][1]; app.setDraft(v.id, ta.value); grow(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+          }));
           send.addEventListener("click", async () => {
             const text = ta.value.trim();
             if (!text) return;
@@ -257,6 +260,13 @@ export function makePanels(app) {
       } };
   }
 
+  // One-tap messages a CEO sends all the time. They fill the box (never send on their own) so they can be edited.
+  const QUICK = [
+    ["Status?", "Quick status check: what are you doing right now, what is left, and is anything blocking you?"],
+    ["Write your notes", "Please write your notes now (what is done, what is next, anything I should know), in case this session stops."],
+    ["Wrap up", "Please wrap up: finish the step you are on, commit or save your work, write your report, and stop."],
+    ["Pause", "Please pause after the current step and wait for my next message before doing anything else."],
+  ];
   function chatHtml(s, x, conv, talk) {
     if (!conv) return `<div class="chat"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:50%;align-self:flex-end"></div><div class="skeleton" style="width:60%"></div></div>`;
     const who = s ? P(s).name : x ? x.name : conv.name || "agent";   // replies are signed by the seat's character
@@ -300,7 +310,7 @@ export function makePanels(app) {
       followup: ["reply", x ? "This session cannot take live messages. Sending starts a follow-up lane that resumes it." : "This session has ended. Sending starts a follow-up lane that resumes it."],
       none: ["x", "Codex sessions cannot take messages yet."] }[talk] || ["dot", ""];
     return `<div class="chat">${html}<span id="chatEnd"></span></div>
-      <div class="composer"><div class="box"><textarea id="chatBox" rows="1" placeholder="${talk === "none" ? "Messaging is not available here" : `Message ${esc(who)}…`}" ${talk === "none" ? "disabled" : ""} aria-label="Message"></textarea>
+      <div class="composer">${talk !== "none" ? `<div class="quick">${QUICK.map(([label], i) => `<button class="chip" data-quick="${i}">${esc(label)}</button>`).join("")}</div>` : ""}<div class="box"><textarea id="chatBox" rows="1" placeholder="${talk === "none" ? "Messaging is not available here" : `Message ${esc(who)}…`}" ${talk === "none" ? "disabled" : ""} aria-label="Message"></textarea>
         <button class="btn primary icon" id="chatSend" ${talk === "none" ? "disabled" : ""} title="Send (Enter)" aria-label="Send">${icon("send", 17)}</button></div>
         <div class="hint">${icon(hint[0], 14)}<span>${hint[1]}</span></div></div>`;
   }
