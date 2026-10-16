@@ -81,8 +81,16 @@ function setPref(k, v) {
   if (k === "motion") { document.documentElement.dataset.motion = v; office.setReducedMotion(v === "reduced"); }
   if (k === "sound") sound.set(v);
   if (k === "privacy") { office.setPrivacy(v); renderPanel(true); renderMain(); rnSig = ""; if (snap) renderRightNow(); }
-  if (k === "notify" && v && "Notification" in window && Notification.permission === "default") {
-    Notification.requestPermission().then(p => { if (p !== "granted") { prefs.notify = false; store.set("prefs", prefs); toast("Notifications are blocked by the browser.", "warn"); } });
+  if (k === "notify" && v) {
+    // The switch only stays on if the browser really lets the office notify.
+    const refuse = (why, later) => {
+      prefs.notify = false; store.set("prefs", prefs); toast(why, "warn");
+      if (later && document.querySelector(".menu")) { document.querySelector(".menu").remove(); openMenu(); }   // redraw an open menu
+      if (view.kind === "settings") renderPanel(true);
+    };
+    if (!("Notification" in window)) refuse("This browser cannot show notifications.");
+    else if (Notification.permission === "denied") refuse("Notifications are blocked for this page. Allow them in the browser's site settings.");
+    else if (Notification.permission === "default") Notification.requestPermission().then(p => { if (p !== "granted") refuse("Notifications are blocked by the browser.", true); });
   }
 }
 
@@ -94,11 +102,13 @@ function hashFor(v) {
   return v.kind === "ceo" ? "#" : "#" + v.kind;
 }
 function viewFromHash() {
-  const h = decodeURIComponent(location.hash.slice(1));
+  let h = "";
+  try { h = decodeURIComponent(location.hash.slice(1)); } catch { return { kind: "ceo" }; }   // a malformed link opens the briefing
   if (!h) return { kind: "ceo" };
-  const [k, rest] = h.split("=");
+  const at = h.indexOf("="), k = at < 0 ? h : h.slice(0, at), rest = at < 0 ? "" : h.slice(at + 1);
+  if (["seat", "session", "lane"].includes(k) && !rest) return { kind: "ceo" };
   if (k === "seat") return { kind: "seat", seat: rest };
-  if (k === "session") { const i = rest.indexOf("/"); return { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) }; }
+  if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
   return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
