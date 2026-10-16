@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from . import config, conversation, lanes, messaging
 
-SESSION_ID = re.compile(r"^[0-9a-f-]{36}$")
+SESSION_ID = messaging.SESSION_ID
 
 
 def _live(office, seat_id: str, session_id: str) -> tuple[dict | None, dict | None]:
@@ -21,26 +20,36 @@ def _live(office, seat_id: str, session_id: str) -> tuple[dict | None, dict | No
     return None, None
 
 
-def _transcript(seat: dict | None, session_id: str) -> Path | None:
+def _transcript(seat: dict | None, session_id: str, candidate: str | None = None) -> Path | None:
     roots = [Path(seat["config_dir"]) / "projects"] if seat and seat.get("kind") == "claude" else []
     roots.append(config.HOME / ".claude" / "projects")
     for root in roots:
-        hits = list(root.glob(f"*/{session_id}.jsonl")) if root.is_dir() else []
-        if hits:
-            return hits[0]
+        hits = [Path(candidate)] if isinstance(candidate, str) else root.glob(f"*/{session_id}.jsonl")
+        for path in hits:
+            try:
+                resolved = path.resolve()
+                if (resolved.name == f"{session_id}.jsonl" and root.resolve() in resolved.parents
+                        and resolved.is_file()):
+                    return resolved
+            except (OSError, ValueError, RuntimeError):
+                continue
     return None
 
 
 def _cwd_of(path: Path) -> str | None:
     try:
         with open(path, "rb") as f:
+            budget = conversation.HEAD_BYTES
             for _ in range(400):
-                line = f.readline()
+                line = f.readline(budget + 1)
                 if not line:
                     break
+                budget -= len(line)
+                if budget < 0:
+                    return None
                 try:
                     d = json.loads(line)
-                except ValueError:
+                except (ValueError, RecursionError):
                     continue
                 if isinstance(d, dict) and isinstance(d.get("cwd"), str):
                     return d["cwd"]
@@ -54,14 +63,14 @@ def delivery_for(office, x: dict | None) -> str:
     if x is None:
         return "followup"
     if not messaging.valid_target(x.get("socket")):
-        return "followup" if x.get("kind") != "codex" and x.get("seat") != "astra" else "none"
+        return "none"
     pids = {l.get("pid") for l in office.get().get("lanes", []) if l.get("allow_messages") is True and l.get("pid")}
     return "direct" if x.get("pid") in pids else "review"
 
 
 def conversation_view(office, seat_id: str, session_id: str) -> dict:
     demo = getattr(office, "is_demo", False)
-    if not demo and not SESSION_ID.match(session_id or ""):
+    if not demo and not SESSION_ID.fullmatch(session_id or ""):
         raise ValueError("Unknown session")
     seat, x = _live(office, seat_id, session_id)
     if seat is None:
@@ -69,7 +78,7 @@ def conversation_view(office, seat_id: str, session_id: str) -> dict:
     if demo:
         return {"items": office.demo_conversation(session_id), "thread": [], "live": x is not None,
                 "delivery": "direct" if x and x.get("kind") == "lane" else "review", "name": x.get("name") if x else None}
-    path = Path(x["transcript"]) if x and x.get("transcript") else _transcript(seat, session_id)
+    path = _transcript(seat, session_id, (x or {}).get("transcript"))
     inbox = getattr(office, "inbox", None)
     return {
         "items": conversation.read(path),
@@ -94,7 +103,7 @@ def followup_title(text: str, fallback: str) -> str:
 def send(office, body: dict, seat_ids: list[str]) -> dict:
     seat_id, session_id = str(body.get("seat", "")), str(body.get("id", ""))
     text = str(body.get("text") or "").strip()
-    if not SESSION_ID.match(session_id):
+    if not SESSION_ID.fullmatch(session_id):
         raise ValueError("Unknown session")
     if not text:
         raise ValueError("Write a message first")
@@ -107,19 +116,24 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
         raise ValueError("Codex sessions cannot take messages yet")
     inbox = getattr(office, "inbox", None)
     mode = delivery_for(office, x)
-    if body.get("followup"):
-        mode = "followup"
+    if x is not None and body.get("followup"):
+        raise ValueError("Wait for the running session to finish before following up")
+    if x is not None and (mode == "none" or inbox is None):
+        raise ValueError("That running session cannot receive messages right now")
     if mode in ("direct", "review") and inbox is not None:
         msg_id = messaging.send(x["socket"], text, inbox.address, office.cfg.get("message_from_name") or "Claude Office (CEO)")
         inbox.record_out(msg_id, x["socket"], seat_id, session_id, text)
         office.emit("message", f"CEO messaged {x['name']} on {seat['label']}", seat_id)
         return {"ok": True, "delivery": mode, "msg_id": msg_id}
-    # Finished (or not reachable): continue its conversation as a follow-up lane on the seat the CEO picks.
-    path = Path(x["transcript"]) if x and x.get("transcript") else _transcript(seat, session_id)
+    # Finished: continue its conversation as a follow-up lane on the seat the CEO picks.
+    path = _transcript(seat, session_id, (x or {}).get("transcript"))
     cwd = (x or {}).get("cwd") or (path and _cwd_of(path))
     if not path or not cwd:
         raise ValueError("Cannot find that session's transcript to follow up on")
     pick = body.get("seat_choice") or seat_id
+    if pick != "auto" and not any(s["id"] == pick and s.get("kind") == "claude"
+                                  for s in office.get().get("seats", [])):
+        raise ValueError("Claude follow-ups require a Claude seat")
     lane = lanes.create_lane(followup_title(text, (x or {}).get("name") or session_id[:8]), text, cwd, pick,
                              office.cfg["lane_defaults"]["model"], office.cfg["lane_defaults"]["permission_mode"],
                              seat_ids, office.cfg, resume_session=session_id)

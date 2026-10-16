@@ -21,7 +21,16 @@ class FakeSession:
         self.sock.bind(str(path))
         self.sock.listen(4)
         self.sock.settimeout(3)
-        threading.Thread(target=self._run, daemon=True).start()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def close(self):
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        self.sock.close()
+        self.thread.join(timeout=4)
 
     def _run(self):
         try:
@@ -52,6 +61,7 @@ class MessagingTests(unittest.TestCase):
     def test_send_writes_the_cross_session_frame(self):
         target = self.dir / "4242.sock"
         fake = FakeSession(target)
+        self.addCleanup(fake.close)
         msg_id = messaging.send(str(target), "Ship it today, please.", "uds:/office.sock", "Claude Office (CEO)")
         for _ in range(50):
             if fake.frames:
@@ -70,7 +80,8 @@ class MessagingTests(unittest.TestCase):
 
     def test_send_refuses_bad_input(self):
         target = self.dir / "4243.sock"
-        FakeSession(target)
+        fake = FakeSession(target)
+        self.addCleanup(fake.close)
         with self.assertRaises(ValueError):
             messaging.send(str(target), "   ", "uds:/o.sock")
         with self.assertRaises(ValueError):

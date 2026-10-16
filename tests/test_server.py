@@ -197,6 +197,34 @@ class ServerTests(unittest.TestCase):
                                     {"Content-Type": "application/json"}, "{}")
         self.assertEqual(status, 403)
 
+    def test_message_and_followup_always_require_token(self):
+        for path in ('/api/message', '/api/lanes', '/api/lanes/resume'):
+            for token in ('', 'wrong', '\u00e9'):
+                status, _, _ = self.post({'X-Office-Token': token}, path=path,
+                                         body='{"text":"hello","followup":true}')
+                self.assertEqual(status, 403)
+
+    def test_negative_duplicate_lengths_and_transfer_encoding_are_rejected(self):
+        self.assertEqual(self.post({'Content-Length': '-1'})[0], 400)
+        self.assertEqual(self.post({'Transfer-Encoding': 'chunked'})[0], 400)
+        conn = http.client.HTTPConnection('127.0.0.1', self.port, timeout=5)
+        try:
+            conn.putrequest('POST', '/api/message')
+            conn.putheader('Content-Type', 'application/json')
+            conn.putheader('X-Office-Token', self.token)
+            conn.putheader('Content-Length', '2')
+            conn.putheader('Content-Length', '2')
+            conn.endheaders(b'{}')
+            response = conn.getresponse()
+            self.assertEqual(response.status, 400)
+            response.read()
+        finally:
+            conn.close()
+
+    def test_origin_requires_exact_http_origin_and_content_type_is_exact(self):
+        self.assertEqual(self.post({'Origin': f'http://http://localhost:{self.port}'})[0], 403)
+        self.assertEqual(self.post({'Content-Type': 'text/plain; application/json'})[0], 415)
+
     def test_post_with_wrong_token_is_forbidden(self):
         self.assertEqual(self.post({"X-Office-Token": "wrong-token"})[0], 403)
 

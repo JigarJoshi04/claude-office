@@ -180,7 +180,8 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         raise ValueError(f"Model must be one of {', '.join(MODELS)}")
     if permission_mode not in PERMISSIONS:
         raise ValueError(f"Permission mode must be one of {', '.join(PERMISSIONS)}")
-    if resume_session is not None and not re.match(r"^[0-9a-f-]{36}$", resume_session):
+    if resume_session is not None and (not isinstance(resume_session, str)
+                                       or not messaging.SESSION_ID.fullmatch(resume_session)):
         raise ValueError("A follow-up needs a session id")
     lane_id = f"{time.strftime('%m%d-%H%M%S')}-{_slug(title)}"
     if lane_dir(lane_id).exists():                       # two hires in the same second with the same title
@@ -315,11 +316,17 @@ def _choose_seat(lane: dict, exclude: tuple = ()) -> tuple[str | None, str, floa
             if (w.get("pct") or 0) >= 100:
                 return None, f"{lane['seat_pref']} has used all of its {key.replace('_', '-')} plan", w.get("resets_at")
         return lane["seat_pref"], "pinned by the CEO", None
-    ev = divider.evaluate(seats, cfg, exclude=exclude, limited_until=read_limits())
+    ev = divider.evaluate(seats, cfg, exclude=exclude, limited_until=read_limits(),
+                          kind="claude" if lane.get("resume_session") else None)
     return ev["pick"], ev["why"], ev.get("next_reset")
 
 
 def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[list[str], dict]:
+    resume = lane.get("resume_session")
+    if resume is not None and (not isinstance(resume, str) or not messaging.SESSION_ID.fullmatch(resume)):
+        raise ValueError("A follow-up needs a session id")
+    if resume and seat["kind"] != "claude":
+        raise ValueError("Claude follow-ups require a Claude seat")
     if seat["kind"] == "codex":
         gpt = shutil.which("gpt") or str(config.HOME / ".local" / "bin" / "gpt")
         cmd = [gpt, "-w", "-C", lane["workdir"], "--add-dir", str(d), prompt]

@@ -27,7 +27,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/2.0"
+    server_version = "ClaudeOffice/3.0.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -38,8 +38,10 @@ class Handler(BaseHTTPRequestHandler):
         allowed = {f"127.0.0.1:{self.port}", f"localhost:{self.port}", f"[::1]:{self.port}"}
         if host not in allowed:
             return False
+        if len(self.headers.get_all("Host", [])) != 1 or len(self.headers.get_all("Origin", [])) > 1:
+            return False
         origin = self.headers.get("Origin")
-        if origin and origin.lower().replace("http://", "") not in allowed:
+        if origin and origin.lower() not in {"http://" + h for h in allowed}:
             return False
         return True
 
@@ -60,9 +62,13 @@ class Handler(BaseHTTPRequestHandler):
         self._send(code, json.dumps(obj, default=str).encode(), "application/json")
 
     def _body(self) -> dict:
+        lengths = self.headers.get_all("Content-Length", [])
+        if len(lengths) > 1 or self.headers.get("Transfer-Encoding"):
+            raise ValueError("Ambiguous request framing")
         n = int(self.headers.get("Content-Length") or 0)
-        if n > MAX_BODY:
+        if n < 0 or n > MAX_BODY:
             raise ValueError("Request too large")
+        self.connection.settimeout(5)
         raw = self.rfile.read(n) if n else b"{}"
         data = json.loads(raw or b"{}")
         if not isinstance(data, dict):
@@ -201,9 +207,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._send(403, b"forbidden", "text/plain")
         given = self.headers.get("X-Office-Token") or ""
-        if not hmac.compare_digest(given, self.token):
+        if not self.token or not hmac.compare_digest(given.encode(), self.token.encode()):
             return self._json(403, {"error": "Missing or wrong office token"})
-        if "application/json" not in (self.headers.get("Content-Type") or ""):
+        if (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower() != "application/json":
             return self._json(415, {"error": "Send JSON"})
         path = urlparse(self.path).path
         try:
@@ -257,7 +263,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/usage/refresh":
                 self.office.usage.poke(body.get("seat"))
                 return self._json(200, {"ok": True})
-        except (ValueError, KeyError, json.JSONDecodeError) as e:
+        except (ValueError, KeyError, json.JSONDecodeError, RecursionError) as e:
             return self._json(400, {"error": str(e)})
         except RuntimeError as e:
             return self._json(500, {"error": str(e)})
@@ -308,6 +314,7 @@ def serve(port: int, demo: bool = False) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        httpd.server_close()
         office.stop.set()
         if getattr(office, "inbox", None):
             office.inbox.stop()

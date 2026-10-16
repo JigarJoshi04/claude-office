@@ -364,7 +364,7 @@ class Office(LiveOffice):
                 elif messaging.valid_target(x.get("socket")):
                     x["talk"] = "direct" if x.get("pid") in direct else "review"
                 else:
-                    x["talk"] = "followup"
+                    x["talk"] = "later"   # running without a message socket: follow up once it finishes
         evaluation = divider.evaluate(seats_out, div, limited_until=limits, now=now)
         programmes = {}
         for s in seats_out:
@@ -377,7 +377,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "2.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.0.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,

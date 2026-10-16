@@ -316,10 +316,11 @@ export function makePanels(app) {
     const hint = { direct: ["zap", "Goes straight to this lane."],
       review: ["eye", "Claude Code holds messages from the office until someone approves them in that terminal."],
       followup: ["reply", x ? "This session cannot take live messages. Sending starts a follow-up lane that resumes it." : "This session has ended. Sending starts a follow-up lane that resumes it."],
-      none: ["x", "Codex sessions cannot take messages yet."] }[talk] || ["dot", ""];
+      none: ["x", "Codex sessions cannot take messages yet."],
+      later: ["clock", "This session has no message socket, so it cannot take messages while it runs. Follow up once it finishes."] }[talk] || ["dot", ""];
     return `<div class="chat">${html}<span id="chatEnd"></span></div>
-      <div class="composer">${talk !== "none" ? `<div class="quick">${QUICK.map(([label], i) => `<button class="chip" data-quick="${i}">${esc(label)}</button>`).join("")}</div>` : ""}<div class="box"><textarea id="chatBox" rows="1" placeholder="${talk === "none" ? "Messaging is not available here" : `Message ${esc(who)}…`}" ${talk === "none" ? "disabled" : ""} aria-label="Message"></textarea>
-        <button class="btn primary icon" id="chatSend" ${talk === "none" ? "disabled" : ""} title="Send (Enter)" aria-label="Send">${icon("send", 17)}</button></div>
+      <div class="composer">${!(talk === "none" || talk === "later") ? `<div class="quick">${QUICK.map(([label], i) => `<button class="chip" data-quick="${i}">${esc(label)}</button>`).join("")}</div>` : ""}<div class="box"><textarea id="chatBox" rows="1" placeholder="${talk === "none" || talk === "later" ? "Messaging is not available here" : `Message ${esc(who)}…`}" ${talk === "none" || talk === "later" ? "disabled" : ""} aria-label="Message"></textarea>
+        <button class="btn primary icon" id="chatSend" ${talk === "none" || talk === "later" ? "disabled" : ""} title="Send (Enter)" aria-label="Send">${icon("send", 17)}</button></div>
         <div class="hint">${icon(hint[0], 14)}<span>${hint[1]}</span></div></div>`;
   }
 

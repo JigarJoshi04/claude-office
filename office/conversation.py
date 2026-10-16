@@ -18,7 +18,8 @@ def _text_of(content) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return "\n".join(c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text")
+        return "\n".join(c["text"] for c in content if isinstance(c, dict) and c.get("type") == "text"
+                         and isinstance(c.get("text"), str))
     return ""
 
 
@@ -39,7 +40,7 @@ def _parse(raw: bytes) -> list[dict]:
             continue
         try:
             d = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             continue
         if not isinstance(d, dict) or d.get("isSidechain") or d.get("isMeta"):   # meta: injected, never typed
             continue
@@ -64,7 +65,7 @@ def _parse(raw: bytes) -> list[dict]:
                               "text": redact(text.split("\nTHE BRIEF:\n", 1)[-1])[:MAX_TEXT]})
             elif 0 <= at < 200:
                 p = parse_incoming(text[at:])
-                items.append({"ts": ts, "role": "peer", "from_name": p["from_name"] or "another session",
+                items.append({"ts": ts, "role": "peer", "from_name": redact(p["from_name"] or "another session")[:120],
                               "text": redact(p["text"])[:MAX_TEXT]})
             elif text.startswith(("[SYSTEM", "<task-notification", "<system-reminder", "Caveat:")):
                 first = text.splitlines()[0][:160]
@@ -81,14 +82,14 @@ def _parse(raw: bytes) -> list[dict]:
                 if not isinstance(c, dict):
                     continue
                 if c.get("type") == "text" and isinstance(c.get("text"), str) and c["text"].strip():
-                    key = (msg.get("id"), c["text"][:80])
+                    key = (str(msg.get("id")), c["text"][:80])
                     if key in seen_text:
                         continue
                     seen_text.add(key)
                     items.append({"ts": ts, "role": "assistant", "text": redact(c["text"])[:MAX_TEXT]})
                 elif c.get("type") == "tool_use":
                     text, kind = describe_tool(str(c.get("name") or ""), c.get("input") or {})
-                    items.append({"ts": ts, "role": "step", "text": text, "kind": kind})
+                    items.append({"ts": ts, "role": "step", "text": redact(text)[:MAX_TEXT], "kind": kind})
     return items
 
 
@@ -102,8 +103,8 @@ def read(path: str | Path | None, limit: int = 60) -> list[dict]:
             size = f.tell()
             f.seek(max(0, size - TAIL_BYTES))
             if size > TAIL_BYTES:
-                f.readline()
-            raw = f.read()
+                f.readline(TAIL_BYTES)
+            raw = f.read(TAIL_BYTES)
     except OSError:
         return []
     items = _parse(raw)

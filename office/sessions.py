@@ -97,11 +97,11 @@ def find_transcript(config_dir: str, cwd: str, session_id: str) -> Path | None:
 
 
 def _ts(s: str | None) -> float | None:
-    if not s:
+    if not isinstance(s, str) or not s:
         return None
     try:
         return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
-    except ValueError:
+    except (ValueError, OverflowError, OSError):
         return None
 
 
