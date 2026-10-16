@@ -1,5 +1,4 @@
 // Personalities: every seat is a character with a name, a role, a voice and a mood that follows its real state.
-import { hashOf } from "../engine/sprites.js";
 
 const ARCHETYPES = [
   { role: "The Orchestrator", traits: ["calm", "plans ahead", "keeps score"], motto: "Three steps ahead, one step at a time.",
@@ -20,7 +19,7 @@ const CODEX = { role: "The Contractor", traits: ["precise", "a little formal", "
 const NAMES = ["Ember", "Atlas", "Vega", "Orion", "Nova", "Juno", "Rigel", "Lyra", "Sol", "Iris"];
 
 export function personaFor(seat, index = 0) {
-  const base = seat.kind === "codex" ? CODEX : ARCHETYPES[(index + (hashOf(seat.id) % 2)) % ARCHETYPES.length];
+  const base = seat.kind === "codex" ? CODEX : ARCHETYPES[index % ARCHETYPES.length];   // one character per seat, in order
   return {
     name: seat.nickname || (seat.kind === "codex" ? "Astra" : NAMES[index % NAMES.length]),
     role: seat.role || base.role,

@@ -5,3 +5,7 @@ __pycache__/
 /state/
 /local/
 *.log
+
+# headless browser profiles from screenshot scripts
+cdp-profile/
+**/cdp-profile/

@@ -499,3 +499,24 @@ export function drawBeacon(ctx, x, y, t, color = "#ff3b4e") {
   rect(ctx, x + 1, y, 3, 3, on ? color : shade(color, 0.45));
   if (on) rect(ctx, x + 2, y - 1, 1, 1, "#ffd0d6");
 }
+
+// Pixel, the office cat. mode: "walk" | "sit" | "sleep"; facing: 1 right, -1 left.
+export function drawCat(ctx, x, y, mode, facing, t) {
+  const fur = "#e9a35b", dark = "#b9773a", light = "#f6cf9c";
+  const X = (dx) => (facing > 0 ? x + dx : x + 10 - dx);
+  const px = (dx, dy, w, h, c) => { for (let i = 0; i < w; i++) rect(ctx, X(dx + i) - (facing > 0 ? 0 : 0), y + dy, 1, h, c); };
+  rect(ctx, x + 1, y + 7, 9, 1, "rgba(0,0,0,0.25)");
+  if (mode === "sleep") {
+    px(1, 3, 8, 4, fur); px(2, 3, 2, 1, dark); px(6, 3, 2, 1, dark); px(7, 2, 3, 2, fur); px(8, 1, 1, 1, fur); px(9, 3, 1, 1, light);
+    px(0, 5, 2, 1, fur); px(1, 6, 7, 1, dark);
+    return;
+  }
+  const step = mode === "walk" ? Math.floor(t / 150) % 2 : 0;
+  const tail = mode === "sit" ? Math.round(Math.sin(t / 400)) : 0;
+  px(1, 2, 6, 3, fur); px(2, 2, 1, 1, dark); px(4, 2, 1, 1, dark);           // body + stripes
+  px(6, 0, 3, 3, fur); px(6, 0, 1, 1, dark); px(8, 0, 1, 1, dark);           // head + ears
+  px(7, 1, 1, 1, "#2a2420"); px(9, 2, 1, 1, light);                          // eye + muzzle
+  px(0, 1 + tail, 1, 2, dark);                                               // tail
+  if (mode === "sit") { px(2, 5, 1, 1, fur); px(5, 5, 1, 1, fur); }
+  else { px(1 + step, 5, 1, 1, dark); px(4 - step, 5, 1, 1, dark); px(6 + step, 5, 1, 1, dark); }
+}

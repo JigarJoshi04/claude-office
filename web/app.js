@@ -23,6 +23,7 @@ let lastEventTs = 0;
 // ------------------------------------------------------------------------------------------------ app api
 const app = {
   demo: DEMO,
+  broadcast: () => broadcast(),
   snap: () => snap,
   prefs: () => prefs,
   privacy: () => prefs.privacy,
@@ -68,6 +69,7 @@ const office = createOffice($("stage"), {
   openDivider: () => go({ kind: "divider" }),
   openNews: () => go({ kind: "news" }),
   openStats: () => setView("stats"),
+  onCat: () => sound.play("arrive"),
 });
 office.setPersonas((s) => panels.persona(s));
 
@@ -77,7 +79,7 @@ function setPref(k, v) {
   if (k === "theme") document.documentElement.dataset.theme = v;
   if (k === "motion") { document.documentElement.dataset.motion = v; office.setReducedMotion(v === "reduced"); }
   if (k === "sound") sound.set(v);
-  if (k === "privacy") { office.setPrivacy(v); renderPanel(true); renderMain(); }
+  if (k === "privacy") { office.setPrivacy(v); renderPanel(true); renderMain(); rnSig = ""; if (snap) renderRightNow(); }
   if (k === "notify" && v && "Notification" in window && Notification.permission === "default") {
     Notification.requestPermission().then(p => { if (p !== "granted") { prefs.notify = false; store.set("prefs", prefs); toast("Notifications are blocked by the browser.", "warn"); } });
   }
@@ -165,7 +167,7 @@ function apply(next) {
   const first = !snap;
   snap = next; setNow(snap.now);
   office.update(snap);
-  renderTop(); renderLatest(); renderMain(true);
+  renderTop(); renderLatest(); renderRightNow(); renderMain(true);
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) onNews(e);
@@ -241,7 +243,11 @@ async function pollOnce() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     apply(await r.json());
     if (!es) setLive("polling");
-  } catch { setLive("lost"); }
+  } catch {
+    setLive("lost");
+    $("pulse").className = "pulse urgent";
+    $("pulseText").textContent = "Can't reach the office server. Retrying every few seconds…";
+  }
 }
 function startPolling() { if (pollTimer) return; pollOnce(); pollTimer = setInterval(() => { if (!document.hidden) pollOnce(); }, 3000); }
 function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
@@ -274,6 +280,27 @@ function paintLatest() {
 }
 setInterval(() => { if (snap && prefs.motion !== "reduced") { latestIdx++; paintLatest(); } }, 7000);
 
+let rnSig = "";
+function renderRightNow() {
+  const rows = snap.seats.flatMap(s => live(s).filter(x => ["working", "waiting", "stuck", "limited"].includes(x.state)).map(x => ({ s, x })))
+    .sort((a, b) => ({ working: 0, waiting: 1, stuck: 2, limited: 3 }[a.x.state] - { working: 0, waiting: 1, stuck: 2, limited: 3 }[b.x.state]) || (b.x.updated_at || 0) - (a.x.updated_at || 0)).slice(0, 8);
+  const sig = JSON.stringify([prefs.privacy, rows.map(r => [r.x.id, r.x.state, r.x.activity, r.x.name])]);
+  if (sig === rnSig) return;
+  rnSig = sig;
+  const el = $("rightnow");
+  if (!rows.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="rn-h"><h4>Right now</h4><span class="hint">${rows.length} at work</span></div><div class="rn-grid">${rows.map(({ s, x }) => {
+    const p = panels.persona(s);
+    const act = prefs.privacy && x.kind === "desk" ? "Working…" : (x.activity || x.state);
+    return `<button class="rn" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" style="--seat:${s.color}">
+      <span class="av"><i data-portrait="${esc(x.id)}|${esc(s.color)}|${x.kind === "desk" ? "headset" : ""}"></i></span>
+      <span class="rn-body"><span class="rn-top"><b>${esc(x.name.replace(/^wt-/, ""))}</b><span class="sdot ${x.state}"></span></span>
+      <span class="rn-act">${esc(act)}</span><span class="rn-meta">${esc(p.name)} · ${x.kind === "lane" ? "lane" : "terminal"}${x.started_at ? " · " + esc(relTime(x.started_at).replace(" ago", "")) : ""}</span></span></button>`;
+  }).join("")}</div>`;
+  hydratePortraits(el, 3);
+  el.querySelectorAll(".rn").forEach(b => b.addEventListener("click", () => { go({ kind: "session", seat: b.dataset.seat, id: b.dataset.id }); office.focusSession(b.dataset.id); }));
+}
+
 // ------------------------------------------------------------------------------------------------ menu
 function openMenu() {
   const old = document.querySelector(".menu"); if (old) { old.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); return; }
@@ -284,7 +311,7 @@ function openMenu() {
     + item("notify", "bell", "Desktop notifications", prefs.notify ? "On" : "Off", prefs.notify)
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
-    + "<hr>" + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("broadcast", "send", "Message all lanes") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -295,6 +322,7 @@ function openMenu() {
     else if (k === "privacy") setPref("privacy", !prefs.privacy);
     else if (k === "theme") setPref("theme", { dark: "light", light: "system", system: "dark" }[prefs.theme] || "dark");
     else if (k === "checkpoint") checkpoint();
+    else if (k === "broadcast") broadcast();
     else go({ kind: k });
     m.remove(); $("btnMenu").setAttribute("aria-expanded", "false");
     if (["sound", "notify", "privacy", "theme"].includes(k)) openMenu();
@@ -386,6 +414,34 @@ async function checkpoint() {
     const cp = $("dCopyPath"); if (cp) cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(r.path); toast("Copied.", "good", 1800); } catch { /* ignore */ } });
   } catch (e) { toast("Checkpoint failed: " + e.message, "bad"); }
 }
+function broadcast() {
+  const targets = snap.seats.flatMap(s => live(s).filter(x => x.kind === "lane" && x.talk && x.talk !== "none" && x.talk !== "followup").map(x => ({ s, x })));
+  const who = (s) => panels.persona(s).name;
+  $("dialogBody").innerHTML = `<div class="dh"><b>Message all lanes</b><button class="btn sm ghost" id="bClose">${icon("x", 16)}</button></div>
+    <div class="db">${targets.length ? `<p class="muted" style="margin-top:0">One message to every running background lane. Lanes you hired here get it straight away; others may wait for approval in their terminal.</p>
+      <div class="row wrap" style="gap:6px;margin-bottom:12px">${targets.map(t => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-bt="${esc(t.s.id)}|${esc(t.x.id)}" checked> ${esc(t.x.name)} · ${esc(who(t.s))}</label>`).join("")}</div>
+      <textarea id="bText" placeholder="e.g. Limits reset in 20 minutes: write your progress notes now and keep going." style="min-height:110px"></textarea>
+      <div class="row" style="margin-top:12px;gap:8px"><button class="btn primary" id="bSend">${icon("send", 16)}Send to selected</button><span class="hint" id="bStatus"></span></div>`
+      : `<p class="muted" style="margin-top:0">No running lanes can take a message right now.</p>`}</div>`;
+  $("dialog").showModal();
+  $("bClose").addEventListener("click", () => $("dialog").close());
+  const send = $("bSend");
+  if (send) send.addEventListener("click", async () => {
+    const text = $("bText").value.trim();
+    const picked = [...document.querySelectorAll("[data-bt]")].filter(c => c.checked).map(c => c.dataset.bt.split("|"));
+    if (!text || !picked.length) { toast("Write a message and pick at least one lane.", "warn"); return; }
+    send.disabled = true;
+    let ok = 0, held = 0, failed = 0;
+    for (const [seat, id] of picked) {
+      try { const r = await app.post("/api/message", { seat, id, text }); if (r.delivery === "review") held++; else ok++; app.chatSent(seat, id, text, r); }
+      catch { failed++; }
+      $("bStatus").textContent = `${ok + held + failed} of ${picked.length} sent…`;
+    }
+    $("dialog").close();
+    sound.play("hire");
+    toast(`Sent to ${ok + held} lane${ok + held === 1 ? "" : "s"}${held ? `, ${held} waiting for approval` : ""}${failed ? `; ${failed} failed` : ""}.`, failed ? "warn" : "good");
+  });
+}
 function paletteItems() {
   const items = [
     { icon: icon("coffee", 16), label: "Briefing", hint: "Esc", run: () => go({ kind: "ceo" }) },
@@ -397,6 +453,7 @@ function paletteItems() {
     { icon: icon("trophy", 16), label: "Today: stats and MVP", hint: "S", keywords: "league employee of the day", run: () => setView("stats") },
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
+    { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },
     { icon: icon("volume", 16), label: prefs.sound ? "Mute sound effects" : "Turn on sound effects", run: () => setPref("sound", !prefs.sound) },
     { icon: icon("moon", 16), label: "Night theme", run: () => setPref("theme", "dark") },

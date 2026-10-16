@@ -76,6 +76,7 @@ export function makePanels(app) {
         <li>Hire a lane at the front desk; the load divider picks who does it.</li></ol></div>` : ""}
       <h2>${greet}, ${esc(name)}.</h2>
       <p class="lede">${esc(pulse(snap, P, dayTime))}</p>
+      ${!snap.seats.length ? `<div class="welcome" style="margin-top:16px"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
       ${snap.office.config_error ? `<div class="need bad" style="margin-top:14px"><span class="ico">${icon("alert", 16)}</span><div><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
       ${section(`Needs you${att.length ? ` · ${att.length}` : ""}`, att.length ? shown.map(a => `<div class="need ${a.level}" ${a.seat ? `data-seat="${esc(a.seat)}"` : ""} ${a.session ? `data-id="${esc(a.session)}"` : ""} ${a.lane ? `data-lane="${esc(a.lane)}"` : ""}>
           <span class="ico">${icon(a.level === "bad" ? "alert" : a.lane ? "briefcase" : a.resets_at ? "zap" : "clock", 16)}</span>
@@ -85,13 +86,14 @@ export function makePanels(app) {
       ${section("Your team", snap.seats.map(memberRow).join(""), `<button class="btn sm ghost" data-view-go="board">Team view</button>`)}
       ${section("Up next", `<div class="pick ${next ? "" : "none"}"><b>${next ? `The next lane goes to ${esc(P(next).name)}.` : "No seat can take a new lane right now."}</b>
         <div class="why">${esc(humanise(np.why))}</div>
-        <div class="row" style="margin-top:12px"><button class="btn sm primary" data-go="hire">${icon("plus", 15)}Hire a lane</button><button class="btn sm" data-go="divider">${icon("sliders", 15)}Adjust the split</button></div></div>`)}
+        <div class="row wrap" style="margin-top:12px"><button class="btn sm primary" data-go="hire">${icon("plus", 15)}Hire a lane</button><button class="btn sm" data-go="divider">${icon("sliders", 15)}Adjust the split</button><button class="btn sm" data-broadcast>${icon("send", 15)}Message all lanes</button></div></div>`)}
       ${(snap.programmes || []).length ? section("Programmes", snap.programmes.map(progCard).join("")) : ""}
       ${snap.lanes.length ? section("Office lanes", snap.lanes.slice(0, 4).map(laneRow).join(""), `<button class="btn sm ghost" data-go="hire">All</button>`) : ""}
       ${section("Activity", ev.length ? ev.map(actRow).join("") : `<div class="muted">Nothing has happened yet.</div>`, `<button class="btn sm ghost" data-go="news">All news</button>`)}`,
       bind(root) {
         const d = root.querySelector("[data-dismiss-welcome]"); if (d) d.addEventListener("click", () => { store.set("welcomed", true); app.rerender(true); });
         const t = root.querySelector("[data-toggle-needs]"); if (t) t.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
+        const b = root.querySelector("[data-broadcast]"); if (b) b.addEventListener("click", () => app.broadcast());
       } };
   }
   function progCard(p) {

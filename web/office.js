@@ -61,6 +61,11 @@ export function createOffice(stage, handlers) {
   const elevator = { open: 0, until: 0 };
   const cam = { z: 1, x: 0, y: 0, tz: 1, tx: 0, ty: 0 };
   let first = true, lastT = performance.now(), ceoPace = 0;
+  const cat = { x: 300, y: 60, tx: 300, ty: 60, path: [], mode: "sit", until: 0, facing: 1, el: null };
+  const TIPS = ["Ctrl + K jumps to any seat, session or action.", "Double-click a desk to fly the camera to it.",
+    "Click a person, then Chat, to message them.", "The load divider decides who gets the next lane.",
+    "Take a checkpoint before you restart the laptop.", "Share-safe mode blurs topics before a screen share.",
+    "Today shows who carried the day.", "A drone by a desk means a subagent is working.", "Meow."];
 
   // ---------------------------------------------------------------------------------------- agents
   function assign() {
@@ -102,6 +107,33 @@ export function createOffice(stage, handlers) {
     }
   }
 
+  function catSpots() {
+    const pts = [[200, 60], [360, 60], [540, 60], [430, 196], [250, 196], [560, 196]];
+    if (L) {
+      pts.push([L.lounge.x + 30, L.lounge.y + 18], [L.lounge.x + 60, L.lounge.y + 52], [60, L.ceo.y + 112], [L.meet.x + 20, L.meet.y + 100]);
+      const mid = L.pods.length > 3 ? L.pods[3].y - 14 : 196;
+      for (const p of L.pods) pts.push([p.x + 40 + (p.col * 17) % 50, p.row === 0 ? mid : H - 12]);
+    }
+    return pts;
+  }
+  function stepCat(dt, t) {
+    if (!L || reduced) return;
+    if (cat.mode === "walk") {
+      const dx = cat.tx - cat.x, dy = cat.ty - cat.y, d = Math.hypot(dx, dy), v = 26 * dt;
+      if (Math.abs(dx) > 0.5) cat.facing = dx > 0 ? 1 : -1;
+      if (d <= v && cat.path.length) { cat.x = cat.tx; cat.y = cat.ty; [cat.tx, cat.ty] = cat.path.shift(); }
+      else if (d <= v) { cat.x = cat.tx; cat.y = cat.ty; const lounge = cat.x >= L.lounge.x && cat.y >= L.lounge.y; cat.mode = lounge && Math.random() < 0.6 ? "sleep" : "sit"; cat.until = t + (cat.mode === "sleep" ? 25000 : 4000 + Math.random() * 7000); }
+      else { cat.x += dx / d * v; cat.y += dy / d * v; }
+    } else if (t > cat.until) {
+      const spots = catSpots(), [nx, ny] = spots[Math.floor(Math.random() * spots.length)];
+      // Walk out to a corridor, along it, then in: Pixel never wades through the desks.
+      const lanes = [62, L.pods.length > 3 ? L.pods[3].y - 14 : 196, H - 12];
+      const near = (y) => lanes.reduce((a, b) => Math.abs(b - y) < Math.abs(a - y) ? b : a);
+      const cy = near((cat.y + ny) / 2);
+      cat.path = [[cat.x, cy], [nx, cy], [nx, ny]];
+      [cat.tx, cat.ty] = cat.path.shift(); cat.mode = "walk";
+    }
+  }
   function openElevator() { elevator.until = performance.now() + 1600; }
 
   function stepAgents(dt) {
@@ -159,6 +191,8 @@ export function createOffice(stage, handlers) {
     drawHire(t, lights);
     const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers].sort((a, b) => a.y - b.y);
     for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
+    S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
+    if (cat.mode === "sleep") S.drawZ(ctx, cat.x + 8, cat.y - 2, t);
     drawParticles();
     if (env.dark > 0) drawLighting(env, lights);
     else drawSun(t);
@@ -571,10 +605,25 @@ export function createOffice(stage, handlers) {
       const [bx, by] = anchorFor(c.a);
       place(b, bx, by);
     }
-    overlay.querySelectorAll(".bubble").forEach(b => { if (!want.has(b.dataset.sid)) b.remove(); });
+    overlay.querySelectorAll(".bubble[data-sid]").forEach(b => { if (!want.has(b.dataset.sid)) b.remove(); });
   }
 
+  function catHot() {
+    if (cat.el && cat.el.isConnected) return cat.el;
+    cat.el = document.createElement("button");
+    cat.el.className = "hot cat"; cat.el.type = "button"; cat.el.setAttribute("aria-label", "Pixel the office cat");
+    cat.el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+      if (cat.mode === "sleep") { cat.mode = "sit"; cat.until = performance.now() + 5000; }
+      pops.push({ el: div("bubble cat-says", "Mrrp! " + tip, cat.x + 5, cat.y - 2), until: performance.now() + 5200 });
+      if (handlers.onCat) handlers.onCat(tip);
+    });
+    overlay.appendChild(cat.el);
+    return cat.el;
+  }
   function moveDynamicDom() {
+    place(catHot(), cat.x - 2, cat.y - 3, 15, 12);
     for (const a of agents.values()) {
       if (a.mode !== "walking") continue;
       if (a.tagEl) place(a.tagEl, a.x + 5, a.y + 19);
@@ -689,7 +738,7 @@ export function createOffice(stage, handlers) {
     const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
     if (snap && L) {
       if (applyCam(false)) { clearTimeout(reresTimer); reresTimer = setTimeout(() => reres(false), 160); }
-      stepAgents(dt); stepParticles(dt);
+      stepAgents(dt); stepParticles(dt); stepCat(dt, t);
       if (t - lastDraw >= (reduced ? 250 : 33)) { drawFrame(t); lastDraw = t; }
       moveDynamicDom();
       if (Math.floor(t / 1000) !== lastSec) {
