@@ -51,7 +51,8 @@ export function createOffice(stage, handlers) {
   const lightC = document.createElement("canvas"), lx = lightC.getContext("2d");
 
   let snap = null, L = null, H = 340, F = 1, RES = 1, staticKey = "", ovKey = "";
-  let selected = null, privacy = false, reduced = false, mvp = null, hoverId = null;
+  let selected = null, privacy = false, reduced = false, mvp = null, hoverId = null, persona = null;
+  const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
   let leavers = [];                   // agents walking out
   const fresh = new Map();            // session id -> bubble expiry
@@ -84,6 +85,7 @@ export function createOffice(stage, handlers) {
           if (!first && !reduced) {      // a new arrival walks in from the elevator
             const p = pathTo(L, pod, slot);
             a.mode = "walking"; a.x = p[0][0]; a.y = p[0][1]; a.path = p.slice(1); openElevator();
+            if (persona) said.set(x.id, { text: persona(pod.seat).lines.arrive, until: performance.now() + 9000, at: performance.now() });
           }
           agents.set(x.id, a);
         } else { Object.assign(a, { slot, pod, seatId: pod.seat.id, sess: x, look, mode: "seated", path: [] }); }
@@ -437,7 +439,7 @@ export function createOffice(stage, handlers) {
   }
 
   function overlaySig() {
-    return JSON.stringify([F, selected, privacy, snap.office.name, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
+    return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
       (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id),
       [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
       snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
@@ -465,56 +467,63 @@ export function createOffice(stage, handlers) {
     div("room-label", "LOUNGE", L.lounge.x + 8, L.lounge.y + 4);
     const neon = div("neon", snap.office.name || "Claude Office", 254, 10); place(neon, 254, 10, 92, 24);
     if (mvp) place(div("mvp-tag", "MVP", 541, 37), 541, 37, 26, null);
-    const wb = div("wb", null, 590, 9); place(wb, 590, 9, 84, 34);
-    (snap.programmes || []).slice(0, 5).forEach(p => { const d = document.createElement("div"); d.textContent = p.name; wb.appendChild(d); });
-    if (!(snap.programmes || []).length) wb.innerHTML = "<div class='muted'>No programmes</div>";
     (snap.units || []).slice(0, 12).forEach((un, i) => {
       const [x, y] = rackPos(i);
       if (y + 42 <= H) hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices());
     });
     hot("hire", "Hiring desk: start a new lane", L.hire.x + 8, L.hire.y + 8, POD_W - 16, POD_H - 14, () => handlers.openHire());
-    place(div("plate hire-plate", "HIRING DESK", 0, 0), L.hire.x + 14, L.hire.y + 98, POD_W - 28, null);
-    waiting().forEach((l, i) => { const tg = div("tag st-waiting", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 90); tg.title = l.waiting_reason || "Waiting for a seat"; });
+    place(div("plate hire-plate", "Hiring desk", 0, 0), L.hire.x + 24, L.hire.y + 98, POD_W - 48, null);
+    waiting().forEach((l, i) => { const tg = div("tag queue", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 90); tg.title = l.waiting_reason || "Waiting for a seat"; });
     for (const pod of L.pods) renderPod(pod);
-    for (const a of leavers) a.tagEl = div("tag ghost", "👋 " + short(a.sess.name), a.x + 5, a.y + 19);
+    for (const a of leavers) a.tagEl = div("tag ghost", short(a.sess.name), a.x + 5, a.y + 19);
     renderBubbles();
   }
 
   function renderPod(pod) {
     const s = pod.seat;
     const live = s.sessions.filter(x => x.live !== false);
-    const us = s.usage || {};
-    const p5 = us.five_hour && us.five_hour.pct != null ? Math.round(us.five_hour.pct) : null;
-    const pw = us.weekly && us.weekly.pct != null ? Math.round(us.weekly.pct) : null;
-    const sign = div(`pod-sign st-${s.status}`, s.label, 0, 0);
-    sign.style.setProperty("--seat", s.color); place(sign, pod.x + 30, pod.y - 1, POD_W - 60, null);
+    const who = persona ? persona(s) : { name: s.nickname || s.label };
     const plate = document.createElement("button");
     plate.type = "button";
-    plate.className = `plate seat-plate st-${s.status}` + (selected && selected.seat === s.id && !selected.session ? " sel" : "");
+    plate.className = `plate st-${s.status}` + (selected && selected.seat === s.id && !selected.session ? " sel" : "");
     plate.style.setProperty("--seat", s.color);
-    place(plate, pod.x + 8, pod.y + 98, POD_W - 16, null);
-    const bar = (v) => `<span class="hp${v != null && v >= 90 ? " low" : ""}"><i style="width:${v == null ? 0 : Math.max(0, 100 - v)}%"></i></span>`;
-    const label = { working: "WORKING", idle: "IDLE", limited: "OUT OF PLAN", benched: "BENCHED", offline: "LOGGED OUT" }[s.status] || s.status;
-    plate.innerHTML = `<span class="pl-top"><b>${esc(s.nickname || s.label)}</b><span class="pl-st">${esc(label)}</span>` +
-      `${live.length > MAX_SLOTS ? `<span class="more">+${live.length - MAX_SLOTS}</span>` : ""}${(s.tokens_1h || 0) > 400000 ? `<span class="burn" title="Burning fast">🔥</span>` : ""}</span>` +
-      `<span class="pl-bars"><span class="pl-k">5H</span>${bar(p5)}<span class="pl-k">WK</span>${bar(pw)}</span>`;
-    plate.title = `${s.label}: plan left 5-hour ${p5 == null ? "?" : 100 - p5}%, week ${pw == null ? "?" : 100 - pw}%`;
+    place(plate, pod.x + 8, pod.y + 96, POD_W - 16, null);
+    const line = plateLine(s, live);
+    plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}</b><span>${esc(line.main)}</span></span>` +
+      `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>`;
+    plate.setAttribute("aria-label", `${who.name}: ${line.main}, ${line.side}`);
     plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; handlers.openSeat(s.id); });
     overlay.appendChild(plate);
-    const pz = hot("pod", `${s.label} desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id));
+    const pz = hot("pod", `${who.name}'s desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id));
     pz.addEventListener("dblclick", (e) => { e.stopPropagation(); focusSeat(s.id); });
     for (const a of agents.values()) {
       if (a.seatId !== s.id) continue;
-      if (a.mode === "walking") { a.tagEl = div(`tag st-${a.sess.state} k-${a.sess.kind} walking`, short(a.sess.name), a.x + 5, a.y + 19); continue; }
+      if (a.mode === "walking") { a.tagEl = div("tag walking", short(a.sess.name), a.x + 5, a.y + 19); continue; }
       const sp = seatSpot(pod, a.slot), sess = a.sess;
-      const b = hot("worker" + (selected && selected.session === sess.id ? " sel" : ""), `${sess.name} (${sess.state}): open details`,
+      const isSel = selected && selected.session === sess.id;
+      const b = hot("worker" + (isSel ? " sel" : ""), `${sess.name}, ${sess.state}: open`,
         sp.cx - 4, sp.top ? sp.seatY - 4 : sp.seatY - 6, 18, sp.top ? 24 : 22, () => handlers.openSession(s.id, sess.id));
-      b.addEventListener("mouseenter", () => { hoverId = sess.id; renderBubbles(); });
-      b.addEventListener("mouseleave", () => { hoverId = null; renderBubbles(); });
+      const tg = div("tag" + (isSel ? " show" : ""), short(sess.name), sp.cx + 5, sp.top ? pod.y + 45 : pod.y + 86);
+      b.addEventListener("mouseenter", () => { hoverId = sess.id; tg.classList.add("show"); renderBubbles(); });
+      b.addEventListener("mouseleave", () => { hoverId = null; if (!isSel) tg.classList.remove("show"); renderBubbles(); });
       b.addEventListener("dblclick", (e) => { e.stopPropagation(); focusSession(sess.id); });
-      div(`tag st-${sess.state} k-${sess.kind}`, short(sess.name), sp.cx + 5, sp.top ? pod.y + 45 : pod.y + 86);
     }
   }
+
+  function plateLine(s, live) {
+    const u = s.usage || {};
+    const l5 = u.five_hour && u.five_hour.pct != null ? Math.max(0, 100 - u.five_hour.pct) : null;
+    const lw = u.weekly && u.weekly.pct != null ? Math.max(0, 100 - u.weekly.pct) : null;
+    const tight = l5 == null ? (lw == null ? null : ["week", lw]) : lw == null || l5 <= lw ? ["5h", l5] : ["week", lw];
+    const busy = live.filter(x => x.state === "working" || x.state === "waiting").length;
+    const r5 = u.five_hour && u.five_hour.resets_at;
+    const left = tight ? `${Math.round(tight[1])}% of ${tight[0] === "5h" ? "5-hour" : "week"} left` : "no reading";
+    if (s.status === "limited") return { main: "Napping", side: r5 ? "back at " + hhmm(r5) : "out of plan", left: 0 };
+    if (s.status === "offline") return { main: "Locked out", side: "needs /login", left: null };
+    if (s.status === "benched") return { main: "On holiday", side: left, left: tight ? tight[1] : null };
+    return { main: busy ? `${busy} working` : live.length ? "Waiting for you" : "Free", side: left, left: tight ? tight[1] : null };
+  }
+  function hhmm(ts) { return new Date(ts * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
 
   function short(n, max = 16) {
     n = (n || "").replace(/^wt-/, "");
@@ -523,8 +532,8 @@ export function createOffice(stage, handlers) {
 
   function bubbleText(sess) {
     if (privacy && sess.kind === "desk") return sess.state === "idle" ? "Idle" : "Working…";
-    if (sess.state === "limited") return "Out of plan, waiting for the reset";
-    if (sess.state === "stuck") return "Quiet for a while: " + (sess.activity || "");
+    if (sess.state === "limited") return "Out of plan, back after the reset";
+    if (sess.state === "stuck") return "Taking a while: " + (sess.activity || "");
     if (sess.state === "waiting") return "⏳ " + (sess.activity || "Waiting");
     return sess.activity || sess.state;
   }
@@ -538,19 +547,28 @@ export function createOffice(stage, handlers) {
   function renderBubbles() {
     if (!L) return;
     const t = performance.now();
-    const want = new Set();
+    const cands = [];
     for (const a of agents.values()) {
-      const sess = a.sess, f = fresh.get(sess.id);
-      const show = hoverId === sess.id || (selected && selected.session === sess.id) || (f && f > t) || a.mode === "walking";
-      if (!show) continue;
+      const sess = a.sess, f = fresh.get(sess.id), say = said.get(sess.id);
+      const forced = hoverId === sess.id || (selected && selected.session === sess.id) || a.mode === "walking";
+      const sayOn = say && say.until > t;
+      if (!forced && !sayOn && !(f && f > t)) continue;
+      cands.push({ a, forced, prio: forced ? 1e15 : sayOn ? say.at + 1e12 : f, text: a.mode === "walking" ? (say && say.text) || `On my way to ${a.seatId}` : sayOn ? say.text : bubbleText(sess), persona: sayOn && !forced });
+    }
+    cands.sort((x, y) => y.prio - x.prio);
+    const perPod = new Set(), want = new Set();
+    let n = 0;
+    for (const c of cands) {
+      const podKey = c.a.mode === "seated" ? c.a.seatId : "walk-" + c.a.id;
+      if (!c.forced && (perPod.has(podKey) || n >= 3)) continue;
+      perPod.add(podKey); n++;
+      const sess = c.a.sess;
       want.add(sess.id);
       let b = overlay.querySelector(`.bubble[data-sid="${CSS.escape(sess.id)}"]`);
       if (!b) { b = document.createElement("div"); b.dataset.sid = sess.id; overlay.appendChild(b); }
-      const top = a.mode !== "seated" || seatSpot(a.pod, a.slot).top;
-      b.className = "bubble" + (top ? "" : " low") + (sess.state === "limited" ? " bad" : sess.state === "stuck" ? " warn" : "") + (a.mode === "walking" ? " hello" : "");
-      const txt = a.mode === "walking" ? `On my way to ${a.seatId}` : bubbleText(sess);
-      if (b.textContent !== txt) b.textContent = txt;
-      const [bx, by] = anchorFor(a);
+      b.className = "bubble" + (sess.state === "limited" ? " bad" : sess.state === "stuck" ? " warn" : "") + (c.a.mode === "walking" ? " hello" : c.persona ? " persona" : "");
+      if (b.textContent !== c.text) b.textContent = c.text;
+      const [bx, by] = anchorFor(c.a);
       place(b, bx, by);
     }
     overlay.querySelectorAll(".bubble").forEach(b => { if (!want.has(b.dataset.sid)) b.remove(); });
@@ -601,6 +619,7 @@ export function createOffice(stage, handlers) {
     else { cam.z += dz * 0.18; cam.x += dx * 0.18; cam.y += dy * 0.18; }
     world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`;
     stage.classList.toggle("zoomed", cam.tz > 1.01);
+    world.classList.toggle("zoomin", cam.z > 1.7);
     return true;
   }
 
@@ -677,6 +696,7 @@ export function createOffice(stage, handlers) {
         lastSec = Math.floor(t / 1000);
         let changed = false;
         for (const [k, v] of fresh) if (v < t) { fresh.delete(k); changed = true; }
+        for (const [k, v] of said) if (v.until < t) { said.delete(k); changed = true; }
         if (changed) renderBubbles();
       }
     }
@@ -728,6 +748,12 @@ export function createOffice(stage, handlers) {
     setPrivacy(on) { privacy = on; ovKey = ""; renderOverlay(); },
     setReducedMotion(on) { reduced = on; },
     setMvp(m) { mvp = m && m.seat ? m : null; ovKey = ""; renderOverlay(); },
+    setPersonas(fn) { persona = fn; ovKey = ""; renderOverlay(); },
+    say(sessionId, text, ms = 6000) { if (!sessionId || !text) return; said.set(sessionId, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); },
+    sayAtSeat(seatId, text, ms = 6000) {
+      const a = [...agents.values()].find(x => x.seatId === seatId && x.mode === "seated");
+      if (a) { said.set(a.id, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); }
+    },
     focusSeat, focusSession, fit, celebrate, alarm,
     zoom(dir) { const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
     pan(dx, dy) { cam.tx += dx; cam.ty += dy; clampCam(cam); },

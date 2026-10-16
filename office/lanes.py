@@ -166,7 +166,8 @@ def unit_active(unit: str) -> bool:
 # ------------------------------------------------------------------------------------------------ create
 
 def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, permission_mode: str,
-                seat_ids: list[str], cfg: dict, launch: bool = True) -> dict:
+                seat_ids: list[str], cfg: dict, launch: bool = True, allow_messages: bool = True,
+                resume_session: str | None = None) -> dict:
     title = " ".join(str(title).split())[:80]
     if not title or not str(brief).strip():
         raise ValueError("A lane needs a title and a brief")
@@ -179,7 +180,11 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         raise ValueError(f"Model must be one of {', '.join(MODELS)}")
     if permission_mode not in PERMISSIONS:
         raise ValueError(f"Permission mode must be one of {', '.join(PERMISSIONS)}")
+    if resume_session is not None and not re.match(r"^[0-9a-f-]{36}$", resume_session):
+        raise ValueError("A follow-up needs a session id")
     lane_id = f"{time.strftime('%m%d-%H%M%S')}-{_slug(title)}"
+    if lane_dir(lane_id).exists():                       # two hires in the same second with the same title
+        lane_id = f"{lane_id[:-4] if len(lane_id) > 40 else lane_id}-{os.urandom(2).hex()}"
     d = lane_dir(lane_id)
     d.mkdir(parents=True, exist_ok=False)
     d.chmod(0o700)   # briefs and logs can hold private details
@@ -188,7 +193,8 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
     lane = {
         "id": lane_id, "title": title, "workdir": workdir, "seat_pref": seat, "model": model,
         "permission_mode": permission_mode, "created_at": time.time(), "status": "queued",
-        "seat": None, "runs": [], "unit": unit_name(lane_id),
+        "seat": None, "runs": [], "unit": unit_name(lane_id), "allow_messages": bool(allow_messages),
+        "resume_session": resume_session,
     }
     save_lane(lane)
     if launch:
@@ -317,8 +323,17 @@ def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[l
         env = dict(os.environ)
     else:
         ld = cfg["lane_defaults"]
-        cmd = ["claude", "-p", prompt, "--model", lane["model"], "--permission-mode", lane["permission_mode"],
-               "--allowedTools", ld["allowed_tools"], "--add-dir", str(d)]
+        if lane.get("resume_session"):
+            # A follow-up: continue that session's own conversation with the CEO's message.
+            prompt = "Message from the CEO, sent from Claude Office:\n\n" + (d / "brief.md").read_text()
+            cmd = ["claude", "--resume", lane["resume_session"], "-p", prompt, "--permission-mode", lane["permission_mode"],
+                   "--allowedTools", ld["allowed_tools"]]
+        else:
+            cmd = ["claude", "-p", prompt, "--model", lane["model"], "--permission-mode", lane["permission_mode"],
+                   "--allowedTools", ld["allowed_tools"], "--add-dir", str(d)]
+        if lane.get("allow_messages", True):
+            # The CEO chose to be able to message this lane from the office: deliver instead of holding.
+            cmd += ["--settings", json.dumps({"crossSessionInbound": "accept"})]
         for extra in ld.get("add_dirs") or []:
             cmd += ["--add-dir", os.path.expanduser(extra)]
         # Headless runs stop their background tasks 10 minutes after the last turn unless told not to.
@@ -330,21 +345,26 @@ def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[l
     return cmd, env
 
 
-def _wait_until_seated(seat: dict, proc, timeout: float = 30.0) -> None:
-    """Block until the new agent shows up as a live session on its seat (or exits, or the timeout passes)."""
+def _wait_until_seated(seat: dict, proc, timeout: float = 30.0) -> str | None:
+    """Block until the new agent shows up as a live session on its seat (or exits, or the timeout passes).
+    Returns its Claude session id when it can be read, so the CEO can follow up on it later."""
     t0 = time.time()
     sdir = Path(seat["config_dir"]) / "sessions"
     while time.time() - t0 < timeout and proc.poll() is None:
         if seat["kind"] == "codex":
             if time.time() - t0 > 8:
-                return
+                return None
         else:
             try:
-                if any(f.stat().st_mtime >= t0 - 1 for f in sdir.glob("*.json")):
-                    return
-            except OSError:
+                mine = sdir / f"{proc.pid}.json"
+                if mine.exists():
+                    return json.loads(mine.read_text()).get("sessionId")
+                if any(f.stat().st_mtime >= t0 - 1 for f in sdir.glob("*.json")) and time.time() - t0 > 12:
+                    return None
+            except (OSError, ValueError):
                 pass
         time.sleep(1)
+    return None
 
 
 def run_lane(lane_id: str) -> int:
@@ -387,10 +407,15 @@ def run_lane(lane_id: str) -> int:
                 log = open(d / "lane.log", "ab")
                 try:
                     proc = subprocess.Popen(cmd, cwd=lane["workdir"], env=env, stdin=subprocess.DEVNULL,
-                                            stdout=subprocess.PIPE if seat["kind"] == "codex" else log, stderr=log)
+                                            stdout=subprocess.PIPE if seat["kind"] == "codex" or lane.get("resume_session") else log,
+                                            stderr=log)
                     lane["pid"] = proc.pid
                     save_lane(lane)
-                    _wait_until_seated(seat, proc)
+                    sid = _wait_until_seated(seat, proc)
+                    if sid:
+                        lane["runs"][-1]["session_id"] = sid
+                        lane["last_session_id"] = sid
+                        save_lane(lane)
                 except OSError as e:
                     _log(lane_id, f"could not start: {e}")
         if not seat_id:
@@ -420,7 +445,8 @@ def run_lane(lane_id: str) -> int:
             with open(d / "lane.log", "ab") as f:
                 f.write(out)
             if not (d / "REPORT.md").exists() and rc == 0:
-                (d / "REPORT.md").write_bytes(b"STATUS: DONE - see summary\n\n" + out)
+                head = b"STATUS: DONE - replied\n\n" if lane.get("resume_session") else b"STATUS: DONE - see summary\n\n"
+                (d / "REPORT.md").write_bytes(head + out)
         lane = load_lane(lane_id) or lane
         lane["runs"][-1].update(ended_at=time.time(), rc=rc)
         lane["pid"] = None

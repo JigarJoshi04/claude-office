@@ -101,6 +101,8 @@ def discover_claude_seats(cfg: dict) -> list[dict]:
             "account_file": str(HOME / ".claude.json") if n == 1 else str(path / ".claude.json"),
             "label": over.get("label", seat_id),
             "nickname": over.get("nickname"),
+            "role": over.get("role"),
+            "motto": over.get("motto"),
             "color": over.get("color", PALETTE[i % len(PALETTE)]),
         })
     return seats
@@ -120,6 +122,8 @@ def codex_seat_meta(cfg: dict) -> dict | None:
         "config_dir": str(HOME / ".codex"),
         "label": over.get("label", c.get("label", "Astra")),
         "nickname": over.get("nickname"),
+        "role": over.get("role"),
+        "motto": over.get("motto"),
         "color": over.get("color", ASTRA_COLOR),
     }
 

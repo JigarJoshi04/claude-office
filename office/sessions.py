@@ -444,6 +444,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "report_file": report_file,
             "report_status": report_status,
             "transcript": str(tpath) if tpath else None,
+            "socket": s.get("messagingSocketPath"),
             "resume_cmd": f"CLAUDE_CONFIG_DIR={seat['config_dir']} claude --resume {s.get('sessionId')}"
                           if s.get("sessionId") else None,
         })

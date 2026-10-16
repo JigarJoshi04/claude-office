@@ -346,6 +346,18 @@ class Office(LiveOffice):
             self._units = list_units(cfg.get("watch_units") or [])
             self._units_at = now
         lane_list = lanes.list_lanes()
+        from . import messaging
+        direct = {l.get("pid") for l in lane_list if l.get("allow_messages", True) and l.get("pid")}
+        for s in seats_out:
+            for x in s["sessions"]:
+                if s.get("kind") == "codex":
+                    x["talk"] = "none"
+                elif not x.get("live", True):
+                    x["talk"] = "followup"
+                elif messaging.valid_target(x.get("socket")):
+                    x["talk"] = "direct" if x.get("pid") in direct else "review"
+                else:
+                    x["talk"] = "followup"
         evaluation = divider.evaluate(seats_out, div, limited_until=limits, now=now)
         programmes = {}
         for s in seats_out:

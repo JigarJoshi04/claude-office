@@ -58,7 +58,33 @@ class _NoPoll:
         pass
 
 
+DEMO_CHAT = [
+    ("user", "Rewrite the rate limiter so bursts are smoothed. Keep the public API the same and add tests."),
+    ("assistant", "On it. I'll read the current limiter, write failing tests for burst smoothing, then switch to a token bucket."),
+    ("step", "Reading limiter.py"), ("step", "Searching retry_after"), ("step", "Editing test_limiter.py"),
+    ("step", "Run unit tests"),
+    ("assistant", "Three new tests fail as expected. Switching the implementation to a token bucket now."),
+    ("step", "Editing limiter.py"), ("step", "Run unit tests"),
+    ("peer", "Claude Office (CEO): How close are you? Can you ship before the 5-hour reset?"),
+    ("assistant", "Yes. All 41 tests pass locally. I'm opening the PR next and will report back with the link."),
+]
+
+
 class DemoOffice(LiveOffice):
+    is_demo = True
+
+    def demo_conversation(self, session_id):
+        now = time.time()
+        out = []
+        for i, (role, text) in enumerate(DEMO_CHAT):
+            item = {"ts": now - (len(DEMO_CHAT) - i) * 95, "role": role, "text": text}
+            if role == "peer":
+                item.update(from_name="Claude Office (CEO)", text=text.split(": ", 1)[1])
+            if role == "step":
+                item["kind"] = "type" if text.startswith(("Editing", "Run")) else "read"
+            out.append(item)
+        return out
+
     def __init__(self):
         self.init_live()
         self.samples = HistoryStore()
@@ -157,6 +183,7 @@ class DemoOffice(LiveOffice):
             s["tokens_1h"] = sum(x["tokens_1h"]["fresh"] for x in s["sessions"])
             s["status"] = Office._seat_status(s, sc, s["sessions"])
             for x in s["sessions"]:
+                x["talk"] = "none" if s["kind"] == "codex" else ("direct" if x["kind"] == "lane" else "review")
                 x["programme"] = ({"name": "Apollo launch", "url": "https://example.com/mission-control", "key": "apollo"}
                                   if "apollo" in (x.get("unit") or "") or x["name"].startswith("apollo") or "work/apollo" in x["cwd"]
                                   else {"name": "Billing revamp", "url": None, "key": "billing"} if "billing" in x["cwd"] else None)

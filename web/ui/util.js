@@ -1,5 +1,6 @@
 // Small shared helpers for the page.
 import * as S from "../engine/sprites.js";
+import { icon } from "./icons.js";
 
 export const $ = (id) => document.getElementById(id);
 export function esc(s) {
@@ -68,6 +69,28 @@ export function portrait(id, color, opts = {}) {
 }
 // Placeholder elements in an HTML string are swapped for portraits after render: <i data-portrait="id|color|opts">
 export function portraitTag(id, color, opts = "") { return `<i data-portrait="${esc(id)}|${esc(color)}|${esc(opts)}"></i>`; }
+export function avatar(id, color, opts = "", cls = "") { return `<span class="av ${cls}" style="--seat:${esc(color)}">${portraitTag(id, color, opts)}</span>`; }
+export function relTime(ts) {
+  if (!ts) return "";
+  const s = Math.max(0, Math.round(NOW - ts));
+  if (s < 45) return "just now";
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 86400) return Math.floor(s / 3600) + " h ago";
+  return Math.floor(s / 86400) + " d ago";
+}
+export function inWords(ts) {   // "in 2 h 05 min"
+  if (!ts) return "";
+  const s = Math.max(0, Math.round(ts - NOW));
+  if (s < 3600) return "in " + Math.max(1, Math.round(s / 60)) + " min";
+  if (s < 86400) return "in " + Math.floor(s / 3600) + " h " + String(Math.floor((s % 3600) / 60)).padStart(2, "0") + " min";
+  return "in " + Math.floor(s / 86400) + " d " + Math.floor((s % 86400) / 3600) + " h";
+}
+export function dayTime(ts) {   // "1:40 AM" today, "Sun 2:30 PM" later
+  if (!ts) return "";
+  const d = new Date(ts * 1000), now = new Date(NOW * 1000);
+  const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === now.toDateString() ? t : d.toLocaleDateString([], { weekday: "short" }) + " " + t;
+}
 export function hydratePortraits(root, scale) {
   root.querySelectorAll("i[data-portrait]").forEach(el => {
     const [id, color, o] = el.dataset.portrait.split("|");
@@ -91,7 +114,7 @@ export function toast(msg, level = "info", ms = 4200) {
   toastEl = toastEl || $("toasts");
   const t = document.createElement("div");
   t.className = "toast " + level;
-  t.innerHTML = `<span class="ico">${{ good: "✅", bad: "⛔", warn: "⚠️", info: "💬" }[level] || "💬"}</span><span>${esc(msg)}</span>`;
+  t.innerHTML = `${icon({ good: "check", bad: "alert", warn: "alert", info: "chat" }[level] || "chat", 18)}<span>${esc(msg)}</span>`;
   toastEl.appendChild(t);
   while (toastEl.children.length > 4) toastEl.firstChild.remove();
   setTimeout(() => t.remove(), ms);

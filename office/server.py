@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import checkpoint, config, divider, lanes, sessions, settings
+from . import checkpoint, config, divider, lanes, messaging, sessions, talk, settings
 
 MAX_BODY = 256 * 1024
 
@@ -100,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self._session_detail(q.get("seat", ""), q.get("id", "")))
             if url.path == "/api/lane":
                 return self._json(200, self._lane_detail(q.get("id", "")))
+            if url.path == "/api/conversation":
+                return self._json(200, talk.conversation_view(self.office, q.get("seat", ""), q.get("id", "")))
             if url.path == "/healthz":
                 return self._json(200, {"ok": True, "age_s": round(time.time() - (self.office.get().get("now") or 0), 1)})
         except (ValueError, KeyError) as e:
@@ -227,6 +229,8 @@ class Handler(BaseHTTPRequestHandler):
                 ev = divider.evaluate(snap.get("seats", []), cfg, limited_until=lanes.read_limits())
                 return self._json(200, {"ok": True, "next_pick": {"seat": ev["pick"], "why": ev["why"],
                                                                   "ranking": ev["ranking"]}})
+            if path == "/api/message":
+                return self._json(200, talk.send(self.office, body, seat_ids))
             if path == "/api/lanes":
                 cfg = self.office.cfg
                 ld = cfg["lane_defaults"]
@@ -269,6 +273,19 @@ def serve(port: int, demo: bool = False) -> None:
     else:
         from .snapshot import Office
         office = Office()
+    if not demo:
+        office.inbox = messaging.Inbox()
+        if office.inbox.start():
+            def on_inbox(item, office=office):
+                if item.get("dir") != "in":
+                    return
+                who = item.get("from_name") or "A session"
+                seat = next((s["id"] for s in office.get().get("seats", []) for x in s.get("sessions", [])
+                             if x.get("socket") and "uds:" + x["socket"] == item.get("from")), None)
+                office.emit("reply", f"{who} replied to the CEO: {item.get('text', '')[:90]}", seat, "good")
+            office.inbox.listeners.append(on_inbox)
+        else:
+            office.inbox = None
     office.build()
     threading.Thread(target=office.run, daemon=True, name="office").start()
     Handler.office = office
@@ -284,3 +301,5 @@ def serve(port: int, demo: bool = False) -> None:
         pass
     finally:
         office.stop.set()
+        if getattr(office, "inbox", None):
+            office.inbox.stop()

@@ -80,7 +80,7 @@ export function bindSparks(root) {
 }
 
 // The timeline: one block per seat, one row per session, segments coloured by state.
-export function timeline(hist, snap, width, hours) {
+export function timeline(hist, snap, width, hours, nameOf = (s) => s.label) {
   const labelW = 170, padR = 14, rowH = 18, headH = 28, gapH = 10;
   const now = hist.now || snap.now;
   const t0 = now - hours * 3600, t1 = now + Math.max(1800, hours * 3600 * 0.18);
@@ -98,6 +98,7 @@ export function timeline(hist, snap, width, hours) {
   let svg = "";
   const step = hours > 12 ? 3 * 3600 : hours > 6 ? 2 * 3600 : hours > 2 ? 3600 : 1800;
   for (let t = Math.ceil(t0 / step) * step; t < t1; t += step) {
+    if (Math.abs(x(t) - x(now)) < 34) { svg += `<line class="tick" x1="${x(t)}" x2="${x(t)}" y1="18" y2="__H__"/>`; continue; }
     svg += `<line class="tick" x1="${x(t)}" x2="${x(t)}" y1="18" y2="__H__"/><text class="ticklbl" x="${x(t)}" y="12" text-anchor="middle">${new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: step < 3600 ? "2-digit" : undefined })}</text>`;
   }
   svg += `<rect x="${x(now)}" y="18" width="${x(t1) - x(now)}" height="__HH__" fill="url(#tlhatch)"/>`;
@@ -106,7 +107,8 @@ export function timeline(hist, snap, width, hours) {
     const shown = list.slice(-10);
     svg += `<rect class="rowbg" x="0" y="${yy}" width="${labelW + plotW}" height="${headH}" rx="6"/>`;
     svg += `<rect x="8" y="${yy + 9}" width="10" height="10" rx="3" fill="${seat.color}"/>`;
-    svg += `<text class="lbl" x="24" y="${yy + 18}">${esc(seat.label)}</text><text class="lbl2" x="${30 + seat.label.length * 7.4}" y="${yy + 18}">${list.length} session${list.length === 1 ? "" : "s"}</text>`;
+    const nm = nameOf(seat);
+    svg += `<text class="lbl" x="24" y="${yy + 18}">${esc(nm)}</text><text class="lbl2" x="${32 + nm.length * 7.6}" y="${yy + 18}">${list.length} session${list.length === 1 ? "" : "s"}</text>`;
     // usage strip: 5-hour % as a thin line across the header
     const ser = ((hist.seats || {})[seat.id] || {}).series || [];
     const pts = ser.filter(r => r[0] >= t0 && r[1] != null);
