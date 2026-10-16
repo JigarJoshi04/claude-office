@@ -62,6 +62,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Message all lanes** at once, for example "limits reset in 20 minutes: write your notes now".
 
 **The CEO's briefing**
+- *While you were away*: after an hour or more away, it opens with what happened since you last looked. That covers
+  reports filed, level-ups, trophies, lanes finished, limits hit and anything blocked, plus the five items to read first.
 - A summary in plain sentences: who is working, who is lowest on plan and when it resets, and where the next lane
   goes.
 - *Needs you*: logouts, seats near empty, lanes stopped by a limit, quiet lanes, blocked reports, failed services,
