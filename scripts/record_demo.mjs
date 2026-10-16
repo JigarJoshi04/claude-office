@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Records the demo office into docs/demo.mp4 and docs/demo.gif, for the README and the landing page.
 //
-// It starts the demo server if nothing answers on --url, launches headless Chrome with a throwaway profile
-// and drives it over the DevTools protocol: the floor overview, a zoom into the pod a visitor lane is walking
-// to (its character's card opens in the panel), the walk-in, a zoom back out, a session's Chat, then a few
-// seconds each of the Team view and the Timeline. Frames are resampled to a steady rate and encoded with
+// It starts a fresh demo office on a free port (or uses --url), launches headless Chrome with a throwaway
+// profile and drives it over the DevTools protocol. The cut opens on the "LEVEL UP!" banner the demo office
+// shows about 20 s after it starts, then follows a visitor lane: the floor overview, a zoom into the pod it is
+// walking to (its character's card opens in the panel), the walk-in, a zoom back out, a session's Chat, then a
+// few seconds each of the Team view and the Timeline. Frames are resampled to a steady rate and encoded with
 // ffmpeg. Chrome, its profile, the frames and any server it started are cleaned up on exit, also after an
 // error or Ctrl-C.
 //
@@ -16,6 +17,7 @@
 // The UI hooks it relies on are listed in UI below; update them there if the page changes.
 
 import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:net";
 import { copyFileSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -28,6 +30,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const UI = {
   floorReady: "#stage canvas",         // the floor has been drawn
   dismissWelcome: "[data-dismiss-welcome]",   // the first-visit welcome card's close button (a fresh profile sees it)
+  banner: ".lvl-banner",               // the "LEVEL UP!" banner across the floor; it shows for about 3.4 s, and only
+                                       // on the Floor view
   stage: "#stage",                     // the floor's viewport; Ctrl + wheel over it zooms the camera
   walking: ".tag.walking",             // the name tag of a session walking in from the elevator; other name tags
                                        // only show on hover or when zoomed in, but this one always shows
@@ -49,6 +53,10 @@ const CHAT_WITH = "api-rate-limits";
 // The cut, in seconds. The floor part comes out at about 10 s; the middle of the walk is sped up to get there.
 // Set chat, team or timeline to 0 to leave that part out.
 const SHOT = {
+  bannerWait: 45,     // how long to wait for the level-up banner once the page is open (the demo's comes ~20 s in)
+  bannerPre: 0.6,     // floor kept from before the banner sweeps in...
+  bannerPost: 0.3,    // ...and after it has gone
+  posterAt: 1.0,      // the poster is this long after the banner appears (the first frame if there was no banner)
   preroll: 1.2,       // overview kept from before the visitor appears
   stepOut: 0.8,       // the visitor steps out of the elevator at normal speed...
   walkSpeed: 3,       // ...then crosses the floor this many times faster, until the camera moves
@@ -59,16 +67,17 @@ const SHOT = {
   zoomOut: 1.1,       // the camera glides back out
   overview: 0.7,      // hold on the whole floor
   chat: 2.8,          // a session's Chat, next to the floor
-  team: 2.6,          // the Team view
-  timeline: 2.6,      // the Timeline view
+  team: 2.3,          // the Team view
+  timeline: 2.3,      // the Timeline view
 };
 
-const LIMITS = { mp4: 6 * 1024 * 1024, gif: 8 * 1024 * 1024 };
+const LIMITS = { mp4: 6 * 1024 * 1024, gif: 6.6 * 1024 * 1024 };   // the GIF stays under 7 MB (decimal) too
 
 const HELP = `Usage: node scripts/record_demo.mjs [options]
 
-  --url URL         office to record (default http://127.0.0.1:7497); a demo server is started there if
-                    nothing answers and the host is loopback
+  --url URL         office to record (default: a fresh demo office on a free loopback port, so its first
+                    level-up comes about 20 s in); a server already answering there is used as it is, and
+                    one is started there if nothing answers and the host is loopback
   --out DIR         where demo.mp4, demo.gif and demo-poster.jpg go (default docs/)
   --fps N           frame rate of the MP4 (default 24); the GIF is always 12 fps
   --width N         viewport width (default 1600)
@@ -83,7 +92,7 @@ const HELP = `Usage: node scripts/record_demo.mjs [options]
 
 const { values: opt } = parseArgs({
   options: {
-    url: { type: "string", default: "http://127.0.0.1:7497" },
+    url: { type: "string" },
     out: { type: "string", default: join(ROOT, "docs") },
     fps: { type: "string", default: "24" },
     width: { type: "string", default: "1600" },
@@ -99,7 +108,7 @@ const { values: opt } = parseArgs({
 });
 if (opt.help) { console.log(HELP); process.exit(0); }
 
-const BASE = opt.url.replace(/\/+$/, "");
+let BASE = opt.url ? opt.url.replace(/\/+$/, "") : null;    // set in main() when no --url is given
 const FPS = Number(opt.fps), VW = Number(opt.width), VH = Number(opt.height), WAIT = Number(opt.wait);
 for (const [k, v] of Object.entries({ fps: FPS, width: VW, height: VH, wait: WAIT })) {
   if (!Number.isFinite(v) || v <= 0) fail(`--${k} must be a positive number`);
@@ -135,6 +144,14 @@ async function stopGroup(child, graceMs = 3000) {
 }
 
 // ------------------------------------------------------------------------------------------------- server
+function freePort() {
+  return new Promise((res, rej) => {
+    const s = createServer();
+    s.on("error", rej);
+    s.listen(0, "127.0.0.1", () => { const { port } = s.address(); s.close(() => res(port)); });
+  });
+}
+
 async function reachable(url) {
   try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); return r.ok; } catch { return false; }
 }
@@ -370,6 +387,7 @@ function frameRecorder(cdp, page, sessionId, rawDir) {
   return {
     start: () => page.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: VW, maxHeight: VH, everyNthFrame: 1 }),
     record() { for (const f of ring.splice(0)) store(f.t, f.buf); mode = "record"; },
+    buffer() { mode = "buffer"; },        // back to keeping only the last few seconds in memory
     async stop() { mode = "off"; await page.send("Page.stopScreencast").catch(() => {}); },
     frames,
   };
@@ -454,6 +472,7 @@ function encodeGif(seq, out) {
 async function main() {
   if (Number(process.versions.node.split(".")[0]) < 22 || typeof WebSocket !== "function") fail("needs Node 22 or newer (global WebSocket)");
   mkdirSync(opt.out, { recursive: true });
+  if (!BASE) BASE = `http://127.0.0.1:${await freePort()}`;
   await ensureServer();
 
   const work = mkdtempSync(join(tmpdir(), "claude-office-frames-"));
@@ -469,6 +488,7 @@ async function main() {
   const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
   const page = pageOf(cdp, sessionId);
 
+  let posterTick = 0;
   try {
     await page.send("Page.enable");
     await page.send("Runtime.enable");
@@ -490,6 +510,21 @@ async function main() {
     await rec.start();
     const park = () => page.mouse(VW - 2, Math.round(VH * 0.12), 0);   // out of the way, over the tab bar
     await park();
+
+    // 0. The level-up. A fresh demo office celebrates its first one about 20 s after it starts; an older one
+    // may be past it, and then the cut starts with the walk-in.
+    let bannerSeg = null;
+    const bannerUp = `!!document.querySelector(${JSON.stringify(UI.banner)})`;
+    log(`waiting up to ${SHOT.bannerWait} s for the level-up banner`);
+    if (await page.waitFor(bannerUp, SHOT.bannerWait)) {
+      const tb = now() - 0.05;
+      rec.record();
+      await page.waitFor(`!${bannerUp}`, 8);
+      await sleep(SHOT.bannerPost * 1000);
+      bannerSeg = { from: tb - SHOT.bannerPre, to: now(), speed: 1 };
+      rec.buffer();
+      log(`level-up banner: ${(bannerSeg.to - tb).toFixed(1)} s`);
+    } else log("no level-up banner came; the cut starts with the walk-in");
 
     // A visitor already on its way may be half-way to its desk; wait for a fresh arrival instead.
     if (await page.evaluate(WALKING)) await page.waitFor(`${WALKING} === 0`, SHOT.maxWalk);
@@ -559,20 +594,24 @@ async function main() {
     mark("end");
     await rec.stop();
 
-    const got = rec.frames.length, span = rec.frames.length ? rec.frames.at(-1).t - rec.frames[0].t : 0;
+    const got = rec.frames.length, tour = rec.frames.filter((f) => f.t >= t0 - SHOT.preroll), span = t1 - (t0 - SHOT.preroll);
     if (got < 10) throw new Error(`only ${got} frames arrived from Chrome`);
-    log(`captured ${got} frames over ${span.toFixed(1)} s (${(got / Math.max(span, 0.001)).toFixed(1)} fps from Chrome)`);
+    const lvl = bannerSeg ? rec.frames.filter((f) => f.t <= bannerSeg.to).length : 0;
+    log(`captured ${got} frames${lvl ? `, ${lvl} of them during the level-up` : ""} ` +
+      `(${(tour.length / Math.max(span, 0.001)).toFixed(1)} fps from Chrome during the tour)`);
     rec.frames.sort((a, b) => a.t - b.t);
     const { keep, dropped } = dropBlankFrames(rec.frames);
     if (dropped) log(`dropped ${dropped} blank frame${dropped > 1 ? "s" : ""} from canvas redraws`);
     const tFast = Math.min(t0 + SHOT.stepOut, tZoom);
     const ticks = resample(keep, [
+      ...(bannerSeg ? [bannerSeg] : []),
       { from: Math.max(t0 - SHOT.preroll, rec.frames[0].t), to: tFast, speed: 1 },
       { from: tFast, to: tZoom, speed: SHOT.walkSpeed },
       { from: tZoom, to: t1, speed: 1 },
     ], FPS, seqDir);
     log(`seconds after the visitor appeared: ${marks.join(", ")}`);
     log(`cut ${ticks} frames at ${FPS} fps (${(ticks / FPS).toFixed(1)} s)`);
+    if (bannerSeg) posterTick = Math.min(ticks - 1, Math.round((SHOT.bannerPre + SHOT.posterAt) * FPS));
   } finally {
     await page.send("Page.stopScreencast").catch(() => {});
     await cdp.send("Browser.close").catch(() => {});
@@ -582,7 +621,7 @@ async function main() {
   const mp4 = join(opt.out, "demo.mp4"), gif = join(opt.out, "demo.gif"), poster = join(opt.out, "demo-poster.jpg");
   encodeMp4(seqDir, mp4);
   encodeGif(seqDir, gif);
-  ffmpeg(["-i", join(seqDir, "00000.jpg"), "-q:v", "3", poster]);
+  ffmpeg(["-i", join(seqDir, `${String(posterTick).padStart(5, "0")}.jpg`), "-q:v", "3", poster]);
   if (opt.previews) {
     mkdirSync(opt.previews, { recursive: true });
     for (const f of readdirSync(opt.previews)) if (/^still-\d+\.png$/.test(f)) rmSync(join(opt.previews, f));

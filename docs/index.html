@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Office: a pixel office for every AI coding seat</title>
-<meta name="description" content="A local dashboard that shows every Claude Code account and the Codex CLI on your machine as a living pixel-art office. See who is working and who is stuck, talk to any task, and split new work across seats. Python standard library only, MIT licensed.">
+<meta name="description" content="A local dashboard that shows every Claude Code account and the Codex CLI on your machine as a living pixel-art office. See who is working and who is stuck, talk to any task, split new work across seats, and watch every character level up from real work. Python standard library only, MIT licensed.">
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#090b12" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Claude Office: a pixel office for every AI coding seat">
-<meta property="og:description" content="Every Claude Code account and the Codex CLI on your machine as a living pixel-art office: a character at every seat, a chat with every task. Local-first, zero dependencies, MIT.">
+<meta property="og:description" content="Every Claude Code account and the Codex CLI on your machine as a living pixel-art office: a character at every seat, a chat with every task, and careers earned from real work. Local-first, zero dependencies, MIT.">
 <meta property="og:image" content="https://jigarjoshi04.github.io/claude-office/demo-poster.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23121522'/%3E%3Crect x='3' y='3' width='3' height='3' fill='%23ffd76a'/%3E%3Crect x='7' y='3' width='3' height='3' fill='%23ffd76a'/%3E%3Crect x='11' y='3' width='2' height='3' fill='%2338e07b'/%3E%3Crect x='3' y='9' width='10' height='4' fill='%23ff7a45'/%3E%3C/svg%3E">
@@ -90,10 +90,10 @@ code, pre, kbd { font-family: var(--mono); }
 .brand svg { width: 26px; height: 26px; shape-rendering: crispEdges; }
 .wordmark { font-family: Silkscreen, var(--mono); font-size: 17px; letter-spacing: .06em; text-transform: uppercase; line-height: 1; white-space: nowrap; }
 .nav-links { display: flex; gap: 4px; margin-left: auto; }
-.nav-links a { padding: 8px 12px; border-radius: 10px; color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; }
+.nav-links a { padding: 8px 12px; border-radius: 10px; color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 500; white-space: nowrap; }
 .nav-links a:hover { color: var(--text); background: var(--surface-2); }
 .nav .btn { padding: 9px 14px; font-size: 15px; }
-@media (max-width: 860px) { .nav-links { display: none; } .nav .gh { margin-left: auto; } }
+@media (max-width: 980px) { .nav-links { display: none; } .nav .gh { margin-left: auto; } }
 
 /* ------------------------------------------------------------------ buttons */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 13px 20px; border-radius: 12px;
@@ -269,6 +269,9 @@ footer .wrap { display: grid; gap: 18px; }
   <symbol id="i-cat" viewBox="0 -1 9 9"><path d="M1 0h1v1h-1zM7 0h1v1h-1zM1 1h2v1h-2zM6 1h2v1h-2zM1 2h7v1h-7zM0 3h2v1h-2zM3 3h3v1h-3zM7 3h2v1h-2zM0 4h9v1h-9zM0 5h4v1h-4zM5 5h4v1h-4zM1 6h7v1h-7zM2 7h5v1h-5z"/></symbol>
   <symbol id="i-team" viewBox="0 0 9 9"><path d="M1 0h2v2h-2zM6 0h2v2h-2zM0 3h4v1h-4zM5 3h4v1h-4zM0 4h4v3h-4zM5 4h4v3h-4z"/></symbol>
   <symbol id="i-brief" viewBox="0 0 9 9"><path d="M1 0h7v1h-7zM1 1h1v7h-1zM7 1h1v7h-1zM3 2h3v1h-3zM3 4h3v1h-3zM3 6h2v1h-2zM1 8h7v1h-7z"/></symbol>
+  <symbol id="i-up" viewBox="0 0 9 9"><path d="M4 0h1v1h-1zM3 1h3v1h-3zM2 2h5v1h-5zM1 3h7v1h-7zM3 4h3v4h-3z"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 9 9"><path d="M0 0h9v1h-9zM0 1h1v2h-1zM8 1h1v2h-1zM2 1h5v2h-5zM1 3h7v1h-7zM3 4h3v1h-3zM4 5h1v1h-1zM3 6h3v1h-3zM2 7h5v1h-5z"/></symbol>
+  <symbol id="i-photo" viewBox="0 0 9 9"><path d="M0 1h9v1h-9zM0 2h1v5h-1zM8 2h1v5h-1zM0 7h9v1h-9zM6 3h1v1h-1zM3 4h1v1h-1zM2 5h3v1h-3zM5 5h1v1h-1zM1 6h7v1h-7z"/></symbol>
   <symbol id="i-lock" viewBox="0 0 9 9"><path d="M3 0h3v1h-3zM2 1h1v1h-1zM6 1h1v1h-1zM2 2h1v1h-1zM6 2h1v1h-1zM1 3h7v1h-7zM1 4h7v1h-7zM1 5h3v1h-3zM5 5h3v1h-3zM1 6h3v1h-3zM5 6h3v1h-3zM1 7h7v1h-7z"/></symbol>
 </svg>
 
@@ -280,6 +283,7 @@ footer .wrap { display: grid; gap: 18px; }
     </a>
     <nav class="nav-links" aria-label="Sections">
       <a href="#see">The office</a>
+      <a href="#careers">Careers</a>
       <a href="#get-started">How it works</a>
       <a href="#features">Features</a>
       <a href="#safety">Safety</a>
@@ -294,7 +298,7 @@ footer .wrap { display: grid; gap: 18px; }
     <div class="wrap">
       <p class="pill"><span class="dot" aria-hidden="true"></span><b>Open source</b> Local-first · Zero dependencies · MIT</p>
       <h1>Your AI coding seats, <span class="hl">as a living office.</span></h1>
-      <p class="lead">Claude Office turns every Claude Code account and the Codex CLI on your machine into a pixel-art office. See who is working and who is stuck in one glance, talk to any task, and split new work across your seats.</p>
+      <p class="lead">Claude Office turns every Claude Code account and the Codex CLI on your machine into a pixel-art office. See who is working and who is stuck in one glance, talk to any task, split new work across your seats, and watch every character level up from real work.</p>
       <div class="cta">
         <a class="btn btn-primary" href="#get-started">Get started <svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
         <a class="btn btn-ghost" href="https://github.com/JigarJoshi04/claude-office"><svg aria-hidden="true"><use href="#i-github"/></svg>View on GitHub</a>
@@ -305,9 +309,9 @@ footer .wrap { display: grid; gap: 18px; }
         <div class="window">
           <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i><span>127.0.0.1:7420</span></div>
           <video id="demo" autoplay muted loop playsinline preload="auto" poster="demo-poster.jpg" width="1600" height="900"
-                 aria-label="Demo: the office floor at night. A visitor lane walks out of the elevator to Orion's desks while the camera zooms in and Orion's character card opens. The camera zooms back out, a session's Chat opens next to the floor, then the Team view and the Timeline.">
+                 aria-label="Demo: the office floor at night. A LEVEL UP! banner sweeps across the floor as Codex reaches level 6. Then a visitor lane walks out of the elevator to Orion's desks while the camera zooms in and Orion's character card opens, the camera zooms back out, a session's Chat opens next to the floor, and the Team view and the Timeline follow.">
             <source src="demo.mp4" type="video/mp4">
-            <img src="demo.gif" width="960" height="540" alt="Demo: the office floor at night. A visitor lane walks out of the elevator to Orion's desks while the camera zooms in and Orion's character card opens. The camera zooms back out, a session's Chat opens next to the floor, then the Team view and the Timeline.">
+            <img src="demo.gif" width="960" height="540" alt="Demo: the office floor at night. A LEVEL UP! banner sweeps across the floor as Codex reaches level 6. Then a visitor lane walks out of the elevator to Orion's desks while the camera zooms in and Orion's character card opens, the camera zooms back out, a session's Chat opens next to the floor, and the Team view and the Timeline follow.">
           </video>
           <button class="demo-toggle" id="demoToggle" type="button" hidden><span>Pause</span></button>
         </div>
@@ -333,7 +337,7 @@ footer .wrap { display: grid; gap: 18px; }
 
       <div class="shows">
         <article class="show">
-          <figure class="shot"><img src="office.png" width="1680" height="857" loading="lazy" decoding="async" alt="The office floor at night. The header reads: Five agents are working, 3 more are idle. Vega is out of plan until 1:12 AM. Below it, desk pods with a nameplate for each character (Main on holiday, Atlas with 3 working, Vega napping), a CEO office, server room, meeting room and lounge, the Right now strip of session cards under the floor, and the CEO briefing on the right."></figure>
+          <figure class="shot"><img src="office.png" width="1680" height="857" loading="lazy" decoding="async" alt="The office floor at night. The header reads: Five agents are working, three more are idle. Vega is out of plan until 2:46 AM. No seat can take a new lane right now. Below it, desk pods with a nameplate for each character and its level (Main on holiday, Atlas with 3 working, Vega napping), a trophy cabinet on the wall, a CEO office, server room, meeting room and lounge, the Right now strip under the floor, and the CEO briefing on the right."></figure>
           <div>
             <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-pod"/></svg>The floor</span>
             <h3>A calm floor you can read in one glance</h3>
@@ -348,7 +352,7 @@ footer .wrap { display: grid; gap: 18px; }
         </article>
 
         <article class="show" id="talk">
-          <figure class="shot"><img src="session.png" width="1680" height="857" loading="lazy" decoding="async" alt="The api-rate-limits session open on its Chat tab next to the floor: the prompt to rewrite the rate limiter, the agent's replies, collapsed tool steps, and a message from the office asking whether it can ship before the 5-hour reset."></figure>
+          <figure class="shot"><img src="session.png" width="1680" height="857" loading="lazy" decoding="async" alt="A session at Atlas's desk, open on its Chat tab next to the floor: Atlas's replies, collapsed tool steps, a message from the office asking whether it can ship before the 5-hour reset, Atlas's answer, and the quick messages Status?, Write your notes, Wrap up and Pause above the message box."></figure>
           <div>
             <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg>Talk to a task</span>
             <h3>Open any session and talk to it</h3>
@@ -358,34 +362,21 @@ footer .wrap { display: grid; gap: 18px; }
               <li>Agents can answer you. Replies show up in the chat and as a toast.</li>
               <li><b>Follow up</b> on a finished session: your message starts a lane that resumes that exact conversation.</li>
               <li><b>Message all lanes</b> at once, for example "limits reset in 20 minutes: write your notes now".</li>
+              <li><b>Quick messages</b>: Status?, Write your notes, Wrap up and Pause fill the box in one tap, ready to edit before you send.</li>
             </ul>
           </div>
         </article>
 
         <article class="show">
-          <figure class="shot"><img src="light.png" width="1680" height="857" loading="lazy" decoding="async" alt="The day theme, with Atlas's card open on the right: The Investigator on seat claude2, in the mood Pacing myself, with the motto Show me the evidence and the traits reads every log, asks why five times and trusts evidence, above its 5-hour and weekly plan windows."></figure>
+          <figure class="shot"><img src="team.png" width="1680" height="857" loading="lazy" decoding="async" alt="The Team view: a card for each character (Main, Atlas, Vega, Orion and Codex) with its role, mood, motto, level and trophies, 5-hour and weekly plan bars with their reset times, and the sessions at that desk."></figure>
           <div>
-            <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-worker"/></svg>Characters</span>
+            <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-team"/></svg>Characters</span>
             <h3>Every seat is a character</h3>
-            <p>A name, a role, a motto and a few traits. Atlas, The Investigator: "Show me the evidence." Rename them and change their colours in Settings.</p>
+            <p>A name, a role, a motto and a few traits. Vega, The Investigator: "Show me the evidence." Rename them and change their colours in Settings.</p>
             <ul class="ticks">
               <li>A mood that follows the live state: In the zone, Pacing myself, Running on fumes, Napping until 1:40 AM, On holiday, Locked out.</li>
               <li>They speak up when it matters: when they arrive, when they ship, when they hit a limit, and when a fresh window opens.</li>
-              <li>Click a desk's nameplate to meet its character and see its plan.</li>
-            </ul>
-          </div>
-        </article>
-
-        <article class="show">
-          <figure class="shot"><img src="team.png" width="1680" height="857" loading="lazy" decoding="async" alt="The Team view: a card for each character (Main, Atlas, Vega, Orion and Codex) with its role, mood and motto, 5-hour and weekly plan bars with their reset times, and the sessions at that desk."></figure>
-          <div>
-            <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-team"/></svg>Team</span>
-            <h3>The whole team on one page</h3>
-            <p>A card for every character, with both plan windows and everyone at that desk.</p>
-            <ul class="ticks">
-              <li>Who is in the zone, who is pacing themselves, and who is napping or on holiday.</li>
-              <li>How much of the 5-hour window and the week is left, and when each one resets.</li>
-              <li>Every session at each desk, and what it is doing.</li>
+              <li>The Team view gives each one a card, with both plan windows and everyone at that desk.</li>
             </ul>
           </div>
         </article>
@@ -401,7 +392,7 @@ footer .wrap { display: grid; gap: 18px; }
           </div>
         </article>
         <article>
-          <figure class="shot"><img src="today.png" width="1680" height="857" loading="lazy" decoding="async" alt="The Today view: Orion is employee of the day, next to tiles for sessions, reports, limits, tokens, hours of agent work and lanes hired, a two-line digest, and a league table for every seat."></figure>
+          <figure class="shot"><img src="today.png" width="1680" height="857" loading="lazy" decoding="async" alt="The Today view: Atlas is employee of the day with 128 active minutes, next to tiles for sessions, reports, limits, tokens, hours of agent work and lanes hired, a four-line digest, and a league table with each seat's level."></figure>
           <div>
             <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>Today</span>
             <h3>An employee of the day, and a league</h3>
@@ -412,7 +403,7 @@ footer .wrap { display: grid; gap: 18px; }
 
       <div class="shows">
         <article class="show">
-          <figure class="shot"><img src="divider.png" width="1680" height="857" loading="lazy" decoding="async" alt="The load divider panel: a split bar sharing new lanes between Atlas, Vega, Orion and Codex, Adapt to plan left switched on, the next lane going to Orion, and a line for every seat saying whether it can take one and why."></figure>
+          <figure class="shot"><img src="divider.png" width="1680" height="857" loading="lazy" decoding="async" alt="The load divider panel next to the Today view: a split bar sharing new lanes between Atlas, Vega, Orion and Codex, Adapt to plan left switched on, the next lane going to Orion, and a line for every seat saying whether it can take one and why."></figure>
           <div>
             <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-split"/></svg>Load divider</span>
             <h3>Share new work across seats</h3>
@@ -427,7 +418,7 @@ footer .wrap { display: grid; gap: 18px; }
         </article>
 
         <article class="show">
-          <figure class="shot"><img src="hire.png" width="1680" height="857" loading="lazy" decoding="async" alt="The hiring desk panel next to the office floor: Hire a lane, with six templates (Fix a failing test, Investigate a bug, Review a PR, Write docs, Research and Refactor), then a title and a box for what the lane should do."></figure>
+          <figure class="shot"><img src="hire.png" width="1680" height="857" loading="lazy" decoding="async" alt="In the day theme, the hiring desk next to the Today view: Hire a lane, with six templates (Fix a failing test, Investigate a bug, Review a PR, Write docs, Research and Refactor), then a title and a box for what the lane should do."></figure>
           <div>
             <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-hire"/></svg>Hiring desk</span>
             <h3>Hire a lane from the front desk</h3>
@@ -443,7 +434,52 @@ footer .wrap { display: grid; gap: 18px; }
     </div>
   </section>
 
-  <section id="get-started" aria-labelledby="how-h">
+  <section id="careers" aria-labelledby="career-h">
+    <div class="wrap">
+      <div class="head center">
+        <span class="eyebrow">Careers</span>
+        <h2 id="career-h">Real work earns a real career</h2>
+        <p class="sub">Every character earns XP from the work its seat actually does: 1 per tool call, 2 per minute at work, 10 per session and 100 per filed report. Levels run from Intern to Legend.</p>
+      </div>
+
+      <div class="shows">
+        <article class="show">
+          <figure class="shot"><img src="levelup.png" width="1680" height="857" loading="lazy" decoding="async" alt="A LEVEL UP! banner across the office floor reading Codex is now level 6: Engineer. A LEVEL 6! badge and +350 XP rise from Codex's desk, every nameplate shows its character's level, and a toast says Codex reached level 6: Engineer."></figure>
+          <div>
+            <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-up"/></svg>Level up</span>
+            <h3>A LEVEL UP! banner across the floor</h3>
+            <p>When a character goes up a level, the whole office sees it.</p>
+            <ul class="ticks">
+              <li>"+XP" rises from busy desks as the work comes in.</li>
+              <li>Desks upgrade as their character levels up: a mug, a plant, a gold cup, a glowing desk edge, a pennant, gold trim.</li>
+              <li>Each seat's career is kept with the office's own records, on your machine.</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+
+      <div class="duo">
+        <article>
+          <figure class="shot"><img src="trophies.png" width="1680" height="857" loading="lazy" decoding="async" alt="In the day theme, the Trophy room next to the Today view: 39 trophies across 5 characters, an XP leaderboard led by Atlas at level 17 (Staff, 26,500 XP) ahead of Main, Vega, Orion and Codex, and the latest unlocks."></figure>
+          <div>
+            <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-trophy"/></svg>Trophy room</span>
+            <h3>A trophy cabinet on the wall</h3>
+            <p>The cabinet on the office wall fills up as achievements are unlocked. Click it to open the Trophy room, with an XP leaderboard.</p>
+          </div>
+        </article>
+        <article>
+          <figure class="shot"><img src="career.png" width="1680" height="857" loading="lazy" decoding="async" alt="Atlas's career next to the floor: 14 of 15 achievements, 140 hours at work, 22k tool calls, 41 reports and 96M tokens, a wall of badges from Senior and Week streak to Night shift and Marathon with Early bird still locked, and how XP is counted."></figure>
+          <div>
+            <span class="tag"><svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>Trophy wall</span>
+            <h3>Fifteen achievements to earn</h3>
+            <p>Night shift, Marathon, Juggler, Week streak and more sit on each character's trophy wall, with a "next up" goal for the next one.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="alt" id="get-started" aria-labelledby="how-h">
     <div class="wrap">
       <div class="head center">
         <span class="eyebrow">How it works</span>
@@ -484,7 +520,7 @@ footer .wrap { display: grid; gap: 18px; }
     </div>
   </section>
 
-  <section class="alt" id="features" aria-labelledby="feat-h">
+  <section id="features" aria-labelledby="feat-h">
     <div class="wrap">
       <div class="head center">
         <span class="eyebrow">Features</span>
@@ -494,10 +530,10 @@ footer .wrap { display: grid; gap: 18px; }
       <div class="grid">
         <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-pod"/></svg></div><h3>A desk for every seat</h3><p><code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code> are found automatically. Each desk's nameplate says what that seat is doing and how much plan it has left.</p></div>
         <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-worker"/></svg></div><h3>A worker for every session</h3><p>Typing, reading, thinking or waiting on a long tool. Terminal sessions wear headsets; a subagent shows up as a little helper drone.</p></div>
-        <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-cat"/></svg></div><h3>An office that feels alive</h3><p>Arrivals walk in from the elevator, departures walk out, filed reports burst into confetti and spent seats get a red beacon. Night lighting follows your clock, and Pixel the office cat naps in the lounge.</p></div>
-        <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-brief"/></svg></div><h3>The CEO's briefing</h3><p>Who is working, who is lowest on plan and when it resets, and where the next lane goes, in plain sentences. Then your team, programmes, office lanes and recent activity.</p></div>
+        <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-cat"/></svg></div><h3>An office that feels alive</h3><p>Arrivals walk in from the elevator, departures walk out, filed reports burst into confetti and spent seats get a red beacon. Zoom and pan the camera, and double-click a desk to fly to it.</p></div>
+        <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-brief"/></svg></div><h3>The CEO's briefing</h3><p>Who is working, who is lowest on plan and when it resets, and where the next lane goes, in plain sentences. After an hour or more away, it opens with what happened while you were away.</p></div>
         <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg></div><h3>A "Needs you" list</h3><p>Logouts, seats near empty, lanes stopped by a limit, quiet lanes, blocked reports, failed services, and seats that will run dry before their reset at the current pace.</p></div>
-        <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-zoom"/></svg></div><h3>A camera</h3><p>Zoom and pan the floor, and double-click a desk to fly to it. Zoomed in, every worker wears a name tag.</p></div>
+        <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-photo"/></svg></div><h3>Save a picture of the office</h3><p>A PNG of the floor with each character's level and status. It has no session names or accounts in it, so it is safe to post.</p></div>
         <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-cmd"/></svg></div><h3>Command palette and checkpoints</h3><p><kbd>Ctrl</kbd>/<kbd>⌘</kbd> <kbd>K</kbd> jumps to any seat, session or lane. A checkpoint writes every session and its resume command to a file, for before you restart.</p></div>
         <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-eye"/></svg></div><h3>Share-safe mode</h3><p>Blurs what terminal sessions are about, and account emails, so you can put the office on a screen share.</p></div>
         <div class="card"><div class="badge"><svg class="ico" aria-hidden="true"><use href="#i-star"/></svg></div><h3>Small delights</h3><p>8-bit sound effects, desktop notifications, optional Jarvis voice alerts, a day theme, and reduced motion.</p></div>
@@ -505,7 +541,7 @@ footer .wrap { display: grid; gap: 18px; }
     </div>
   </section>
 
-  <section id="safety" aria-labelledby="safe-h">
+  <section class="alt" id="safety" aria-labelledby="safe-h">
     <div class="wrap safe">
       <div class="head">
         <span class="eyebrow">Safety</span>
@@ -522,7 +558,7 @@ footer .wrap { display: grid; gap: 18px; }
     </div>
   </section>
 
-  <section class="alt" id="faq" aria-labelledby="faq-h">
+  <section id="faq" aria-labelledby="faq-h">
     <div class="wrap">
       <div class="head center">
         <span class="eyebrow">FAQ</span>
@@ -550,6 +586,10 @@ footer .wrap { display: grid; gap: 18px; }
           <div class="a"><p>No. The office never refreshes a login itself, because a refresh would rotate the token under Claude Code. While a seat's token is expired, it shows the last reading, marked stale.</p></div>
         </details>
         <details>
+          <summary>Can I post a picture of my office?</summary>
+          <div class="a"><p>Yes. "Save a picture of the office", in the menu or the command palette, makes a PNG of the floor with each character's level and status. It has no session names or accounts in it, so it is safe to post.</p></div>
+        </details>
+        <details>
           <summary>Can I try it without my real accounts?</summary>
           <div class="a"><p>Yes. Run <code>python3 -m office serve --demo</code> for a made-up office: it reads no accounts, and every write does nothing. The video and screenshots on this page are all demo mode.</p></div>
         </details>
@@ -557,7 +597,7 @@ footer .wrap { display: grid; gap: 18px; }
     </div>
   </section>
 
-  <section class="final" aria-labelledby="final-h">
+  <section class="final alt" aria-labelledby="final-h">
     <div class="wrap">
       <div class="final-box">
         <span class="eyebrow">Open the office</span>
