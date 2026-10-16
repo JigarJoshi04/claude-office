@@ -15,6 +15,8 @@ desk.
 | The floor | Talk to a task | Your team |
 |---|---|---|
 | ![The office floor](docs/office.png) | ![Chat](docs/session.png) | ![Team](docs/team.png) |
+| **Level up** | **Trophy room** | **Trophy wall** |
+| ![A LEVEL UP banner sweeps the floor](docs/levelup.png) | ![The trophy room leaderboard](docs/trophies.png) | ![A character's career and trophy wall](docs/career.png) |
 
 ## Why
 
