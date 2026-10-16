@@ -398,6 +398,17 @@ async function savePicture() {
   }, "image/png");
 }
 
+function shortcuts() {
+  const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S", "Floor, Timeline, Team, Today"],
+    ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
+    ["P", "Share-safe mode"], [",", "Settings"], ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
+  $("dialogBody").innerHTML = `<div class="dh"><b>Keyboard shortcuts</b><button class="btn sm ghost" id="kClose">${icon("x", 16)}</button></div>
+    <div class="db"><table class="keys">${keys.map(([k, what]) => `<tr><td>${k.split(" ").map(x => `<kbd>${esc(x)}</kbd>`).join(" ")}</td><td>${esc(what)}</td></tr>`).join("")}</table></div>`;
+  $("dialog").showModal();
+  $("kClose").addEventListener("click", () => $("dialog").close());
+  $("kClose").focus();
+}
+
 function openMenu(focusItem) {
   const old = document.querySelector(".menu"); if (old) { old.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); return; }
   const m = document.createElement("div");
@@ -584,6 +595,7 @@ function paletteItems() {
     { icon: icon("sun", 16), label: "Day theme", run: () => setPref("theme", "light") },
     { icon: icon("target", 16), label: "Zoom to fit", hint: "0", run: () => { setView("floor"); office.fit(); } },
     { icon: icon("settings", 16), label: "Settings", run: () => go({ kind: "settings" }) },
+    { icon: icon("sliders", 16), label: "Keyboard shortcuts", hint: "?", keywords: "keys help hotkeys", run: shortcuts },
     { icon: icon("server", 16), label: "Server room", run: () => go({ kind: "services" }) },
   ];
   // Share-safe: a terminal session's topic never becomes a search keyword.
@@ -626,7 +638,8 @@ document.addEventListener("keydown", (e) => {
   else if (k === "b") setView("board");
   else if (k === "s") setView("stats");
   else if (k === "p") setPref("privacy", !prefs.privacy);
-  else if (k === "," || k === "?") go({ kind: "settings" });
+  else if (k === ",") go({ kind: "settings" });
+  else if (k === "?") shortcuts();
   else if (prefs.view === "floor" && (k === "+" || k === "=")) office.zoom(1);
   else if (prefs.view === "floor" && k === "-") office.zoom(-1);
   else if (prefs.view === "floor" && k === "0") office.fit();

@@ -343,6 +343,11 @@ export function makePanels(app) {
     });
     flush("end");
     if (!html) html = `<div class="notice">No conversation yet.</div>`;
+    // While the agent works, a typing line says what it is doing right now (hidden for terminals in share-safe).
+    if (x && (x.state === "working" || x.state === "waiting") && x.live !== false) {
+      const doing = app.privacy() && x.kind === "desk" ? "working" : (x.activity || "working").replace(/^\w/, c => c.toLowerCase());
+      html += `<div class="typing" aria-live="off"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(who)} is ${esc(doing)}</span></div>`;
+    }
     const hint = { direct: ["zap", "Goes straight to this lane."],
       review: ["eye", "Claude Code holds messages from the office until someone approves them in that terminal."],
       followup: ["reply", x ? "This session cannot take live messages. Sending starts a follow-up lane that resumes it." : "This session has ended. Sending starts a follow-up lane that resumes it."],
