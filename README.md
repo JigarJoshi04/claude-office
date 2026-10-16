@@ -42,9 +42,13 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - They speak up when it matters: when they arrive, when they ship, when they hit a limit, and when a fresh window
   opens.
 - A career that grows with real work. XP comes from tool calls (1 each), minutes at work (2), sessions (10) and
-  filed reports (100). Levels run from Intern to Legend. Fifteen achievements, such as *Night shift*, *Marathon*,
-  *Juggler* and *Week streak*, sit on a trophy wall with a "next up" goal. Level-ups and unlocks get confetti on
-  the floor.
+  filed reports (100). Levels run from Intern to Legend, with a "LEVEL UP!" banner across the floor and "+XP"
+  rising from busy desks.
+- Desks upgrade as their character levels up: a mug, a plant, a gold cup, a glowing desk edge, a pennant, gold
+  trim.
+- Fifteen achievements, such as *Night shift*, *Marathon*, *Juggler* and *Week streak*. They sit on each
+  character's trophy wall with a "next up" goal, and fill the trophy cabinet on the office wall. The cabinet opens
+  the Trophy room, with an XP leaderboard.
 
 **Talk to a task**
 - Open any session and use the **Chat** tab. It shows the conversation: prompts, replies, collapsed tool steps,
@@ -78,6 +82,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   - A lane keeps notes, moves to another seat if its seat hits a limit, and files a report when done.
   - You can stop, resume, re-hire or chat with any lane.
 - **Checkpoint**: writes every session and its resume command to a file, for before you restart.
+- **Save a picture of the office**: a PNG of the floor with each character's level and status. It has no session
+  names or accounts in it, so it is safe to post.
 - **Everything else**: Ctrl/⌘ K command palette, share-safe mode for screen sharing, 8-bit sound effects, desktop
   notifications, optional Jarvis voice alerts, a day theme, and reduced motion.
 
@@ -93,7 +99,7 @@ bin/install.sh                    # keep it running as a systemd user service
 You need Python 3.10 or newer and nothing else: the server uses only the standard library, and the page needs no
 build step. The live view needs Linux, because sessions are read from `/proc` and lanes run under `systemd --user`.
 
-Handy links: `/?view=timeline`, `/?view=board`, `/?view=stats`, `/#hire`, `/#divider`, `/#seat=claude2`, `/?theme=light`.
+Handy links: `/?view=timeline`, `/?view=board`, `/?view=stats`, `/#hire`, `/#divider`, `/#trophies`, `/#seat=claude2`, `/?theme=light`.
 
 ## How talking to a session works
 
