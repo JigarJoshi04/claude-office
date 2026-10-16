@@ -488,7 +488,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb
 
 /* ------------------------------------------------------------------------------------------ overlays */
 .toasts { position: fixed; right: 22px; bottom: 22px; display: grid; gap: 10px; z-index: 80; max-width: min(400px, calc(100vw - 32px)); }
-.toasts[popover] { inset: auto 22px 22px auto; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; overflow: visible; width: max-content; }
+/* Bottom-left, over the floor, so toasts never cover the message box or Send; they are never clickable either. */
+.toasts, .toast { pointer-events: none; }
+.toasts { right: auto; left: 22px; }
+.toasts[popover] { inset: auto auto 22px 22px; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; overflow: visible; width: max-content; }
+@media (max-width: 760px) { .toasts, .toasts[popover] { left: 16px; right: 16px; bottom: 16px; width: auto; max-width: none; } }
 .toasts[popover]:not(:popover-open) { display: none; }
 .toast { display: flex; gap: 12px; align-items: flex-start; background: var(--surface-3); color: var(--text); padding: 12px 14px; border-radius: 14px; font-size: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.45), 0 0 0 1px var(--line-2); animation: slidein .28s ease-out; }
 .toast .ic { margin-top: 1px; } .toast.good .ic { color: var(--good); } .toast.bad .ic { color: var(--bad); } .toast.warn .ic { color: var(--warn); } .toast.info .ic { color: var(--info); }

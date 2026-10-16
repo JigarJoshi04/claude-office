@@ -85,7 +85,7 @@ function setPref(k, v) {
     // The switch only stays on if the browser really lets the office notify.
     const refuse = (why, later) => {
       prefs.notify = false; store.set("prefs", prefs); toast(why, "warn");
-      if (later && document.querySelector(".menu")) { document.querySelector(".menu").remove(); openMenu(); }   // redraw an open menu
+      if (later && document.querySelector(".menu")) { document.querySelector(".menu").remove(); openMenu("notify"); }   // redraw an open menu
       if (view.kind === "settings") renderPanel(true);
     };
     if (!("Notification" in window)) refuse("This browser cannot show notifications.");
@@ -373,7 +373,7 @@ async function savePicture() {
   }, "image/png");
 }
 
-function openMenu() {
+function openMenu(focusItem) {
   const old = document.querySelector(".menu"); if (old) { old.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); return; }
   const m = document.createElement("div");
   m.className = "menu"; m.setAttribute("role", "menu");
@@ -386,6 +386,16 @@ function openMenu() {
     + "<hr>" + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
+  // Keyboard: focus lands on the first item; arrows move, Home/End jump, Tab leaves (Escape is handled globally).
+  const items = [...m.querySelectorAll(".mi")];
+  const at = (focusItem && items[Math.max(0, items.findIndex(b => b.dataset.mi === focusItem))]) || items[0];
+  if (at) at.focus();
+  m.addEventListener("keydown", (e) => {
+    const i = items.indexOf(document.activeElement);
+    const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+    if (to != null) { e.preventDefault(); items[(to + items.length) % items.length].focus(); }
+    else if (e.key === "Tab") { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); }
+  });
   m.querySelectorAll("[data-mi]").forEach(b => b.addEventListener("click", () => {
     const k = b.dataset.mi;
     if (k === "sound") { setPref("sound", !prefs.sound); if (prefs.sound) sound.play("hire"); }
@@ -397,7 +407,7 @@ function openMenu() {
     else if (k === "picture") savePicture();
     else go({ kind: k });
     m.remove(); $("btnMenu").setAttribute("aria-expanded", "false");
-    if (["sound", "notify", "privacy", "theme"].includes(k)) openMenu();
+    if (["sound", "notify", "privacy", "theme"].includes(k)) openMenu(k);   // a toggle keeps the menu open on that item
   }));
   setTimeout(() => document.addEventListener("mousedown", function close(ev) { if (!m.contains(ev.target) && ev.target !== $("btnMenu") && !$("btnMenu").contains(ev.target)) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); document.removeEventListener("mousedown", close); } }), 0);
 }

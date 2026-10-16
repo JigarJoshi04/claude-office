@@ -194,6 +194,8 @@ class Handler(BaseHTTPRequestHandler):
         return out
 
     def _lane_detail(self, lane_id: str) -> dict:
+        if self.demo:
+            return self.office.demo_lane_detail(lane_id)
         lane = lanes.load_lane(lane_id)
         if not lane:
             raise ValueError("No such lane")

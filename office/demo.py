@@ -74,8 +74,23 @@ DEMO_CHAT = [
 class DemoOffice(LiveOffice):
     is_demo = True
 
+    def demo_lane_detail(self, lane_id):
+        """Made-up lane pages: the demo never reads the real lanes folder."""
+        lane = next((l for l in self.snapshot.get("lanes", []) if l.get("id") == lane_id), None)
+        if not lane:
+            raise ValueError("No such lane")
+        when = time.strftime("%H:%M", time.localtime(lane.get("created_at") or time.time()))
+        brief = (f"# {lane['title']}\n\nWork in {lane.get('workdir')}. Keep notes in STATE as you go, check your work, "
+                 f"and write the report when it is done.")
+        state = lane.get("state_tail") or f"{when} read the brief and the code it points at\n{when} planned the change"
+        report = (lane["report_status"] + "\n\nAll checks pass. Notes and links are in STATE.") if lane.get("report_status") else ""
+        log = "\n".join(f"=== {time.strftime('%Y-%m-%dT%H:%M', time.localtime(r.get('started_at') or time.time()))} start on {r['seat']}"
+                        + (" (stopped by a limit)" if r.get("ended_by") == "limit" else "") for r in lane.get("runs", []))
+        return {"lane": lane, "brief": brief, "state": state, "report": report, "log": log or lane.get("waiting_reason") or ""}
+
     def demo_conversation(self, session_id):
-        now = time.time()
+        # Anchored to when the demo started, so the conversation (and any steps the viewer opened) stays put.
+        now = self.started_at
         out = []
         for i, (role, text) in enumerate(DEMO_CHAT):
             item = {"ts": now - (len(DEMO_CHAT) - i) * 95, "role": role, "text": text}

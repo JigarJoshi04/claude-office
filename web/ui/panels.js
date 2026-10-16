@@ -239,7 +239,9 @@ export function makePanels(app) {
           ta.addEventListener("input", () => { app.setDraft(v.id, ta.value); grow(); });
           ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send.click(); } });
           root.querySelectorAll("[data-quick]").forEach(b => b.addEventListener("click", () => {
-            ta.value = QUICK[+b.dataset.quick][1]; app.setDraft(v.id, ta.value); grow(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+            const q = QUICK[+b.dataset.quick][1];
+            ta.value = ta.value.trim() ? ta.value.replace(/\s+$/, "") + "\n\n" + q : q;   // never throw away a draft
+            app.setDraft(v.id, ta.value); grow(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
           }));
           send.addEventListener("click", async () => {
             const text = ta.value.trim();
@@ -524,7 +526,8 @@ export function makePanels(app) {
           const others = enabledIds().filter(x => x !== id), rest = 100 - val, ot = others.reduce((a, x) => a + dv.seats[x].weight, 0);
           dv.seats[id].weight = val;
           others.forEach(x => dv.seats[x].weight = ot ? Math.round(dv.seats[x].weight / ot * rest) : Math.round(rest / others.length));
-          normalise(); markDirty(); app.rerender(true);
+          normalise(); markDirty();
+          setTimeout(() => app.rerender(true), 0);   // after Tab has moved focus on, so the redraw keeps it there
         }));
         root.querySelectorAll("[data-cap]").forEach(inp => inp.addEventListener("change", () => { inp.value = dv.seats[inp.dataset.cap].max_lanes = Math.max(0, Math.min(16, Math.round(+inp.value) || 0)); markDirty(); }));
         root.querySelectorAll("[data-note]").forEach(inp => inp.addEventListener("input", () => { dv.seats[inp.dataset.note].note = inp.value; markDirty(); }));
