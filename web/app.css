@@ -277,6 +277,8 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
   box-shadow: 0 0 10px color-mix(in srgb, var(--seat) 55%, transparent); transition: width .8s cubic-bezier(.2,.8,.2,1); }
 .level .hint { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .level .hint .ic { color: var(--warn); }
+.level .hint.perk { margin-top: 3px; }
+.level .hint.perk .ic { color: var(--seat); }
 .cstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .cstats div { padding: 10px 10px 9px; border-radius: 12px; background: var(--surface-2); display: grid; gap: 2px; min-width: 0; }
 .cstats b { font: 650 17px/1.2 var(--mono); }

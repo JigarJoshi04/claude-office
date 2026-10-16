@@ -468,6 +468,34 @@ export function drawFrame(ctx, x, y, w, h, gold) {
   rect(ctx, x, y, w, h, "#20243a");
 }
 
+// Desk upgrades earned by levelling up: a mug (3), a plant (6), a gold cup (10), a glowing desk edge (15), a pennant (20)
+// and a gold trim (30). px/py are the pod's top-left; everything sits in the free band between the two monitor rows.
+export function drawDeskPerks(ctx, px, py, level, color, t) {
+  if (level >= 15) {
+    ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t / 700);
+    rect(ctx, px + 10, py + 67, 108, 2, color);
+    ctx.globalAlpha = 0.35; rect(ctx, px + 10, py + 69, 108, 2, color);
+    ctx.globalAlpha = 1;
+  }
+  if (level >= 30) { rect(ctx, px + 11, py + 38, 106, 1, "#ffd24a"); rect(ctx, px + 10, py + 39, 1, 28, "#c9a227"); rect(ctx, px + 117, py + 39, 1, 28, "#c9a227"); }
+  if (level >= 3) drawMug(ctx, px + 114, py + 46, t, false, color);
+  if (level >= 6) {                         // a little succulent
+    rect(ctx, px + 82, py + 47, 5, 3, "#a0522d"); rect(ctx, px + 82, py + 47, 5, 1, "#c06a3a");
+    rect(ctx, px + 83, py + 45, 1, 2, "#3fb68b"); rect(ctx, px + 85, py + 44, 1, 3, "#3fb68b"); rect(ctx, px + 84, py + 45, 1, 1, "#56d39c");
+  }
+  if (level >= 10) {                        // a gold cup
+    rect(ctx, px + 41, py + 43, 5, 1, "#fff0a8"); rect(ctx, px + 41, py + 44, 5, 2, "#ffd24a");
+    rect(ctx, px + 40, py + 44, 1, 1, "#e0a92a"); rect(ctx, px + 46, py + 44, 1, 1, "#e0a92a");
+    rect(ctx, px + 42, py + 46, 3, 1, "#e0a92a"); rect(ctx, px + 43, py + 47, 1, 2, "#b8841c"); rect(ctx, px + 42, py + 49, 3, 1, "#8a6a1c");
+    if (Math.floor(t / 300) % 9 === 0) rect(ctx, px + 44, py + 42, 1, 1, "#ffffff");
+  }
+  if (level >= 20) {                        // a pennant in the seat's colour
+    rect(ctx, px + 120, py + 36, 1, 12, "#d7d2c4");
+    const wave = Math.floor(t / 400) % 2;
+    rect(ctx, px + 121, py + 36, 5, 2, color); rect(ctx, px + 121, py + 38, 3 + wave, 1, color); rect(ctx, px + 121, py + 39, 1 + wave, 1, color);
+  }
+}
+
 // A glass trophy cabinet with two shelves of cups, one per unlocked achievement (newest last).
 export function drawCabinet(ctx, x, y, cups, t) {
   const w = 56, h = 30;

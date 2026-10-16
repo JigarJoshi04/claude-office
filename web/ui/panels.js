@@ -160,15 +160,18 @@ export function makePanels(app) {
       } };
   }
   // Career: level, XP and achievements, earned from real work (office/career.py).
+  const PERKS = [[3, "a mug"], [6, "a desk plant"], [10, "a gold cup"], [15, "a glowing desk"], [20, "a pennant"], [30, "gold trim"]];   // web/engine/sprites.js drawDeskPerks
   function levelRow(s) {
     const c = s.career;
     if (!c) return "";
+    const perk = PERKS.find(([lv]) => lv > c.level);
     const pct = Math.round(c.progress * 100), r = 19, len = 2 * Math.PI * r;
     return `<div class="level">
       <svg class="ring" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="${r}" class="trk"/><circle cx="24" cy="24" r="${r}" class="val" stroke-dasharray="${(len * c.progress).toFixed(1)} ${len.toFixed(1)}"/><text x="24" y="28.5">${c.level}</text></svg>
       <div class="grow"><div class="lt"><b>Level ${c.level} · ${esc(c.title)}</b><span>${c.xp.toLocaleString()} XP</span></div>
         <div class="xpbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progress to level ${c.level + 1}"><i style="width:${pct}%"></i></div>
-        <div class="hint">${(c.next_xp - c.xp).toLocaleString()} XP to level ${c.level + 1}${c.streak > 1 ? ` · ${icon("flame", 13)} ${c.streak}-day streak` : ""}</div></div></div>`;
+        <div class="hint">${(c.next_xp - c.xp).toLocaleString()} XP to level ${c.level + 1}${c.streak > 1 ? ` · ${icon("flame", 13)} ${c.streak}-day streak` : ""}</div>
+        ${perk ? `<div class="hint perk">${icon("sparkles", 13)} Desk upgrade at level ${perk[0]}: ${perk[1]}</div>` : ""}</div></div>`;
   }
   let badgeSel = null;   // the trophy whose details are open, kept across refreshes
   // How close each countable achievement is, for the "next up" nudge.

@@ -371,6 +371,9 @@ export function createOffice(stage, handlers) {
     const busy = [...bySlot.values()].some(a => a.sess.state === "working" || a.sess.state === "waiting");
     S.drawDeskLamp(ctx, pod.x + 11, pod.y + 34, busy);
     if (busy) lights.push({ x: pod.x + 64, y: pod.y + 54, r: 62, c: "#ffd59a", i: 0.5 });
+    const lv = s.career ? s.career.level : 1;
+    if (lv >= 3) S.drawDeskPerks(ctx, pod.x, pod.y, lv, s.color, t);
+    if (lv >= 15) lights.push({ x: pod.x + 64, y: pod.y + 68, r: 40, c: s.color, i: 0.3 });
     for (let slot = 0; slot < MAX_SLOTS; slot++) {
       const sp = seatSpot(pod, slot), a = bySlot.get(slot), x = sp.cx;
       const pose = a ? poseFor(a.sess, status) : null;
