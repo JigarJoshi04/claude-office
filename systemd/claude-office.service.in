@@ -1,0 +1,21 @@
+[Unit]
+Description=Claude Office: a pixel office for every Claude seat (http://127.0.0.1:7420)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@
+ExecStart=@PYTHON@ -m office serve
+Environment=HOME=@HOME@
+Environment=PATH=@PATH@
+Environment=PYTHONUNBUFFERED=1
+# A dashboard should never compete with real work (or games) for the CPU.
+Nice=10
+CPUWeight=20
+# Lanes run in their own units, so restarting the office never kills one.
+KillMode=control-group
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

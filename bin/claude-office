@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Run the office CLI from anywhere: claude-office status | pick-seat | hire ... | checkpoint
+repo="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+PYTHONPATH="$repo${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m office "$@"

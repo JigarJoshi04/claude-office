@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="office-token" content="{{TOKEN}}">
+<meta name="office-demo" content="{{DEMO}}">
+<title>Claude Office</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Silkscreen&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='3' width='14' height='12' fill='%233b4060'/%3E%3Crect x='3' y='5' width='3' height='3' fill='%23ffd76a'/%3E%3Crect x='7' y='5' width='3' height='3' fill='%23ffd76a'/%3E%3Crect x='11' y='5' width='2' height='3' fill='%2338e07b'/%3E%3Crect x='3' y='10' width='10' height='5' fill='%23d97757'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <div>
+      <div class="brand-name" id="officeName">Claude Office</div>
+      <div class="brand-sub" id="summaryLine">Opening the office…</div>
+    </div>
+  </div>
+  <div class="caps" id="caps" aria-label="Plan left on every seat"></div>
+  <div class="actions">
+    <button class="btn ghost" id="btnView" title="Switch between the floor and the board (B)">Board</button>
+    <button class="btn ghost" id="btnPrivacy" title="Hide what interactive sessions are about, for screen sharing (P)">Share-safe</button>
+    <button class="btn ghost" id="btnDivider" title="Load divider (D)">Divider</button>
+    <button class="btn ghost" id="btnCheckpoint" title="Write down every session and how to resume it">Checkpoint</button>
+    <button class="btn primary" id="btnHire" title="Start a new lane (H)">Hire</button>
+  </div>
+</header>
+
+<main class="main">
+  <section class="floor-wrap" id="floorWrap" aria-label="Office floor">
+    <div class="floor-scroll"><div class="floor" id="floor">
+      <canvas id="canvas" aria-hidden="true"></canvas>
+      <div class="overlay" id="overlay"></div>
+    </div></div>
+    <div class="board" id="board" hidden></div>
+    <div class="legend">
+      <span><i class="lg working"></i>Working</span>
+      <span><i class="lg waiting"></i>Waiting on a tool</span>
+      <span><i class="lg idle"></i>Idle</span>
+      <span><i class="lg limited"></i>Out of plan</span>
+      <span><i class="lg stuck"></i>Quiet 15 min+</span>
+      <span class="sep"></span>
+      <span><i class="lg lane"></i>Headless lane</span>
+      <span><i class="lg desk"></i>Interactive session</span>
+    </div>
+  </section>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+
+<footer class="ticker" id="ticker" aria-label="Office news"><div class="ticker-in" id="tickerIn"></div></footer>
+<div class="toast" id="toast" role="status" hidden></div>
+<dialog id="dialog"><div id="dialogBody"></div></dialog>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+# Local runtime state never belongs in the repo (it can hold account names and task text).
+/state/
+/local/
+*.log
