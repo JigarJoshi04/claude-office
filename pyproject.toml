@@ -1,0 +1,16 @@
+[project]
+name = "claude-office"
+version = "3.0.0"
+description = "A local, living office for Claude Code seats and Codex sessions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/JigarJoshi04/claude-office"
+Repository = "https://github.com/JigarJoshi04/claude-office"
+Issues = "https://github.com/JigarJoshi04/claude-office/issues"
+
+[tool.ruff]
+line-length = 120
