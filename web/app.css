@@ -39,7 +39,8 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; }
+html, body { margin: 0; }
+html { height: 100%; } body { min-height: 100%; }   /* a fixed body height would cut the sticky header loose after one screen */
 body {
   background: var(--bg); color: var(--text);
   font: 15px/1.55 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: -.003em;
@@ -373,6 +374,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 .tile .v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .tile .tk { font-size: 12.5px; color: var(--muted); }
 .chat { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.chat > * { flex-shrink: 0; }   /* in a height-capped chat, messages scroll; they never squash */
 .msg { max-width: 90%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .msg.agent { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 5px; }
 .msg.user { align-self: flex-end; background: color-mix(in srgb, var(--info) 18%, var(--surface-2)); border-bottom-right-radius: 5px; }
@@ -519,8 +521,9 @@ dialog .db { padding: 16px 20px; max-height: 70vh; overflow: auto; }
 /* ------------------------------------------------------------------------------------------ responsive */
 @media (max-width: 1240px) {
   .main { grid-template-columns: 1fr; }
-  .panel { position: static; max-height: none; }
+  .panel { position: static; max-height: none; min-height: calc(100vh - 80px); }   /* tall enough to scroll its title to the top */
   .composer { position: static; margin: 16px 0 0; padding: 0; background: none; }
+  .chat { max-height: min(58vh, 560px); overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }   /* the box stays in view */
   .stats-top { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
@@ -535,6 +538,7 @@ dialog .db { padding: 16px 20px; max-height: 70vh; overflow: auto; }
   .member .gauge { min-width: 72px; }
   .panel-in { padding: 18px 16px 22px; }
   .wordmark { display: none; }
+  .chat { max-height: max(220px, calc(100svh - 500px)); }   /* title, chat and message box fit one phone screen */
 }
 .hot.cat { border-radius: 50%; } .hot.cat:hover { box-shadow: 0 0 0 calc(.6px * var(--f)) #ffd59a; }
 .bubble.cat-says { background: #fff4e0; z-index: 7; }

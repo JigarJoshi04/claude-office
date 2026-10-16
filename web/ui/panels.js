@@ -258,7 +258,12 @@ export function makePanels(app) {
             send.disabled = false;
           });
           const end = root.querySelector("#chatEnd");
-          if (end && app.chatJustOpened(v.id)) requestAnimationFrame(() => end.scrollIntoView({ block: "end" }));
+          // Open at the newest message by scrolling the chat (phones) or the panel (desktop), never the whole page.
+          if (end && app.chatJustOpened(v.id)) requestAnimationFrame(() => {
+            const chat = root.querySelector(".chat");
+            if (chat && getComputedStyle(chat).overflowY !== "visible") chat.scrollTop = chat.scrollHeight;
+            else root.scrollTop = root.scrollHeight;
+          });
         }
       } };
   }

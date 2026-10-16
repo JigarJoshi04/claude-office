@@ -121,7 +121,11 @@ function go(v, fromHash) {
   office.setSelected(v.kind === "seat" ? { seat: v.seat } : v.kind === "session" ? { seat: v.seat, session: v.id } : null);
   renderPanel(true);
   $("panel").scrollTop = 0;
-  if (matchMedia("(max-width: 1240px)").matches && v.kind !== "ceo") $("panel").scrollIntoView({ behavior: prefs.motion === "reduced" ? "auto" : "smooth", block: "start" });
+  if (matchMedia("(max-width: 1240px)").matches && v.kind !== "ceo") {
+    // The header is sticky: land the panel's title just below it, not under it.
+    const y = $("panel").getBoundingClientRect().top + window.scrollY - document.querySelector(".top").offsetHeight - 8;
+    window.scrollTo({ top: Math.max(0, y), behavior: prefs.motion === "reduced" ? "auto" : "smooth" });
+  }
 }
 
 // ------------------------------------------------------------------------------------------------ data
@@ -445,11 +449,15 @@ function renderPanel(force, keepScroll) {
   if (!force && p.dataset.html === out.html) return;
   const top = p.scrollTop;
   const atBottom = p.scrollHeight - p.scrollTop - p.clientHeight < 60;
+  const vk = JSON.stringify(view), oc = p.dataset.vk === vk ? p.querySelector(".chat") : null;   // a chat with its own scroll (phones)
+  const chatScroll = oc ? { top: oc.scrollTop, end: oc.scrollHeight - oc.scrollTop - oc.clientHeight < 40 } : null;
   p.innerHTML = `<div class="panel-in">${out.html}</div>`;
-  p.dataset.html = out.html;
+  p.dataset.html = out.html; p.dataset.vk = vk;
   hydratePortraits(p, 4);
   bindCommon(p);
   if (out.bind) out.bind(p);
+  const nc = chatScroll && p.querySelector(".chat");
+  if (nc) nc.scrollTop = chatScroll.end ? nc.scrollHeight : chatScroll.top;
   if (!force || keepScroll) p.scrollTop = k === "session" && atBottom ? p.scrollHeight : top;
   const back = activeSel && p.querySelector(activeSel);
   if (back) { back.focus({ preventScroll: true }); if (caret) back.setSelectionRange(caret[0], caret[1]); }   // keep focus and the caret where they were
@@ -481,7 +489,8 @@ async function checkpoint() {
     const r = await app.post("/api/checkpoint", {});
     $("dialogBody").innerHTML = `<div class="dh"><b>${r.path ? "Checkpoint saved" : "Checkpoint (demo, not saved)"}</b><button class="btn sm ghost" id="dClose">${icon("x", 16)}</button></div>
       <div class="db"><p class="muted" style="margin-top:0">Everything running right now, and the command to pick each one up again.</p>${r.path ? `<div class="copy" style="margin-bottom:12px"><code>${esc(r.path)}</code><button class="btn sm" id="dCopyPath">${icon("copy", 14)}Copy path</button></div>` : ""}
-      <pre class="pre" style="max-height:52vh">${esc(r.markdown)}</pre><div class="row" style="margin-top:12px"><button class="btn" id="dCopy">${icon("copy", 15)}Copy all</button></div></div>`;
+      ${prefs.privacy ? `<div class="hint" style="margin-bottom:8px">${icon("eyeOff", 14)} Share-safe is on, so the list is blurred. Copy still copies it.</div>` : ""}
+      <pre class="pre ${prefs.privacy ? "private" : ""}" style="max-height:52vh">${esc(r.markdown)}</pre><div class="row" style="margin-top:12px"><button class="btn" id="dCopy">${icon("copy", 15)}Copy all</button></div></div>`;
     $("dialog").showModal();
     $("dClose").addEventListener("click", () => $("dialog").close());
     $("dCopy").addEventListener("click", async () => { try { await navigator.clipboard.writeText(r.markdown); toast("Copied.", "good", 1800); } catch { toast("Copy failed.", "warn"); } });
