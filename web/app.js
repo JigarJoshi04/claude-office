@@ -502,9 +502,10 @@ $("btnHire").addEventListener("click", () => go({ kind: "hire" }));
 $("btnMenu").addEventListener("click", (e) => { e.stopPropagation(); openMenu(); });
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap) openPalette(paletteItems()); return; }
-  if (e.target.closest("input, textarea, select, [contenteditable]") || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back")) return;
+  // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).
+  if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back, dialog[open]")) return;
   const k = e.key;
-  if (k === "Escape") { const m = document.querySelector(".menu"); if (m) m.remove(); else go({ kind: "ceo" }); }
+  if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else go({ kind: "ceo" }); }
   else if (k === "h") go({ kind: "hire" });
   else if (k === "d") go({ kind: "divider" });
   else if (k === "f") setView("floor");

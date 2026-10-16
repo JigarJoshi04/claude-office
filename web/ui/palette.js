@@ -2,6 +2,8 @@
 import { esc } from "./util.js";
 
 export function openPalette(items) {
+  const open = document.querySelector(".palette-back");
+  if (open) { open.querySelector("input").focus(); return () => open.remove(); }   // one palette at a time
   const back = document.createElement("div");
   back.className = "palette-back";
   back.innerHTML = `<div class="palette" role="dialog" aria-label="Search and commands">

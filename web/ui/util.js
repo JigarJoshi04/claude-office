@@ -118,7 +118,9 @@ export function toast(msg, level = "info", opts = 4200) {
   t.innerHTML = `${icon(ic || { good: "check", bad: "alert", warn: "alert", info: "chat" }[level] || "chat", 18)}<span>${esc(msg)}</span>`;
   toastEl.appendChild(t);
   while (toastEl.children.length > 4) toastEl.firstChild.remove();
-  setTimeout(() => t.remove(), ms);
+  // Toasts live in the top layer (a manual popover), re-raised each time so they show above an open dialog.
+  try { if (toastEl.matches(":popover-open")) toastEl.hidePopover(); toastEl.showPopover(); } catch { /* no popover API: plain fixed layer */ }
+  setTimeout(() => { t.remove(); if (!toastEl.children.length) try { toastEl.hidePopover(); } catch { /* ignore */ } }, ms);
 }
 
 let tipEl = null;
