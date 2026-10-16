@@ -517,7 +517,7 @@ document.addEventListener("keydown", (e) => {
   else if (prefs.view === "floor" && (k === "+" || k === "=")) office.zoom(1);
   else if (prefs.view === "floor" && k === "-") office.zoom(-1);
   else if (prefs.view === "floor" && k === "0") office.fit();
-  else if (prefs.view === "floor" && k.startsWith("Arrow")) { e.preventDefault(); office.pan(k === "ArrowLeft" ? 80 : k === "ArrowRight" ? -80 : 0, k === "ArrowUp" ? 80 : k === "ArrowDown" ? -80 : 0); }
+  else if (prefs.view === "floor" && k.startsWith("Arrow") && $("stage").classList.contains("zoomed")) { e.preventDefault(); office.pan(k === "ArrowLeft" ? 80 : k === "ArrowRight" ? -80 : 0, k === "ArrowUp" ? 80 : k === "ArrowDown" ? -80 : 0); }
 });
 setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }, 1000);
 setInterval(() => {

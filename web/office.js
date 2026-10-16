@@ -472,11 +472,21 @@ export function createOffice(stage, handlers) {
     if (w != null) el.style.width = u(w);
     if (h != null) el.style.height = u(h);
   }
-  function hot(cls, label, x, y, w, h, onClick) {
+  // The first click opens a panel, which rebuilds this overlay, so the browser never sees a double-click on the same
+  // element. Spot it ourselves: a second click within 400 ms, a few pixels away, flies the camera there.
+  let lastTap = { t: 0, x: 0, y: 0 };
+  function secondTap(e) {
+    const t = performance.now(), again = t - lastTap.t < 400 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 8;
+    lastTap = { t: again ? 0 : t, x: e.clientX, y: e.clientY };
+    return again;
+  }
+  function zoomToEvent(e) { const r = stage.getBoundingClientRect(); zoomAt(cam.tz < 1.6 ? 2.2 : 1, e.clientX - r.left, e.clientY - r.top); }
+  function hot(cls, label, x, y, w, h, onClick, onDouble) {
     const b = document.createElement("button");
     b.className = "hot " + cls; b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
     place(b, x, y, w, h);
-    b.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; onClick(); });
+    b.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { onDouble ? onDouble() : zoomToEvent(e); return; } onClick(); });
+    b.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(b);
     return b;
   }
@@ -542,21 +552,20 @@ export function createOffice(stage, handlers) {
     plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span>${esc(line.main)}</span></span>` +
       `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>`;
     plate.setAttribute("aria-label", `${who.name}${s.career ? `, level ${s.career.level}` : ""}: ${line.main}, ${line.side}`);
-    plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; handlers.openSeat(s.id); });
+    plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { focusSeat(s.id); return; } handlers.openSeat(s.id); });
+    plate.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(plate);
-    const pz = hot("pod", `${who.name}'s desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id));
-    pz.addEventListener("dblclick", (e) => { e.stopPropagation(); focusSeat(s.id); });
+    hot("pod", `${who.name}'s desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id), () => focusSeat(s.id));
     for (const a of agents.values()) {
       if (a.seatId !== s.id) continue;
       if (a.mode === "walking") { a.tagEl = div("tag walking", short(a.sess.name), a.x + 5, a.y + 19); continue; }
       const sp = seatSpot(pod, a.slot), sess = a.sess;
       const isSel = selected && selected.session === sess.id;
       const b = hot("worker" + (isSel ? " sel" : ""), `${sess.name}, ${sess.state}: open`,
-        sp.cx - 4, sp.top ? sp.seatY - 4 : sp.seatY - 6, 18, sp.top ? 24 : 22, () => handlers.openSession(s.id, sess.id));
+        sp.cx - 4, sp.top ? sp.seatY - 4 : sp.seatY - 6, 18, sp.top ? 24 : 22, () => handlers.openSession(s.id, sess.id), () => focusSession(sess.id));
       const tg = div("tag" + (isSel ? " show" : ""), short(sess.name), sp.cx + 5, sp.top ? pod.y + 45 : pod.y + 86);
       b.addEventListener("mouseenter", () => { hoverId = sess.id; tg.classList.add("show"); renderBubbles(); });
       b.addEventListener("mouseleave", () => { hoverId = null; if (!isSel) tg.classList.remove("show"); renderBubbles(); });
-      b.addEventListener("dblclick", (e) => { e.stopPropagation(); focusSession(sess.id); });
     }
   }
 

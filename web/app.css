@@ -169,6 +169,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 .tag { position: absolute; transform: translateX(-50%); pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity .2s;
   font: 600 max(10px, calc(4.4px * var(--f)))/1.25 Inter, sans-serif; color: #fff; background: rgba(8,10,18,.86); padding: calc(.6px * var(--f)) calc(1.8px * var(--f)); border-radius: calc(99px * var(--f)); }
 .tag.show, .world.zoomin .tag, .tag.walking, .tag.ghost, .tag.queue { opacity: 1; }
+.world.zoomin .tag { font-size: calc(3.6px * var(--f)); max-width: calc(38px * var(--f)); overflow: hidden; text-overflow: ellipsis; }   /* seats sit 40 apart */
 .tag.walking { background: rgba(30,70,140,.92); } .tag.ghost { opacity: .75; } .tag.queue { background: rgba(80,60,10,.9); }
 .bubble { position: absolute; transform: translate(-50%, -100%); z-index: 3; pointer-events: none; max-width: max(150px, calc(64px * var(--f))); width: max-content;
   white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
