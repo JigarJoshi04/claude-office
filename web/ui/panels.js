@@ -40,6 +40,9 @@ export function makePanels(app) {
   const pill = (text, tone = "", ic = "") => `<span class="pill ${tone}">${ic ? icon(ic, 14) : ""}${esc(text)}</span>`;
   const bar = (left, cls = "minibar") => `<div class="${cls} ${left != null && left < 15 ? "low" : left != null && left < 35 ? "mid" : ""}"><i style="width:${left == null ? 0 : left}%"></i></div>`;
   const tone = (lvl) => ({ bad: "bad", warn: "warn", good: "good" }[lvl] || "info");
+  // Writes in the demo office do nothing, so never claim they worked.
+  const result = (r, msg, lvl = "good") => toast(r && r.demo ? "Demo office: nothing was changed." : msg, r && r.demo ? "info" : lvl);
+  let dragging = false;   // a divider handle is held: refreshes must not rebuild the panel under the pointer
 
   function actRow(e) {
     return `<div class="act ${tone(e.level)} ${e.seat ? "click" : ""}" ${e.seat ? `data-seat="${esc(e.seat)}"` : ""}>${icon(EVENT_ICON[e.kind] || "dot", 16)}<span>${esc(humanise(e.text))}</span><span class="when">${relTime(e.ts)}</span></div>`;
@@ -155,7 +158,7 @@ export function makePanels(app) {
         const duty = root.querySelector("#seatDuty");
         if (duty) duty.addEventListener("change", async () => {
           const cfg = JSON.parse(JSON.stringify(S().divider)); cfg.seats[s.id].enabled = duty.checked;
-          try { await app.post("/api/divider", cfg); toast(duty.checked ? `${p.name} is back on duty.` : `${p.name} is on holiday: no new lanes go there.`, "good"); app.refresh(); }
+          try { const r = await app.post("/api/divider", cfg); result(r, duty.checked ? `${p.name} is back on duty.` : `${p.name} is on holiday: no new lanes go there.`); app.refresh(); }
           catch (e) { toast(e.message, "bad"); duty.checked = !duty.checked; }
         });
       } };
@@ -408,8 +411,8 @@ export function makePanels(app) {
       ${section("Details", `<dl class="facts"><dt>Lane id</dt><dd><code>${esc(l.id)}</code></dd><dt>Unit</dt><dd><code>${esc(l.unit)}</code></dd><dt>Folder</dt><dd><code>${esc(l.workdir)}</code></dd></dl>`)}`,
       bind(root) {
         const stop = root.querySelector("#lStop"), res = root.querySelector("#lResume"), clone = root.querySelector("#lClone"), chat = root.querySelector("[data-chat-session]");
-        if (stop) stop.addEventListener("click", async () => { if (!confirm("Stop this lane? Its progress notes stay, so you can resume it.")) return; try { await app.post("/api/lanes/stop", { id: v.id }); toast("Lane stopped.", "warn"); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
-        if (res) res.addEventListener("click", async () => { try { await app.post("/api/lanes/resume", { id: v.id, seat: root.querySelector("#lSeat").value || null }); toast("Resuming the lane.", "good"); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
+        if (stop) stop.addEventListener("click", async () => { if (!confirm("Stop this lane? Its progress notes stay, so you can resume it.")) return; try { const r = await app.post("/api/lanes/stop", { id: v.id }); result(r, "Lane stopped.", "warn"); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
+        if (res) res.addEventListener("click", async () => { try { const r = await app.post("/api/lanes/resume", { id: v.id, seat: root.querySelector("#lSeat").value || null }); result(r, "Resuming the lane."); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
         if (clone) clone.addEventListener("click", () => {
           hireDraft = { title: l.title, brief: d ? d.brief : "", workdir: l.workdir, seat: l.seat_pref || "auto", model: l.model, permission_mode: l.permission_mode, allow_messages: l.allow_messages !== false };
           store.set("hireDraft", hireDraft); app.go({ kind: "hire" }); toast("Brief copied to the hiring desk.");
@@ -490,9 +493,10 @@ export function makePanels(app) {
           };
           h.addEventListener("pointerdown", (e) => {
             h.setPointerCapture(e.pointerId);
+            dragging = true;
             const mv = (ev) => move(ev.clientX);
-            const up = () => { h.removeEventListener("pointermove", mv); h.removeEventListener("pointerup", up); sound.play("click"); app.rerender(true); };
-            h.addEventListener("pointermove", mv); h.addEventListener("pointerup", up);
+            const up = () => { dragging = false; h.removeEventListener("pointermove", mv); h.removeEventListener("pointerup", up); h.removeEventListener("pointercancel", up); sound.play("click"); app.rerender(true); };
+            h.addEventListener("pointermove", mv); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
           });
           h.addEventListener("keydown", (e) => {
             if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -510,16 +514,16 @@ export function makePanels(app) {
           normalise(); markDirty(); app.rerender(true);
         }));
         root.querySelectorAll("[data-w]").forEach(inp => inp.addEventListener("change", () => {
-          const id = inp.dataset.w, val = Math.max(0, Math.min(100, +inp.value || 0));
+          const id = inp.dataset.w, val = Math.max(0, Math.min(100, Math.round(+inp.value) || 0));
           const others = enabledIds().filter(x => x !== id), rest = 100 - val, ot = others.reduce((a, x) => a + dv.seats[x].weight, 0);
           dv.seats[id].weight = val;
           others.forEach(x => dv.seats[x].weight = ot ? Math.round(dv.seats[x].weight / ot * rest) : Math.round(rest / others.length));
           normalise(); markDirty(); app.rerender(true);
         }));
-        root.querySelectorAll("[data-cap]").forEach(inp => inp.addEventListener("change", () => { dv.seats[inp.dataset.cap].max_lanes = Math.max(0, Math.min(16, +inp.value || 0)); markDirty(); }));
+        root.querySelectorAll("[data-cap]").forEach(inp => inp.addEventListener("change", () => { inp.value = dv.seats[inp.dataset.cap].max_lanes = Math.max(0, Math.min(16, Math.round(+inp.value) || 0)); markDirty(); }));
         root.querySelectorAll("[data-note]").forEach(inp => inp.addEventListener("input", () => { dv.seats[inp.dataset.note].note = inp.value; markDirty(); }));
         for (const [id, key, lo, hi] of [["dv5", "five_hour_guard", 10, 100], ["dvW", "weekly_guard", 10, 100], ["dvG", "global_max_lanes", 0, 32]]) {
-          const el = root.querySelector("#" + id); el.addEventListener("change", () => { dv[key] = Math.max(lo, Math.min(hi, +el.value || 0)); markDirty(); });
+          const el = root.querySelector("#" + id); el.addEventListener("change", () => { el.value = dv[key] = Math.max(lo, Math.min(hi, Math.round(+el.value) || 0)); markDirty(); });
         }
         root.querySelector("#dvSuggest").addEventListener("click", () => {
           let tot = 0; const raw = {};
@@ -533,7 +537,7 @@ export function makePanels(app) {
         });
         root.querySelector("#dvSave").addEventListener("click", async () => {
           try { const r = await app.post("/api/divider", dv); dvDirty = false; dvPreview = null; dv = null; sound.play("hire");
-            toast(r.demo ? "Demo office: nothing saved." : `Saved. The next lane goes to ${r.next_pick && r.next_pick.seat ? nameOf(r.next_pick.seat) : "nobody"}.`, "good"); app.refresh(); }
+            result(r, `Saved. The next lane goes to ${r.next_pick && r.next_pick.seat ? nameOf(r.next_pick.seat) : "nobody"}.`); app.refresh(); }
           catch (e) { toast("Could not save: " + e.message, "bad"); }
         });
         root.querySelector("#dvReset").addEventListener("click", () => { dv = null; dvDirty = false; dvPreview = null; app.rerender(true); });
@@ -642,12 +646,12 @@ export function makePanels(app) {
           root.querySelectorAll("[data-role]").forEach(i => put(i.dataset.role, "role", i.value.trim()));
           root.querySelectorAll("[data-motto]").forEach(i => put(i.dataset.motto, "motto", i.value.trim()));
           root.querySelectorAll("[data-color]").forEach(i => put(i.dataset.color, "color", i.value));
-          try { const r = await app.post("/api/settings", body); settingsData = r.demo ? settingsData : null; toast(r.demo ? "Demo office: nothing saved." : "Saved. The office redecorates on the next refresh.", "good"); app.refresh(); }
+          try { const r = await app.post("/api/settings", body); settingsData = r.demo ? settingsData : null; result(r, "Saved. The office redecorates on the next refresh."); app.refresh(); }
           catch (e) { toast("Could not save: " + e.message, "bad"); }
         });
       } };
   }
 
   return { ceo, seat, session, services, programmes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
-    isEditing: (k) => (k === "divider" && dvDirty) || k === "hire" || k === "settings" };
+    isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings" };
 }

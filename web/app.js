@@ -424,7 +424,11 @@ function renderPanel(force, keepScroll) {
   }
   const sel = window.getSelection && window.getSelection();
   if (!force && sel && !sel.isCollapsed && p.contains(sel.anchorNode)) return;
-  const active = document.activeElement && p.contains(document.activeElement) ? document.activeElement.id : null;
+  const ae = document.activeElement && p.contains(document.activeElement) ? document.activeElement : null;
+  const active = ae ? ae.id || null : null;
+  // Controls without an id (duty switches, share fields, handles) are found again by their first data-* attribute.
+  const dataAttr = ae && !ae.id ? [...ae.attributes].find(a => a.name.startsWith("data-")) : null;
+  const activeSel = active ? "#" + CSS.escape(active) : dataAttr ? `[${dataAttr.name}="${CSS.escape(dataAttr.value)}"]` : null;
   if (k === "session" && active === "chatBox" && !force) return;       // don't redraw under someone typing
   const box = active === "chatBox" ? $("chatBox") : null, caret = box ? [box.selectionStart, box.selectionEnd] : null;
   const out = (panels[k] || panels.ceo)(view);
@@ -437,7 +441,8 @@ function renderPanel(force, keepScroll) {
   bindCommon(p);
   if (out.bind) out.bind(p);
   if (!force || keepScroll) p.scrollTop = k === "session" && atBottom ? p.scrollHeight : top;
-  if (active && $(active)) { $(active).focus(); if (caret) $(active).setSelectionRange(caret[0], caret[1]); }   // keep the caret where it was
+  const back = activeSel && p.querySelector(activeSel);
+  if (back) { back.focus({ preventScroll: true }); if (caret) back.setSelectionRange(caret[0], caret[1]); }   // keep focus and the caret where they were
 }
 function bindCommon(p) {
   p.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => go({ kind: b.dataset.go })));
@@ -454,7 +459,7 @@ function bindCommon(p) {
     try { await navigator.clipboard.writeText(b.dataset.copy); toast("Copied.", "good", 1800); } catch { toast("Copy failed: select the text instead.", "warn"); }
   }));
   p.querySelectorAll("[data-refresh]").forEach(b => b.addEventListener("click", async () => {
-    try { await app.post("/api/usage/refresh", { seat: b.dataset.refresh }); toast("Reading the plan now."); setTimeout(pollOnce, 2500); } catch (e) { toast(e.message, "bad"); }
+    try { const r = await app.post("/api/usage/refresh", { seat: b.dataset.refresh }); toast(r.demo ? "Demo office: nothing to read." : "Reading the plan now."); setTimeout(pollOnce, 2500); } catch (e) { toast(e.message, "bad"); }
   }));
   p.querySelectorAll("[data-focus-seat]").forEach(b => b.addEventListener("click", () => { setView("floor"); office.focusSeat(b.dataset.focusSeat); }));
   p.querySelectorAll("[data-focus-session]").forEach(b => b.addEventListener("click", () => { setView("floor"); office.focusSession(b.dataset.focusSession); }));
@@ -490,13 +495,14 @@ function broadcast() {
     const picked = [...document.querySelectorAll("[data-bt]")].filter(c => c.checked).map(c => c.dataset.bt.split("|"));
     if (!text || !picked.length) { toast("Write a message and pick at least one lane.", "warn"); return; }
     send.disabled = true;
-    let ok = 0, held = 0, failed = 0;
+    let ok = 0, held = 0, failed = 0, demo = false;
     for (const [seat, id] of picked) {
-      try { const r = await app.post("/api/message", { seat, id, text }); if (r.delivery === "review") held++; else ok++; app.chatSent(seat, id, text, r); }
+      try { const r = await app.post("/api/message", { seat, id, text }); if (r.demo) demo = true; else if (r.delivery === "review") held++; else ok++; if (!r.demo) app.chatSent(seat, id, text, r); }
       catch { failed++; }
       $("bStatus").textContent = `${ok + held + failed} of ${picked.length} sent…`;
     }
     $("dialog").close();
+    if (demo) { toast("Demo office: nothing was sent."); return; }
     sound.play("hire");
     toast(`Sent to ${ok + held} lane${ok + held === 1 ? "" : "s"}${held ? `, ${held} waiting for approval` : ""}${failed ? `; ${failed} failed` : ""}.`, failed ? "warn" : "good");
   });
