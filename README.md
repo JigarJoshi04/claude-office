@@ -1,18 +1,20 @@
 # Claude Office
 
+[![MIT license](https://img.shields.io/badge/license-MIT-ff7a45?style=flat-square)](LICENSE) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?style=flat-square&logo=python&logoColor=white) ![Zero dependencies](https://img.shields.io/badge/zero_dependencies-standard_library_only-38e07b?style=flat-square) ![Local-first](https://img.shields.io/badge/local--first-127.0.0.1_only-5b8def?style=flat-square)
+
 **Your AI coding seats, as a living office.** Every Claude Code account on your machine gets a desk, and so does
 the Codex CLI. Every running session is a little worker at that desk, acting out what it is doing right now. New
 sessions walk in from the elevator; spent seats nap on the couch. You run the place from the CEO's chair: see who is
 working and who is stuck, talk to any task, split new work across seats, and hire background lanes from the front
 desk.
 
-![The office floor](docs/office.png)
+![Claude Office in demo mode: a visitor lane walks in from the elevator, a character card opens, then a session's Chat, the Team view and the Timeline](docs/demo.gif)
 
-*Every screenshot is demo mode (`python3 -m office serve --demo`): made-up seats, no real accounts.*
+*Every screenshot and recording is demo mode (`python3 -m office serve --demo`): made-up seats, no real accounts.*
 
-| Talk to a task | Your team | Timeline |
+| The floor | Talk to a task | Your team |
 |---|---|---|
-| ![Chat](docs/session.png) | ![Team](docs/team.png) | ![Timeline](docs/timeline.png) |
+| ![The office floor](docs/office.png) | ![Chat](docs/session.png) | ![Team](docs/team.png) |
 
 ## Why
 
