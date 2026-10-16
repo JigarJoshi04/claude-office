@@ -135,6 +135,19 @@ class DemoOffice(LiveOffice):
                  sessions=[_sess("astra", "c-docs", "docs-refresh", "lane", "working", "docs", now, 1500,
                                  title="Refresh the API docs", cwd="/home/you/work/docs", tokens=90000)]),
         ]
+        # A visitor lane comes and goes every 45 seconds, so the demo shows arrivals, reports and departures.
+        visiting = int(now // 45) % 2 == 1
+        if visiting:
+            seats[3]["sessions"].append(_sess("claude4", "c-visit", "visitor-lane", "lane", "working", "docs", now,
+                                              (now % 45) + 5, title="Quick docs fix", tokens=40000))
+        was = getattr(self, "_visiting", None)
+        if was is not None and was != visiting:
+            if visiting:
+                self.emit("arrive", "visitor-lane sat down at claude4 (lane)", "claude4")
+            else:
+                self.emit("report", "visitor-lane filed its report: STATUS: DONE - docs fixed", "claude4", "good")
+                self.emit("leave", "visitor-lane left claude4", "claude4")
+        self._visiting = visiting
         for s in seats:
             sc = div["seats"][s["id"]]
             s["divider"] = sc
