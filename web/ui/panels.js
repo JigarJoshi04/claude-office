@@ -137,10 +137,21 @@ export function makePanels(app) {
   }
   // Needs you, grouped: everything caused by one seat being out of plan becomes one line about that seat.
   function needs(snap) {
-    const out = [], spent = new Map();
+    const out = [], spent = new Map(), nearly = new Map();
     for (const a of snap.attention || []) {
       const st = a.seat && seatById(a.seat);
       const planItem = /usage at \d+%|stopped by the usage limit|runs out of its/i.test(a.text);
+      // A seat close to its limit says so once: "Orion has 1% of its 5-hour window left, out in ~2 min".
+      const use = /(5-hour|weekly|week) usage at (\d+)%/i.exec(a.text), eta = /runs out of its (5-hour|weekly|week)\S* window in (~?[\d.]+ \w+)/i.exec(a.text);
+      if (st && st.status !== "limited" && (use || eta)) {
+        const g = nearly.get(st.id) || { level: "warn", seat: st.id, grouped: false, nearly: true };
+        if (a.level === "bad") g.level = "bad";
+        if (use) { g.pct = +use[2]; g.win = use[1]; }
+        if (eta) { g.eta = eta[2]; g.win = g.win || eta[1]; }
+        g.resets_at = g.resets_at || a.resets_at;
+        if (!nearly.has(st.id)) { nearly.set(st.id, g); out.push(g); }
+        continue;
+      }
       if (st && st.status === "limited" && planItem) {
         const g = spent.get(st.id) || { level: "bad", seat: st.id, paused: 0, resets_at: null, grouped: true };
         if (/stopped by the usage limit/i.test(a.text)) g.paused++;
@@ -150,7 +161,12 @@ export function makePanels(app) {
       }
       out.push(a);
     }
-    for (const g of spent.values()) {
+    for (const g of nearly.values()) {
+      const win = /week/i.test(g.win || "") ? "weekly plan" : "5-hour window", name = P(seatById(g.seat)).name;
+      g.text = g.pct != null ? `${name} has ${Math.max(0, 100 - g.pct)}% of its ${win} left${g.eta ? `, out in ${g.eta}` : ""}`
+        : `${name} runs out of its ${win} in ${g.eta} at this pace`;
+    }
+        for (const g of spent.values()) {
       const st = seatById(g.seat), w = binding(st), r = g.resets_at || (w.key && st.usage[w.key] && st.usage[w.key].resets_at);
       g.text = `${P(st).name} is out of plan${g.paused ? `: ${g.paused} session${g.paused === 1 ? "" : "s"} paused` : ""}`;
       g.resets_at = r;
