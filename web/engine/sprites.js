@@ -131,11 +131,34 @@ export function drawTorso(ctx, x, y, look, rows = 5) {
   rect(ctx, x + 4, y, 2, 1, shade(look.shirt, 0.65));        // collar
 }
 
+// A person's silhouette (head + torso, with the hair style's extra pixels), drawn a pixel out on each side in a dark
+// tone under the sprite: a soft outline that keeps people readable on light and busy floors. Cached per shape.
+const silCache = new Map();
+function silhouette(facing, style, legs) {
+  const k = facing + style + (legs ? "L" : "");
+  if (silCache.has(k)) return silCache.get(k);
+  const rows = (facing === "up" ? HEAD_UP : HEAD_DOWN).concat(TORSO).concat(legs ? LEGS.stand : []);
+  const c = document.createElement("canvas"); c.width = 10; c.height = rows.length + 2;
+  const g = c.getContext("2d"); g.fillStyle = "rgba(8,10,20,0.55)";
+  rows.forEach((row, r) => { for (let i = 0; i < row.length; i++) if (row[i] !== ".") g.fillRect(i, r + 2, 1, 1); });
+  if (style === 1) { g.fillRect(0, 5, 1, 5); g.fillRect(9, 5, 1, 5); }
+  if (style === 2) { g.fillRect(4, 0, 2, 2); g.fillRect(3, 1, 4, 1); }
+  if (style === 3) { g.fillRect(2, 1, 1, 1); g.fillRect(5, 1, 1, 1); g.fillRect(7, 1, 1, 1); }
+  silCache.set(k, c);
+  return c;
+}
+function outline(ctx, x, y, facing, style, legs) {
+  if (typeof document === "undefined") return;
+  const m = silhouette(facing, style, legs);
+  for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1]]) ctx.drawImage(m, x + ox, y - 2 + oy);
+}
+
 // Seated, upper body only (the desk hides the rest): 13 rows.
 export function drawSeated(ctx, x, y, look, facing, pose, t) {
   const sleep = pose === "sleep";
   const bob = pose === "idle" ? Math.round(Math.sin(t / 900) * 0.6) : 0;
   const hy = y + (sleep && facing === "down" ? 3 : bob);
+  outline(ctx, x, hy, facing, look.style, false);
   drawTorso(ctx, x, y + 8, look);
   const blink = !sleep && Math.floor(t / 3100) % 7 === 0 && (t % 3100) < 130;
   const thinking = pose === "think" && Math.floor(t / 1400) % 2 === 0;

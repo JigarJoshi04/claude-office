@@ -482,8 +482,8 @@ export function createOffice(stage, handlers) {
     S.rect(ctx, h.x + 36, h.y + 14, 56, 10, Math.floor(t / 700) % 2 ? "#2fa77b" : "#258763");
     for (let i = 0; i < 6; i++) S.rect(ctx, h.x + 40 + i * 8, h.y + 18, 5, 2, "#eafff6");
     lights.push({ x: h.x + 64, y: h.y + 19, r: 34, c: "#3fe0a0", i: 0.45 });
-    S.rect(ctx, h.x + 52, h.y + 47, 10, 7, S.P.white); S.rect(ctx, h.x + 54, h.y + 49, 6, 1, "#9aa3b5");
-    S.rect(ctx, h.x + 70, h.y + 45, 2, 9, "#2b2f3a"); S.rect(ctx, h.x + 68, h.y + 44, 6, 2, "#3fb68b");
+    S.rect(ctx, h.x + 52, h.y + 41, 10, 3, S.P.white); S.rect(ctx, h.x + 54, h.y + 42, 6, 1, "#9aa3b5");
+    S.rect(ctx, h.x + 72, h.y + 34, 2, 7, "#2b2f3a"); S.rect(ctx, h.x + 70, h.y + 33, 6, 2, "#3fb68b");
     waiting().forEach((l, i) => {                  // office lanes waiting for a seat queue up here
       const x = h.x + 34 + i * 14, y = h.y + 70;
       S.drawWalker(ctx, x, y, S.lookFor("lane-" + l.id, "#6b7a90"), "up", t, false);

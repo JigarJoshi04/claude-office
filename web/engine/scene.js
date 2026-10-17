@@ -112,27 +112,31 @@ export function drawStatic(c, L) {
     S.rect(c, LOBBY_W, cy + 3, W - LOBBY_W, 8, "#6b3a4d"); S.rect(c, LOBBY_W, cy + 3, W - LOBBY_W, 1, "#7d4a5e");
     for (let x = LOBBY_W + 3; x < W - 3; x += 6) { S.rect(c, x, cy + 4, 2, 1, "#b8913f"); S.rect(c, x + 3, cy + 9, 2, 1, "#b8913f"); }
   }
-  // lobby: warm planks, a back wall with the brand, the elevator and the trophy cabinet
-  for (let y = WALL; y < H; y += 6) {
-    const odd = ((y / 6) | 0) % 2;
-    S.rect(c, 0, y, LOBBY_W, 6, odd ? S.P.floorA : S.P.floorB);
-    S.rect(c, 0, y, LOBBY_W, 1, S.P.floorHi);
-    for (let x = odd ? 0 : 20; x < LOBBY_W; x += 40) S.rect(c, x, y, 1, 6, S.P.floorLine);
+  // lobby: a terrazzo floor in big polished slabs, a back wall with the brand, the elevator and the trophy cabinet
+  S.rect(c, 0, WALL, LOBBY_W, H - WALL, "#8a8174");
+  for (let y = WALL; y < H; y += 24) for (let x = 0; x < LOBBY_W; x += 24) { S.rect(c, x, y, 24, 1, "#766e62"); S.rect(c, x, y, 1, 24, "#766e62"); S.rect(c, x + 1, y + 1, 22, 1, "#978e80"); }
+  for (let i = 0; i < LOBBY_W * (H - WALL) / 40; i++) {
+    const hx = S.hashOf("tz" + i), x = hx % LOBBY_W, y = WALL + (hx >>> 9) % (H - WALL);
+    S.rect(c, x, y, 1, 1, ["#a1977f", "#6f675c", "#b49d78", "#7d8a8a"][(hx >>> 20) % 4]);
   }
   S.rect(c, 0, 0, LOBBY_W, WALL, S.P.wall);
   for (let x = 0; x < LOBBY_W; x += 32) { S.rect(c, x, 0, 1, WALL - 10, S.P.wallLo); S.rect(c, x + 1, 0, 1, WALL - 10, S.P.wallHi); }
   S.rect(c, 0, WALL - 10, LOBBY_W, 10, S.P.wainscot); S.rect(c, 0, WALL - 11, LOBBY_W, 1, S.P.trim);
   S.rect(c, 0, WALL, LOBBY_W, 3, "rgba(0,0,0,0.28)");
-  // a runner from the elevator to the rooms
-  S.rect(c, 70, WALL + 2, LOBBY_W - 70, 10, "#5c4a6e"); S.rect(c, LOBBY_W - 22, WALL + 2, 12, H - WALL - 4, "#5c4a6e");
-  // CEO corner: a rug under the desk
-  S.rect(c, 70, L.ceo.y + 30, 112, 62, "#6e3646"); S.rect(c, 73, L.ceo.y + 33, 106, 56, "#84445a");
-  // hiring desk
+  // a red carpet from the elevator to the rooms, edged in gold
+  const runner = (x, y, w, h) => { S.rect(c, x, y, w, h, "#7a2f3f"); S.rect(c, x + 1, y + 1, w - 2, h - 2, "#8c3949"); S.rect(c, x, y, w, 1, "#c9a24a"); S.rect(c, x, y + h - 1, w, 1, "#c9a24a"); S.rect(c, x, y, 1, h, "#c9a24a"); S.rect(c, x + w - 1, y, 1, h, "#c9a24a"); };
+  runner(70, WALL + 2, LOBBY_W - 70, 10); runner(LOBBY_W - 22, WALL + 2, 12, H - WALL - 4);
+  // CEO corner: a navy rug with a gold border under the desk
+  S.rect(c, 70, L.ceo.y + 30, 112, 62, "#27304f"); S.rect(c, 72, L.ceo.y + 32, 108, 58, "#c9a24a"); S.rect(c, 73, L.ceo.y + 33, 106, 56, "#33406a");
+  for (let i = 0; i < 6; i++) S.rect(c, 80 + i * 17, L.ceo.y + 58, 6, 6, "#3e4c7c");
+  // the hiring desk: a reception counter in teal with a frosted front
   const h = L.hire;
-  S.rect(c, h.x + 4, h.y + 8, POD_W - 8, 88, "rgba(63,182,139,0.10)");
-  S.rect(c, h.x + 24, h.y + 44, 80, 22, S.P.deskEdge); S.rect(c, h.x + 24, h.y + 42, 80, 6, S.P.deskTop); S.rect(c, h.x + 24, h.y + 42, 80, 1, S.P.deskTopHi);
-  S.drawChairFront(c, h.x + 57, h.y + 28);
-  S.drawPlant(c, 6, h.y + 70, 1);
+  S.rect(c, h.x + 22, h.y + 68, 84, 3, S.P.shadow);
+  S.rect(c, h.x + 22, h.y + 44, 84, 24, "#235c4e"); S.rect(c, h.x + 22, h.y + 44, 84, 2, "#3f9b80"); S.rect(c, h.x + 26, h.y + 49, 76, 14, "#2c7262");
+  for (let i = 0; i < 4; i++) S.rect(c, h.x + 30 + i * 18, h.y + 52, 10, 8, "#348571");
+  S.rect(c, h.x + 22, h.y + 40, 84, 5, S.P.deskTop); S.rect(c, h.x + 22, h.y + 40, 84, 1, S.P.deskTopHi);
+  S.drawChairFront(c, h.x + 57, h.y + 26);
+  S.drawPlant(c, 6, h.y + 70, 1); S.drawPlant(c, h.x + 108, h.y + 54, 2);
   // server closet: tiles behind a low wall
   const sv = L.server;
   for (let y = sv.y; y < H; y += 8) for (let x = 0; x < LOBBY_W - 26; x += 8) { S.rect(c, x, y, 8, 8, ((x + y) / 8) % 2 ? S.P.tile : S.P.tileB); S.rect(c, x, y, 8, 1, S.P.tileLine); }

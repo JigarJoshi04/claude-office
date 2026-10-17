@@ -3,6 +3,24 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.3.0] - 2026-10-17
+
+### Changed
+- The floor, reworked: desks sized to the people at them, a floor and a furniture corner per personality, lighter
+  walls, brighter lighting, corridors with a runner, a terrazzo lobby with a red carpet and a teal hiring counter, and a
+  soft outline around people.
+- Nameplates: bigger, with a coloured status chip, a plan bar and a pulsing Needs-you badge.
+
+### Added
+- Room peek: hovering a room shows a card with its voice, plans and who is doing what.
+- A floor legend behind the `?` camera button.
+
+### Fixed
+- The load divider's split bar (a class clash hid its segments), the camera aim and double-click when the inspector was
+  hidden, the Career level ring colour, double goal celebrations, the header's Needs-you count, focus after `\`, Esc and
+  dismissals, toast position under text zoom, the phone dock news line, the chat hint, the Career tab at narrow widths,
+  timeline marker names, and "Waiting for you" shown for a long tool call.
+
 ## [3.2.0] - 2026-10-17
 
 ### Added

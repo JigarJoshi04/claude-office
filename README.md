@@ -17,6 +17,8 @@ desk.
 | ![The office floor](docs/office.png) | ![Chat](docs/session.png) | ![Team](docs/team.png) |
 | **Level up** | **Trophy room** | **Trophy wall** |
 | ![A LEVEL UP banner sweeps the floor](docs/levelup.png) | ![The trophy room leaderboard](docs/trophies.png) | ![A character's career and trophy wall](docs/career.png) |
+| **Room peek** | **Day theme** | **Timeline** |
+| ![Hovering a room shows who is doing what](docs/peek.png) | ![The office in the day theme](docs/light.png) | ![Every session over the last hours](docs/timeline.png) |
 
 ## Why
 
@@ -31,10 +33,16 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   name on the door, a floor in its colour, a window, and decor that matches its personality. The Investigator has a
   corkboard with red string, the Builder a tool pegboard and a hard hat, the Night Owl a moon poster, string lights
   and a coffee machine, and so on.
-- One worker per live session. They type, read, think, wait on long tools, sweat when stuck, and fall asleep when
-  their seat is out of plan. Terminal sessions wear headsets; a subagent shows up as a little helper drone.
+- One worker per live session, at a desk sized to the people actually there (one, two, three, four or six seats) on
+  a rug in the seat's colour. They type, read, think, wait on long tools, sweat when stuck, and fall asleep when their
+  seat is out of plan. Terminal sessions wear headsets; a subagent shows up as a little helper drone.
+- Every personality has its own floor (oak planks, carpet tiles, library green, pale tiles, a starry navy carpet, a
+  chequered floor, parquet) and its own furniture corner: a 3D printer, an armchair under a lamp, a sand garden.
 - Rooms tell you their state at a glance: lights on while people work, dim while the seat naps (with when it is back),
-  a beach umbrella when it is on holiday, a padlock on the door when it is logged out.
+  a beach umbrella when it is on holiday, a padlock on the door when it is logged out. Each nameplate shows the name,
+  level, a coloured status chip and the plan left, with a pulsing badge when something about that seat needs you.
+- **Room peek**: hover a room for a moment and a card shows its voice, both plans and who is doing what. The `?` by the
+  camera buttons explains every colour, badge and icon on the floor.
 - A lobby holds the elevator, the CEO's desk with the capacity board, the hiring desk, the trophy cabinet and the
   server closet. A spare room becomes the lounge, where seats on a break hang out.
 - Arrivals walk in from the elevator, down the corridor and through their room's door. Filed reports burst into
