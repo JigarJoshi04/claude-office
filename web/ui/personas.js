@@ -155,8 +155,15 @@ export function moodFor(seat, fmtTime) {
 export function pulse(snap, persona, fmtTime) {
   const t = snap.totals;
   const parts = [];
-  if (!t.sessions) parts.push("The office is quiet: no agents are running.");
-  else parts.push(`${t.working ? (t.working === 1 ? "One agent is" : `${words(t.working)} agents are`) : "No agents are"} working${t.sessions > t.working ? `, ${words(t.sessions - t.working).toLowerCase()} more ${t.sessions - t.working === 1 ? "is" : "are"} idle` : ""}.`);
+  const all = snap.seats.flatMap(s => s.sessions.filter(x => x.live !== false));
+  const working = all.filter(x => x.state === "working" || x.state === "waiting").length;
+  const stopped = all.filter(x => x.state === "limited" || x.state === "stuck").length;
+  const idle = all.length - working - stopped;
+  if (!all.length) parts.push("The office is quiet: no agents are running.");
+  else {
+    const rest = [idle ? `${words(idle).toLowerCase()} ${idle === 1 ? "is" : "are"} idle` : "", stopped ? `${words(stopped).toLowerCase()} ${stopped === 1 ? "is" : "are"} stopped` : ""].filter(Boolean);
+    parts.push(`${working ? (working === 1 ? "One agent is" : `${words(working)} agents are`) : "No agents are"} working${rest.length ? ", " + rest.join(" and ") : ""}.`);
+  }
   const tight = snap.seats.filter(s => s.status !== "benched" && s.status !== "offline")
     .map(s => ({ s, b: binding(s) })).filter(x => x.b.left != null).sort((a, b) => a.b.left - b.b.left)[0];
   const spent = snap.seats.filter(s => s.status === "limited");

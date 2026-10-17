@@ -139,12 +139,16 @@ export function makePanels(app) {
     const np = snap.next_pick, next = np.seat && seatById(np.seat);
     const welcome = !store.get("welcomed", false);
     const latest = (snap.events || []).slice(-1)[0];
-    const idle = Math.max(0, (t.sessions || 0) - (t.working || 0));
+    // Sessions by what they are doing: stopped ones (out of plan, stuck) are not "idle".
+    const all = snap.seats.flatMap(s => live(s));
+    const working = all.filter(x => x.state === "working" || x.state === "waiting").length;
+    const stopped = all.filter(x => x.state === "limited" || x.state === "stuck").length;
+    const idle = all.length - working - stopped;
     return { html: `${awayHtml()}
       ${welcome ? `<div class="hello">${icon("sparkles", 16)}<span>New here? Click anyone on the floor to see what they are doing and talk to them.</span><button class="btn sm ghost" data-dismiss-welcome>Got it</button></div>` : ""}
       ${snap.office.config_error ? `<div class="need bad"><span class="ico">${icon("alert", 16)}</span><div class="grow"><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
       <div class="g-status">
-        <div class="g-nums"><span><b>${t.working || 0}</b> working</span><span><b>${idle}</b> idle</span><span><b>${snap.seats.filter(s => s.status === "limited").length}</b> napping</span></div>
+        <div class="g-nums"><span><b>${working}</b> working</span><span><b>${idle}</b> idle</span><span title="Out of plan or stuck"><b>${stopped}</b> stopped</span></div>
         <div class="g-next">${next ? `Next lane goes to <b style="color:${esc(next.color)}">${esc(P(next).name)}</b>` : "No seat can take a new lane right now"}<button class="btn sm primary" data-go="hire">${icon("plus", 14)}Hire</button></div>
       </div>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
@@ -215,7 +219,7 @@ export function makePanels(app) {
         <div class="hint">${sc.enabled ? `Gets ${sc.weight}% of new lanes, up to ${sc.max_lanes} at once. Running ${s.lanes} now.` : "No new lanes go here."}${sc.note ? " " + esc(sc.note) : ""}</div></div>
         <label class="switch" title="On duty"><input type="checkbox" id="seatDuty" ${sc.enabled ? "checked" : ""} aria-label="On duty"><span></span></label></div>
         ${s.kind === "claude" ? `<div class="copy" style="margin-top:12px"><code>CLAUDE_CONFIG_DIR=${esc(s.config_dir)} claude</code><button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(s.config_dir)} claude">${icon("copy", 14)}Copy</button></div>`
-          : `<div class="copy" style="margin-top:12px"><code>gpt -w -C &lt;folder&gt; "task"</code></div>`}
+          : `<div class="copy" style="margin-top:12px"><code>gpt -w -C &lt;folder&gt; "task"</code><button class="btn sm" data-copy='gpt -w -C <folder> "task"'>${icon("copy", 14)}Copy</button></div>`}
         <div class="acct">${app.privacy() ? "Account hidden (share-safe)" : esc([a.name, a.email].filter(Boolean).join(" · "))}${h.tier ? " · " + esc(h.tier) : ""} · ${esc(h.detail || "")} · ${esc(s.label)}</div>`)}
       ${recent.length ? section("Recently", recent.slice(0, 3).map(actRow).join("")) : ""}
       <div class="row" style="margin-top:18px"><button class="btn sm" data-focus-seat="${esc(s.id)}">${icon("target", 15)}Show on the floor</button></div>`,

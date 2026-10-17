@@ -142,7 +142,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 .hot.room:hover, .hot.pod:hover, .hot.hire:hover { background: rgba(255,255,255,.035); }
 .hot.worker:hover, .hot.worker.sel { box-shadow: 0 0 0 calc(.7px * var(--f)) #fff, 0 0 calc(7px * var(--f)) rgba(255,255,255,.55); }
 .hot.wallhot:hover, .hot.rack:hover { box-shadow: 0 0 0 calc(.6px * var(--f)) rgba(255,255,255,.6); }
-.room-label { position: absolute; pointer-events: none; font: 700 max(9px, calc(4.2px * var(--f)))/1 Inter, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.32); white-space: nowrap; }
+.room-label { position: absolute; pointer-events: none; font: 700 max(9px, calc(4.2px * var(--f)))/1 Inter, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.66); white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
 .neon { position: absolute; display: flex; align-items: center; justify-content: center; pointer-events: none; white-space: nowrap;
   font-family: var(--pixel); font-size: calc(7.6px * var(--f)); color: #ffe9f8; letter-spacing: .6px;
   text-shadow: 0 0 calc(2px * var(--f)) #ff4fd8, 0 0 calc(6px * var(--f)) #ff4fd8, 0 0 calc(12px * var(--f)) #ff2fc8; animation: flicker 9s infinite; }

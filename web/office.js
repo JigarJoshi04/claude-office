@@ -303,9 +303,15 @@ export function createOffice(stage, handlers) {
   }
 
   function rackPos(i) { return [8 + (i % 6) * 27, L.server.y + 12 + Math.floor(i / 6) * 48]; }
+  // The closet holds six racks. Failed services always get one, then running ones; the rest show as "+N".
+  const RANK = { failed: 0, activating: 1, active: 2 };
+  function closetUnits() {
+    const all = [...(snap.units || [])].sort((a, b) => (RANK[a.active] ?? 3) - (RANK[b.active] ?? 3));
+    return { shown: all.slice(0, 6), hidden: Math.max(0, all.length - 6) };
+  }
   function drawServer(t, lights) {
-    const units = (snap.units || []).slice(0, 12);
-    for (let i = 0; i < Math.max(units.length, 6); i++) {
+    const units = closetUnits().shown;
+    for (let i = 0; i < 6; i++) {
       const un = units[i];
       const [x, y] = rackPos(i);
       if (y + 42 > H - 2) break;
@@ -565,10 +571,9 @@ export function createOffice(stage, handlers) {
     div("room-label", "SERVER CLOSET", 6, L.server.y - 12);
     const neon = div("neon", snap.office.name || "Claude Office", 6, 8); place(neon, 6, 8, 70, 22);
     if (mvp) place(div("mvp-tag", "MVP", 172, 36), 172, 36, 24, null);
-    (snap.units || []).slice(0, 12).forEach((un, i) => {
-      const [x, y] = rackPos(i);
-      if (y + 42 <= H - 2) hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices());
-    });
+    const closet = closetUnits();
+    closet.shown.forEach((un, i) => { const [x, y] = rackPos(i); hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices()); });
+    if (closet.hidden) div("room-label more", `+${closet.hidden} more`, LOBBY_W - 70, L.server.y - 12);
     hot("hire", "Hiring desk: start a new lane", L.hire.x + 8, L.hire.y + 8, POD_W - 16, POD_H - 14, () => handlers.openHire());
     place(div("plate hire-plate", "Hiring desk", 0, 0), L.hire.x + 24, L.hire.y + 98, POD_W - 48, null);
     waiting().forEach((l, i) => { const tg = div("tag queue", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 80); tg.title = l.waiting_reason || "Waiting for a seat"; });

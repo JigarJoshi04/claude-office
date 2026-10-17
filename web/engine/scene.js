@@ -96,7 +96,10 @@ export function drawStatic(c, L) {
   const sv = L.server;
   for (let y = sv.y; y < H; y += 8) for (let x = 0; x < LOBBY_W - 26; x += 8) { S.rect(c, x, y, 8, 8, ((x + y) / 8) % 2 ? S.P.tile : S.P.tileB); S.rect(c, x, y, 8, 1, S.P.tileLine); }
   S.rect(c, 0, sv.y - 3, LOBBY_W - 26, 3, "#141722");
-  S.rect(c, LOBBY_W - 2, 0, 2, H, "#141722");
+  // the wall between the lobby and the rooms, open where each corridor meets the lobby walkway
+  let wy = 0;
+  for (const cy of L.corridors) { S.rect(c, LOBBY_W - 2, wy, 2, cy - 3 - wy, "#141722"); wy = cy + CORR; }
+  if (wy < H) S.rect(c, LOBBY_W - 2, wy, 2, H - wy, "#141722");
   // character rooms
   for (const p of L.pods) {
     drawRoomShell(c, p.room, p.seat.color);
