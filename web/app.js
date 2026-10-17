@@ -92,6 +92,7 @@ const office = createOffice($("stage"), {
   openTrophies: () => go({ kind: "trophies" }),
   openStats: () => setView("stats"),
   onCat: () => sound.play("arrive"),
+  onDouble: () => clearTimeout(panelScroll),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
 
@@ -143,11 +144,16 @@ function go(v, fromHash) {
   renderPanel(true);
   $("panel").scrollTop = 0;
   if (matchMedia("(max-width: 1240px)").matches && v.kind !== "ceo") {
-    // The header is sticky: land the panel's title just below it, not under it.
-    const y = $("panel").getBoundingClientRect().top + window.scrollY - document.querySelector(".top").offsetHeight - 8;
-    window.scrollTo({ top: Math.max(0, y), behavior: prefs.motion === "reduced" ? "auto" : "smooth" });
+    // The header is sticky: land the panel's title just below it, not under it. Wait out a double-click first: a
+    // second click on the floor means "fly there", and then the page must stay on the floor.
+    clearTimeout(panelScroll);
+    panelScroll = setTimeout(() => {
+      const y = $("panel").getBoundingClientRect().top + window.scrollY - document.querySelector(".top").offsetHeight - 8;
+      window.scrollTo({ top: Math.max(0, y), behavior: prefs.motion === "reduced" ? "auto" : "smooth" });
+    }, 420);
   }
 }
+let panelScroll = 0;
 
 // ------------------------------------------------------------------------------------------------ data
 async function loadDetail(key, force) {

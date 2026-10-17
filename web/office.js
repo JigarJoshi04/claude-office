@@ -530,7 +530,7 @@ export function createOffice(stage, handlers) {
     b.className = "hot " + cls; b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
     b.dataset.k = cls.split(" ")[0] + ":" + label;          // a stable key, so keyboard focus survives a rebuild
     place(b, x, y, w, h);
-    b.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { onDouble ? onDouble() : zoomToEvent(e); return; } onClick(); });
+    b.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); onDouble ? onDouble() : zoomToEvent(e); return; } onClick(); });
     b.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(b);
     return b;
@@ -597,7 +597,7 @@ export function createOffice(stage, handlers) {
     plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span>${esc(line.main)}</span></span>` +
       `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>`;
     plate.setAttribute("aria-label", `${who.name}${s.career ? `, level ${s.career.level}` : ""}: ${line.main}, ${line.side}`);
-    plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { focusSeat(s.id); return; } handlers.openSeat(s.id); });
+    plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); focusSeat(s.id); return; } handlers.openSeat(s.id); });
     plate.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(plate);
     hot("pod", `${who.name}'s desks`, pod.room.x + 2, pod.room.y + 2, ROOM_W - 4, ROOM_H - 30, () => handlers.openSeat(s.id), () => focusSeat(s.id)).dataset.k = "pod:" + s.id;
