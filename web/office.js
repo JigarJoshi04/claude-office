@@ -1,7 +1,7 @@
 // The office floor engine: a pixel canvas rendered at a whole-number scale, a DOM overlay for names, bubbles
 // and click targets, a camera you can zoom and pan, agents that walk in from the elevator, and night lighting.
 import * as S from "./engine/sprites.js";
-import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, drawStatic } from "./engine/scene.js";
+import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, drawStatic, capFor, deskFor } from "./engine/scene.js";
 import { windowRect, drawDecorLive } from "./engine/decor.js";
 
 const SPEED = 46;                 // logical px per second
@@ -21,10 +21,10 @@ export function poseFor(sess, seatStatus) {
 
 function skyFor(d) {
   const h = d.getHours() + d.getMinutes() / 60;
-  if (h < 5.5 || h >= 20) return { sky: ["#070b26", "#18204a"], night: true, dark: 0.44 };
-  if (h < 7.5) return { sky: ["#34407e", "#f2a65a"], night: false, dark: 0.24 };
+  if (h < 5.5 || h >= 20) return { sky: ["#070b26", "#18204a"], night: true, dark: 0.36 };
+  if (h < 7.5) return { sky: ["#34407e", "#f2a65a"], night: false, dark: 0.16 };
   if (h < 17) return { sky: ["#5fa8ff", "#bfe3ff"], night: false, dark: 0 };
-  return { sky: ["#35296a", "#f07a5a"], night: false, dark: 0.26 };
+  return { sky: ["#35296a", "#f07a5a"], night: false, dark: 0.18 };
 }
 
 export function esc(s) {
@@ -43,6 +43,7 @@ export function createOffice(stage, handlers) {
       <button type="button" data-cam="in" title="Zoom in (+)" aria-label="Zoom in">+</button>
       <button type="button" data-cam="out" title="Zoom out (−)" aria-label="Zoom out">−</button>
       <button type="button" data-cam="fit" title="Fit the office (0)" aria-label="Fit the office">⤢</button>
+      <button type="button" data-cam="legend" title="What the floor shows" aria-label="What the floor shows" aria-expanded="false">?</button>
     </div>
     <div class="cam-hint">Ctrl + scroll or pinch to zoom · drag to pan · double-click a desk to focus</div>`;
   const world = stage.querySelector(".world");
@@ -78,11 +79,13 @@ export function createOffice(stage, handlers) {
     const seen = new Set();
     for (const pod of L.pods) {
       const want = pod.seat.sessions.filter(x => x.live !== false).slice(0, MAX_SLOTS);
+      pod.cap = capFor(want.length);                 // the desk grows and shrinks with the people at it
+      pod.y = pod.baseY + (pod.cap <= 3 ? 12 : 0);   // one row of seats sits lower, centred in the room
       const taken = new Set();
       const keep = new Set();
       for (const x of want) {
         const a = agents.get(x.id);
-        if (a && a.seatId === pod.seat.id && a.slot < MAX_SLOTS && !taken.has(a.slot)) { taken.add(a.slot); keep.add(x.id); }
+        if (a && a.seatId === pod.seat.id && a.slot < pod.cap && !taken.has(a.slot)) { taken.add(a.slot); keep.add(x.id); }
       }
       for (const x of want) {
         seen.add(x.id);
@@ -189,7 +192,7 @@ export function createOffice(stage, handlers) {
     ctx.drawImage(bg, 0, 0, W, H);
     const now = new Date();
     const env = skyFor(now);
-    if (env.sky[0] !== skyKey) { skyKey = env.sky[0]; stage.style.setProperty("--sky-a", env.sky[0]); stage.style.setProperty("--sky-b", env.sky[1]); }   // the backdrop's sky
+    if (env.sky[0] !== skyKey) { skyKey = env.sky[0]; stage.style.setProperty("--sky-a", env.sky[0]); stage.style.setProperty("--sky-b", env.sky[1]); stage.dataset.sky = env.night ? "night" : "day"; }   // the backdrop's sky
     const lights = [];
     drawLobbyWall(t, lights);
     drawCEO(t, lights);
@@ -212,12 +215,9 @@ export function createOffice(stage, handlers) {
   function drawSpot(t) {
     const p = L.pods.find(p => p.seat.id === spot);
     if (!p) return;
-    const { x, y, w, h } = p.room, a = reduced ? 0.9 : 0.65 + 0.35 * Math.sin(t / 220);
-    ctx.globalAlpha = a;
-    S.rect(ctx, x, y, w, 2, p.seat.color); S.rect(ctx, x, y + h - 2, w, 2, p.seat.color);
-    S.rect(ctx, x, y, 2, h, p.seat.color); S.rect(ctx, x + w - 2, y, 2, h, p.seat.color);
-    ctx.globalAlpha = a * 0.35;
-    S.rect(ctx, x + 2, y + 2, w - 4, 2, "#ffffff"); S.rect(ctx, x + 2, y + 2, 2, h - 4, "#ffffff");
+    const { x, y, w, h } = p.room, a = reduced ? 1 : 0.75 + 0.25 * Math.sin(t / 220), c = p.seat.color;
+    const frame = (i, col, alpha) => { ctx.globalAlpha = alpha; S.rect(ctx, x + i, y + i, w - 2 * i, 1, col); S.rect(ctx, x + i, y + h - 1 - i, w - 2 * i, 1, col); S.rect(ctx, x + i, y + i, 1, h - 2 * i, col); S.rect(ctx, x + w - 1 - i, y + i, 1, h - 2 * i, col); };
+    frame(0, "#ffffff", a); frame(1, c, a); frame(2, c, a); frame(3, c, a * 0.45); frame(4, c, a * 0.2);   // white rim, the seat's colour, a soft inner glow
     ctx.globalAlpha = 1;
   }
 
@@ -426,12 +426,15 @@ export function createOffice(stage, handlers) {
     const bySlot = new Map();
     for (const a of agents.values()) if (a.seatId === s.id && a.mode === "seated") bySlot.set(a.slot, a);
     const busy = [...bySlot.values()].some(a => a.sess.state === "working" || a.sess.state === "waiting");
-    S.drawDeskLamp(ctx, pod.x + 11, pod.y + 34, busy);
-    if (busy) lights.push({ x: pod.x + 64, y: pod.y + 54, r: 62, c: "#ffd59a", i: 0.5 });
+    const desk = deskFor(pod), mid = desk.x + desk.w / 2;
+    S.drawRug(ctx, desk.x - 12, pod.y + 8, desk.w + 24, desk.two ? 92 : 64, s.color);
+    S.drawDeskIsland(ctx, desk.x, desk.y, desk.w, desk.h, desk.two);
+    S.drawDeskLamp(ctx, desk.x + 1, pod.y + 34, busy);
+    if (busy) lights.push({ x: mid, y: pod.y + 54, r: 62, c: "#ffd59a", i: 0.5 });
     const lv = s.career ? s.career.level : 1;
-    if (lv >= 3) S.drawDeskPerks(ctx, pod.x, pod.y, lv, s.color, t);
-    if (lv >= 15) lights.push({ x: pod.x + 64, y: pod.y + 68, r: 40, c: s.color, i: 0.3 });
-    for (let slot = 0; slot < MAX_SLOTS; slot++) {
+    if (lv >= 3) S.drawDeskPerks(ctx, desk, lv, s.color, t);
+    if (lv >= 15) lights.push({ x: mid, y: desk.y + desk.h, r: 40, c: s.color, i: 0.3 });
+    for (let slot = 0; slot < pod.cap; slot++) {
       const sp = seatSpot(pod, slot), a = bySlot.get(slot), x = sp.cx;
       const pose = a ? poseFor(a.sess, status) : null;
       if (sp.top) {
@@ -516,9 +519,7 @@ export function createOffice(stage, handlers) {
     ctx.globalCompositeOperation = "lighter";
     const rooms = [...L.pods.map(p => p.room), L.lounge, L.meet].filter(Boolean);
     for (const room of rooms) {
-      const wr = windowRect(room), top = wr.y + wr.h + 4;
-      ctx.fillStyle = "rgba(255,240,200,0.045)";
-      ctx.beginPath(); ctx.moveTo(wr.x, top); ctx.lineTo(wr.x + wr.w, top); ctx.lineTo(wr.x + wr.w - 14, top + 70); ctx.lineTo(wr.x - 34, top + 70); ctx.closePath(); ctx.fill();
+      const wr = windowRect(room), top = wr.y + wr.h + 4;   // a few dust motes drift down from the window
       if (!reduced) for (let i = 0; i < 2; i++) {
         const p = ((t / 9000) + i / 2 + room.x / 300) % 1;
         S.rect(ctx, wr.x + 6 + i * 16 - p * 24, top + p * 64, 1, 1, "rgba(255,250,220,0.5)");
@@ -587,7 +588,7 @@ export function createOffice(stage, handlers) {
     if (L.lounge) div("room-label", "LOUNGE", L.lounge.x + 8, L.lounge.y + BACK_LABEL);
     if (L.meet) div("room-label", "MEETING", L.meet.x + 8, L.meet.y + BACK_LABEL);
     for (const o of L.open) div("room-label", "GARDEN", o.x + 8, o.y + BACK_LABEL);
-    div("room-label", "SERVER CLOSET", 6, L.server.y - 12);
+
     const neon = div("neon", snap.office.name || "Claude Office", 6, 8); place(neon, 6, 8, 70, 22);
     if (mvp) place(div("mvp-tag", "MVP", 172, 36), 172, 36, 24, null);
     const closet = closetUnits();
@@ -610,11 +611,14 @@ export function createOffice(stage, handlers) {
     plate.type = "button"; plate.dataset.k = "plate:" + s.id;
     plate.className = `plate st-${s.status}` + (selected && selected.seat === s.id && !selected.session ? " sel" : "");
     plate.style.setProperty("--seat", s.color);
-    place(plate, pod.room.x + 18, pod.room.y + pod.room.h - 26, pod.room.w - 36, null);
+    place(plate, pod.room.x + 12, pod.room.y + pod.room.h - 31, pod.room.w - 24, null);
     const line = plateLine(s, live);
     const lv = s.career ? `<em class="lv" title="Level ${s.career.level} ${esc(s.career.title)}">${s.career.level}</em>` : "";
-    plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span>${esc(line.main)}</span></span>` +
-      `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>`;
+    const need = (snap.attention || []).filter(a => a.seat === s.id).length;   // things about this seat in Needs you
+    if (need) plate.classList.add("needs");
+    plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span class="pl-chip ${line.tone}">${esc(line.main)}</span></span>` +
+      `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : line.left != null && line.left < 35 ? "mid" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>` +
+      (need ? `<span class="pl-need" title="${need} thing${need === 1 ? "" : "s"} in Needs you">${need}</span>` : "");
     plate.setAttribute("aria-label", `${who.name}${s.career ? `, level ${s.career.level}` : ""}: ${line.main}, ${line.side}`);
     plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); focusSeat(s.id); return; } handlers.openSeat(s.id); });
     plate.addEventListener("dblclick", (e) => e.stopPropagation());
@@ -622,8 +626,8 @@ export function createOffice(stage, handlers) {
     const podHot = hot("pod", `${who.name}'s desks`, pod.room.x + 2, pod.room.y + 2, pod.room.w - 4, pod.room.h - 30, () => handlers.openSeat(s.id), () => focusSeat(s.id));
     podHot.dataset.k = "pod:" + s.id;
     for (const el of [podHot, plate]) {
-      el.addEventListener("mouseenter", () => { spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); });
-      el.addEventListener("mouseleave", () => { if (spot === s.id) spot = null; if (handlers.onHoverSeat) handlers.onHoverSeat(null); });
+      el.addEventListener("mouseenter", () => { spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); peek(s.id, podHot); });
+      el.addEventListener("mouseleave", () => { if (spot === s.id) spot = null; if (handlers.onHoverSeat) handlers.onHoverSeat(null); peek(null); });
     }
     for (const a of agents.values()) {
       if (a.seatId !== s.id) continue;
@@ -634,9 +638,18 @@ export function createOffice(stage, handlers) {
         sp.cx - 4, sp.top ? sp.seatY - 4 : sp.seatY - 6, 18, sp.top ? 24 : 22, () => handlers.openSession(s.id, sess.id), () => focusSession(sess.id));
       b.dataset.k = "worker:" + sess.id;
       const tg = div("tag" + (isSel ? " show" : ""), short(sess.name), sp.cx + 5, sp.top ? pod.y + 45 : pod.y + 86);
-      b.addEventListener("mouseenter", () => { hoverId = sess.id; tg.classList.add("show"); renderBubbles(); spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); });
-      b.addEventListener("mouseleave", () => { hoverId = null; if (!isSel) tg.classList.remove("show"); renderBubbles(); if (spot === s.id) spot = null; if (handlers.onHoverSeat) handlers.onHoverSeat(null); });
+      b.addEventListener("mouseenter", () => { hoverId = sess.id; tg.classList.add("show"); renderBubbles(); spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); peek(s.id, podHot); });
+      b.addEventListener("mouseleave", () => { hoverId = null; if (!isSel) tg.classList.remove("show"); renderBubbles(); if (spot === s.id) spot = null; if (handlers.onHoverSeat) handlers.onHoverSeat(null); peek(null); });
     }
+  }
+
+  // The room peek card waits a moment (a pointer passing over the floor should not flash cards) and hides at once.
+  let peekT = 0, peekOn = null;
+  function peek(id, el) {
+    clearTimeout(peekT);
+    if (!handlers.onPeek || matchMedia("(pointer: coarse)").matches) return;
+    if (!id) { if (peekOn) { peekOn = null; handlers.onPeek(null); } return; }
+    peekT = setTimeout(() => { if (!el.isConnected || dragMoved) return; peekOn = id; handlers.onPeek(id, el.getBoundingClientRect()); }, peekOn ? 60 : 380);
   }
 
   function plateLine(s, live) {
@@ -646,11 +659,11 @@ export function createOffice(stage, handlers) {
     const tight = l5 == null ? (lw == null ? null : ["week", lw]) : lw == null || l5 <= lw ? ["5h", l5] : ["week", lw];
     const busy = live.filter(x => x.state === "working" || x.state === "waiting").length;
     const r5 = u.five_hour && u.five_hour.resets_at;
-    const left = tight ? `${Math.round(tight[1])}% of ${tight[0] === "5h" ? "5-hour" : "week"} left` : "no reading";
-    if (s.status === "limited") return { main: "Napping", side: r5 ? "back at " + hhmm(r5) : "out of plan", left: 0 };
-    if (s.status === "offline") return { main: "Locked out", side: "needs /login", left: null };
-    if (s.status === "benched") return { main: "On holiday", side: left, left: tight ? tight[1] : null };
-    return { main: busy ? `${busy} working` : live.length ? "Waiting for you" : "Free", side: left, left: tight ? tight[1] : null };
+    const left = tight ? `${Math.round(tight[1])}% ${tight[0] === "5h" ? "of 5 h" : "of week"} left` : "no reading";
+    if (s.status === "limited") return { main: "Napping", tone: "bad", side: r5 ? "back at " + hhmm(r5) : "out of plan", left: 0 };
+    if (s.status === "offline") return { main: "Locked out", tone: "bad", side: "needs /login", left: null };
+    if (s.status === "benched") return { main: "On holiday", tone: "info", side: left, left: tight ? tight[1] : null };
+    return { main: busy ? `${busy} working` : live.length ? "Waiting for you" : "Free", tone: busy ? "good" : live.length ? "warn" : "idle", side: left, left: tight ? tight[1] : null };
   }
   function hhmm(ts) { return new Date(ts * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
 
@@ -750,9 +763,12 @@ export function createOffice(stage, handlers) {
     cam.tz = z; cam.tx = sw / 2 - (x + w / 2) * F * z; cam.ty = sh / 2 - (y + h / 2) * F * z;
     clampCam(cam);
   }
-  function focusSeat(id) { const p = L && L.pods.find(p => p.seat.id === id); if (p) focusRect(p.room.x, p.room.y, p.room.w, p.room.h); }
-  function focusSession(id) { const a = agents.get(id); if (!a) return; const [x, y] = anchorFor(a); focusRect(x - 44, y - 24, 88, 70); }
-  function fit() { cam.tz = 1; cam.tx = 0; cam.ty = 0; clampCam(cam); }
+  // A focus asked for just before the frame changes size (the inspector coming back re-plans the building) is aimed
+  // again once the new plan is in, so the camera lands on the right room.
+  let refocus = null;
+  function focusSeat(id) { refocus = { at: performance.now(), run: () => focusSeat(id) }; const p = L && L.pods.find(p => p.seat.id === id); if (p) focusRect(p.room.x, p.room.y, p.room.w, p.room.h); }
+  function focusSession(id) { refocus = { at: performance.now(), run: () => focusSession(id) }; const a = agents.get(id); if (!a) return; const [x, y] = anchorFor(a); focusRect(x - 44, y - 24, 88, 70); }
+  function fit() { refocus = null; cam.tz = 1; cam.tx = 0; cam.ty = 0; clampCam(cam); }
   function applyCam(force) {
     const dz = cam.tz - cam.z, dx = cam.tx - cam.x, dy = cam.ty - cam.y;
     if (!force && Math.abs(dz) < 0.001 && Math.abs(dx) < 0.3 && Math.abs(dy) < 0.3) {
@@ -797,6 +813,7 @@ export function createOffice(stage, handlers) {
   stage.querySelectorAll("[data-cam]").forEach(b => b.addEventListener("click", (e) => {
     e.stopPropagation();
     const { sw, sh } = sizes();
+    if (b.dataset.cam === "legend") { if (handlers.onLegend) handlers.onLegend(b); return; }
     if (b.dataset.cam === "in") zoomAt(cam.tz * 1.4, sw / 2, sh / 2);
     else if (b.dataset.cam === "out") zoomAt(cam.tz / 1.4, sw / 2, sh / 2);
     else fit();
@@ -828,7 +845,9 @@ export function createOffice(stage, handlers) {
     world.style.width = W * F + "px"; world.style.height = H * F + "px";
     if (!fill) stage.style.height = H * F + "px";
     world.style.setProperty("--f", F);
-    clampCam(cam); applyCam(true);
+    clampCam(cam);
+    if (refocus && performance.now() - refocus.at < 1500) { const r = refocus; r.run(); refocus = r; }
+    applyCam(true);
     reres(true);
     ovKey = ""; renderOverlay();
   }

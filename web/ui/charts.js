@@ -80,7 +80,7 @@ export function bindSparks(root) {
 }
 
 // The timeline: one block per seat, one row per session, segments coloured by state.
-export function timeline(hist, snap, width, hours, nameOf = (s) => s.label) {
+export function timeline(hist, snap, width, hours, nameOf = (s) => s.label, words = (t) => t) {
   const labelW = 170, padR = 14, rowH = 18, headH = 28, gapH = 10;
   const now = hist.now || snap.now;
   const t0 = now - hours * 3600, t1 = now + Math.max(1800, hours * 3600 * 0.18);
@@ -128,7 +128,7 @@ export function timeline(hist, snap, width, hours, nameOf = (s) => s.label) {
     }
     for (const m of marks.filter(m => m.seat === seat.id)) {
       const mx = x(m.ts), col = m.level === "good" ? "var(--good)" : m.level === "bad" ? "var(--bad)" : m.level === "warn" ? "var(--warn)" : "var(--info)";
-      svg += `<path class="mk" data-tip="${esc(esc(clock(m.ts) + " · " + m.text))}" d="M${mx} ${yy + 3} l4 4 l-4 4 l-4 -4 Z" fill="${col}" stroke="var(--surface)" stroke-width="1"/>`;
+      svg += `<path class="mk" data-tip="${esc(esc(clock(m.ts) + " · " + words(m.text)))}" d="M${mx} ${yy + 3} l4 4 l-4 4 l-4 -4 Z" fill="${col}" stroke="var(--surface)" stroke-width="1"/>`;
     }
     yy += headH + 3;
     for (const s of shown) {

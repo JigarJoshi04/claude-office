@@ -6,30 +6,62 @@ const r = S.rect;
 export const BACK = 40;                         // height of a room's back wall
 export const DOOR_W = 24;
 
-// Floor, walls, a back-wall accent in the seat colour, and a door in the front wall.
-export function drawRoomShell(c, room, color) {
+// Each personality gets its own floor; the seat's colour shows in the wall band, the door mat and the rug under the desk.
+const FLOORS = {
+  "The Orchestrator"(c, x, y, w, h) {                               // carpet tiles
+    for (let yy = 0; yy < h; yy += 10) for (let xx = 0; xx < w; xx += 10) r(c, x + xx, y + yy, 10, 10, ((xx + yy) / 10) % 2 ? "#3f4a6e" : "#3a4467");
+    for (let yy = 0; yy < h; yy += 10) r(c, x, y + yy, w, 1, "#35405f");
+  },
+  "The Builder"(c, x, y, w, h) {                                    // light oak planks
+    for (let yy = 0; yy < h; yy += 6) {
+      const row = (yy / 6) | 0;
+      r(c, x, y + yy, w, 6, row % 2 ? "#a77c52" : "#9f754c"); r(c, x, y + yy, w, 1, "#b48a5e");
+      for (let xx = (row % 3) * 22; xx < w; xx += 64) r(c, x + xx, y + yy, 1, 6, "#87613d");
+    }
+  },
+  "The Investigator"(c, x, y, w, h) {                               // library-green carpet with a diamond weave
+    r(c, x, y, w, h, "#2f4d3c");
+    for (let yy = 4; yy < h; yy += 8) for (let xx = ((yy / 8) | 0) % 2 * 4; xx < w; xx += 8) r(c, x + xx, y + yy, 1, 1, "#3b5e4a");
+  },
+  "The Perfectionist"(c, x, y, w, h) {                              // clean pale tiles on a strict grid
+    r(c, x, y, w, h, "#b9bfcd");
+    for (let yy = 0; yy < h; yy += 12) r(c, x, y + yy, w, 1, "#a6adbe");
+    for (let xx = 0; xx < w; xx += 12) r(c, x + xx, y, 1, h, "#a6adbe");
+  },
+  "The Night Owl"(c, x, y, w, h) {                                  // a deep navy carpet with tiny stars
+    r(c, x, y, w, h, "#262d52");
+    for (let i = 0; i < w * h / 160; i++) r(c, x + S.hashOf("nx" + i) % w, y + S.hashOf("ny" + i) % h, 1, 1, i % 5 ? "#323a66" : "#59609a");
+  },
+  "The Speedrunner"(c, x, y, w, h) {                                // a chequered floor with a racing stripe
+    for (let yy = 0; yy < h; yy += 8) for (let xx = 0; xx < w; xx += 8) r(c, x + xx, y + yy, 8, 8, ((xx + yy) / 8) % 2 ? "#3a3f50" : "#2f3443");
+    r(c, x + w - 22, y, 6, h, "#b93a3a"); r(c, x + w - 14, y, 3, h, "#e8e4da");
+  },
+  "The Contractor"(c, x, y, w, h) {                                 // warm parquet
+    for (let yy = 0; yy < h; yy += 8) for (let xx = 0; xx < w; xx += 16) {
+      const alt = ((xx / 16) + (yy / 8)) % 2;
+      r(c, x + xx, y + yy, 16, 8, alt ? "#8d6343" : "#7f583a");
+      if (alt) r(c, x + xx, y + yy + 4, 16, 1, "#74502f"); else r(c, x + xx + 8, y + yy, 1, 8, "#74502f");
+    }
+  },
+};
+
+// Floor, walls, a back-wall band in the seat colour, and a door in the front wall.
+export function drawRoomShell(c, room, color, arch) {
   const { x, y, w, h } = room;
-  // floor: soft carpet tiles tinted with the seat colour
-  for (let yy = y + BACK; yy < y + h - 4; yy += 6) {
-    const odd = ((yy - y) / 6 | 0) % 2;
-    r(c, x, yy, w, 6, odd ? "#3a3448" : "#37314a");
-  }
-  c.globalAlpha = 0.16; r(c, x, y + BACK, w, h - BACK - 4, color); c.globalAlpha = 1;
-  // a rug under the desks
-  c.globalAlpha = 0.22; r(c, x + 34, y + BACK + 18 + (room.dy || 0), w - 68, 74, S.shade(color, 0.7)); c.globalAlpha = 1;
-  // back wall
-  r(c, x, y, w, BACK, "#2c3150");
-  for (let xx = x + 6; xx < x + w; xx += 24) r(c, xx, y + 4, 1, BACK - 12, "#323858");
-  r(c, x, y, w, 3, S.shade(color, 0.85));                       // the room's colour along the top
-  r(c, x, y + BACK - 8, w, 8, "#232741"); r(c, x, y + BACK - 9, w, 1, "#4d5480");
-  r(c, x, y + BACK, w, 2, "rgba(0,0,0,0.25)");
+  (FLOORS[arch] || FLOORS["The Orchestrator"])(c, x, y + BACK, w, h - BACK - 4);
+  // back wall: a soft two-tone wall with a picture rail
+  r(c, x, y, w, BACK, "#3a4169");
+  for (let xx = x + 6; xx < x + w; xx += 24) r(c, xx, y + 5, 1, BACK - 14, "#424a76");
+  r(c, x, y, w, 4, S.shade(color, 0.9)); r(c, x, y + 4, w, 1, S.shade(color, 0.6));     // the room's colour along the top
+  r(c, x, y + BACK - 9, w, 9, "#2a2f50"); r(c, x, y + BACK - 10, w, 1, "#5a6396");
+  r(c, x, y + BACK, w, 2, "rgba(0,0,0,0.22)");
   // side walls
   r(c, x, y, 2, h, "#1b1e31"); r(c, x + w - 2, y, 2, h, "#1b1e31");
   // front wall with a door in the middle
   const dx = x + (w - DOOR_W) / 2;
   r(c, x, y + h - 4, dx - x, 4, "#1b1e31"); r(c, dx + DOOR_W, y + h - 4, x + w - dx - DOOR_W, 4, "#1b1e31");
-  r(c, dx - 2, y + h - 6, 2, 6, "#4d5480"); r(c, dx + DOOR_W, y + h - 6, 2, 6, "#4d5480");
-  r(c, dx, y + h - 4, DOOR_W, 4, S.shade(color, 0.55));           // door mat
+  r(c, dx - 2, y + h - 6, 2, 6, "#6b74a8"); r(c, dx + DOOR_W, y + h - 6, 2, 6, "#6b74a8");
+  r(c, dx, y + h - 4, DOOR_W, 4, S.shade(color, 0.7)); r(c, dx + 2, y + h - 3, DOOR_W - 4, 1, S.shade(color, 1.1));   // door mat
 }
 
 export function windowRect(room) { return { x: room.x + room.w - 62, y: room.y + 8, w: 46, h: 22 }; }
@@ -119,8 +151,48 @@ const STATIC = {
   },
 };
 
+// A furniture corner on the right of each room (x + w - 34 … x + w - 6, from y + 48 down), so no room is a bare floor.
+const CORNER = {
+  "The Orchestrator"(c, x, y) {                                     // a shelf of binders and a sticky-note column
+    S.drawBookshelf(c, x, y + 4, 26);
+    for (let i = 0; i < 4; i++) r(c, x + 4 + (i % 2) * 10, y + 38 + ((i / 2) | 0) * 9, 8, 7, ["#ffe066", "#8fd3ff", "#ffb3c7", "#b8f5c9"][i]);
+  },
+  "The Builder"(c, x, y) {                                          // a 3D printer on a stand, mid-print
+    r(c, x + 1, y + 30, 24, 3, "#5a4030"); r(c, x + 3, y + 33, 2, 14, "#4a3020"); r(c, x + 21, y + 33, 2, 14, "#4a3020");
+    r(c, x + 2, y + 4, 22, 26, "#2a2d38"); r(c, x + 4, y + 6, 18, 20, "#14161e"); r(c, x + 4, y + 6, 18, 1, "#3d4459");
+    r(c, x + 8, y + 20, 10, 5, "#ff8f3d"); r(c, x + 9, y + 18, 8, 2, "#ffb36b"); r(c, x + 12, y + 9, 2, 8, "#9aa3b5");
+    r(c, x + 23, y + 8, 3, 6, "#3fb68b");
+  },
+  "The Investigator"(c, x, y) {                                     // a leather armchair under a floor lamp
+    r(c, x + 21, y + 2, 1, 34, "#39404f"); r(c, x + 16, y, 10, 4, "#2f6f3f"); r(c, x + 17, y + 4, 8, 1, "#ffe8a3");
+    r(c, x + 1, y + 26, 22, 18, "#6b3b2a"); r(c, x + 3, y + 22, 18, 8, "#7d4632"); r(c, x + 1, y + 30, 4, 12, "#5a3022"); r(c, x + 19, y + 30, 4, 12, "#5a3022");
+    r(c, x + 4, y + 23, 16, 1, "#94573f"); r(c, x + 6, y + 44, 12, 2, "rgba(0,0,0,0.25)");
+  },
+  "The Perfectionist"(c, x, y) {                                    // a raked sand garden with three stones
+    r(c, x, y + 20, 26, 22, "#8a8f9e"); r(c, x + 1, y + 21, 24, 20, "#e6dcc3");
+    for (let i = 0; i < 5; i++) r(c, x + 3, y + 24 + i * 4, 20, 1, "#d2c6a8");
+    r(c, x + 6, y + 27, 5, 4, "#6b7080"); r(c, x + 15, y + 32, 6, 5, "#7d8292"); r(c, x + 12, y + 24, 3, 3, "#5a5f6e");
+  },
+  "The Night Owl"(c, x, y) {                                        // a bean bag and a lava lamp
+    S.drawBeanBag(c, x + 2, y + 30, "#6a4fc4");
+    r(c, x + 20, y + 14, 4, 2, "#9aa3b5"); r(c, x + 19, y + 16, 6, 14, "#2a2440"); r(c, x + 20, y + 17, 4, 12, "#ff5fa2");
+    r(c, x + 21, y + 19, 2, 3, "#ffd0e4"); r(c, x + 21, y + 25, 2, 2, "#ffd0e4"); r(c, x + 19, y + 30, 6, 3, "#9aa3b5");
+  },
+  "The Speedrunner"(c, x, y) {                                      // a treadmill desk's walking belt
+    r(c, x, y + 30, 26, 10, "#2a2d38"); r(c, x + 2, y + 32, 22, 6, "#3d4459");
+    for (let i = 0; i < 5; i++) r(c, x + 4 + i * 4, y + 34, 2, 2, "#4f5873");
+    r(c, x + 21, y + 10, 2, 22, "#9aa3b5"); r(c, x + 16, y + 9, 10, 3, "#c4cad6"); r(c, x + 18, y + 6, 6, 3, "#38e07b");
+  },
+  "The Contractor"(c, x, y) {                                       // a coat rack and an umbrella stand
+    r(c, x + 10, y + 2, 2, 40, "#5a4030"); r(c, x + 6, y + 41, 10, 2, "#5a4030"); r(c, x + 5, y + 4, 12, 2, "#5a4030");
+    r(c, x + 3, y + 6, 8, 16, "#3d4f6e"); r(c, x + 4, y + 6, 6, 2, "#4f6389");                                   // a coat
+    r(c, x + 18, y + 30, 7, 12, "#4a5070"); r(c, x + 19, y + 22, 1, 9, "#c94f4f"); r(c, x + 22, y + 24, 1, 7, "#2b3045");
+  },
+};
+
 export function drawDecorStatic(c, room, arch) {
   (STATIC[arch] || STATIC["The Orchestrator"])(c, room.x, room.y);
+  (CORNER[arch] || CORNER["The Orchestrator"])(c, room.x + room.w - 34, room.y + 48);
   S.drawPlant(c, room.x + room.w - 24, room.y + room.h - 46, (room.x + room.y) % 3);
 }
 

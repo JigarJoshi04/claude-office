@@ -11,7 +11,7 @@ export function renderTimeline(el, app) {
   el.innerHTML = `<div class="view-card">
     <div class="view-head"><div class="grow"><h3>Timeline</h3><p>Every session on every seat, with plan resets coming up on the right.</p></div>
       <div class="seg-ctl">${[1, 3, 6, 12, 24].map(h => `<button data-h="${h}" class="${h === hours ? "on" : ""}">${h} h</button>`).join("")}</div></div>
-    ${hist ? (hist.unavailable ? `<div class="muted" style="padding:20px">The timeline needs the history store on the server. Restart the office after updating.</div>` : timeline(hist, app.snap(), width, hours, (s) => personaFor(s, app.snap().seats.indexOf(s)).name))
+    ${hist ? (hist.unavailable ? `<div class="muted" style="padding:20px">The timeline needs the history store on the server. Restart the office after updating.</div>` : timeline(hist, app.snap(), width, hours, (s) => personaFor(s, app.snap().seats.indexOf(s)).name, app.humanise))
       : `<div class="skeleton"></div><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:60%"></div>`}
     <div class="tl-legend"><span><i class="k working"></i>Working</span><span><i class="k waiting"></i>Waiting on a tool</span><span><i class="k idle"></i>Idle</span><span><i class="k limited"></i>Out of plan</span><span><i class="k stuck"></i>Quiet</span>
       <span>◆ News</span><span style="color:var(--info)">┆ Plan resets</span><span style="color:var(--bad)">✕ Runs out at this pace</span><span>✓ Reported</span></div>

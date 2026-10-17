@@ -190,19 +190,19 @@ export function drawChairBack(ctx, x, y) {      // chair seen from behind
   rect(ctx, x + 2, y + 11, 1, 1, "#1a1d29"); rect(ctx, x + 9, y + 11, 1, 1, "#1a1d29");
 }
 
-export function drawDeskIsland(ctx, x, y, w, h) {
+export function drawDeskIsland(ctx, x, y, w, h, seam = true) {
   rect(ctx, x + 2, y + h, w - 4, 4, P.shadow);
   rect(ctx, x, y, w, h, P.deskTop);
   rect(ctx, x + 1, y, w - 2, 1, P.deskTopHi);
-  rect(ctx, x, y + Math.floor(h / 2), w, 1, P.deskEdge);
+  if (seam) rect(ctx, x, y + Math.floor(h / 2), w, 1, P.deskEdge);
   rect(ctx, x, y + h - 3, w, 3, P.deskEdge);
   rect(ctx, x, y + h - 1, w, 1, P.deskDark);
   rect(ctx, x + 2, y + h, 2, 3, P.deskDark); rect(ctx, x + w - 4, y + h, 2, 3, P.deskDark);
 }
 
-export function drawMonitorBack(ctx, x, y) {
-  rect(ctx, x, y, 16, 10, P.monEdge); rect(ctx, x + 1, y + 1, 14, 8, P.mon); rect(ctx, x + 1, y + 1, 14, 1, P.monHi);
-  rect(ctx, x + 7, y + 10, 2, 2, P.monEdge);
+export function drawMonitorBack(ctx, x, y) {   // the back of a light aluminium screen
+  rect(ctx, x, y, 16, 10, "#8f97ab"); rect(ctx, x + 1, y + 1, 14, 8, "#c3c9d6"); rect(ctx, x + 1, y + 1, 14, 1, "#dfe3eb");
+  rect(ctx, x + 7, y + 4, 2, 2, "#a9b0c0"); rect(ctx, x + 7, y + 10, 2, 2, "#8f97ab");
 }
 
 // What the screen shows tells you what the agent is doing.
@@ -470,30 +470,42 @@ export function drawFrame(ctx, x, y, w, h, gold) {
 
 // Desk upgrades earned by levelling up: a mug (3), a plant (6), a gold cup (10), a glowing desk edge (15), a pennant (20)
 // and a gold trim (30). px/py are the pod's top-left; everything sits in the free band between the two monitor rows.
-export function drawDeskPerks(ctx, px, py, level, color, t) {
+// Desk upgrades that come with levels, placed on whatever desk the room has right now ({x, y, w, h, gaps}).
+export function drawDeskPerks(ctx, d, level, color, t) {
+  const right = d.x + d.w, bottom = d.y + d.h;
   if (level >= 15) {
     ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t / 700);
-    rect(ctx, px + 10, py + 67, 108, 2, color);
-    ctx.globalAlpha = 0.35; rect(ctx, px + 10, py + 69, 108, 2, color);
+    rect(ctx, d.x, bottom - 3, d.w, 2, color);
+    ctx.globalAlpha = 0.35; rect(ctx, d.x, bottom - 1, d.w, 2, color);
     ctx.globalAlpha = 1;
   }
-  if (level >= 30) { rect(ctx, px + 11, py + 38, 106, 1, "#ffd24a"); rect(ctx, px + 10, py + 39, 1, 28, "#c9a227"); rect(ctx, px + 117, py + 39, 1, 28, "#c9a227"); }
-  if (level >= 3) drawMug(ctx, px + 114, py + 46, t, false, color);
+  if (level >= 30) { rect(ctx, d.x + 1, d.y, d.w - 2, 1, "#ffd24a"); rect(ctx, d.x, d.y + 1, 1, d.h - 3, "#c9a227"); rect(ctx, right - 1, d.y + 1, 1, d.h - 3, "#c9a227"); }
+  if (level >= 3) drawMug(ctx, right - 6, d.y + 7, t, false, color);
   if (level >= 6) {                         // a little succulent
-    rect(ctx, px + 82, py + 47, 5, 3, "#a0522d"); rect(ctx, px + 82, py + 47, 5, 1, "#c06a3a");
-    rect(ctx, px + 83, py + 45, 1, 2, "#3fb68b"); rect(ctx, px + 85, py + 44, 1, 3, "#3fb68b"); rect(ctx, px + 84, py + 45, 1, 1, "#56d39c");
+    const x = d.gaps.length > 1 ? d.gaps[1] - 2 : d.x + 4, y = d.y + 9;
+    rect(ctx, x, y, 5, 3, "#a0522d"); rect(ctx, x, y, 5, 1, "#c06a3a");
+    rect(ctx, x + 1, y - 2, 1, 2, "#3fb68b"); rect(ctx, x + 3, y - 3, 1, 3, "#3fb68b"); rect(ctx, x + 2, y - 2, 1, 1, "#56d39c");
   }
   if (level >= 10) {                        // a gold cup
-    rect(ctx, px + 41, py + 43, 5, 1, "#fff0a8"); rect(ctx, px + 41, py + 44, 5, 2, "#ffd24a");
-    rect(ctx, px + 40, py + 44, 1, 1, "#e0a92a"); rect(ctx, px + 46, py + 44, 1, 1, "#e0a92a");
-    rect(ctx, px + 42, py + 46, 3, 1, "#e0a92a"); rect(ctx, px + 43, py + 47, 1, 2, "#b8841c"); rect(ctx, px + 42, py + 49, 3, 1, "#8a6a1c");
-    if (Math.floor(t / 300) % 9 === 0) rect(ctx, px + 44, py + 42, 1, 1, "#ffffff");
+    const x = (d.gaps.length ? d.gaps[0] : d.x + 10) - 3, y = d.y + 5;
+    rect(ctx, x + 1, y, 5, 1, "#fff0a8"); rect(ctx, x + 1, y + 1, 5, 2, "#ffd24a");
+    rect(ctx, x, y + 1, 1, 1, "#e0a92a"); rect(ctx, x + 6, y + 1, 1, 1, "#e0a92a");
+    rect(ctx, x + 2, y + 3, 3, 1, "#e0a92a"); rect(ctx, x + 3, y + 4, 1, 2, "#b8841c"); rect(ctx, x + 2, y + 6, 3, 1, "#8a6a1c");
+    if (Math.floor(t / 300) % 9 === 0) rect(ctx, x + 4, y - 1, 1, 1, "#ffffff");
   }
   if (level >= 20) {                        // a pennant in the seat's colour
-    rect(ctx, px + 120, py + 36, 1, 12, "#d7d2c4");
+    rect(ctx, right + 2, d.y - 2, 1, 12, "#d7d2c4");
     const wave = Math.floor(t / 400) % 2;
-    rect(ctx, px + 121, py + 36, 5, 2, color); rect(ctx, px + 121, py + 38, 3 + wave, 1, color); rect(ctx, px + 121, py + 39, 1 + wave, 1, color);
+    rect(ctx, right + 3, d.y - 2, 5, 2, color); rect(ctx, right + 3, d.y, 3 + wave, 1, color); rect(ctx, right + 3, d.y + 1, 1 + wave, 1, color);
   }
+}
+
+// A rug in the seat's colour under the desk: a border, a lighter field and a woven stripe.
+export function drawRug(ctx, x, y, w, h, color) {
+  ctx.globalAlpha = 0.55; rect(ctx, x, y, w, h, shade(color, 0.55));
+  ctx.globalAlpha = 0.42; rect(ctx, x + 3, y + 3, w - 6, h - 6, shade(color, 0.85));
+  ctx.globalAlpha = 0.3; rect(ctx, x + 6, y + 6, w - 12, 1, shade(color, 1.3)); rect(ctx, x + 6, y + h - 7, w - 12, 1, shade(color, 1.3));
+  ctx.globalAlpha = 1;
 }
 
 // A glass trophy cabinet with two shelves of cups, one per unlocked achievement (newest last).

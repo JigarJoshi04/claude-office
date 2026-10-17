@@ -34,12 +34,13 @@ export function computeLayout(seats, archetypeOf = () => null, plan = {}) {
   const cells = seats.length + 1;              // + the lounge
   const rows = Math.max(2, Math.ceil(cells / cols));
   const H = rows * (roomH + CORR);
-  const dy = Math.round((roomH - ROOM_H) * 0.4);   // in a taller room the desks sit a little lower, under more wall
+  const dy = Math.round((roomH - ROOM_H) / 2);     // in a taller room the desks sit in the middle of the floor
   const cell = (i) => ({ x: LOBBY_W + 2 + (i % cols) * ROOM_W, y: Math.floor(i / cols) * (roomH + CORR), w: ROOM_W, h: roomH, dy, row: Math.floor(i / cols), col: i % cols });
   const pods = seats.map((s, i) => {
     const room = cell(i);
     // the desk island sits in the middle of the room, under the back wall
-    return { seat: s, arch: archetypeOf(s), room, x: room.x + (ROOM_W - POD_W) / 2, y: room.y + BACK - 12 + dy, row: room.row, col: room.col,
+    const y = room.y + BACK - 12 + dy;           // a one-row desk drops a little lower (office.js assign) to stay centred
+    return { seat: s, arch: archetypeOf(s), room, x: room.x + (ROOM_W - POD_W) / 2, y, baseY: y, cap: 6, row: room.row, col: room.col,
       door: { x: room.x + ROOM_W / 2, y: room.y + roomH }, corr: room.y + roomH + 1 };
   });
   const spare = [];
@@ -57,11 +58,32 @@ export function computeLayout(seats, archetypeOf = () => null, plan = {}) {
   };
 }
 
+// A desk sized to the people at it: 1, 2, 3, 4 or 6 seats (x inside the pod, top row first). A room never shows rows
+// of empty chairs; an empty room keeps a two-seat desk.
+const SEATS = {
+  1: [[59, true]],
+  2: [[39, true], [79, true]],
+  3: [[19, true], [59, true], [99, true]],
+  4: [[39, true], [79, true], [39, false], [79, false]],
+  6: [[19, true], [59, true], [99, true], [19, false], [59, false], [99, false]],
+};
+export const capFor = (n) => n <= 0 ? 2 : n <= 1 ? 1 : n <= 2 ? 2 : n <= 3 ? 3 : n <= 4 ? 4 : 6;
+export const seatsOf = (pod) => SEATS[pod.cap || 6];
+
 // Where a worker sits (relative to the desk island).
 export function seatSpot(pod, slot) {
-  const col = slot % 3, top = slot < 3;
-  const cx = pod.x + SLOT_X[col];
+  const lay = seatsOf(pod), [dx, top] = lay[Math.min(slot, lay.length - 1)];
+  const cx = pod.x + dx;
   return { cx, top, seatY: top ? pod.y + 22 : pod.y + 64, standY: top ? pod.y + 4 : pod.y + 82 };
+}
+
+// The desk under a pod's seats: one row (people face us) or two (back to back).
+export function deskFor(pod) {
+  const lay = seatsOf(pod), xs = lay.map(([dx]) => dx), two = lay.some(([, top]) => !top);
+  let x0 = Math.min(...xs) - 9, x1 = Math.max(...xs) + 19;
+  if (x1 - x0 < 46) { const c = (x0 + x1) / 2; x0 = c - 23; x1 = c + 23; }
+  return { x: pod.x + x0, y: pod.y + 38, w: x1 - x0, h: two ? 32 : 18, two,
+    gaps: xs.slice(1).map((x, i) => pod.x + (xs[i] + 10 + x) / 2) };   // spaces between neighbours, for desk things
 }
 
 // Elevator → lobby walkway → spine → the room's corridor → its door → an aisle → the seat (walker top-left coords).
@@ -84,10 +106,11 @@ export function drawStatic(c, L) {
   const H = L.H, W = L.W;
   // the building: dark gaps between rooms read as corridors
   S.rect(c, 0, 0, W, H, "#1a1c2b");
-  // corridors: a runner along each row
+  // corridors: a warm floor with a burgundy runner and a gold stitch, lit from above at each door
   for (const cy of L.corridors) {
-    S.rect(c, LOBBY_W, cy - 1, W - LOBBY_W, CORR, "#4a3f5c"); S.rect(c, LOBBY_W, cy - 1, W - LOBBY_W, 1, "#5c4f72");
-    for (let x = LOBBY_W + 6; x < W - 6; x += 14) S.rect(c, x, cy + 6, 7, 1, "#3d3450");
+    S.rect(c, LOBBY_W, cy - 1, W - LOBBY_W, CORR, "#47425c"); S.rect(c, LOBBY_W, cy - 1, W - LOBBY_W, 1, "#615b7d"); S.rect(c, LOBBY_W, cy + CORR - 2, W - LOBBY_W, 1, "#2f2b40");
+    S.rect(c, LOBBY_W, cy + 3, W - LOBBY_W, 8, "#6b3a4d"); S.rect(c, LOBBY_W, cy + 3, W - LOBBY_W, 1, "#7d4a5e");
+    for (let x = LOBBY_W + 3; x < W - 3; x += 6) { S.rect(c, x, cy + 4, 2, 1, "#b8913f"); S.rect(c, x + 3, cy + 9, 2, 1, "#b8913f"); }
   }
   // lobby: warm planks, a back wall with the brand, the elevator and the trophy cabinet
   for (let y = WALL; y < H; y += 6) {
@@ -120,9 +143,8 @@ export function drawStatic(c, L) {
   if (wy < H) S.rect(c, LOBBY_W - 2, wy, 2, H - wy, "#141722");
   // character rooms
   for (const p of L.pods) {
-    drawRoomShell(c, p.room, p.seat.color);
+    drawRoomShell(c, p.room, p.seat.color, p.arch);
     drawDecorStatic(c, p.room, p.arch);
-    S.drawDeskIsland(c, p.x + 10, p.y + 38, POD_W - 20, 32);
   }
   // the lounge, the meeting room and any open space
   if (L.lounge) drawCommonRoom(c, L.lounge, "#2f5658", "#2a4d4f");

@@ -6,7 +6,7 @@ import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
-import { pulse, line, reaction } from "./ui/personas.js";
+import { pulse, line, reaction, voice, binding, leftOf } from "./ui/personas.js";
 import { goals } from "./ui/goals.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
@@ -44,7 +44,7 @@ setInterval(markSeen, 30000);
 const app = {
   demo: DEMO,
   away: () => away,
-  dismissAway: () => { away = null; renderPanel(true); },
+  dismissAway: () => { away = null; renderPanel(true); $("panel").focus({ preventScroll: true }); },
   broadcast: () => broadcast(),
   snap: () => snap,
   prefs: () => prefs,
@@ -80,10 +80,11 @@ const app = {
   chatJustOpened: (id) => { if (opened.has(id)) return false; opened.add(id); return true; },
 };
 const panels = makePanels(app);
+app.humanise = (t) => panels.humanise(t);   // news in plain words, character names for seat ids (views use it too)
 const office = createOffice($("stage"), {
   openCEO: () => go({ kind: "ceo" }),
-  openSeat: (seat) => go({ kind: "seat", seat }),
-  openSession: (seat, id) => go({ kind: "session", seat, id }),
+  openSeat: (seat) => go({ kind: "seat", seat }, false, { floor: true }),
+  openSession: (seat, id) => go({ kind: "session", seat, id }, false, { floor: true }),
   openServices: () => go({ kind: "services" }),
   openProgrammes: () => go({ kind: "programmes" }),
   openLounge: () => go({ kind: "lounge" }),
@@ -93,7 +94,9 @@ const office = createOffice($("stage"), {
   openTrophies: () => go({ kind: "trophies" }),
   openStats: () => setView("stats"),
   onCat: () => sound.play("arrive"),
-  onDouble: () => clearTimeout(panelScroll),
+  onDouble: () => { clearTimeout(panelScroll); clearTimeout(revealT); },
+  onPeek: (id, r) => peekCard(id, r),
+  onLegend: (btn) => legend(btn),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
@@ -161,6 +164,7 @@ function applyPanel() {
   b.setAttribute("aria-label", prefs.panel ? "Hide the inspector" : "Show the inspector");
 }
 $("btnPanel").addEventListener("click", () => setPref("panel", !prefs.panel));
+const shell = () => matchMedia("(min-width: 1241px) and (min-height: 640px)").matches;   // the full-height layout (app.css)
 applyPanel();
 
 // A first-visit hint on the floor itself, gone after the first click there.
@@ -173,6 +177,64 @@ applyPanel();
   h.querySelector("button").addEventListener("click", done);
   $("stage").addEventListener("pointerdown", done, { once: true });
 })();
+
+// ------------------------------------------------------------------------------------------------ floor cards
+// Room peek: hover a room for a moment and a card says who it is, how they feel, how much plan is left and who is at
+// the desk doing what. It never takes focus or clicks (the room under it still opens the character).
+const peekEl = document.createElement("div");
+peekEl.className = "peek"; peekEl.hidden = true; peekEl.setAttribute("aria-hidden", "true");
+document.body.appendChild(peekEl);
+function peekCard(id, r) {
+  const s = id && snap && snap.seats.find(x => x.id === id);
+  if (!s || !r) { peekEl.hidden = true; return; }
+  const p = panels.persona(s), v = voice(s, p, dayTime), people = live(s);
+  const plan = (key, label) => { const left = leftOf(s, key); return left == null ? "" :
+    `<div class="pk-plan"><span>${label}</span><span class="pk-bar ${left < 15 ? "low" : left < 35 ? "mid" : ""}"><i style="width:${Math.round(left)}%"></i></span><b>${Math.round(left)}%</b></div>`; };
+  const STATE = { working: "working", waiting: "on a long tool", idle: "idle", limited: "out of plan", stuck: "quiet a while" };
+  const row = (x) => `<div class="pk-row"><i class="sdot ${x.state}"></i><b>${esc(x.name.replace(/^wt-/, ""))}</b><span>${esc(prefs.privacy && x.kind === "desk" ? STATE[x.state] || x.state : x.activity || STATE[x.state] || x.state)}</span></div>`;
+  peekEl.style.setProperty("--seat", s.color);
+  peekEl.innerHTML = `<div class="pk-top"><span class="av"><i data-portrait="mascot-${esc(s.id)}|${esc(s.color)}|${s.status === "offline" ? "dim" : ""}"></i></span>
+      <div class="grow"><b class="pk-name">${esc(p.name)}${s.career ? `<em>Lv ${s.career.level}</em>` : ""}</b><span class="pk-role">${esc(p.role)}</span></div>
+      <span class="pk-word ${v.tone}"><i></i>${esc(v.word)}</span></div>
+    <p class="pk-voice">“${esc(v.line)}”</p>
+    ${plan("five_hour", "5 hours")}${plan("weekly", "This week")}
+    ${people.length ? `<div class="pk-h">At the desk · ${people.length}</div>${people.slice(0, 4).map(row).join("")}${people.length > 4 ? `<div class="pk-more">+${people.length - 4} more</div>` : ""}` : `<div class="pk-h">Nobody at the desk</div>`}
+    <div class="pk-foot">Click to open · double-click to zoom in</div>`;
+  hydratePortraits(peekEl, 3);
+  peekEl.hidden = false;
+  const w = peekEl.offsetWidth, h = peekEl.offsetHeight, gap = 10;
+  let left = r.right + gap; if (left + w > innerWidth - 8) left = r.left - w - gap; if (left < 8) left = Math.min(innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2));
+  const top = Math.max(70, Math.min(innerHeight - h - 10, r.top + r.height / 2 - h / 2));
+  peekEl.style.left = left + "px"; peekEl.style.top = top + "px";
+}
+addEventListener("scroll", () => { peekEl.hidden = true; }, { passive: true, capture: true });
+
+// The floor legend: what the colours, badges and little icons mean.
+function legend(btn) {
+  const old = document.querySelector(".legend");
+  if (old) { old.remove(); btn.setAttribute("aria-expanded", "false"); btn.focus(); return; }
+  const el = document.createElement("div");
+  el.className = "legend"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "What the floor shows");
+  const chip = (cls, text) => `<span class="lg-chip ${cls}">${text}</span>`;
+  el.innerHTML = `<div class="lg-h"><b>What the floor shows</b><button class="btn sm ghost icon" data-lg-close aria-label="Close">${icon("x", 15)}</button></div>
+    <div class="lg-sec">Rooms</div>
+    <div class="lg-row">${chip("good", "3 working")}<span>People at the desk are busy</span></div>
+    <div class="lg-row">${chip("warn", "Waiting for you")}<span>Sessions are open and idle: your turn</span></div>
+    <div class="lg-row">${chip("bad", "Napping")}<span>Out of plan until the reset; the room goes dim</span></div>
+    <div class="lg-row">${chip("info", "On holiday")}<span>Benched on the load divider: no new lanes</span></div>
+    <div class="lg-row"><span class="lg-badge">2</span><span>Things about this seat in Needs you</span></div>
+    <div class="lg-row"><span class="lg-bar"><i></i></span><span>Plan left (the tighter of 5 hours and this week)</span></div>
+    <div class="lg-sec">People</div>
+    <div class="lg-grid"><span>💭 Thinking</span><span>⌨ Typing (the screen shows what)</span><span>☕ Idle at the desk</span><span>? Quiet for a while</span><span>z Asleep: out of plan</span><span>🛸 A helper subagent</span></div>
+    <div class="lg-sec">Lobby</div>
+    <div class="lg-grid"><span>Elevator: office news</span><span>Cabinet: trophies</span><span>Gold frame: today's star</span><span>Screen: load divider</span><span>Green desk: hire a lane</span><span>Racks: background services</span></div>
+    <div class="lg-foot">Hover a room for a peek · double-click to zoom · drag to pan · 0 fits the office</div>`;
+  btn.closest(".floor-frame").appendChild(el);
+  btn.setAttribute("aria-expanded", "true");
+  el.querySelector("[data-lg-close]").addEventListener("click", () => legend(btn));
+  el.querySelector("[data-lg-close]").focus();
+  el.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); legend(btn); } });
+}
 
 // ------------------------------------------------------------------------------------------------ prefs
 function setPref(k, v) {
@@ -215,8 +277,11 @@ function viewFromHash() {
   return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
-function go(v, fromHash) {
-  if (!fromHash && !prefs.panel) setPref("panel", true);   // opening anything brings a hidden inspector back
+let revealT = 0;
+function go(v, fromHash, opt = {}) {
+  // Opening anything brings a hidden inspector back; from the floor it waits out a double-click (which only flies the
+  // camera), so the building does not re-plan under the second click.
+  if (!fromHash && !prefs.panel) { clearTimeout(revealT); if (opt.floor) revealT = setTimeout(() => setPref("panel", true), 420); else setPref("panel", true); }
   if (!fromHash && hashFor(v) !== (location.hash || "#")) history.pushState(null, "", hashFor(v) === "#" ? location.pathname + location.search : hashFor(v));
   view = v;
   if (v.kind === "session") { loadDetail("s:" + v.seat + "/" + v.id, true); loadChat(v.seat, v.id, true); }
@@ -306,12 +371,12 @@ function cheerGoals(st) {
     if (!days.includes(day)) store.set("goalDays", [...days, day].slice(-90));
   }
   const fresh = gl.filter(g => g.done && !goalsSeen.ids.has(g.id));
-  for (const g of fresh) {
-    goalsSeen.ids.add(g.id);
-    const all = gl.every(x => x.done);
-    if (prefs.view === "floor") office.banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : g.label, "#ffd24a");
+  if (fresh.length) {   // one celebration per refresh, however many goals finished in it
+    fresh.forEach(g => goalsSeen.ids.add(g.id));
+    const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
+    if (prefs.view === "floor") office.banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
     sound.play(all ? "levelup" : "achievement");
-    toast(all ? "All three goals done today." : `Goal done: ${g.label}.`, "good", { ic: "goal" });
+    toast(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
   }
   if (fresh.length) { store.set("goalsSeen", { day, ids: [...goalsSeen.ids] }); if (view.kind === "ceo") renderPanel(true); }
 }
@@ -441,7 +506,7 @@ function renderTop() {
   document.title = (bad ? "● " : "") + (snap.office.name || "Claude Office");
   const p = $("pulse");
   p.className = "pulse" + (bad ? " urgent" : warn ? " attn" : "");
-  const n = snap.attention.length;
+  const n = panels.needsCount();
   // The header says the one thing worth a glance; the whole story is in its tooltip and the briefing.
   const full = pulse(snap, (s) => panels.persona(s), dayTime), needs = n ? ` ${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} you.` : "";
   $("pulseText").textContent = full.split(/(?<=\.) /)[0] + needs + (DEMO ? " (Demo office.)" : "");
@@ -483,7 +548,7 @@ function renderRightNow() {
     el.querySelector("[data-go-hire]").addEventListener("click", () => go({ kind: "hire" }));
     return;
   }
-  const STATE = { working: "Working", waiting: "Waiting for you", stuck: "Stuck", limited: "Out of plan" };
+  const STATE = { working: "Working", waiting: "On a long tool", stuck: "Stuck", limited: "Out of plan" };
   el.innerHTML = rows.map(({ s, x }) => {
     const p = panels.persona(s);
     const act = prefs.privacy && x.kind === "desk" ? "Working…" : (x.activity || STATE[x.state]);
@@ -496,7 +561,12 @@ function renderRightNow() {
   }).join("");
   hydratePortraits(el, 3);
   requestAnimationFrame(() => el.classList.toggle("more", el.scrollWidth > el.clientWidth + 4 && el.scrollLeft + el.clientWidth < el.scrollWidth - 4));
-  if (!el.dataset.fade) { el.dataset.fade = "1"; el.addEventListener("scroll", () => el.classList.toggle("more", el.scrollLeft + el.clientWidth < el.scrollWidth - 4), { passive: true }); }
+  if (!el.dataset.fade) {
+    el.dataset.fade = "1";
+    const fade = () => el.classList.toggle("more", el.scrollWidth > el.clientWidth + 4 && el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    el.addEventListener("scroll", fade, { passive: true });
+    new ResizeObserver(fade).observe(el);
+  }
   el.querySelectorAll(".rn").forEach(b => {
     b.addEventListener("click", () => { go({ kind: "session", seat: b.dataset.seat, id: b.dataset.id }); office.focusSession(b.dataset.id); });
     b.addEventListener("mouseenter", () => office.spotlight(b.dataset.spot)); b.addEventListener("mouseleave", () => office.spotlight(null));
@@ -786,7 +856,7 @@ document.addEventListener("keydown", (e) => {
   // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).
   if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back, dialog[open]")) return;
   const k = e.key;
-  if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else go({ kind: "ceo" }); }
+  if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else { const back = $("panel").contains(document.activeElement); go({ kind: "ceo" }); if (back) $("panel").focus({ preventScroll: true }); } }
   else if (k === "h") go({ kind: "hire" });
   else if (k === "d") go({ kind: "divider" });
   else if (k === "f") setView("floor");
@@ -796,7 +866,7 @@ document.addEventListener("keydown", (e) => {
   else if (k === "p") setPref("privacy", !prefs.privacy);
   else if (k === ",") go({ kind: "settings" });
   else if (k === "?") shortcuts();
-  else if (k === "\\") setPref("panel", !prefs.panel);
+  else if (k === "\\") { if (shell()) { const inPanel = $("panel").contains(document.activeElement); setPref("panel", !prefs.panel); if (inPanel || !prefs.panel) $("btnPanel").focus(); } }
   else if (/^[1-9]$/.test(k) && snap && snap.seats[+k - 1]) go({ kind: "seat", seat: snap.seats[+k - 1].id });
   else if (prefs.view === "floor" && (k === "+" || k === "=")) office.zoom(1);
   else if (prefs.view === "floor" && k === "-") office.zoom(-1);

@@ -263,8 +263,8 @@ export function makePanels(app) {
       </div>
       <div class="prings">${planRing("five_hour", "5 hours")}${planRing("weekly", "This week")}</div>
       <div class="pace ${paceText.cls}">${icon(paceText.ic, 17)}<span>${esc(paceText.t)}</span>${s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}" title="Read the plan now" aria-label="Read the plan now">${icon("refresh", 14)}</button>` : ""}</div>
-      <div class="seg" role="tablist" aria-label="${esc(p.name)}">${tabs.filter(([k]) => k !== "career" || s.career).map(([k, label, ic]) => `<button role="tab" data-seat-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? "on" : ""}">${icon(ic, 15)}${label}</button>`).join("")}</div>
-      <div class="seg-body" role="tabpanel">${body}</div>`,
+      <div class="stabs" role="tablist" aria-label="${esc(p.name)}">${tabs.filter(([k]) => k !== "career" || s.career).map(([k, label, ic]) => `<button role="tab" data-seat-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? "on" : ""}">${icon(ic, 15)}${label}</button>`).join("")}</div>
+      <div class="stabs-body" role="tabpanel">${body}</div>`,
       bind(root) {
         bindSparks(root);
         const pick = (k) => { seatTab = k; store.set("seatTab", k); app.rerender(true); const t = root.querySelector(`[data-seat-tab="${k}"]`); if (t) t.focus(); };
@@ -291,7 +291,7 @@ export function makePanels(app) {
     if (!c) return "";
     const perk = PERKS.find(([lv]) => lv > c.level);
     const pct = Math.round(c.progress * 100), r = 19, len = 2 * Math.PI * r;
-    return `<div class="level">
+    return `<div class="level" style="--seat:${esc(s.color)}">
       <svg class="ring" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="${r}" class="trk"/><circle cx="24" cy="24" r="${r}" class="val" stroke-dasharray="${(len * c.progress).toFixed(1)} ${len.toFixed(1)}"/><text x="24" y="28.5">${c.level}</text></svg>
       <div class="grow"><div class="lt"><b>Level ${c.level} · ${esc(c.title)}</b><span>${c.xp.toLocaleString()} XP</span></div>
         <div class="xpbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progress to level ${c.level + 1}"><i style="width:${pct}%"></i></div>
@@ -802,6 +802,6 @@ export function makePanels(app) {
       } };
   }
 
-  return { ceo, seat, session, services, programmes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+  return { needsCount: () => needs(S()).length, ceo, seat, session, services, programmes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings" };
 }
