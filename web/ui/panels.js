@@ -3,7 +3,7 @@ import { esc, fmtTok, ago, until, clock, dur, pct, live, store, toast, debounce,
   STATE_LABEL, SEAT_LABEL } from "./util.js";
 import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
-import { personaFor, moodFor, binding, leftOf, pulse } from "./personas.js";
+import { personaFor, binding, leftOf, voice, diary } from "./personas.js";
 import { sound } from "./sound.js";
 
 const TEMPLATES = [
@@ -43,6 +43,13 @@ export function makePanels(app) {
   const pill = (text, tone = "", ic = "") => `<span class="pill ${tone}">${ic ? icon(ic, 14) : ""}${esc(text)}</span>`;
   const bar = (left, cls = "minibar") => `<div class="${cls} ${left != null && left < 15 ? "low" : left != null && left < 35 ? "mid" : ""}"><i style="width:${left == null ? 0 : left}%"></i></div>`;
   const tone = (lvl) => ({ bad: "bad", warn: "warn", good: "good" }[lvl] || "info");
+  // A ring gauge: how much plan is left, coloured by the seat (red when nearly out).
+  const ring = (left, color, size = 46, sub = "") => {
+    const r = 18, len = 2 * Math.PI * r, f = left == null ? 0 : Math.max(0, Math.min(1, left / 100));
+    const c = left != null && left < 15 ? "var(--bad)" : left != null && left < 35 ? "var(--warn)" : color;
+    return `<span class="gring" style="--ring:${c};width:${size}px;height:${size}px"><svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="${r}" class="trk"/><circle cx="22" cy="22" r="${r}" class="val" stroke-dasharray="${(len * f).toFixed(1)} ${len.toFixed(1)}"/></svg><b>${left == null ? "–" : Math.round(left)}<small>%</small></b>${sub ? `<i>${esc(sub)}</i>` : ""}</span>`;
+  };
+  const say = (s) => voice(s, P(s), dayTime);
   // Writes in the demo office do nothing, so never claim they worked.
   const result = (r, msg, lvl = "good") => toast(r && r.demo ? "Demo office: nothing was changed." : msg, r && r.demo ? "info" : lvl);
   let dragging = false;   // a divider handle is held: refreshes must not rebuild the panel under the pointer
@@ -51,7 +58,7 @@ export function makePanels(app) {
     return `<div class="act ${tone(e.level)} ${e.seat ? "click" : ""}" ${e.seat ? `data-seat="${esc(e.seat)}"` : ""}>${icon(EVENT_ICON[e.kind] || "dot", 16)}<span>${esc(humanise(e.text))}</span><span class="when">${relTime(e.ts)}</span></div>`;
   }
   function memberRow(s) {
-    const p = P(s), m = moodFor(s, dayTime), b = binding(s);
+    const p = P(s), v = say(s), m = { mood: v.word, tone: v.tone, detail: v.line }, b = binding(s);
     return `<div class="member" style="--seat:${s.color}" data-seat="${esc(s.id)}">
       ${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}
       <div class="nm">${esc(p.name)} <small>${esc(p.role)}</small></div>
@@ -86,42 +93,74 @@ export function makePanels(app) {
         ${top.map(m => `<div class="act ${tone(m.level)} ${m.seat ? "click" : ""}" ${m.seat ? `data-seat="${esc(m.seat)}"` : ""}>${icon(EVENT_ICON[m.kind] || "dot", 16)}<span>${esc(humanise(m.text))}</span><span class="when">${relTime(m.ts)}</span></div>`).join("")}`
       : `<h3>Quiet while you were away.</h3><div class="muted">No reports, limits or lanes changed.</div>`}</div>`;
   }
+  // One fix per kind of problem, so every item in Needs you has a next step.
+  function needAction(a) {
+    const st = a.seat && seatById(a.seat);
+    if (/logged out/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
+    if (a.session) return `<button class="btn sm" data-open-session="${esc(a.seat)}|${esc(a.session)}">${icon("chat", 14)}Open</button>`;
+    if (a.lane) return `<button class="btn sm" data-lane-go="${esc(a.lane)}">${icon("briefcase", 14)}Open</button>`;
+    if (a.unit) return `<button class="btn sm" data-go="services">${icon("server", 14)}Open</button>`;
+    if (a.seat) return `<button class="btn sm" data-seat-go="${esc(a.seat)}">Open</button>`;
+    return "";
+  }
+  function tile(s) {
+    const p = P(s), v = say(s), b = binding(s), c = s.career;
+    return `<button class="mate st-${v.state}" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" title="${esc(p.name)}: “${esc(v.line)}”">
+      <span class="t-top">${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}${ring(b.left, s.color, 46, b.key === "weekly" ? "week" : b.key ? "5 h" : "")}</span>
+      <span class="t-name">${esc(p.name)}${c ? `<em>Lv ${c.level}</em>` : ""}</span>
+      <span class="t-word ${v.tone}">${esc(v.word)}</span></button>`;
+  }
+  // Needs you, grouped: everything caused by one seat being out of plan becomes one line about that seat.
+  function needs(snap) {
+    const out = [], spent = new Map();
+    for (const a of snap.attention || []) {
+      const st = a.seat && seatById(a.seat);
+      const planItem = /usage at \d+%|stopped by the usage limit|runs out of its/i.test(a.text);
+      if (st && st.status === "limited" && planItem) {
+        const g = spent.get(st.id) || { level: "bad", seat: st.id, paused: 0, resets_at: null, grouped: true };
+        if (/stopped by the usage limit/i.test(a.text)) g.paused++;
+        g.resets_at = g.resets_at || a.resets_at;
+        if (!spent.has(st.id)) { spent.set(st.id, g); out.push(g); }
+        continue;
+      }
+      out.push(a);
+    }
+    for (const g of spent.values()) {
+      const st = seatById(g.seat), w = binding(st), r = g.resets_at || (w.key && st.usage[w.key] && st.usage[w.key].resets_at);
+      g.text = `${P(st).name} is out of plan${g.paused ? `: ${g.paused} session${g.paused === 1 ? "" : "s"} paused` : ""}`;
+      g.resets_at = r;
+    }
+    return out;
+  }
   function ceo() {
-    const snap = S(), name = (snap.office.ceo || {}).name || "there";
-    const h = new Date().getHours();
-    const greet = h < 5 ? "Burning the midnight oil" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-    const att = snap.attention || [];
+    const snap = S(), t = snap.totals || {};
+    const att = needs(snap);
     const shown = showAllNeeds ? att : att.slice(0, 3);
     const np = snap.next_pick, next = np.seat && seatById(np.seat);
     const welcome = !store.get("welcomed", false);
-    const ev = (snap.events || []).slice(-6).reverse();
+    const latest = (snap.events || []).slice(-1)[0];
+    const idle = Math.max(0, (t.sessions || 0) - (t.working || 0));
     return { html: `${awayHtml()}
-      ${welcome ? `<div class="welcome"><button class="btn sm ghost x" data-dismiss-welcome aria-label="Dismiss">${icon("x", 16)}</button>
-        <h3>Welcome to your office</h3><p>Every AI seat on this machine has a desk. Everyone at a desk is a real session, live.</p>
-        <ol><li>Click a person to see what they are doing, and chat with them.</li><li>Click a desk's nameplate to meet that seat's character and its plan.</li>
-        <li>Hire a lane at the front desk; the load divider picks who does it.</li>
-        <li>Real work earns XP. Characters level up, upgrade their desks and fill the trophy cabinet on the wall.</li></ol></div>` : ""}
-      <h2>${greet}, ${esc(name)}.</h2>
-      <p class="lede">${esc(pulse(snap, P, dayTime))}</p>
-      ${!snap.seats.length ? `<div class="welcome" style="margin-top:16px"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
-      ${snap.office.config_error ? `<div class="need bad" style="margin-top:14px"><span class="ico">${icon("alert", 16)}</span><div><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
-      ${section(`Needs you${att.length ? ` · ${att.length}` : ""}`, att.length ? shown.map(a => `<div class="need ${a.level}" ${a.unit && !a.seat ? `data-go="services"` : ""} ${a.seat ? `data-seat="${esc(a.seat)}"` : ""} ${a.session ? `data-id="${esc(a.session)}"` : ""} ${a.lane ? `data-lane="${esc(a.lane)}"` : ""}>
-          <span class="ico">${icon(a.level === "bad" ? "alert" : a.lane ? "briefcase" : a.resets_at ? "zap" : "clock", 16)}</span>
-          <div class="grow"><div class="t">${esc(humanise(a.text))}</div>${a.resets_at ? `<div class="d">Plan resets ${dayTime(a.resets_at)} (${inWords(a.resets_at)})</div>` : ""}</div></div>`).join("")
-        : `<div class="allclear">${icon("check", 18)}All clear. Nothing needs you right now.</div>`,
-        att.length > 3 ? `<button class="btn sm ghost" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : "")}
-      ${section("Your team", snap.seats.map(memberRow).join(""), `<span class="row" style="gap:4px"><button class="btn sm ghost" data-go="trophies">${icon("trophy", 14)}Trophies</button><button class="btn sm ghost" data-view-go="board">Team view</button></span>`)}
-      ${section("Up next", `<div class="pick ${next ? "" : "none"}"><b>${next ? `The next lane goes to ${esc(P(next).name)}.` : "No seat can take a new lane right now."}</b>
-        <div class="why">${esc(humanise(np.why))}</div>
-        <div class="row wrap" style="margin-top:12px"><button class="btn sm primary" data-go="hire">${icon("plus", 15)}Hire a lane</button><button class="btn sm" data-go="divider">${icon("sliders", 15)}Adjust the split</button><button class="btn sm" data-broadcast>${icon("send", 15)}Message all lanes</button></div></div>`)}
-      ${(snap.programmes || []).length ? section("Programmes", snap.programmes.map(progCard).join("")) : ""}
-      ${snap.lanes.length ? section("Office lanes", snap.lanes.slice(0, 4).map(laneRow).join(""), `<button class="btn sm ghost" data-go="hire">All</button>`) : ""}
-      ${section("Activity", ev.length ? ev.map(actRow).join("") : `<div class="muted">Nothing has happened yet.</div>`, `<button class="btn sm ghost" data-go="news">All news</button>`)}`,
+      ${welcome ? `<div class="hello">${icon("sparkles", 16)}<span>New here? Click anyone on the floor to see what they are doing and talk to them.</span><button class="btn sm ghost" data-dismiss-welcome>Got it</button></div>` : ""}
+      ${snap.office.config_error ? `<div class="need bad"><span class="ico">${icon("alert", 16)}</span><div class="grow"><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
+      <div class="g-status">
+        <div class="g-nums"><span><b>${t.working || 0}</b> working</span><span><b>${idle}</b> idle</span><span><b>${snap.seats.filter(s => s.status === "limited").length}</b> napping</span></div>
+        <div class="g-next">${next ? `Next lane goes to <b style="color:${esc(next.color)}">${esc(P(next).name)}</b>` : "No seat can take a new lane right now"}<button class="btn sm primary" data-go="hire">${icon("plus", 14)}Hire</button></div>
+      </div>
+      ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
+      ${att.length ? `<div class="g-needs"><div class="g-h">${icon("alert", 15)}Needs you · ${att.length}</div>${shown.map(a => `<div class="g-need ${a.level}">
+          <span class="grow"><span class="t">${esc(humanise(a.text))}</span>${a.resets_at ? `<span class="d">${a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at)} · ${inWords(a.resets_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
+          ${att.length > 3 ? `<button class="btn sm ghost" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</div>`
+        : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
+      <div class="g-h g-team">Your team<span class="grow"></span><button class="btn sm ghost" data-go="trophies">${icon("trophy", 14)}Trophies</button></div>
+      <div class="crew">${snap.seats.map(tile).join("")}</div>
+      ${latest ? `<div class="g-latest">${icon(EVENT_ICON[latest.kind] || "news", 15)}<span>${esc(humanise(latest.text))}</span><span class="when">${relTime(latest.ts)}</span><button class="btn sm ghost" data-go="news">All news</button></div>` : ""}`,
       bind(root) {
         const d = root.querySelector("[data-dismiss-welcome]"); if (d) d.addEventListener("click", () => { store.set("welcomed", true); app.rerender(true); });
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
-        const t = root.querySelector("[data-toggle-needs]"); if (t) t.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
-        const b = root.querySelector("[data-broadcast]"); if (b) b.addEventListener("click", () => app.broadcast());
+        const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
+        root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
+        root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
       } };
   }
   function progCard(p) {
@@ -134,7 +173,7 @@ export function makePanels(app) {
   function seat(v) {
     const s = seatById(v.seat);
     if (!s) return { html: crumbs("Gone") + `<div class="allclear">That seat is no longer here.</div>` };
-    const p = P(s), m = moodFor(s, dayTime), u = s.usage || {}, a = s.account || {}, h = s.health || {}, sc = s.divider || {}, fc = s.forecast || {};
+    const p = P(s), u = s.usage || {}, a = s.account || {}, h = s.health || {}, sc = s.divider || {}, fc = s.forecast || {};
     const L = live(s);
     const hist = app.historyCache(6);
     const ser = hist && hist.seats && hist.seats[s.id] ? hist.seats[s.id].series : [];
@@ -151,30 +190,34 @@ export function makePanels(app) {
       : f5.state === "paused" ? { cls: "", ic: "coffee", t: `Resting now. It was burning ${f5.per_hour}% an hour.` }
       : f5.state === "flat" ? { cls: "good", ic: "coffee", t: "Not using its plan right now." }
       : { cls: "", ic: "clock", t: "Learning the pace: a reading every few minutes." };
+    const vo = say(s), today = (app.statsCache(null) || {}).seats, dstats = today && today[s.id];
+    const planRing = (key, label) => {
+      const w = u[key], left = leftOf(s, key);
+      return `<div class="pring">${ring(left, s.color, 64)}<div><b>${label}</b><span>${left == null ? "No reading yet" : "left"}</span>
+        <small>${w && w.resets_at ? `Resets ${dayTime(w.resets_at)}` : w && w.reset_since_read ? "Reset since the last reading" : "Reset time unknown"}</small></div></div>`;
+    };
     return { html: `${crumbs(esc(p.name))}
-      <div class="persona" style="--seat:${s.color}">
-        <div class="who">${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "", "big")}
-          <div><h2>${esc(p.name)}</h2><div class="role">${esc(p.role)} · ${esc(s.label)}</div>
-          <div style="margin-top:8px">${pill(m.mood, m.tone)}</div></div></div>
-        <div class="motto">“${esc(p.motto)}”</div>
-        ${levelRow(s)}
-        <div class="traits">${p.traits.map(t => pill(t)).join("")}</div>
-        <div class="acct">${app.privacy() ? "Account hidden" : esc([a.name, a.email].filter(Boolean).join(" · "))}${h.tier ? " · " + esc(h.tier) : ""} · ${esc(h.detail || "")}</div>
+      <div class="hero st-${vo.state}" style="--seat:${esc(s.color)}">
+        <div class="h-top">${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "", "big")}
+          <div class="grow"><h2>${esc(p.name)}</h2><div class="role">${esc(p.role)}${s.career ? ` · Level ${s.career.level} ${esc(s.career.title)}` : ""}</div>
+          <span class="t-word ${vo.tone}">${esc(vo.word)}</span></div></div>
+        <blockquote class="voice">“${esc(vo.line)}”</blockquote>
       </div>
-      ${section("Plan", `<div class="plan">${meter("five_hour", "5-hour window")}${meter("weekly", "This week")}
-        <div class="pace ${paceText.cls}">${icon(paceText.ic, 18)}<span>${esc(paceText.t)}</span></div></div>`,
-        s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}">${icon("refresh", 14)}Read now</button>` : "")}
-      ${section("Last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
-        <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
-      ${section(`At the desks · ${L.length}`, L.length ? L.map(x => sessRow(s, x)).join("") : `<div class="muted">${s.status === "limited" ? "Everyone went home: the seat is out of plan." : "Nobody here right now."}</div>`)}
+      <div class="prings">${planRing("five_hour", "5 hours")}${planRing("weekly", "This week")}</div>
+      <div class="pace ${paceText.cls}">${icon(paceText.ic, 17)}<span>${esc(paceText.t)}</span>${s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}" title="Read the plan now">${icon("refresh", 14)}</button>` : ""}</div>
+      ${section(`At the desk · ${L.length}`, L.length ? L.map(x => sessRow(s, x)).join("") : `<div class="muted">${s.status === "limited" ? "Everyone went home: the seat is out of plan." : "Nobody here right now."}</div>`)}
+      ${section("Today", `<div class="diary">${icon("news", 16)}<span>${esc(diary(p, dstats))}</span></div>`)}
+      ${s.career ? section("Career", levelRow(s)) : ""}
       ${careerHtml(s)}
-      ${section("Load divider", `<div class="row between"><div class="grow"><div style="font-weight:550">${sc.enabled ? "On duty" : "On holiday (benched)"}</div>
+      ${section("Plan, last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
+        <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
+      ${section("Settings", `<div class="row between"><div class="grow"><div style="font-weight:550">${sc.enabled ? "On duty" : "On holiday"}</div>
         <div class="hint">${sc.enabled ? `Gets ${sc.weight}% of new lanes, up to ${sc.max_lanes} at once. Running ${s.lanes} now.` : "No new lanes go here."}${sc.note ? " " + esc(sc.note) : ""}</div></div>
-        <label class="switch" title="On duty"><input type="checkbox" id="seatDuty" ${sc.enabled ? "checked" : ""} aria-label="On duty"><span></span></label></div>`)}
-      ${recent.length ? section("Recently", recent.map(actRow).join("")) : ""}
-      ${section(s.kind === "claude" ? "Work on this seat yourself" : "Use this seat", s.kind === "claude"
-        ? `<div class="copy"><code>CLAUDE_CONFIG_DIR=${esc(s.config_dir)} claude</code><button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(s.config_dir)} claude">${icon("copy", 14)}Copy</button></div>`
-        : `<div class="copy"><code>gpt -w -C &lt;folder&gt; "task"</code></div>`)}
+        <label class="switch" title="On duty"><input type="checkbox" id="seatDuty" ${sc.enabled ? "checked" : ""} aria-label="On duty"><span></span></label></div>
+        ${s.kind === "claude" ? `<div class="copy" style="margin-top:12px"><code>CLAUDE_CONFIG_DIR=${esc(s.config_dir)} claude</code><button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(s.config_dir)} claude">${icon("copy", 14)}Copy</button></div>`
+          : `<div class="copy" style="margin-top:12px"><code>gpt -w -C &lt;folder&gt; "task"</code></div>`}
+        <div class="acct">${app.privacy() ? "Account hidden (share-safe)" : esc([a.name, a.email].filter(Boolean).join(" · "))}${h.tier ? " · " + esc(h.tier) : ""} · ${esc(h.detail || "")} · ${esc(s.label)}</div>`)}
+      ${recent.length ? section("Recently", recent.slice(0, 3).map(actRow).join("")) : ""}
       <div class="row" style="margin-top:18px"><button class="btn sm" data-focus-seat="${esc(s.id)}">${icon("target", 15)}Show on the floor</button></div>`,
       bind(root) {
         bindSparks(root);

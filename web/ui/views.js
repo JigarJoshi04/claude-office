@@ -2,7 +2,7 @@
 import { esc, fmtTok, live, hydratePortraits, avatar, dayTime, STATE_LABEL, clock } from "./util.js";
 import { timeline, bindTips } from "./charts.js";
 import { icon } from "./icons.js";
-import { personaFor, moodFor, leftOf } from "./personas.js";
+import { personaFor, leftOf, voice, diary } from "./personas.js";
 
 export function renderTimeline(el, app) {
   const hours = app.prefs().tlHours || 6;
@@ -24,7 +24,7 @@ export function renderTimeline(el, app) {
 export function renderBoard(el, app) {
   const snap = app.snap();
   el.innerHTML = `<div class="team">${snap.seats.map((s, i) => {
-    const p = personaFor(s, i), m = moodFor(s, dayTime), L = live(s);
+    const p = personaFor(s, i), vo = voice(s, p, dayTime), L = live(s);
     const meter = (key, label) => {
       const left = leftOf(s, key), w = (s.usage || {})[key];
       return `<div style="margin-top:10px"><div class="row between" style="font-size:13px"><span class="muted">${label}</span><b>${left == null ? "–" : Math.round(left) + "% left"}</b></div>
@@ -34,8 +34,8 @@ export function renderBoard(el, app) {
     return `<div class="tcard" style="--seat:${s.color}">
       <div class="who" data-seat="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}
         <div><h3>${esc(p.name)}</h3><div class="role">${esc(p.role)} · ${esc(s.label)}</div></div>
-        <span class="pill ${m.tone}">${esc(m.mood)}</span></div>
-      <div class="moodline">“${esc(p.motto)}”</div>
+        <span class="pill ${vo.tone}">${esc(vo.word)}</span></div>
+      <div class="moodline">“${esc(vo.line)}”</div>
       ${s.career ? `<div class="tlevel"><span class="lvchip">Lv ${s.career.level}</span><span>${esc(s.career.title)}</span><div class="xpbar"><i style="width:${Math.round(s.career.progress * 100)}%"></i></div><span class="tro">${icon("trophy", 13)}${Object.keys(s.career.unlocked).length}</span></div>` : ""}
       ${meter("five_hour", "5-hour window")}${meter("weekly", "This week")}
       <div style="margin-top:14px">${L.length ? L.map(x => `<div class="sess" data-seat="${esc(s.id)}" data-id="${esc(x.id)}">${avatar(x.id, s.color, x.kind === "desk" ? "headset" : "")}
@@ -85,6 +85,8 @@ export function renderStats(el, app) {
       </div>
     </div>
     ${(st.digest || []).length ? `<div class="view-card"><div class="section-h"><h4>The day in a few lines</h4></div><ul class="digest">${st.digest.map(x => `<li>${esc(human(x))}</li>`).join("")}</ul></div>` : ""}
+    <div class="view-card"><div class="section-h"><h4>Diaries</h4></div><div class="diaries">${rows.map(r => { const p = personaFor(r.seat, snap.seats.indexOf(r.seat));
+      return `<div class="diary-row" style="--seat:${esc(r.seat.color)}"><i data-portrait="mascot-${esc(r.id)}|${esc(r.seat.color)}|"></i><div><b>${esc(p.name)}</b><span>${esc(diary(p, r))}</span></div></div>`; }).join("")}</div></div>
     ${won.length ? `<div class="view-card"><div class="section-h"><h4>Trophies won · ${won.length}</h4><button class="btn sm ghost" data-trophies>${icon("trophy", 14)}Trophy room</button></div>
       <div class="won">${won.map(w => `<span class="wonchip" style="--seat:${esc(w.s.color)}" title="${esc(w.a.desc)}">${icon(w.a.icon, 15)}<b>${esc(nameOf(w.s.id))}</b>${esc(w.a.name)}<small>${clock(w.at)}</small></span>`).join("")}</div></div>` : ""}
     <div class="view-card"><div class="section-h"><h4>League</h4></div>

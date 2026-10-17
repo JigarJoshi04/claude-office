@@ -1,10 +1,12 @@
 // The office floor engine: a pixel canvas rendered at a whole-number scale, a DOM overlay for names, bubbles
 // and click targets, a camera you can zoom and pan, agents that walk in from the elevator, and night lighting.
 import * as S from "./engine/sprites.js";
-import { W, WALL, POD_W, POD_H, ELEVATOR, computeLayout, seatSpot, pathTo, drawStatic } from "./engine/scene.js";
+import { W, WALL, POD_W, POD_H, ROOM_W, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, seatSpot, pathTo, drawStatic } from "./engine/scene.js";
+import { windowRect, drawDecorLive } from "./engine/decor.js";
 
 const SPEED = 46;                 // logical px per second
 const MAX_SLOTS = 6;
+const BACK_LABEL = 42;            // room labels sit just under a room's back wall
 const PROG_COLORS = ["#5b8def", "#3fb68b", "#d97757", "#c678dd", "#e5a50a", "#56b6c2", "#e06c75", "#98c379"];
 
 export function poseFor(sess, seatStatus) {
@@ -62,7 +64,7 @@ export function createOffice(stage, handlers) {
   const elevator = { open: 0, until: 0 };
   const cam = { z: 1, x: 0, y: 0, tz: 1, tx: 0, ty: 0 };
   let first = true, lastT = performance.now(), ceoPace = 0;
-  const cat = { x: 300, y: 60, tx: 300, ty: 60, path: [], mode: "sit", until: 0, facing: 1, el: null };
+  const cat = { x: 140, y: 60, tx: 140, ty: 60, path: [], mode: "sit", until: 0, facing: 1, el: null };
   const TIPS = ["Ctrl + K jumps to any seat, session or action.", "Double-click a desk to fly the camera to it.",
     "Click a person, then Chat, to message them.", "The load divider decides who gets the next lane.",
     "Take a checkpoint before you restart the laptop.", "Share-safe mode blurs topics before a screen share.",
@@ -108,14 +110,19 @@ export function createOffice(stage, handlers) {
     }
   }
 
+  // Pixel walks the lobby, the corridors and the lounge, joined by the walkway down the lobby's right side.
+  const SPX = SPINE_X + 4;
+  function inLounge(x, y) { const lo = L.lounge; return lo && x >= lo.x && x < lo.x + lo.w && y >= lo.y && y < lo.y + lo.h; }
   function catSpots() {
-    const pts = [[200, 60], [360, 60], [540, 60], [430, 196], [250, 196], [560, 196]];
-    if (L) {
-      pts.push([L.lounge.x + 30, L.lounge.y + 18], [L.lounge.x + 60, L.lounge.y + 52], [60, L.ceo.y + 112], [L.meet.x + 20, L.meet.y + 100]);
-      const mid = L.pods.length > 3 ? L.pods[3].y - 14 : 196;
-      for (const p of L.pods) pts.push([p.x + 40 + (p.col * 17) % 50, p.row === 0 ? mid : H - 12]);
-    }
+    const pts = [[40, WALK_Y + 10], [140, WALK_Y + 10], [30, L.ceo.y + 92], [12, L.hire.y + 104]];
+    for (const cy of L.corridors) for (const x of [250, 380, 520, 660]) pts.push([x, cy + 5]);
+    const lo = L.lounge;
+    if (lo) pts.push([lo.x + 70, lo.y + 92], [lo.x + 118, lo.y + 126], [lo.x + 60, lo.y + 136]);
     return pts;
+  }
+  function catLegs(x, y) {                       // from a point to the walkway, through the lounge door if need be
+    if (inLounge(x, y)) { const lo = L.lounge, dx = lo.x + lo.w / 2, cy = lo.y + lo.h + 5; return [[dx, y], [dx, cy], [SPX, cy]]; }
+    return [[SPX, y]];
   }
   function stepCat(dt, t) {
     if (!L || reduced) return;
@@ -123,15 +130,12 @@ export function createOffice(stage, handlers) {
       const dx = cat.tx - cat.x, dy = cat.ty - cat.y, d = Math.hypot(dx, dy), v = 26 * dt;
       if (Math.abs(dx) > 0.5) cat.facing = dx > 0 ? 1 : -1;
       if (d <= v && cat.path.length) { cat.x = cat.tx; cat.y = cat.ty; [cat.tx, cat.ty] = cat.path.shift(); }
-      else if (d <= v) { cat.x = cat.tx; cat.y = cat.ty; const lounge = cat.x >= L.lounge.x && cat.y >= L.lounge.y; cat.mode = lounge && Math.random() < 0.6 ? "sleep" : "sit"; cat.until = t + (cat.mode === "sleep" ? 25000 : 4000 + Math.random() * 7000); }
+      else if (d <= v) { cat.x = cat.tx; cat.y = cat.ty; cat.mode = inLounge(cat.x, cat.y) && Math.random() < 0.6 ? "sleep" : "sit"; cat.until = t + (cat.mode === "sleep" ? 25000 : 4000 + Math.random() * 7000); }
       else { cat.x += dx / d * v; cat.y += dy / d * v; }
     } else if (t > cat.until) {
       const spots = catSpots(), [nx, ny] = spots[Math.floor(Math.random() * spots.length)];
-      // Walk out to a corridor, along it, then in: Pixel never wades through the desks.
-      const lanes = [62, L.pods.length > 3 ? L.pods[3].y - 14 : 196, H - 12];
-      const near = (y) => lanes.reduce((a, b) => Math.abs(b - y) < Math.abs(a - y) ? b : a);
-      const cy = near((cat.y + ny) / 2);
-      cat.path = [[cat.x, cy], [nx, cy], [nx, ny]];
+      const out = catLegs(cat.x, cat.y), back = catLegs(nx, ny).reverse();
+      cat.path = [...out, [SPX, back[0][1]], ...back.slice(1), [nx, ny]];
       [cat.tx, cat.ty] = cat.path.shift(); cat.mode = "walk";
     }
   }
@@ -183,12 +187,12 @@ export function createOffice(stage, handlers) {
     const now = new Date();
     const env = skyFor(now);
     const lights = [];
-    drawWall(t, env, now, lights);
+    drawLobbyWall(t, lights);
     drawCEO(t, lights);
     drawServer(t, lights);
-    drawMeeting(t);
-    drawLounge(t, lights);
-    for (const pod of L.pods) drawPod(pod, t, lights);
+    if (L.meet) drawMeeting(t, env);
+    drawLounge(t, lights, env);
+    for (const pod of L.pods) drawRoom(pod, t, lights, env);
     drawHire(t, lights);
     const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers].sort((a, b) => a.y - b.y);
     for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
@@ -199,33 +203,24 @@ export function createOffice(stage, handlers) {
     else drawSun(t);
   }
 
-  function drawWall(t, env, now, lights) {
-    S.drawBookshelf(ctx, 8, 18, 44);
-    S.drawWindow(ctx, 62, 10, 56, 30, env.sky, t, env.night);
-    const cups = trophies();
-    S.drawCabinet(ctx, 126, 10, cups, t);
-    if (cups.length) lights.push({ x: 154, y: 24, r: 26, c: "#ffd24a", i: cups.some(c => c.glint) ? 0.4 : 0.22 });
-    S.drawWindow(ctx, 190, 10, 54, 30, env.sky, t, env.night);
-    S.rect(ctx, 254, 10, 92, 24, "#140f1f"); S.rect(ctx, 255, 11, 90, 22, "#1d1530");
-    lights.push({ x: 300, y: 22, r: 46, c: "#ff4fd8", i: 0.55 });
+  // The lobby wall: the neon sign (a page element), the elevator, the trophy cabinet and the employee-of-the-day frame.
+  function drawLobbyWall(t, lights) {
+    S.rect(ctx, 6, 8, 70, 22, "#140f1f"); S.rect(ctx, 7, 9, 68, 20, "#1d1530");
+    lights.push({ x: 41, y: 19, r: 40, c: "#ff4fd8", i: 0.55 });
     const open = performance.now() < elevator.until ? 1 : 0;
     elevator.open += (open - elevator.open) * 0.12;
     S.drawElevator(ctx, ELEVATOR.x, ELEVATOR.y, elevator.open, "", t);
     lights.push({ x: ELEVATOR.x + 13, y: ELEVATOR.y - 2, r: 12, c: "#ff8f3d", i: 0.5 });
-    drawTV(t, lights);
-    S.drawClock(ctx, 492, 14, now);
-    S.drawPoster(ctx, 516, 14, 0);
-    S.drawFrame(ctx, 544, 12, 20, 22, !!mvp);
+    const cups = trophies();
+    S.drawCabinet(ctx, 116, 8, cups, t);
+    if (cups.length) lights.push({ x: 144, y: 22, r: 26, c: "#ffd24a", i: cups.some(c => c.glint) ? 0.4 : 0.22 });
+    S.drawFrame(ctx, 176, 12, 16, 22, !!mvp);
     if (mvp) {
       const seat = snap.seats.find(s => s.id === mvp.seat);
-      if (seat) S.drawSeated(ctx, 549, 18, S.lookFor("mascot-" + seat.id, seat.color), "down", "idle", t);
-      if (Math.floor(t / 600) % 4 === 0) S.rect(ctx, 546 + (Math.floor(t / 150) % 16), 13, 1, 1, "#fff8c0");
-      lights.push({ x: 554, y: 22, r: 18, c: "#ffd24a", i: 0.35 });
+      if (seat) S.drawSeated(ctx, 179, 18, S.lookFor("mascot-" + seat.id, seat.color), "down", "idle", t);
+      if (Math.floor(t / 600) % 4 === 0) S.rect(ctx, 178 + (Math.floor(t / 150) % 12), 13, 1, 1, "#fff8c0");
+      lights.push({ x: 184, y: 22, r: 18, c: "#ffd24a", i: 0.35 });
     }
-    drawWhiteboard();
-    S.drawPoster(ctx, 704, 14, 1);
-    S.drawWindow(ctx, 732, 10, 28, 30, env.sky, t, env.night);
-    if (env.night) for (const wx of [90, 217, 746]) lights.push({ x: wx, y: 46, r: 30, c: "#9bb8ff", i: 0.25 });
   }
 
   // Every unlocked achievement in the office, oldest first; ones from the last hour glint.
@@ -239,8 +234,11 @@ export function createOffice(stage, handlers) {
     return cupsCache;
   }
 
+  // The capacity board: plan left on every seat, as bars. It stands in the CEO corner.
+  const TV = () => ({ x: 8, y: L.ceo.y + 8, w: 58, h: 30 });
   function drawTV(t, lights) {
-    const x = 388, y = 8, w = 96, h = 32;
+    const { x, y, w, h } = TV();
+    S.rect(ctx, x + w / 2 - 2, y + h + 2, 4, 14, "#2b2f3a"); S.rect(ctx, x + w / 2 - 10, y + h + 15, 20, 3, "#2b2f3a");
     S.rect(ctx, x - 2, y - 2, w + 4, h + 4, "#0a0b10"); S.rect(ctx, x, y, w, h, "#0f1424");
     const seats = snap.seats;
     const bw = Math.max(4, Math.floor((w - 6) / Math.max(1, seats.length)) - 3);
@@ -260,23 +258,23 @@ export function createOffice(stage, handlers) {
       S.rect(ctx, bx, y + h - 4, bw, 2, s.color);
     });
     S.rect(ctx, x, y + (Math.floor(t / 40) % h), w, 1, "rgba(255,255,255,0.05)");
-    if (Math.floor(t / 900) % 2) S.rect(ctx, x + w - 4, y + 2, 2, 2, "#ff4d5e");
-    lights.push({ x: x + w / 2, y: y + h / 2, r: 46, c: "#5b8def", i: 0.45 });
+    lights.push({ x: x + w / 2, y: y + h / 2, r: 40, c: "#5b8def", i: 0.45 });
   }
 
-  function drawWhiteboard() {
-    const x = 584, y = 8, w = 112, h = 36;
+  // The meeting room's whiteboard: one row per programme, with its sessions as ticks.
+  function drawWhiteboard(x, y, w, h) {
     S.rect(ctx, x - 2, y - 2, w + 4, h + 4, "#9aa3b5"); S.rect(ctx, x, y, w, h, "#f6f7f9");
-    S.rect(ctx, x + 4, y + h, 30, 2, "#c94f4f"); S.rect(ctx, x + 40, y + h, 10, 2, "#3d6fd6");
-    (snap.programmes || []).slice(0, 5).forEach((p, i) => {
+    (snap.programmes || []).slice(0, 4).forEach((p, i) => {
       const done = p.sessions.filter(s => s.report_status).length;
       S.rect(ctx, x + 4, y + 4 + i * 6, 3, 3, PROG_COLORS[i % PROG_COLORS.length]);
+      S.rect(ctx, x + 9, y + 5 + i * 6, 30, 1, "#9aa3b5");
       for (let k = 0; k < Math.min(8, p.sessions.length); k++) S.rect(ctx, x + w - 22 + k * 2, y + 4 + i * 6, 1, 3, k < done ? "#3fb68b" : "#e5a50a");
     });
   }
 
   function drawCEO(t, lights) {
-    const c = L.ceo, dx = 40, dy = c.y + 66;
+    const c = L.ceo, dx = 96, dy = c.y + 58;
+    drawTV(t, lights);
     const urgent = (snap.attention || []).filter(a => a.level === "bad").length;
     const attn = (snap.attention || []).filter(a => a.level !== "info").length;
     const look = S.lookFor("ceo-" + ((snap.office.ceo || {}).name || "CEO"), "#22304f");
@@ -301,16 +299,16 @@ export function createOffice(stage, handlers) {
     S.drawMug(ctx, dx + 10, dy + 6, t, true, "#e8c66a");
     S.rect(ctx, dx + 16, dy + 5, 8, 6, S.P.white); S.rect(ctx, dx + 17, dy + 6, 6, 1, "#9aa3b5"); S.rect(ctx, dx + 17, dy + 8, 4, 1, "#9aa3b5");
     S.drawDeskLamp(ctx, dx + 50, dy - 4, true);
-    lights.push({ x: dx + 39, y: dy + 4, r: 64, c: "#ffcf7a", i: 0.65 });
+    lights.push({ x: dx + 39, y: dy + 4, r: 60, c: "#ffcf7a", i: 0.65 });
   }
 
-  function rackPos(i) { return [10 + (i % 6) * 27, L.server.y + 16 + Math.floor(i / 6) * 56]; }
+  function rackPos(i) { return [8 + (i % 6) * 27, L.server.y + 12 + Math.floor(i / 6) * 48]; }
   function drawServer(t, lights) {
     const units = (snap.units || []).slice(0, 12);
     for (let i = 0; i < Math.max(units.length, 6); i++) {
       const un = units[i];
       const [x, y] = rackPos(i);
-      if (y + 42 > H) break;
+      if (y + 42 > H - 2) break;
       const st = un ? un.active : "inactive";
       S.drawRack(ctx, x, y, 42, st, t, un ? un.unit : "spare" + i);
       if (st === "active") lights.push({ x: x + 14, y: y + 20, r: 14, c: "#38e07b", i: 0.25 });
@@ -321,8 +319,9 @@ export function createOffice(stage, handlers) {
     }
   }
 
-  function drawMeeting(t) {
-    const tx = L.meet.x + 40, ty = L.meet.y + 52;
+  function drawMeeting(t, env) {
+    const m = L.meet, tx = m.x + 40, ty = m.y + 66;
+    drawWhiteboard(m.x + 50, m.y + 5, 90, 28);
     (snap.programmes || []).slice(0, 8).forEach((p, i) => {
       const top = i < 4, x = tx + 10 + (i % 4) * 26;
       const look = S.lookFor("prog-" + p.name, PROG_COLORS[i % PROG_COLORS.length]);
@@ -339,17 +338,27 @@ export function createOffice(stage, handlers) {
     return snap.seats.filter(s => ["limited", "benched", "offline"].includes(s.status) || !s.sessions.some(x => x.live !== false));
   }
 
-  function drawLounge(t, lights) {
+  // The lounge: couches, an aquarium, snacks and an arcade. Seats on a break hang out here.
+  function drawLounge(t, lights, env) {
     const lo = L.lounge;
-    S.drawAquarium(ctx, lo.x + 150, lo.y + 6, t);
-    lights.push({ x: lo.x + 165, y: lo.y + 13, r: 30, c: "#4fb3ff", i: 0.45 });
-    S.drawVending(ctx, lo.x + 166, lo.y + 40, t);
-    lights.push({ x: lo.x + 174, y: lo.y + 52, r: 24, c: "#ffcf7a", i: 0.4 });
-    S.drawCoffeeMachine(ctx, lo.x + 134, lo.y + 44, t);
-    S.drawArcade(ctx, lo.x + 170, H - 30, t);
-    lights.push({ x: lo.x + 177, y: H - 22, r: 22, c: "#ff4fd8", i: 0.45 });
-    S.drawWaterCooler(ctx, lo.x + 150, H - 26, t);
-    const spots = [[lo.x + 22, lo.y + 16], [lo.x + 42, lo.y + 16], [lo.x + 22, lo.y + 64], [lo.x + 42, lo.y + 64], [lo.x + 73, lo.y + 22], [lo.x + 93, lo.y + 34]];
+    if (!lo) return;
+    const wr = windowRect(lo);
+    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night);
+    S.drawPoster(ctx, lo.x + 18, lo.y + 7, 1);
+    S.drawCouch(ctx, lo.x + 14, lo.y + 52, "#c0564b");
+    S.rect(ctx, lo.x + 22, lo.y + 78, 32, 14, "#5e412c"); S.rect(ctx, lo.x + 23, lo.y + 79, 30, 1, "#77543a");
+    S.drawCouch(ctx, lo.x + 14, lo.y + 100, "#4b6fbf");
+    S.drawBeanBag(ctx, lo.x + 76, lo.y + 62, "#e5a50a");
+    S.drawBeanBag(ctx, lo.x + 98, lo.y + 78, "#3fb68b");
+    S.drawAquarium(ctx, lo.x + 146, lo.y + 44, t);
+    lights.push({ x: lo.x + 161, y: lo.y + 51, r: 28, c: "#4fb3ff", i: 0.45 });
+    S.drawVending(ctx, lo.x + 166, lo.y + 72, t);
+    lights.push({ x: lo.x + 174, y: lo.y + 84, r: 22, c: "#ffcf7a", i: 0.4 });
+    S.drawCoffeeMachine(ctx, lo.x + 148, lo.y + 76, t);
+    S.drawArcade(ctx, lo.x + 166, lo.y + 110, t);
+    lights.push({ x: lo.x + 173, y: lo.y + 118, r: 22, c: "#ff4fd8", i: 0.45 });
+    S.drawWaterCooler(ctx, lo.x + 148, lo.y + 112, t);
+    const spots = [[lo.x + 22, lo.y + 46], [lo.x + 42, lo.y + 46], [lo.x + 22, lo.y + 94], [lo.x + 42, lo.y + 94], [lo.x + 79, lo.y + 54], [lo.x + 101, lo.y + 70]];
     restingSeats().slice(0, spots.length).forEach((s, i) => {
       const [x, y] = spots[i];
       const look = S.lookFor("mascot-" + s.id, s.color);
@@ -362,6 +371,30 @@ export function createOffice(stage, handlers) {
       else if (s.status === "offline") S.drawMark(ctx, x + 4, y - 7, "?", t);
       else S.drawMug(ctx, x + 11, y + 10, t, true);
     });
+  }
+
+  // A character's room: its window, live decor, the people at the desks, and the lights. A room is dim while its
+  // seat naps, is on holiday or is logged out, and dark-ish when nobody is in.
+  function drawRoom(pod, t, lights, env) {
+    const s = pod.seat, room = pod.room, wr = windowRect(room), st = s.status;
+    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night);
+    if (env.night) lights.push({ x: wr.x + wr.w / 2, y: wr.y + wr.h + 6, r: 24, c: "#9bb8ff", i: 0.2 });
+    const live = s.sessions.filter(x => x.live !== false);
+    const dark = st === "offline" ? 0.5 : st === "limited" ? 0.42 : st === "benched" ? 0.3 : !live.length ? 0.2 : 0;
+    drawDecorLive(ctx, room, pod.arch, t, dark < 0.25);
+    drawPod(pod, t, lights);
+    if (dark) { ctx.fillStyle = `rgba(6,8,22,${dark})`; ctx.fillRect(room.x + 2, room.y + 3, room.w - 4, room.h - 7); }
+    else lights.push({ x: room.x + room.w / 2, y: room.y + 82, r: 74, c: "#ffd59a", i: live.some(x => x.state === "working") ? 0.38 : 0.2 });
+    const dx = pod.door.x, dy = room.y + room.h - 4;
+    if (st === "offline") {                          // a padlock on the door
+      S.rect(ctx, dx - 4, dy - 9, 8, 7, "#c9a227"); S.rect(ctx, dx - 3, dy - 8, 6, 1, "#ffd24a"); S.rect(ctx, dx - 1, dy - 6, 2, 2, "#5a4030");
+      S.rect(ctx, dx - 3, dy - 13, 1, 4, "#9aa3b5"); S.rect(ctx, dx + 2, dy - 13, 1, 4, "#9aa3b5"); S.rect(ctx, dx - 3, dy - 14, 6, 1, "#9aa3b5");
+    }
+    if (st === "benched") {                          // on holiday: a beach umbrella in the corner
+      const ux = room.x + room.w - 40, uy = room.y + 50;
+      S.rect(ctx, ux + 8, uy + 6, 1, 18, "#d7d2c4");
+      for (let i = 0; i < 4; i++) S.rect(ctx, ux + i * 4, uy + 2 - (i === 1 || i === 2 ? 2 : 0), 4, 5, i % 2 ? "#f4f1ea" : "#e0364a");
+    }
   }
 
   function drawPod(pod, t, lights) {
@@ -457,12 +490,14 @@ export function createOffice(stage, handlers) {
 
   function drawSun(t) {
     ctx.globalCompositeOperation = "lighter";
-    for (const [wx, ww] of [[62, 56], [190, 54], [732, 28]]) {
-      ctx.fillStyle = "rgba(255,240,200,0.05)";
-      ctx.beginPath(); ctx.moveTo(wx, WALL); ctx.lineTo(wx + ww, WALL); ctx.lineTo(wx + ww + 70, WALL + 120); ctx.lineTo(wx + 50, WALL + 120); ctx.closePath(); ctx.fill();
-      if (!reduced) for (let i = 0; i < 3; i++) {
-        const p = ((t / 9000) + i / 3 + wx / 300) % 1;
-        S.rect(ctx, wx + 20 + i * 12 + p * 40, WALL + p * 110, 1, 1, "rgba(255,250,220,0.5)");
+    const rooms = [...L.pods.map(p => p.room), L.lounge, L.meet].filter(Boolean);
+    for (const room of rooms) {
+      const wr = windowRect(room), top = wr.y + wr.h + 4;
+      ctx.fillStyle = "rgba(255,240,200,0.045)";
+      ctx.beginPath(); ctx.moveTo(wr.x, top); ctx.lineTo(wr.x + wr.w, top); ctx.lineTo(wr.x + wr.w - 14, top + 70); ctx.lineTo(wr.x - 34, top + 70); ctx.closePath(); ctx.fill();
+      if (!reduced) for (let i = 0; i < 2; i++) {
+        const p = ((t / 9000) + i / 2 + room.x / 300) % 1;
+        S.rect(ctx, wr.x + 6 + i * 16 - p * 24, top + p * 64, 1, 1, "rgba(255,250,220,0.5)");
       }
     }
     ctx.globalCompositeOperation = "source-over";
@@ -516,24 +551,23 @@ export function createOffice(stage, handlers) {
     const keepPops = pops.map(p => p.el);
     overlay.innerHTML = "";
     keepPops.forEach(el => overlay.appendChild(el));
-    hot("room", "CEO office: briefing and alerts", L.ceo.x, L.ceo.y, L.ceo.w, L.ceo.h, () => handlers.openCEO());
-    hot("room", "Server room: background services", L.server.x, L.server.y, L.server.w, L.server.h, () => handlers.openServices());
-    hot("room", "Meeting room: programmes", L.meet.x, L.meet.y, L.meet.w, L.meet.h, () => handlers.openProgrammes());
-    hot("room", "Lounge: seats on a break", L.lounge.x, L.lounge.y, L.lounge.w, L.lounge.h, () => handlers.openLounge());
-    hot("wallhot", "Capacity board: plan left on every seat", 386, 6, 100, 36, () => handlers.openDivider());
-    hot("wallhot", "Whiteboard: programmes", 582, 6, 116, 40, () => handlers.openProgrammes());
+    hot("room", "CEO desk: briefing and alerts", 70, L.ceo.y + 22, 120, 76, () => handlers.openCEO());
+    hot("room", "Server closet: background services", L.server.x, L.server.y, L.server.w - 26, L.server.h, () => handlers.openServices());
+    if (L.meet) hot("room", "Meeting room: programmes", L.meet.x, L.meet.y, L.meet.w, L.meet.h, () => handlers.openProgrammes());
+    if (L.lounge) hot("room", "Lounge: seats on a break", L.lounge.x, L.lounge.y, L.lounge.w, L.lounge.h, () => handlers.openLounge());
+    const tv = TV();
+    hot("wallhot", "Capacity board: plan left on every seat", tv.x - 2, tv.y - 2, tv.w + 4, tv.h + 20, () => handlers.openDivider());
     hot("wallhot", "Elevator: office news", ELEVATOR.x - 3, ELEVATOR.y - 6, 32, 46, () => handlers.openNews());
-    hot("wallhot", "Employee of the day", 540, 8, 28, 36, () => handlers.openStats());
-    hot("wallhot", "Trophy cabinet: everyone's achievements", 124, 8, 60, 34, () => handlers.openTrophies());
-    div("room-label", "CEO", 6, L.ceo.y + 4);
-    div("room-label", "SERVER ROOM", 6, L.server.y + 4);
-    div("room-label", "MEETING", L.meet.x + 8, L.meet.y + 4);
-    div("room-label", "LOUNGE", L.lounge.x + 8, L.lounge.y + 4);
-    const neon = div("neon", snap.office.name || "Claude Office", 254, 10); place(neon, 254, 10, 92, 24);
-    if (mvp) place(div("mvp-tag", "MVP", 541, 37), 541, 37, 26, null);
+    hot("wallhot", "Employee of the day", 172, 8, 24, 32, () => handlers.openStats());
+    hot("wallhot", "Trophy cabinet: everyone's achievements", 114, 6, 60, 34, () => handlers.openTrophies());
+    if (L.lounge) div("room-label", "LOUNGE", L.lounge.x + 8, L.lounge.y + BACK_LABEL);
+    if (L.meet) div("room-label", "MEETING", L.meet.x + 8, L.meet.y + BACK_LABEL);
+    div("room-label", "SERVER CLOSET", 6, L.server.y - 12);
+    const neon = div("neon", snap.office.name || "Claude Office", 6, 8); place(neon, 6, 8, 70, 22);
+    if (mvp) place(div("mvp-tag", "MVP", 172, 36), 172, 36, 24, null);
     (snap.units || []).slice(0, 12).forEach((un, i) => {
       const [x, y] = rackPos(i);
-      if (y + 42 <= H) hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices());
+      if (y + 42 <= H - 2) hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices());
     });
     hot("hire", "Hiring desk: start a new lane", L.hire.x + 8, L.hire.y + 8, POD_W - 16, POD_H - 14, () => handlers.openHire());
     place(div("plate hire-plate", "Hiring desk", 0, 0), L.hire.x + 24, L.hire.y + 98, POD_W - 48, null);
@@ -552,7 +586,7 @@ export function createOffice(stage, handlers) {
     plate.type = "button"; plate.dataset.k = "plate:" + s.id;
     plate.className = `plate st-${s.status}` + (selected && selected.seat === s.id && !selected.session ? " sel" : "");
     plate.style.setProperty("--seat", s.color);
-    place(plate, pod.x + 8, pod.y + 96, POD_W - 16, null);
+    place(plate, pod.room.x + 18, pod.room.y + ROOM_H - 26, ROOM_W - 36, null);
     const line = plateLine(s, live);
     const lv = s.career ? `<em class="lv" title="Level ${s.career.level} ${esc(s.career.title)}">${s.career.level}</em>` : "";
     plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span>${esc(line.main)}</span></span>` +
@@ -561,7 +595,7 @@ export function createOffice(stage, handlers) {
     plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { focusSeat(s.id); return; } handlers.openSeat(s.id); });
     plate.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(plate);
-    hot("pod", `${who.name}'s desks`, pod.x + 4, pod.y + 8, POD_W - 8, 88, () => handlers.openSeat(s.id), () => focusSeat(s.id)).dataset.k = "pod:" + s.id;
+    hot("pod", `${who.name}'s desks`, pod.room.x + 2, pod.room.y + 2, ROOM_W - 4, ROOM_H - 30, () => handlers.openSeat(s.id), () => focusSeat(s.id)).dataset.k = "pod:" + s.id;
     for (const a of agents.values()) {
       if (a.seatId !== s.id) continue;
       if (a.mode === "walking") { a.tagEl = div("tag walking", short(a.sess.name), a.x + 5, a.y + 19); continue; }
@@ -687,7 +721,7 @@ export function createOffice(stage, handlers) {
     cam.tz = z; cam.tx = sw / 2 - (x + w / 2) * F * z; cam.ty = sh / 2 - (y + h / 2) * F * z;
     clampCam(cam);
   }
-  function focusSeat(id) { const p = L && L.pods.find(p => p.seat.id === id); if (p) focusRect(p.x, p.y - 4, POD_W, POD_H + 4); }
+  function focusSeat(id) { const p = L && L.pods.find(p => p.seat.id === id); if (p) focusRect(p.room.x, p.room.y, ROOM_W, ROOM_H); }
   function focusSession(id) { const a = agents.get(id); if (!a) return; const [x, y] = anchorFor(a); focusRect(x - 44, y - 24, 88, 70); }
   function fit() { cam.tz = 1; cam.tx = 0; cam.ty = 0; clampCam(cam); }
   function applyCam(force) {
@@ -763,7 +797,7 @@ export function createOffice(stage, handlers) {
     canvas.style.width = W * F + "px"; canvas.style.height = H * F + "px";
     bg.width = W * RES; bg.height = H * RES;
     bgx.setTransform(RES, 0, 0, RES, 0, 0); bgx.imageSmoothingEnabled = false;
-    drawStatic(bgx, L, snap.seats, snap.units);
+    drawStatic(bgx, L);
   }
   let reresTimer = 0;
 
@@ -795,9 +829,10 @@ export function createOffice(stage, handlers) {
   function update(next) {
     const prev = snap;
     snap = next;
-    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color])) + "|" + (snap.units || []).length;
+    const arch = (s) => (persona ? persona(s).archetype : null);
+    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color, arch(s)])) + "|" + (snap.units || []).length;
     const relayout = key !== staticKey;
-    if (relayout) { L = computeLayout(snap.seats); H = L.H; staticKey = key; }
+    if (relayout) { L = computeLayout(snap.seats, arch); H = L.H; staticKey = key; }
     else L.pods.forEach((p, i) => { p.seat = snap.seats[i]; });
     assign();
     const t = performance.now();
@@ -863,7 +898,7 @@ export function createOffice(stage, handlers) {
     setPrivacy(on) { privacy = on; ovKey = ""; renderOverlay(); },
     setReducedMotion(on) { reduced = on; },
     setMvp(m) { mvp = m && m.seat ? m : null; ovKey = ""; renderOverlay(); },
-    setPersonas(fn) { persona = fn; ovKey = ""; renderOverlay(); },
+    setPersonas(fn) { persona = fn; staticKey = ""; ovKey = ""; if (snap) update(snap); },
     say(sessionId, text, ms = 6000) { if (!sessionId || !text) return; said.set(sessionId, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); },
     sayAtSeat(seatId, text, ms = 6000) {
       const a = [...agents.values()].find(x => x.seatId === seatId && x.mode === "seated");

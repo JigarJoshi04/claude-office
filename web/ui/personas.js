@@ -27,6 +27,79 @@ const COMMON = {
   levelup: ["Level up!", "Moving up in the world.", "New title, same desk.", "Promotion! Drinks on me."],
   achievement: ["Achievement unlocked!", "Put that on my wall.", "Another one for the trophy shelf."],
 };
+// Status in each character's own voice, for every state the office knows. t = a reset time, n = sessions at work.
+const VOICE = {
+  "The Orchestrator": { working: n => n > 1 ? `Running ${n} threads. All on plan.` : "On it. Everything is on plan.", waiting: "Ready for the next step when you are.",
+    free: "Desk is clear. What's the plan?", limited: t => `Out of plan. Back at ${t}, notes are in order.`, benched: "On holiday. The plan can wait.",
+    offline: "Locked out. Run /login and I'm back.", stuck: "Rethinking this one…" },
+  "The Builder": { working: n => n > 1 ? `${n} builds going. Hard hat on.` : "Building. Tests come next.", waiting: "Built it. Waiting for your call.",
+    free: "Give me something to build.", limited: t => `Tools down until ${t}.`, benched: "On holiday. No building today.",
+    offline: "Locked out of the workshop. /login, please.", stuck: "This one is fighting back…" },
+  "The Investigator": { working: n => n > 1 ? `Working ${n} cases at once.` : "Following the evidence.", waiting: "I have findings. Your move.",
+    free: "Any mysteries today?", limited: t => `Napping until ${t}. The clues will keep.`, benched: "Off the case for now.",
+    offline: "Locked out. /login and I pick up the trail.", stuck: "Following a long trail…" },
+  "The Perfectionist": { working: n => n > 1 ? `${n} things, each done properly.` : "Getting it exactly right.", waiting: "Polished. Have a look?",
+    free: "Tidying while I wait.", limited: t => `Resting until ${t}. Perfection needs sleep.`, benched: "On holiday. Everything is in its place.",
+    offline: "Locked out. Untidy. /login, please.", stuck: "Not quite right yet…" },
+  "The Night Owl": { working: n => n > 1 ? `${n} quiet jobs on the go.` : "Quietly getting it done.", waiting: "Done for now. Coffee's still warm.",
+    free: "Quiet in here. I like it.", limited: t => `Even owls sleep. Back at ${t}.`, benched: "Off shift.",
+    offline: "Locked out in the dark. /login?", stuck: "Long night on this one…" },
+  "The Speedrunner": { working: n => n > 1 ? `${n} runs at once. New record incoming.` : "Going fast. Don't blink.", waiting: "Done! What's next?",
+    free: "Bored. Give me a challenge.", limited: t => `Hit the wall. Respawning at ${t}.`, benched: "Benched. Unfair, but fine.",
+    offline: "Logged out. Run ruined. /login!", stuck: "Speedrun stalled…" },
+  "The Contractor": { working: n => n > 1 ? `${n} contracts in progress.` : "Delivering the contract.", waiting: "Deliverable ready for review.",
+    free: "Available for the next contract.", limited: t => `Outside contracted hours until ${t}.`, benched: "Not on contract right now.",
+    offline: "Credentials expired. /login, please.", stuck: "Reviewing the specification…" },
+};
+// One or two words for tiles and doors, and the tone that colours them.
+const WORD = { working: ["In the zone", "good"], waiting: ["Waiting for you", "warn"], free: ["Free", "idle"], limited: ["Napping", "bad"],
+  benched: ["On holiday", "info"], offline: ["Locked out", "bad"], stuck: ["Stuck", "warn"] };
+
+function stateOf(seat) {
+  if (seat.status === "offline") return "offline";
+  if (seat.status === "benched") return "benched";
+  if (seat.status === "limited") return "limited";
+  const live = seat.sessions.filter(x => x.live !== false);
+  if (live.some(x => x.state === "stuck")) return "stuck";
+  if (live.some(x => x.state === "working" || x.state === "waiting")) return "working";
+  return live.length ? "waiting" : "free";
+}
+
+// What a character says about itself right now: { state, line, word, tone }.
+export function voice(seat, p, fmtTime) {
+  const st = stateOf(seat), v = VOICE[p.archetype] || VOICE["The Orchestrator"];
+  const working = seat.sessions.filter(x => x.live !== false && (x.state === "working" || x.state === "waiting")).length;
+  const b = binding(seat), w = b.key && seat.usage && seat.usage[b.key];
+  const reset = w && w.resets_at ? fmtTime(w.resets_at) : "the reset";
+  const raw = v[st];
+  const text = typeof raw === "function" ? raw(st === "limited" ? reset : working) : raw;
+  const [word, tone] = WORD[st];
+  return { state: st, line: text, word: st === "limited" && w && w.resets_at ? `Back ${fmtTime(w.resets_at)}` : word, tone };
+}
+
+// Teammates react to each other's news. {name} is the teammate the line is about.
+const REACT = {
+  report: ["Nice one, {name}!", "{name} ships again.", "Another one for {name}.", "Good work, {name}."],
+  levelup: ["Congrats, {name}!", "Level up, {name}! Drinks later?", "{name} is moving up."],
+  limit: ["I've got room. Send {name}'s work my way.", "Rest up, {name}. I'll cover.", "Out already, {name}? I'm here."],
+};
+export function reaction(kind, aboutName) {
+  const pool = REACT[kind] || [];
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)].replace("{name}", aboutName) : "";
+}
+
+// A first-person line about today, from the day's stats: "Today I spent 1 h at work in 3 sessions…".
+export function diary(p, st) {
+  if (!st || (!st.active_min && !st.sessions)) return `Nothing yet today. ${p.lines.idle}`;
+  const h = st.active_min >= 60 ? `${Math.floor(st.active_min / 60)} h ${st.active_min % 60} min` : `${st.active_min} min`;
+  const bits = [`spent ${h} at work in ${st.sessions} session${st.sessions === 1 ? "" : "s"}`];
+  if (st.tool_calls) bits.push(`made ${st.tool_calls.toLocaleString()} tool call${st.tool_calls === 1 ? "" : "s"}`);
+  if (st.reports) bits.push(`filed ${st.reports} report${st.reports === 1 ? "" : "s"}`);
+  if (st.limits) bits.push(`hit the limit ${st.limits === 1 ? "once" : st.limits + " times"}`);
+  const last = bits.pop();
+  return `Today I ${bits.length ? bits.join(", ") + " and " : ""}${last}.`;
+}
+
 export function line(p, key) {
   const own = p.lines[key] ? [p.lines[key]] : [];
   const pool = own.concat(own, COMMON[key] || []);       // a character's own line comes up twice as often
@@ -37,6 +110,7 @@ export function personaFor(seat, index = 0) {
   const base = seat.kind === "codex" ? CODEX : ARCHETYPES[index % ARCHETYPES.length];   // one character per seat, in order
   return {
     name: seat.nickname || (seat.kind === "codex" ? "Astra" : NAMES[index % NAMES.length]),
+    archetype: base.role,          // the voice and room decor follow the archetype, even under a custom role
     role: seat.role || base.role,
     motto: seat.motto || base.motto,
     traits: base.traits,

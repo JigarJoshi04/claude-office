@@ -6,7 +6,7 @@ import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
-import { pulse, line } from "./ui/personas.js";
+import { pulse, line, reaction } from "./ui/personas.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
 const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
@@ -199,6 +199,7 @@ async function loadStats(day, force) {
   } catch { statsCache.set(k, { data: { unavailable: true }, at: Date.now() }); }
   inflight.delete("s" + k);
   if (prefs.view === "stats") renderMain();
+  if (!day && view.kind === "seat") renderPanel(true);   // the character page's diary
 }
 
 // ------------------------------------------------------------------------------------------------ live
@@ -216,6 +217,20 @@ function apply(next) {
   if (view.kind === "lane") loadDetail("l:" + view.id);
 }
 
+// A teammate reacts to someone's news: cheers a report or a level-up, offers to cover a limit. Only someone at a desk,
+// awake and not the one the news is about, and never more than one reaction at a time.
+let lastReaction = 0;
+function teammateReacts(e, kind) {
+  if (!snap || Date.now() - lastReaction < 8000) return;
+  const about = snap.seats.find(s => s.id === e.seat);
+  if (!about) return;
+  const mates = snap.seats.filter(s => s.id !== e.seat && !["limited", "offline", "benched"].includes(s.status) && live(s).length);
+  if (!mates.length) return;
+  const mate = mates[Math.floor(Math.random() * mates.length)];
+  lastReaction = Date.now();
+  setTimeout(() => office.sayAtSeat(mate.id, reaction(kind, panels.persona(about).name), 6000), 1800);
+}
+
 function onNews(e) {
   const key = e.ts + "|" + e.text;
   if (seenNews.has(key)) return;
@@ -230,12 +245,12 @@ function onNews(e) {
     case "report": {
       const ok = e.level === "good";
       const sid = findSessionByText(e.text);
-      if (ok) { office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, line(who, "report"), 7000); sound.play("report"); }
+      if (ok) { office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); }
       else sound.play("bad");
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
       break;
     }
-    case "limit": office.alarm(e.seat, "Out of plan"); if (who) office.sayAtSeat(e.seat, line(who, "limit"), 8000); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;
+    case "limit": office.alarm(e.seat, "Out of plan"); if (who) office.sayAtSeat(e.seat, line(who, "limit"), 8000); teammateReacts(e, "limit"); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;
     case "login": office.alarm(e.seat, "Logged out"); sound.play("bad"); toast(text, "bad"); notify("Seat logged out", text); break;
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
     case "reset": toast(text, "good"); if (who) office.sayAtSeat(e.seat, line(who, "reset"), 6000); break;
@@ -247,6 +262,7 @@ function onNews(e) {
       office.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
       if (lvl && seat && prefs.view === "floor") office.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
       if (who) office.sayAtSeat(e.seat, line(who, e.kind), 6500);
+      if (lvl) teammateReacts(e, "levelup");
       sound.play(e.kind);
       toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
       notify(lvl ? "Level up" : "Achievement unlocked", text);
@@ -522,7 +538,7 @@ function bindCommon(p) {
     else if (a.dataset.seat) go({ kind: "seat", seat: a.dataset.seat });
   }));
   p.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(b.dataset.copy); toast("Copied.", "good", 1800); } catch { toast("Copy failed: select the text instead.", "warn"); }
+    try { await navigator.clipboard.writeText(b.dataset.copy); toast(b.dataset.copyNote ? "Copied. " + b.dataset.copyNote : "Copied.", "good", b.dataset.copyNote ? 5000 : 1800); } catch { toast("Copy failed: select the text instead.", "warn"); }
   }));
   p.querySelectorAll("[data-refresh]").forEach(b => b.addEventListener("click", async () => {
     try { const r = await app.post("/api/usage/refresh", { seat: b.dataset.refresh }); toast(r.demo ? "Demo office: nothing to read." : "Reading the plan now."); setTimeout(pollOnce, 2500); } catch (e) { toast(e.message, "bad"); }
