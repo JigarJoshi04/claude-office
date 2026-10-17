@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/JigarJoshi04/claude-office/actions/workflows/ci.yml/badge.svg)](https://github.com/JigarJoshi04/claude-office/actions/workflows/ci.yml) [![MIT license](https://img.shields.io/badge/license-MIT-ff7a45?style=flat-square)](LICENSE) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?style=flat-square&logo=python&logoColor=white) ![Zero dependencies](https://img.shields.io/badge/zero_dependencies-standard_library_only-38e07b?style=flat-square) ![Local-first](https://img.shields.io/badge/local--first-127.0.0.1_only-5b8def?style=flat-square)
 
-**Your AI coding seats, as a living office.** Every Claude Code account on your machine gets a desk, and so does
-the Codex CLI. Every running session is a little worker at that desk, acting out what it is doing right now. New
-sessions walk in from the elevator; spent seats nap on the couch. You run the place from the CEO's chair: see who is
+**Your AI coding seats, as a living office.** Every Claude Code account on your machine becomes a character with
+its own room, and so does the Codex CLI. Every running session is a little worker at a desk in that room, acting out
+what it is doing right now. New sessions walk in from the elevator; spent seats nap on the couch. You run the place from the CEO's chair: see who is
 working and who is stuck, talk to any task, split new work across seats, and hire background lanes from the front
 desk.
 
@@ -26,30 +26,36 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 
 ## What's inside
 
-**A living floor**
-- One desk pod per seat, found automatically (`~/.claude`, `~/.claude2`, … and `~/.codex`). Each desk's nameplate
-  says who it is, what it's doing and how much plan is left, in words ("3 working · 36% of 5-hour left").
+**A living floor: a room per character**
+- Every seat, found automatically (`~/.claude`, `~/.claude2`, … and `~/.codex`), gets its own room. The room has its
+  name on the door, a floor in its colour, a window, and decor that matches its personality. The Investigator has a
+  corkboard with red string, the Builder a tool pegboard and a hard hat, the Night Owl a moon poster, string lights
+  and a coffee machine, and so on.
 - One worker per live session. They type, read, think, wait on long tools, sweat when stuck, and fall asleep when
   their seat is out of plan. Terminal sessions wear headsets; a subagent shows up as a little helper drone.
-- Arrivals walk in from the elevator, departures walk out, filed reports burst into confetti, spent seats get a red
-  beacon. Night lighting follows your clock. Pixel the office cat wanders the corridors and naps in the lounge; click
-  her for a tip.
-- Zoom and pan the camera, double-click a desk to fly to it.
+- Rooms tell you their state at a glance: lights on while people work, dim while the seat naps (with when it is back),
+  a beach umbrella when it is on holiday, a padlock on the door when it is logged out.
+- A lobby holds the elevator, the CEO's desk with the capacity board, the hiring desk, the trophy cabinet and the
+  server closet. A spare room becomes the lounge, where seats on a break hang out.
+- Arrivals walk in from the elevator, down the corridor and through their room's door. Filed reports burst into
+  confetti, and night lighting follows your clock. Pixel the office cat wanders the corridors and naps in the lounge;
+  click her for a tip.
+- Zoom and pan the camera, double-click a room to fly to it.
 
 **Every seat is a character**
 - A name, a role, a motto and a few traits ("Atlas, The Investigator: *Show me the evidence.*"). You can rename them
   and change their colours in Settings.
-- A mood that follows the live state: *In the zone*, *Pacing myself*, *Running on fumes*, *Napping until 1:40 AM*,
-  *On holiday*, *Locked out*.
+- They talk about themselves in their own voice ("Napping until 11:10. The clues will keep.", "3 builds going. Hard
+  hat on.") and write a one-line diary of their day.
 - They speak up when it matters: when they arrive, when they ship, when they hit a limit, and when a fresh window
-  opens.
+  opens. Teammates react too: they cheer a report or a level-up, and offer to cover when someone runs out of plan.
 - A career that grows with real work. XP comes from tool calls (1 each), minutes at work (2), sessions (10) and
   filed reports (100). Levels run from Intern to Legend, with a "LEVEL UP!" banner across the floor and "+XP"
   rising from busy desks.
 - Desks upgrade as their character levels up: a mug, a plant, a gold cup, a glowing desk edge, a pennant, gold
   trim.
 - Fifteen achievements, such as *Night shift*, *Marathon*, *Juggler* and *Week streak*. They sit on each
-  character's trophy wall with a "next up" goal, and fill the trophy cabinet on the office wall. The cabinet opens
+  character's trophy wall with a "next up" goal, and fill the trophy cabinet in the lobby. The cabinet opens
   the Trophy room, with an XP leaderboard.
 
 **Talk to a task**
@@ -62,13 +68,14 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Message all lanes** at once, for example "limits reset in 20 minutes: write your notes now".
 
 **The CEO's briefing**
+- Glance cards, not paragraphs: how many agents are working, idle and napping, and who gets the next lane.
+- *Needs you*, grouped per seat ("Vega is out of plan: 2 sessions paused"), and each item with a one-click fix: copy
+  the login command, open the chat, open the lane.
+- Your team as tiles: each character's face, a ring for the plan it has left, its level and one status word.
 - *While you were away*: after an hour or more away, it opens with what happened since you last looked. That covers
   reports filed, level-ups, trophies, lanes finished, limits hit and anything blocked, plus the five items to read first.
-- A summary in plain sentences: who is working, who is lowest on plan and when it resets, and where the next lane
-  goes.
-- *Needs you*: logouts, seats near empty, lanes stopped by a limit, quiet lanes, blocked reports, failed services,
-  and seats that will run dry before their reset at the current pace.
-- Your team at a glance, the next-lane pick with its reason, programmes, office lanes and recent activity.
+- Each character's page: its voice, two plan rings with their resets, the pace, who is at the desk, today's diary,
+  its career and its settings.
 
 **Views**
 - **Timeline**: every session on every seat over the last 1 to 24 hours, coloured by state. It also shows usage,
