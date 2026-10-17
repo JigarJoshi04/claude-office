@@ -40,7 +40,13 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - Arrivals walk in from the elevator, down the corridor and through their room's door. Filed reports burst into
   confetti, and night lighting follows your clock. Pixel the office cat wanders the corridors and naps in the lounge;
   click her for a tip.
-- Zoom and pan the camera, double-click a room to fly to it.
+- The building fits your screen. On a desktop window the office fills it edge to edge: the floor re-plans itself
+  (two, three or four rooms to a row, taller rooms) for whatever space it has, spare cells become gardens, and a
+  little night city fills anything left. Drag the inspector wider and the building rearranges itself live.
+- Under the floor, a dock shows everyone at work right now: who, what they are doing and for how long. A click
+  opens their chat and flies the camera to their desk.
+- Zoom and pan the camera, double-click a room to fly to it. Point at a character anywhere (the team list, the dock,
+  a room) and their room lights up on the floor while their row lights up in the list.
 
 **Every seat is a character**
 - A name, a role, a motto and a few traits ("Atlas, The Investigator: *Show me the evidence.*"). You can rename them
@@ -68,18 +74,25 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Message all lanes** at once, for example "limits reset in 20 minutes: write your notes now".
 
 **The CEO's briefing**
-- Three blocks, always in the same order: how many sessions are working, idle and stopped (and who gets the next
-  lane), what needs you, and your team.
+- Always in the same order: how many sessions are working, idle and stopped (and who gets the next lane), what
+  needs you, today's goals, and your team.
 - *Needs you*, grouped per seat ("Vega is out of plan: 2 sessions paused"), and each item with a one-click fix: copy
   the login command, open the chat, open the lane.
 - Your team as one row per character: face, level, mood in a word, and a bar for the plan it has left.
-- *While you were away*: after an hour or more away, it opens with what happened since you last looked. That covers
-  reports filed, level-ups, trophies, lanes finished, limits hit and anything blocked, plus the five items to read first.
+- **Today's goals**: three daily targets (reports filed, tool calls, hours of agent work) as rings. Finishing one
+  celebrates on the floor; finishing all three every day builds a streak.
+- *While you were away*: after an hour or more away, one line says what happened since you last looked (reports
+  filed, level-ups, trophies, lanes finished, limits hit, anything blocked); open it for the items to read first.
+- News reads like people talk: "tpl-fix finished: ready for review · #1679", "visitor-lane started at Orion's desk".
 - Each character's page: its voice and two plan rings with their resets, then three tabs: **Now** (who is at the
   desk, today's diary, the plan chart), **Career** (level, stats, trophies) and **Settings** (duty, terminal command,
   account).
 - **Resizable**: drag the handle between the floor and the inspector, or focus it and use the arrow keys.
   Double-click puts it back. The width is remembered, and the inspector lays itself out for the space it has.
+  Hide it with the button by the clock (or `\`) for a full-width floor; opening anything brings it back.
+- **Text size**: Auto, Small, Medium, Large or Extra large, from the menu or Settings. Auto uses larger text on big
+  screens, so a 27-inch monitor reads as well as a laptop.
+- Keys: `1`–`9` open characters, `Esc` goes back to the briefing, `?` lists the rest.
 
 **Views**
 - **Timeline**: every session on every seat over the last 1 to 24 hours, coloured by state. It also shows usage,

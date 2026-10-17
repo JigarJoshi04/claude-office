@@ -3,6 +3,29 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.2.0] - 2026-10-17
+
+### Added
+- Full-height desktop layout: the floor, a dock of agents at work and the inspector fill the window; other views
+  scroll inside the left column. Laptops and phones keep the stacked layout.
+- An adaptive building: two, three or four rooms to a row and taller rooms, chosen to draw the office as large as the
+  space allows; it re-plans live as the inspector is resized. Spare cells become gardens; a night-city backdrop
+  (following the time of day) fills what is left.
+- The dock: one row of agent cards under the floor with the news line in its header; a click opens the chat and flies
+  the camera to the desk.
+- Spotlight: pointing at a character in the team list or the dock outlines its room; pointing at a room highlights its row.
+- Today's goals (reports, tool calls, agent hours) with a celebration when one finishes and a daily streak.
+- Text size (Auto, Small, Medium, Large, Extra large); Auto scales the chrome up on wide screens. The inspector's
+  width limits grow with it.
+- Hide or show the inspector (button or `\`); `1`–`9` open characters.
+
+### Changed
+- News in plain words ("finished: ready for review · #1679", "started at Orion's desk", "You updated…").
+- "While you were away" is one line that expands; toasts sit at the top of the floor, clear of the dock.
+
+### Fixed
+- The chat's typing line read "Atlas is merge PR #482"; it now reads "Atlas · Merge PR #482".
+
 ## [3.1.0] - 2026-10-17
 
 ### Changed

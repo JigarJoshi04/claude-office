@@ -36,14 +36,17 @@
   <span class="spacer"></span>
   <span class="livebadge off" id="live"><i></i><span>Connecting</span></span>
   <span class="clock" id="clock"></span>
+  <button class="btn icon ghost sm panel-toggle" id="btnPanel" aria-controls="panel" aria-pressed="true" title="Hide the inspector (\)"></button>
 </nav>
 
 <main class="main">
   <section class="viewport">
     <div class="view" id="viewFloor">
       <div class="floor-frame"><div class="stage-scroll"><div class="stage" id="stage" aria-label="Office floor"></div></div><div class="floor-hint" id="floorHint" hidden></div></div>
-      <div class="latest" id="latest" style="margin-top:12px"></div>
-      <div class="rightnow" id="rightnow"></div>
+      <section class="dock" id="dock" aria-label="Right now">
+        <div class="dock-h"><h4>Right now</h4><span class="dock-count" id="rnCount"></span><div class="latest" id="latest"></div></div>
+        <div class="rn-grid" id="rightnow"></div>
+      </section>
     </div>
     <div class="view" id="viewTimeline" hidden></div>
     <div class="view" id="viewBoard" hidden></div>

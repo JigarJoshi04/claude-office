@@ -55,6 +55,10 @@ const P = {
   star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9Z"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+  textSize: '<path d="M4 18 9 6l5 12M5.6 14h6.8"/><path d="M15 18l3-7 3 7M15.9 16h4.2"/>',
+  goal: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
+  back: '<path d="M15 6l-6 6 6 6"/>',
   dot: '<circle cx="12" cy="12" r="4" fill="currentColor"/>',
 };
 

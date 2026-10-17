@@ -7,13 +7,14 @@ import { openPalette } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
 import { pulse, line, reaction } from "./ui/personas.js";
+import { goals } from "./ui/goals.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
 const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
 const QS = new URLSearchParams(location.search);
 
 const prefs = Object.assign({ theme: "dark", motion: matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduced" : "full",
-  sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null }, store.get("prefs", {}));
+  sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true }, store.get("prefs", {}));
 let snap = null, view = { kind: "ceo" }, liveMode = "connecting";
 const details = new Map(), histCache = new Map(), statsCache = new Map(), inflight = new Set();
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
@@ -93,19 +94,24 @@ const office = createOffice($("stage"), {
   openStats: () => setView("stats"),
   onCat: () => sound.play("arrive"),
   onDouble: () => clearTimeout(panelScroll),
+  onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
 
 // ------------------------------------------------------------------------------------------------ inspector width
 // Drag the handle between the floor and the inspector (or use the arrow keys); double-click puts it back.
 // The width is a per-browser convenience; the floor refits itself through its ResizeObserver.
+// Its limits grow with the text size, so large text never lands in a cramped column.
 const PANEL_W = { min: 340, def: 440, step: 24 };
-const panelMax = () => Math.max(PANEL_W.min, Math.min(860, document.querySelector(".main").clientWidth - 600));   // the floor keeps ~540px
+const zoomNow = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-zoom")) || 1;
+const panelMin = () => Math.round(PANEL_W.min * zoomNow());
+const panelDef = () => Math.round(PANEL_W.def * zoomNow());
+const panelMax = () => Math.max(panelMin(), Math.min(Math.round(900 * zoomNow()), document.querySelector(".main").clientWidth - 600));   // the floor keeps ~540px
 function setPanelW(w, save) {
-  const v = Math.round(Math.max(PANEL_W.min, Math.min(panelMax(), w)));
+  const v = Math.round(Math.max(panelMin(), Math.min(panelMax(), w)));
   document.documentElement.style.setProperty("--panel-w", v + "px");
   const sp = $("splitter");
-  sp.setAttribute("aria-valuenow", v); sp.setAttribute("aria-valuemin", PANEL_W.min); sp.setAttribute("aria-valuemax", panelMax());
+  sp.setAttribute("aria-valuenow", v); sp.setAttribute("aria-valuemin", panelMin()); sp.setAttribute("aria-valuemax", panelMax());
   sp.setAttribute("aria-valuetext", `${v} pixels wide`);
   if (save) store.set("panelW", v);
   return v;
@@ -113,7 +119,7 @@ function setPanelW(w, save) {
 (function splitter() {
   const sp = $("splitter");
   let start = null;
-  setPanelW(store.get("panelW", PANEL_W.def));
+  setPanelW(store.get("panelW", panelDef()));
   sp.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     e.preventDefault(); sp.setPointerCapture(e.pointerId);
@@ -123,14 +129,39 @@ function setPanelW(w, save) {
   sp.addEventListener("pointermove", (e) => { if (start) setPanelW(start.w + (start.x - e.clientX)); });
   const end = () => { if (!start) return; start = null; document.body.classList.remove("resizing"); setPanelW($("panel").getBoundingClientRect().width, true); };
   sp.addEventListener("pointerup", end); sp.addEventListener("pointercancel", end); sp.addEventListener("lostpointercapture", end);
-  sp.addEventListener("dblclick", () => { setPanelW(PANEL_W.def, true); toast("Inspector width reset."); });
+  sp.addEventListener("dblclick", () => { setPanelW(panelDef(), true); toast("Inspector width reset."); });
   sp.addEventListener("keydown", (e) => {
     const w = $("panel").getBoundingClientRect().width;
-    const to = { ArrowLeft: w + PANEL_W.step, ArrowRight: w - PANEL_W.step, Home: PANEL_W.min, End: panelMax(), Enter: PANEL_W.def }[e.key];
+    const to = { ArrowLeft: w + PANEL_W.step, ArrowRight: w - PANEL_W.step, Home: panelMin(), End: panelMax(), Enter: panelDef() }[e.key];
     if (to != null) { e.preventDefault(); setPanelW(to, true); }
   });
-  addEventListener("resize", debounce(() => setPanelW(store.get("panelW", PANEL_W.def)), 150));
+  addEventListener("resize", debounce(() => setPanelW(store.get("panelW", panelDef())), 150));
 })();
+
+// Text size: Auto picks larger text on big screens; the floor scales itself, everything else follows --ui-zoom.
+const TEXT_ZOOM = { s: 0.92, m: 1, l: 1.12, xl: 1.25 };
+const TEXT_LABEL = { auto: "Auto", s: "Small", m: "Medium", l: "Large", xl: "Extra large" };
+function uiZoom() {
+  if (prefs.textSize !== "auto") return TEXT_ZOOM[prefs.textSize] || 1;
+  const w = innerWidth;
+  return w >= 2400 ? 1.25 : w >= 1900 ? 1.15 : w >= 1600 ? 1.06 : 1;
+}
+function applyTextSize() { document.documentElement.style.setProperty("--ui-zoom", uiZoom()); if (typeof setPanelW === "function") setPanelW(store.get("panelW", panelDef())); }
+applyTextSize();
+addEventListener("resize", debounce(applyTextSize, 150));
+app.textSize = () => ({ pref: prefs.textSize, zoom: uiZoom(), label: TEXT_LABEL });
+
+// Hide the inspector for a full-width floor (the button by the clock, or \). Opening anything brings it back.
+function applyPanel() {
+  document.body.classList.toggle("panel-off", !prefs.panel);
+  const b = $("btnPanel");
+  b.innerHTML = icon("sidebar", 17);
+  b.setAttribute("aria-pressed", String(!!prefs.panel));
+  b.title = prefs.panel ? "Hide the inspector (\\)" : "Show the inspector (\\)";
+  b.setAttribute("aria-label", prefs.panel ? "Hide the inspector" : "Show the inspector");
+}
+$("btnPanel").addEventListener("click", () => setPref("panel", !prefs.panel));
+applyPanel();
 
 // A first-visit hint on the floor itself, gone after the first click there.
 (function floorHint() {
@@ -149,6 +180,8 @@ function setPref(k, v) {
   if (k === "theme") document.documentElement.dataset.theme = v;
   if (k === "motion") { document.documentElement.dataset.motion = v; office.setReducedMotion(v === "reduced"); }
   if (k === "sound") sound.set(v);
+  if (k === "textSize") { applyTextSize(); if (view.kind === "settings") renderPanel(true); }
+  if (k === "panel") applyPanel();
   if (k === "privacy") { office.setPrivacy(v); renderPanel(true); renderMain(); rnSig = ""; if (snap) renderRightNow(); }
   if (k === "notify" && v) {
     // The switch only stays on if the browser really lets the office notify.
@@ -183,6 +216,7 @@ function viewFromHash() {
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 function go(v, fromHash) {
+  if (!fromHash && !prefs.panel) setPref("panel", true);   // opening anything brings a hidden inspector back
   if (!fromHash && hashFor(v) !== (location.hash || "#")) history.pushState(null, "", hashFor(v) === "#" ? location.pathname + location.search : hashFor(v));
   view = v;
   if (v.kind === "session") { loadDetail("s:" + v.seat + "/" + v.id, true); loadChat(v.seat, v.id, true); }
@@ -248,11 +282,38 @@ async function loadStats(day, force) {
     const r = await fetch("/api/stats" + (day ? "?day=" + encodeURIComponent(day) : ""));
     const data = r.ok ? await r.json() : { unavailable: true };
     statsCache.set(k, { data, at: Date.now() });
-    if (!day && data && !data.unavailable) office.setMvp(data.mvp);
+    if (!day && data && !data.unavailable) { office.setMvp(data.mvp); cheerGoals(data); }
   } catch { statsCache.set(k, { data: { unavailable: true }, at: Date.now() }); }
   inflight.delete("s" + k);
   if (prefs.view === "stats") renderMain();
   if (!day && view.kind === "seat") renderPanel(true);   // the character page's diary
+}
+
+// A daily goal finishing while the office is open gets a banner, a chime and a toast. Goals already done when the page
+// opens are only noted, so a reload never re-celebrates them.
+let goalsSeen = null;
+function cheerGoals(st) {
+  const gl = goals(st);
+  if (!gl) return;
+  const day = st.day || "";
+  if (!goalsSeen || goalsSeen.day !== day) {
+    const kept = store.get("goalsSeen", {});
+    goalsSeen = { day, ids: new Set(kept.day === day ? kept.ids || [] : gl.filter(g => g.done).map(g => g.id)) };
+    store.set("goalsSeen", { day, ids: [...goalsSeen.ids] });
+  }
+  if (gl.every(g => g.done) && day) {   // remember finished days for the streak
+    const days = store.get("goalDays", []);
+    if (!days.includes(day)) store.set("goalDays", [...days, day].slice(-90));
+  }
+  const fresh = gl.filter(g => g.done && !goalsSeen.ids.has(g.id));
+  for (const g of fresh) {
+    goalsSeen.ids.add(g.id);
+    const all = gl.every(x => x.done);
+    if (prefs.view === "floor") office.banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : g.label, "#ffd24a");
+    sound.play(all ? "levelup" : "achievement");
+    toast(all ? "All three goals done today." : `Goal done: ${g.label}.`, "good", { ic: "goal" });
+  }
+  if (fresh.length) { store.set("goalsSeen", { day, ids: [...goalsSeen.ids] }); if (view.kind === "ceo") renderPanel(true); }
 }
 
 // ------------------------------------------------------------------------------------------------ live
@@ -405,24 +466,41 @@ function paintLatest() {
 setInterval(() => { if (snap && prefs.motion !== "reduced") { latestIdx++; paintLatest(); } }, 7000);
 
 let rnSig = "";
+// The dock under the floor: one card per agent that is working or stopped, newest first. The card says who, what it is
+// doing and for how long; a click opens its chat and flies the camera to its desk.
 function renderRightNow() {
-  const rows = snap.seats.flatMap(s => live(s).filter(x => ["working", "waiting", "stuck", "limited"].includes(x.state)).map(x => ({ s, x })))
-    .sort((a, b) => ({ working: 0, waiting: 1, stuck: 2, limited: 3 }[a.x.state] - { working: 0, waiting: 1, stuck: 2, limited: 3 }[b.x.state]) || (b.x.updated_at || 0) - (a.x.updated_at || 0)).slice(0, 8);
-  const sig = JSON.stringify([prefs.privacy, rows.map(r => [r.x.id, r.x.state, r.x.activity, r.x.name])]);
+  const order = { working: 0, waiting: 1, stuck: 2, limited: 3 };
+  const rows = snap.seats.flatMap(s => live(s).filter(x => x.state in order).map(x => ({ s, x })))
+    .sort((a, b) => order[a.x.state] - order[b.x.state] || (b.x.updated_at || 0) - (a.x.updated_at || 0)).slice(0, 12);
+  const w = rows.filter(r => r.x.state === "working" || r.x.state === "waiting").length, o = rows.length - w;
+  const sig = JSON.stringify([prefs.privacy, rows.map(r => [r.x.id, r.x.state, r.x.activity, r.x.name, Math.floor((snap.now - (r.x.started_at || snap.now)) / 60)])]);
   if (sig === rnSig) return;
   rnSig = sig;
+  $("rnCount").textContent = rows.length ? `${w} at work${o ? `, ${o} stopped` : ""}` : "";
   const el = $("rightnow");
-  if (!rows.length) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div class="rn-h"><h4>Right now</h4><span class="hint">${(() => { const w = rows.filter(r => r.x.state === "working" || r.x.state === "waiting").length, o = rows.length - w; return `${w} at work${o ? `, ${o} stopped` : ""}`; })()}</span></div><div class="rn-grid">${rows.map(({ s, x }) => {
+  if (!rows.length) {
+    el.innerHTML = `<div class="rn-empty">${icon("coffee", 18)}<span>Nobody is working right now.</span><button class="btn sm" data-go-hire>${icon("plus", 14)}Hire a lane</button></div>`;
+    el.querySelector("[data-go-hire]").addEventListener("click", () => go({ kind: "hire" }));
+    return;
+  }
+  const STATE = { working: "Working", waiting: "Waiting for you", stuck: "Stuck", limited: "Out of plan" };
+  el.innerHTML = rows.map(({ s, x }) => {
     const p = panels.persona(s);
-    const act = prefs.privacy && x.kind === "desk" ? "Working…" : (x.activity || x.state);
-    return `<button class="rn" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" style="--seat:${s.color}">
+    const act = prefs.privacy && x.kind === "desk" ? "Working…" : (x.activity || STATE[x.state]);
+    const mins = x.started_at ? Math.max(0, Math.round((snap.now - x.started_at) / 60)) : null;
+    const age = mins == null ? "" : mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, "0")}`;
+    return `<button class="rn st-${x.state}" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" data-spot="${esc(s.id)}" style="--seat:${s.color}" title="${esc(x.name)}: ${esc(act)}">
       <span class="av"><i data-portrait="${esc(x.id)}|${esc(s.color)}|${x.kind === "desk" ? "headset" : ""}"></i></span>
-      <span class="rn-body"><span class="rn-top"><b>${esc(x.name.replace(/^wt-/, ""))}</b><span class="sdot ${x.state}"></span></span>
-      <span class="rn-act">${esc(act)}</span><span class="rn-meta">${esc(p.name)} · ${x.kind === "lane" ? "lane" : "terminal"}${x.started_at ? " · " + esc(relTime(x.started_at).replace(" ago", "")) : ""}</span></span></button>`;
-  }).join("")}</div>`;
+      <span class="rn-body"><span class="rn-top"><i class="sdot ${x.state}" title="${STATE[x.state]}"></i><b>${esc(x.name.replace(/^wt-/, ""))}</b>${x.state === "working" ? "" : `<span class="rn-state">${STATE[x.state]}</span>`}</span>
+      <span class="rn-act">${esc(act)}</span><span class="rn-meta"><span class="rn-who">${esc(p.name)}</span> · ${x.kind === "lane" ? "lane" : "terminal"}${age ? " · " + age : ""}</span></span></button>`;
+  }).join("");
   hydratePortraits(el, 3);
-  el.querySelectorAll(".rn").forEach(b => b.addEventListener("click", () => { go({ kind: "session", seat: b.dataset.seat, id: b.dataset.id }); office.focusSession(b.dataset.id); }));
+  requestAnimationFrame(() => el.classList.toggle("more", el.scrollWidth > el.clientWidth + 4 && el.scrollLeft + el.clientWidth < el.scrollWidth - 4));
+  if (!el.dataset.fade) { el.dataset.fade = "1"; el.addEventListener("scroll", () => el.classList.toggle("more", el.scrollLeft + el.clientWidth < el.scrollWidth - 4), { passive: true }); }
+  el.querySelectorAll(".rn").forEach(b => {
+    b.addEventListener("click", () => { go({ kind: "session", seat: b.dataset.seat, id: b.dataset.id }); office.focusSession(b.dataset.id); });
+    b.addEventListener("mouseenter", () => office.spotlight(b.dataset.spot)); b.addEventListener("mouseleave", () => office.spotlight(null));
+  });
 }
 
 // ------------------------------------------------------------------------------------------------ menu
@@ -473,7 +551,8 @@ async function savePicture() {
 function shortcuts() {
   const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S", "Floor, Timeline, Team, Today"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
-    ["P", "Share-safe mode"], [",", "Settings"], ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
+    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["\\", "Hide or show the inspector"],
+    ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
   $("dialogBody").innerHTML = `<div class="dh"><b>Keyboard shortcuts</b><button class="btn sm ghost" id="kClose">${icon("x", 16)}</button></div>
     <div class="db"><table class="keys">${keys.map(([k, what]) => `<tr><td>${k.split(" ").map(x => `<kbd>${esc(x)}</kbd>`).join(" ")}</td><td>${esc(what)}</td></tr>`).join("")}</table></div>`;
   $("dialog").showModal();
@@ -490,6 +569,7 @@ function openMenu(focusItem) {
     + item("notify", "bell", "Desktop notifications", prefs.notify ? "On" : "Off", prefs.notify)
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
+    + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
     + "<hr>" + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + item("settings", "settings", "Settings");
   document.body.appendChild(m);
@@ -510,12 +590,13 @@ function openMenu(focusItem) {
     else if (k === "notify") setPref("notify", !prefs.notify);
     else if (k === "privacy") setPref("privacy", !prefs.privacy);
     else if (k === "theme") setPref("theme", { dark: "light", light: "system", system: "dark" }[prefs.theme] || "dark");
+    else if (k === "text") setPref("textSize", { auto: "s", s: "m", m: "l", l: "xl", xl: "auto" }[prefs.textSize] || "auto");
     else if (k === "checkpoint") checkpoint();
     else if (k === "broadcast") broadcast();
     else if (k === "picture") savePicture();
     else go({ kind: k });
     m.remove(); $("btnMenu").setAttribute("aria-expanded", "false");
-    if (["sound", "notify", "privacy", "theme"].includes(k)) openMenu(k);   // a toggle keeps the menu open on that item
+    if (["sound", "notify", "privacy", "theme", "text"].includes(k)) openMenu(k);   // a toggle keeps the menu open on that item
   }));
   setTimeout(() => document.addEventListener("mousedown", function close(ev) { if (!m.contains(ev.target) && ev.target !== $("btnMenu") && !$("btnMenu").contains(ev.target)) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); document.removeEventListener("mousedown", close); } }), 0);
 }
@@ -599,6 +680,9 @@ function bindCommon(p) {
   p.querySelectorAll("[data-refresh]").forEach(b => b.addEventListener("click", async () => {
     try { const r = await app.post("/api/usage/refresh", { seat: b.dataset.refresh }); toast(r.demo ? "Demo office: nothing to read." : "Reading the plan now."); setTimeout(pollOnce, 2500); } catch (e) { toast(e.message, "bad"); }
   }));
+  p.querySelectorAll("[data-spot]").forEach(b => {   // pointing at a character lights up its room on the floor
+    b.addEventListener("mouseenter", () => office.spotlight(b.dataset.spot)); b.addEventListener("mouseleave", () => office.spotlight(null));
+  });
   p.querySelectorAll("[data-focus-seat]").forEach(b => b.addEventListener("click", () => { setView("floor"); office.focusSeat(b.dataset.focusSeat); }));
   p.querySelectorAll("[data-focus-session]").forEach(b => b.addEventListener("click", () => { setView("floor"); office.focusSession(b.dataset.focusSession); }));
 }
@@ -712,6 +796,8 @@ document.addEventListener("keydown", (e) => {
   else if (k === "p") setPref("privacy", !prefs.privacy);
   else if (k === ",") go({ kind: "settings" });
   else if (k === "?") shortcuts();
+  else if (k === "\\") setPref("panel", !prefs.panel);
+  else if (/^[1-9]$/.test(k) && snap && snap.seats[+k - 1]) go({ kind: "seat", seat: snap.seats[+k - 1].id });
   else if (prefs.view === "floor" && (k === "+" || k === "=")) office.zoom(1);
   else if (prefs.view === "floor" && k === "-") office.zoom(-1);
   else if (prefs.view === "floor" && k === "0") office.fit();

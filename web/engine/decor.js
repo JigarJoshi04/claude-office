@@ -16,7 +16,7 @@ export function drawRoomShell(c, room, color) {
   }
   c.globalAlpha = 0.16; r(c, x, y + BACK, w, h - BACK - 4, color); c.globalAlpha = 1;
   // a rug under the desks
-  c.globalAlpha = 0.22; r(c, x + 34, y + BACK + 18, w - 68, 74, S.shade(color, 0.7)); c.globalAlpha = 1;
+  c.globalAlpha = 0.22; r(c, x + 34, y + BACK + 18 + (room.dy || 0), w - 68, 74, S.shade(color, 0.7)); c.globalAlpha = 1;
   // back wall
   r(c, x, y, w, BACK, "#2c3150");
   for (let xx = x + 6; xx < x + w; xx += 24) r(c, xx, y + 4, 1, BACK - 12, "#323858");

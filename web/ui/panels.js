@@ -5,6 +5,7 @@ import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary } from "./personas.js";
 import { sound } from "./sound.js";
+import { goals, streak } from "./goals.js";
 
 const TEMPLATES = [
   { name: "Fix a failing test", ic: "check", title: "Fix failing test: ", brief: "Goal: make the failing test pass without weakening it.\nWhere: <test file or CI job>\nContext: <what changed recently>\nDone when: the test passes locally and the full suite is green.\nVerify: run the suite and paste the summary in the report." },
@@ -30,13 +31,19 @@ export function makePanels(app) {
   const seatById = (id) => S().seats.find(s => s.id === id);
   const P = (s) => personaFor(s, S().seats.indexOf(s));
   const nameOf = (id) => { const s = seatById(id); return s ? P(s).name : id; };
+  const STATUS_WORD = { READY: "ready for review", DONE: "done", BLOCKED: "blocked", FAILED: "failed", PARTIAL: "partly done", COMPLETE: "done", SUCCESS: "done" };
   const humanise = (text) => {
     let t = String(text || "");
     for (const s of S().seats) {
       const n = P(s).name;   // seat labels and seat ids both read as the character's name
       for (const k of new Set([s.label, s.id])) if (k && k !== n) t = t.replace(new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b(?![-\\w])`, "g"), n);
     }
-    return t;
+    // Plain words for the machine-shaped lines: "wt-x filed its report: STATUS: READY #12" reads "x finished: ready for review · #12".
+    return t.replace(/\bwt-(?=\w)/g, "")
+      .replace(/ filed its report: STATUS:\s*([A-Za-z_]+)\s*(?:[-–—:·]\s*)?(.*)$/, (m, st, rest) => ` finished: ${STATUS_WORD[st.toUpperCase()] || st.toLowerCase().replace(/_/g, " ")}${rest.trim() ? " · " + rest.trim() : ""}`)
+      .replace(/ sat down at ([\w .'-]+?) \((?:lane|terminal)\)$/, " started at $1's desk")
+      .replace(/ left ([A-Z][\w'-]*)$/, " left $1's room")
+      .replace(/^CEO (updated|changed|hired|stopped|sent)\b/, "You $1");
   };
   const crumbs = (...parts) => `<nav class="crumbs"><button data-go="ceo">Office</button>${parts.map(x => `${icon("chevronRight", 14)}${x}`).join("")}</nav>`;
   const priv = (sess, text) => app.privacy() && sess && sess.kind === "desk" ? `<span class="private">${esc(text || "")}</span>` : esc(text || "");
@@ -74,25 +81,38 @@ export function makePanels(app) {
   }
 
   // ---------------------------------------------------------------------------------------- briefing
-  // "While you were away": counts by kind, then the few things worth reading first.
+  // "While you were away": one line with the counts; the few things worth reading first open on demand.
+  let awayOpen = false;
   function awayHtml() {
     const a = app.away();
     if (!a) return "";
     const it = a.items, by = (k, pred = () => true) => it.filter(m => m.kind === k && pred(m)).length;
     const hrs = Math.max(1, Math.round((S().now - a.since) / 3600));
     const say = (n, one, many) => n === 1 ? one : many;
-    const chips = [[by("report", m => m.level === "good"), "report", "report filed", "reports filed", "check"], [by("levelup"), "levelup", "level-up", "level-ups", "star"],
-      [by("achievement"), "achievement", "trophy", "trophies", "trophy"], [by("lane", m => m.level === "good"), "lane", "lane finished", "lanes finished", "briefcase"],
-      [by("limit"), "limit", "limit hit", "limits hit", "sleep"], [by("report", m => m.level === "warn") + by("lane", m => m.level === "bad"), "bad", "blocked or failed", "blocked or failed", "alert"]]
-      .filter(([n]) => n > 0).map(([n, k, one, many, ic]) => [n, k, say(n, one, many), ic]);
+    const chips = [[by("report", m => m.level === "good"), "report filed", "reports filed"], [by("levelup"), "level-up", "level-ups"],
+      [by("achievement"), "trophy", "trophies"], [by("lane", m => m.level === "good"), "lane finished", "lanes finished"],
+      [by("limit"), "limit hit", "limits hit"], [by("report", m => m.level === "warn") + by("lane", m => m.level === "bad"), "blocked or failed", "blocked or failed"]]
+      .filter(([n]) => n > 0).map(([n, one, many]) => `${n} ${say(n, one, many)}`);
     const rank = (m) => (m.level === "bad" ? 0 : m.level === "warn" ? 1 : { report: 2, levelup: 3, achievement: 4, lane: 5 }[m.kind] ?? 6);
-    const top = [...it].sort((x, y) => rank(x) - rank(y) || y.ts - x.ts).slice(0, 5);
-    return `<div class="away"><button class="btn sm ghost x" data-dismiss-away aria-label="Dismiss">${icon("x", 16)}</button>
-      <div class="eyebrow">While you were away · ${hrs} h</div>
-      ${it.length ? `<h3>${chips.length ? chips.map(([n, , label]) => `${n} ${label}`).slice(0, 3).join(", ") : `${it.length} updates`}</h3>
-        <div class="away-chips">${chips.map(([n, , label, ic]) => `<span class="pill">${icon(ic, 14)}${n} ${esc(label)}</span>`).join("")}</div>
-        ${top.map(m => `<div class="act ${tone(m.level)} ${m.seat ? "click" : ""}" ${m.seat ? `data-seat="${esc(m.seat)}"` : ""}>${icon(EVENT_ICON[m.kind] || "dot", 16)}<span>${esc(humanise(m.text))}</span><span class="when">${relTime(m.ts)}</span></div>`).join("")}`
-      : `<h3>Quiet while you were away.</h3><div class="muted">No reports, limits or lanes changed.</div>`}</div>`;
+    const top = [...it].sort((x, y) => rank(x) - rank(y) || y.ts - x.ts).slice(0, 6);
+    return `<div class="away${awayOpen ? " open" : ""}">
+      <div class="away-top">${icon("sparkles", 18)}<div class="grow"><div class="eyebrow">While you were away · ${hrs} h</div>
+        <b>${it.length ? esc(chips.slice(0, 3).join(", ") || `${it.length} updates`) : "Quiet: nothing changed."}</b></div>
+        ${it.length ? `<button class="btn sm ghost" data-away-toggle aria-expanded="${awayOpen}">${awayOpen ? "Hide" : "What happened"}${icon(awayOpen ? "chevronDown" : "chevronRight", 14)}</button>` : ""}
+        <button class="btn sm ghost icon" data-dismiss-away aria-label="Dismiss" title="Dismiss">${icon("x", 16)}</button></div>
+      ${awayOpen ? `<div class="away-list">${top.map(m => `<div class="act ${tone(m.level)} ${m.seat ? "click" : ""}" ${m.seat ? `data-seat="${esc(m.seat)}"` : ""}>${icon(EVENT_ICON[m.kind] || "dot", 16)}<span>${esc(humanise(m.text))}</span><span class="when">${relTime(m.ts)}</span></div>`).join("")}</div>` : ""}</div>`;
+  }
+  // Today's goals as three small rings (web/ui/goals.js); a finished day folds into one gold line.
+  function goalsHtml() {
+    const st = app.statsCache(null), gl = goals(st);
+    if (!gl) return "";
+    const done = gl.filter(g => g.done).length, run = streak(store.get("goalDays", []), st.day);
+    const flame = run >= 2 ? `<span class="streak" title="Days in a row with every goal done">${icon("flame", 14)}${run}-day streak</span>` : "";
+    if (done === gl.length) return `<div class="goals-done">${icon("trophy", 18)}<span><b>All three goals done today.</b> New ones at midnight.</span>${flame}</div>`;
+    const r = 17, len = 2 * Math.PI * r;
+    return `<section class="b-sec"><h3 class="b-h">Today's goals<span class="count">${done}/${gl.length}</span><span class="grow"></span>${flame}</h3><div class="goals">${gl.map(g => `
+      <div class="goal${g.done ? " done" : ""}" title="${esc(g.label)}: ${esc(g.text)}"><span class="g-ring"><svg class="g-arc" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="${r}" class="trk"/><circle cx="20" cy="20" r="${r}" class="val" stroke-dasharray="${(len * g.f).toFixed(1)} ${len.toFixed(1)}"/></svg>${icon(g.done ? "check" : g.icon, 16)}</span>
+        <span class="g-txt"><b>${esc(g.label)}</b><small>${esc(g.text)}</small></span></div>`).join("")}</div></section>`;
   }
   // One fix per kind of problem, so every item in Needs you has a next step.
   function needAction(a) {
@@ -109,7 +129,7 @@ export function makePanels(app) {
     const p = P(s), v = say(s), b = binding(s), c = s.career;
     const left = b.left == null ? null : Math.round(b.left);
     const lvl = left != null && left < 15 ? "low" : left != null && left < 35 ? "mid" : "";
-    return `<button class="mate st-${v.state}" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" title="${esc(p.name)}: “${esc(v.line)}”">
+    return `<button class="mate st-${v.state}" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}" title="${esc(p.name)}: “${esc(v.line)}”">
       ${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}
       <span class="m-who"><span class="m-name">${esc(p.name)}${c ? `<em>Lv ${c.level}</em>` : ""}</span><span class="m-word ${v.tone}"><i></i>${esc(v.word)}</span></span>
       <span class="m-plan ${lvl}"><span class="m-num"><b>${left == null ? "–" : left + "%"}</b><small>${left == null ? "no reading" : b.key === "weekly" ? "week left" : "5 h left"}</small></span><span class="m-bar"><i style="width:${left ?? 0}%"></i></span></span>
@@ -160,6 +180,7 @@ export function makePanels(app) {
           <span class="grow"><span class="t">${esc(humanise(a.text))}</span>${a.resets_at ? `<span class="d">${a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at)} · ${inWords(a.resets_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
+      ${goalsHtml()}
       ${snap.seats.length ? `<section class="b-sec"><h3 class="b-h">Team<span class="count">${snap.seats.length}</span></h3>
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
@@ -167,6 +188,7 @@ export function makePanels(app) {
         <button data-go="services">${icon("server", 16)}Services</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
+        const at = root.querySelector("[data-away-toggle]"); if (at) at.addEventListener("click", () => { awayOpen = !awayOpen; app.rerender(true); });
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
         root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
@@ -404,8 +426,8 @@ export function makePanels(app) {
     if (!html) html = `<div class="notice">No conversation yet.</div>`;
     // While the agent works, a typing line says what it is doing right now (hidden for terminals in share-safe).
     if (x && (x.state === "working" || x.state === "waiting") && x.live !== false) {
-      const doing = app.privacy() && x.kind === "desk" ? "working" : (x.activity || "working").replace(/^\w/, c => c.toLowerCase());
-      html += `<div class="typing" aria-live="off"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(who)} is ${esc(doing)}</span></div>`;
+      const doing = app.privacy() && x.kind === "desk" ? "Working" : (x.activity || "Working");   // activities read as titles ("Merge PR #482")
+      html += `<div class="typing" aria-live="off"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span><b>${esc(who)}</b> · ${esc(doing)}</span></div>`;
     }
     const hint = { direct: ["zap", "Goes straight to this lane."],
       review: ["eye", "Claude Code holds messages from the office until someone approves them in that terminal."],
@@ -721,6 +743,8 @@ export function makePanels(app) {
     return { html: `${crumbs("Settings")}<h2>Settings</h2>
       ${section("This screen", [
         row("Theme", "Night is the default.", `<div class="seg-ctl">${[["dark", "Night"], ["light", "Day"], ["system", "System"]].map(([t, l]) => `<button data-theme-set="${t}" class="${p.theme === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
+        row("Text size", (() => { const ts = app.textSize(); return ts.pref === "auto" ? `Auto shows text at ${Math.round(ts.zoom * 100)}% on this screen.` : "Bigger text for big or far-away screens."; })(),
+          `<div class="seg-ctl">${[["auto", "Auto"], ["s", "S"], ["m", "M"], ["l", "L"], ["xl", "XL"]].map(([t, l]) => `<button data-text-set="${t}" class="${(p.textSize || "auto") === t ? "on" : ""}" aria-label="${esc(app.textSize().label[t])}">${l}</button>`).join("")}</div>`),
         row("Motion", "Reduced stops walking, confetti and fades.", `<div class="seg-ctl">${[["full", "Full"], ["reduced", "Reduced"]].map(([t, l]) => `<button data-motion-set="${t}" class="${p.motion === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
         row("Sound effects", "Little chimes for arrivals, reports and limits.", `<button class="btn sm ghost" data-test-sound>Play</button>${sw("sound", p.sound)}`),
         row("Desktop notifications", "Reports, limits and logouts while this tab is in the background.", sw("notify", p.notify)),
@@ -738,10 +762,11 @@ export function makePanels(app) {
         <div class="row wrap" style="gap:6px;margin:10px 0">${VOICE.map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-vev="${k}" ${(voice.events || []).includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
         <div class="grid2"><label class="f">Quiet from (hour)<input type="number" min="0" max="23" id="setQ1" value="${(voice.quiet_hours || [23, 8])[0]}"></label><label class="f">Until (hour)<input type="number" min="0" max="23" id="setQ2" value="${(voice.quiet_hours || [23, 8])[1]}"></label></div>`)}
       <div class="row" style="margin-top:8px"><button class="btn primary" id="setSave">Save office settings</button></div>`}
-      ${section("Keyboard", `<dl class="facts">${[["Ctrl/⌘ K", "Search and commands"], ["Esc", "Back to the briefing"], ["F  T  B  S", "Floor, Timeline, Team, Today"], ["H", "Hire a lane"], ["D", "Load divider"], ["P", "Share-safe"], ["+  −  0", "Zoom in, out, fit"], ["Arrows", "Pan when zoomed in"]].map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join("")}</dl>`)}
+      ${section("Keyboard", `<dl class="facts">${[["Ctrl/⌘ K", "Search and commands"], ["Esc", "Back to the briefing"], ["F  T  B  S", "Floor, Timeline, Team, Today"], ["H", "Hire a lane"], ["D", "Load divider"], ["P", "Share-safe"], ["1 … 9", "Open a character"], ["\\", "Hide or show the inspector"], ["+  −  0", "Zoom in, out, fit"], ["Arrows", "Pan when zoomed in"]].map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join("")}</dl>`)}
       ${section("About", `<div class="hint">Claude Office ${esc(S().office.version || "")} · up ${S().office.started_at ? ago(S().office.started_at).replace(" ago", "") : "–"} · ${esc(app.liveMode())}</div>`)}`,
       bind(root) {
         root.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => { app.setPref("theme", b.dataset.themeSet); app.rerender(true); }));
+        root.querySelectorAll("[data-text-set]").forEach(b => b.addEventListener("click", () => { app.setPref("textSize", b.dataset.textSet); app.rerender(true); }));
         root.querySelectorAll("[data-motion-set]").forEach(b => b.addEventListener("click", () => { app.setPref("motion", b.dataset.motionSet); app.rerender(true); }));
         root.querySelectorAll("[data-pref]").forEach(c => c.addEventListener("change", () => app.setPref(c.dataset.pref, c.checked)));
         const ts = root.querySelector("[data-test-sound]"); if (ts) ts.addEventListener("click", () => sound.preview("levelup"));

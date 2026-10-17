@@ -1,33 +1,51 @@
 // Floor plan and the static background. v4 "Studio": a lobby down the left (elevator, CEO desk, hiring desk, server
-// closet) and a room per character on the right, three to a row, each opening onto a corridor through its door.
+// closet) and a room per character on the right, each opening onto a corridor through its door. v5: the plan adapts to
+// the space it is shown in (2, 3 or 4 rooms to a row, taller rooms), so the building fills the screen.
 import * as S from "./sprites.js";
 import { BACK, drawRoomShell, drawDecorStatic } from "./decor.js";
 
-export const W = 768;
+export const W = 768;                           // the default plan's width (three rooms to a row); a layout carries its own
 export const WALL = 48;                         // the lobby's back wall
 export const LOBBY_W = 196;
-export const ROOM_W = 190, ROOM_H = 160, CORR = 16;
+export const ROOM_W = 190, ROOM_H = 160, ROOM_H_MAX = 240, CORR = 16;
 export const POD_W = 128, POD_H = 118;          // the desk island inside a room (people, monitors, chairs)
 export const SLOT_X = [19, 59, 99];
 export const ELEVATOR = { x: 84, y: 6 };
 export const SPINE_X = 178;                     // the lobby walkway that joins every corridor (walker left x)
 export const WALK_Y = 50;                       // the walkway under the lobby wall (walker top y)
 
-export function computeLayout(seats, archetypeOf = () => null) {
+// The plan that draws the office biggest in a box of bw × bh pixels: rooms per row, then rooms as tall as the box
+// allows (within limits). Leftover space is scored down, so a plan that fills the box wins a near tie.
+export function planFor(nSeats, bw, bh) {
+  let best = null;
+  for (const cols of [2, 3, 4]) {
+    const w = LOBBY_W + 2 + cols * ROOM_W, rows = Math.max(2, Math.ceil((nSeats + 1) / cols));
+    const roomH = Math.round(Math.max(ROOM_H, Math.min(ROOM_H_MAX, (bh * w / bw) / rows - CORR)));
+    const h = rows * (roomH + CORR), f = Math.min(bw / w, bh / h), fill = (w * f * h * f) / (bw * bh);
+    const score = f * Math.sqrt(fill);
+    if (!best || score > best.score + 1e-6) best = { cols, roomH, score };
+  }
+  return { cols: best.cols, roomH: best.roomH };
+}
+
+export function computeLayout(seats, archetypeOf = () => null, plan = {}) {
+  const cols = plan.cols || 3, roomH = plan.roomH || ROOM_H;
+  const W = LOBBY_W + 2 + cols * ROOM_W;
   const cells = seats.length + 1;              // + the lounge
-  const rows = Math.max(2, Math.ceil(cells / 3));
-  const H = rows * (ROOM_H + CORR);
-  const cell = (i) => ({ x: LOBBY_W + 2 + (i % 3) * ROOM_W, y: Math.floor(i / 3) * (ROOM_H + CORR), w: ROOM_W, h: ROOM_H, row: Math.floor(i / 3), col: i % 3 });
+  const rows = Math.max(2, Math.ceil(cells / cols));
+  const H = rows * (roomH + CORR);
+  const dy = Math.round((roomH - ROOM_H) * 0.4);   // in a taller room the desks sit a little lower, under more wall
+  const cell = (i) => ({ x: LOBBY_W + 2 + (i % cols) * ROOM_W, y: Math.floor(i / cols) * (roomH + CORR), w: ROOM_W, h: roomH, dy, row: Math.floor(i / cols), col: i % cols });
   const pods = seats.map((s, i) => {
     const room = cell(i);
     // the desk island sits in the middle of the room, under the back wall
-    return { seat: s, arch: archetypeOf(s), room, x: room.x + (ROOM_W - POD_W) / 2, y: room.y + BACK - 12, row: room.row, col: room.col,
-      door: { x: room.x + ROOM_W / 2, y: room.y + ROOM_H }, corr: room.y + ROOM_H + 1 };
+    return { seat: s, arch: archetypeOf(s), room, x: room.x + (ROOM_W - POD_W) / 2, y: room.y + BACK - 12 + dy, row: room.row, col: room.col,
+      door: { x: room.x + ROOM_W / 2, y: room.y + roomH }, corr: room.y + roomH + 1 };
   });
   const spare = [];
-  for (let i = seats.length; i < rows * 3; i++) spare.push(cell(i));
+  for (let i = seats.length; i < rows * cols; i++) spare.push(cell(i));
   return {
-    H, rows, pods,
+    W, H, rows, cols, roomH, pods,
     lounge: spare[0],
     meet: spare[1] || null,
     open: spare.slice(2),
@@ -35,7 +53,7 @@ export function computeLayout(seats, archetypeOf = () => null) {
     ceo: { x: 0, y: WALL, w: LOBBY_W, h: 104 },
     hire: { x: 22, y: WALL + 110 },
     server: { x: 0, y: WALL + 236, w: LOBBY_W, h: H - WALL - 236 },
-    corridors: Array.from({ length: rows }, (_, r) => r * (ROOM_H + CORR) + ROOM_H + 1),
+    corridors: Array.from({ length: rows }, (_, r) => r * (roomH + CORR) + roomH + 1),
   };
 }
 
@@ -51,10 +69,10 @@ export function pathTo(layout, pod, slot) {
   const sp = seatSpot(pod, slot), room = pod.room;
   const ex = ELEVATOR.x + 8, ey = ELEVATOR.y + 18;
   const corrY = pod.corr - 2, doorX = pod.door.x - 5;
-  const aisleY = room.y + ROOM_H - 44;                          // inside the room, below the bottom chairs, above the door sign
+  const aisleY = room.y + room.h - 44;                          // inside the room, below the bottom chairs, above the door sign
   const pts = [[ex, ey], [ex, WALK_Y], [SPINE_X, WALK_Y], [SPINE_X, corrY], [doorX, corrY], [doorX, aisleY]];
   if (sp.top) {
-    const side = sp.cx < pod.x + POD_W / 2 ? room.x + 26 : room.x + ROOM_W - 34;
+    const side = sp.cx < pod.x + POD_W / 2 ? room.x + 26 : room.x + room.w - 34;
     pts.push([side, aisleY], [side, sp.standY], [sp.cx, sp.standY]);
   } else {
     pts.push([sp.cx, aisleY], [sp.cx, sp.standY]);
@@ -63,7 +81,7 @@ export function pathTo(layout, pod, slot) {
 }
 
 export function drawStatic(c, L) {
-  const H = L.H;
+  const H = L.H, W = L.W;
   // the building: dark gaps between rooms read as corridors
   S.rect(c, 0, 0, W, H, "#1a1c2b");
   // corridors: a runner along each row
@@ -115,7 +133,23 @@ export function drawStatic(c, L) {
     S.rect(c, tx, ty, 112, 36, "#5e412c"); S.rect(c, tx + 2, ty + 2, 108, 32, "#77543a"); S.rect(c, tx + 2, ty + 2, 108, 1, "#8a6446");
     for (let i = 0; i < 4; i++) { S.drawChairFront(c, tx + 8 + i * 26, ty - 12); S.drawChairBack(c, tx + 9 + i * 26, ty + 38); }
   }
-  for (const o of L.open) { drawCommonRoom(c, o, "#2c3042", "#292c3d"); S.drawPlant(c, o.x + 20, o.y + 60, 0); S.drawPlant(c, o.x + o.w - 34, o.y + 90, 2); }
+  for (const o of L.open) drawGarden(c, o);
+}
+
+// A spare cell becomes a little indoor garden: grass, a stepping-stone path from the door, a pond, a bench, plants.
+function drawGarden(c, room) {
+  const { x, y, w, h } = room;
+  drawCommonRoom(c, room, "#2f5a3a", "#2b5335");
+  for (let yy = y + BACK + 6; yy < y + h - 8; yy += 9) for (let xx = x + 6 + ((yy / 9) | 0) % 2 * 5; xx < x + w - 6; xx += 11) S.rect(c, xx, yy, 1, 2, "#3d7049");
+  const cx = x + w / 2;
+  for (let yy = y + h - 14; yy > y + BACK + 30; yy -= 13) { S.rect(c, cx - 6 + (((yy / 13) | 0) % 2 ? 3 : -3), yy, 12, 6, "#8f8b7c"); S.rect(c, cx - 6 + (((yy / 13) | 0) % 2 ? 3 : -3), yy, 12, 1, "#aaa596"); }
+  const px = x + 18, py = y + h - 62;                                  // the pond
+  S.rect(c, px + 4, py, 44, 26, "#2a4f7a"); S.rect(c, px, py + 4, 52, 18, "#2a4f7a"); S.rect(c, px + 6, py + 3, 40, 2, "#4f86c0"); S.rect(c, px + 30, py + 12, 6, 1, "#7fb2e6");
+  S.rect(c, px + 14, py + 9, 4, 2, "#e8823a"); S.rect(c, px + 18, py + 10, 1, 1, "#e8823a");   // a koi
+  const bx = x + w - 66, by = y + BACK + 34;                           // a bench
+  S.rect(c, bx, by, 46, 6, "#7a5233"); S.rect(c, bx, by, 46, 1, "#9a6b44"); S.rect(c, bx, by - 8, 46, 4, "#6b4529");
+  S.rect(c, bx + 3, by + 6, 2, 6, "#4a3020"); S.rect(c, bx + 41, by + 6, 2, 6, "#4a3020");
+  S.drawPlant(c, x + 10, y + BACK + 8, 0); S.drawPlant(c, x + w - 24, y + h - 40, 2); S.drawPlant(c, x + w - 30, y + BACK + 60, 1); S.drawPlant(c, x + 64, y + BACK + 14, 2);
 }
 
 function drawCommonRoom(c, room, a, b) {
