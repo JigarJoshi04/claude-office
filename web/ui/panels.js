@@ -22,6 +22,7 @@ export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
   let hireDraft = store.get("hireDraft", { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true });
   let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false;
+  let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
   const sessTab = new Map();
   const openSteps = new Set();
 
@@ -103,12 +104,16 @@ export function makePanels(app) {
     if (a.seat) return `<button class="btn sm" data-seat-go="${esc(a.seat)}">Open</button>`;
     return "";
   }
-  function tile(s) {
+  // One row per character: who, how they feel (in their words on hover), and how much plan is left.
+  function mate(s) {
     const p = P(s), v = say(s), b = binding(s), c = s.career;
+    const left = b.left == null ? null : Math.round(b.left);
+    const lvl = left != null && left < 15 ? "low" : left != null && left < 35 ? "mid" : "";
     return `<button class="mate st-${v.state}" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" title="${esc(p.name)}: “${esc(v.line)}”">
-      <span class="t-top">${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}${ring(b.left, s.color, 46, b.key === "weekly" ? "week" : b.key ? "5 h" : "")}</span>
-      <span class="t-name">${esc(p.name)}${c ? `<em>Lv ${c.level}</em>` : ""}</span>
-      <span class="t-word ${v.tone}">${esc(v.word)}</span></button>`;
+      ${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}
+      <span class="m-who"><span class="m-name">${esc(p.name)}${c ? `<em>Lv ${c.level}</em>` : ""}</span><span class="m-word ${v.tone}"><i></i>${esc(v.word)}</span></span>
+      <span class="m-plan ${lvl}"><span class="m-num"><b>${left == null ? "–" : left + "%"}</b><small>${left == null ? "no reading" : b.key === "weekly" ? "week left" : "5 h left"}</small></span><span class="m-bar"><i style="width:${left ?? 0}%"></i></span></span>
+    </button>`;
   }
   // Needs you, grouped: everything caused by one seat being out of plan becomes one line about that seat.
   function needs(snap) {
@@ -137,30 +142,30 @@ export function makePanels(app) {
     const att = needs(snap);
     const shown = showAllNeeds ? att : att.slice(0, 3);
     const np = snap.next_pick, next = np.seat && seatById(np.seat);
-    const welcome = !store.get("welcomed", false);
-    const latest = (snap.events || []).slice(-1)[0];
     // Sessions by what they are doing: stopped ones (out of plan, stuck) are not "idle".
     const all = snap.seats.flatMap(s => live(s));
     const working = all.filter(x => x.state === "working" || x.state === "waiting").length;
     const stopped = all.filter(x => x.state === "limited" || x.state === "stuck").length;
     const idle = all.length - working - stopped;
+    const num = (n, label, dot, tip = "") => `<div class="b-n ${n ? "" : "zero"}"${tip ? ` title="${tip}"` : ""}><b>${n}</b><span><i class="sdot ${dot}"></i>${label}</span></div>`;
+    // Three blocks, always in this order: how the office is doing, what needs you, who is on the team.
     return { html: `${awayHtml()}
-      ${welcome ? `<div class="hello">${icon("sparkles", 16)}<span>New here? Click anyone on the floor to see what they are doing and talk to them.</span><button class="btn sm ghost" data-dismiss-welcome>Got it</button></div>` : ""}
       ${snap.office.config_error ? `<div class="need bad"><span class="ico">${icon("alert", 16)}</span><div class="grow"><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
-      <div class="g-status">
-        <div class="g-nums"><span><b>${working}</b> working</span><span><b>${idle}</b> idle</span><span title="Out of plan or stuck"><b>${stopped}</b> stopped</span></div>
-        <div class="g-next">${next ? `Next lane goes to <b style="color:${esc(next.color)}">${esc(P(next).name)}</b>` : "No seat can take a new lane right now"}<button class="btn sm primary" data-go="hire">${icon("plus", 14)}Hire</button></div>
-      </div>
+      <section class="b-status" aria-label="Sessions right now">
+        <div class="b-nums">${num(working, "Working", "working")}${num(idle, "Idle", "idle")}${num(stopped, "Stopped", "limited", "Out of plan or stuck")}</div>
+        <button class="b-next" data-go="divider" title="How new lanes are divided">${icon("sliders", 16)}<span>${next ? `Next lane goes to <b style="color:${esc(next.color)}">${esc(P(next).name)}</b>` : "No seat can take a new lane right now"}</span>${icon("chevronRight", 16)}</button>
+      </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
-      ${att.length ? `<div class="g-needs"><div class="g-h">${icon("alert", 15)}Needs you · ${att.length}</div>${shown.map(a => `<div class="g-need ${a.level}">
+      ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
           <span class="grow"><span class="t">${esc(humanise(a.text))}</span>${a.resets_at ? `<span class="d">${a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at)} · ${inWords(a.resets_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
-          ${att.length > 3 ? `<button class="btn sm ghost" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</div>`
+          ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
-      <div class="g-h g-team">Your team<span class="grow"></span><button class="btn sm ghost" data-go="trophies">${icon("trophy", 14)}Trophies</button></div>
-      <div class="crew">${snap.seats.map(tile).join("")}</div>
-      ${latest ? `<div class="g-latest">${icon(EVENT_ICON[latest.kind] || "news", 15)}<span>${esc(humanise(latest.text))}</span><span class="when">${relTime(latest.ts)}</span><button class="btn sm ghost" data-go="news">All news</button></div>` : ""}`,
+      ${snap.seats.length ? `<section class="b-sec"><h3 class="b-h">Team<span class="count">${snap.seats.length}</span></h3>
+      <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
+      <nav class="b-links" aria-label="More">
+        <button data-go="news">${icon("news", 16)}News</button><button data-go="trophies">${icon("trophy", 16)}Trophies</button>
+        <button data-go="services">${icon("server", 16)}Services</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
-        const d = root.querySelector("[data-dismiss-welcome]"); if (d) d.addEventListener("click", () => { store.set("welcomed", true); app.rerender(true); });
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
@@ -182,11 +187,6 @@ export function makePanels(app) {
     const hist = app.historyCache(6);
     const ser = hist && hist.seats && hist.seats[s.id] ? hist.seats[s.id].series : [];
     const recent = (S().events || []).filter(e => e.seat === s.id).slice(-5).reverse();
-    const meter = (key, label) => {
-      const w = u[key], left = leftOf(s, key);
-      return `<div class="m"><div class="mt"><b>${label}</b><span>${left == null ? "no reading yet" : Math.round(left) + "% left"}</span></div>
-        ${bar(left, "bar")}<div class="sub">${w && w.resets_at ? `Resets ${dayTime(w.resets_at)} (${inWords(w.resets_at)})` : w && w.reset_since_read ? "Reset since the last reading" : "Reset time unknown"}</div></div>`;
-    };
     const f5 = fc.five_hour || {};
     const paceText = s.status === "limited" ? { cls: "bad", ic: "sleep", t: "Out of plan. The desk wakes up when the window resets." }
       : f5.state === "runs_out" ? { cls: "bad", ic: "zap", t: `At ${f5.per_hour}% an hour it runs out ${dayTime(f5.out_at)}, ${until(S().now + (f5.margin_s || 0))} before the reset.` }
@@ -197,34 +197,46 @@ export function makePanels(app) {
     const vo = say(s), today = (app.statsCache(null) || {}).seats, dstats = today && today[s.id];
     const planRing = (key, label) => {
       const w = u[key], left = leftOf(s, key);
-      return `<div class="pring">${ring(left, s.color, 64)}<div><b>${label}</b><span>${left == null ? "No reading yet" : "left"}</span>
-        <small>${w && w.resets_at ? `Resets ${dayTime(w.resets_at)}` : w && w.reset_since_read ? "Reset since the last reading" : "Reset time unknown"}</small></div></div>`;
+      const when = w && w.resets_at ? `${s.status === "limited" && key === binding(s).key ? "Back" : "Resets"} ${dayTime(w.resets_at)}` : w && w.reset_since_read ? "Reset since the last reading" : left == null ? "No reading yet" : "Reset time unknown";
+      return `<div class="pring">${ring(left, s.color, 58)}<div><b>${label}</b><small>${when}</small>${w && w.resets_at ? `<small>${inWords(w.resets_at)}</small>` : ""}</div></div>`;
     };
+    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : `gpt -w -C <folder> "task"`;
+    const tabs = [["now", "Now", "clock"], ["career", "Career", "trophy"], ["settings", "Settings", "sliders"]];
+    const tab = tabs.some(([k]) => k === seatTab) && (s.career || seatTab !== "career") ? seatTab : "now";
+    const body = tab === "career" ? `${levelRow(s)}${careerHtml(s)}`
+      : tab === "settings" ? `${section("Duty", `<div class="duty"><div class="grow"><b>${sc.enabled ? "On duty" : "On holiday"}</b>
+          <span>${sc.enabled ? `Gets ${sc.weight}% of new lanes, up to ${sc.max_lanes} at once. Running ${s.lanes} now.` : "No new lanes go here."}${sc.note ? " " + esc(sc.note) : ""}</span></div>
+          <label class="switch" title="On duty"><input type="checkbox" id="seatDuty" ${sc.enabled ? "checked" : ""} aria-label="On duty"><span></span></label></div>`)}
+        ${section(s.kind === "claude" ? "Open this seat in a terminal" : "Give Codex a task", `<div class="copy"><code>${esc(cmd)}</code><button class="btn sm" data-copy="${esc(cmd)}">${icon("copy", 14)}Copy</button></div>`)}
+        ${section("Account", `<dl class="facts">${app.privacy() ? `<dt>Account</dt><dd>Hidden (share-safe)</dd>` : [["Name", a.name], ["Email", a.email]].filter(([, x]) => x).map(([k, x]) => `<dt>${k}</dt><dd>${esc(x)}</dd>`).join("")}
+          ${h.tier ? `<dt>Plan</dt><dd>${esc(h.tier)}</dd>` : ""}${h.detail ? `<dt>Status</dt><dd>${esc(h.detail)}</dd>` : ""}<dt>Seat</dt><dd>${esc(s.label)}</dd></dl>`)}`
+      : `${section(`At the desk · ${L.length}`, L.length ? L.map(x => sessRow(s, x)).join("") : `<div class="empty">${s.status === "limited" ? "Everyone went home: the seat is out of plan." : "Nobody here right now."}</div>`)}
+        ${section("Today", `<div class="diary">${icon("news", 16)}<span>${esc(diary(p, dstats))}</span></div>`)}
+        ${section("Plan, last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
+          <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
+        ${recent.length ? section("Recently", recent.slice(0, 3).map(actRow).join("")) : ""}`;
     return { html: `${crumbs(esc(p.name))}
       <div class="hero st-${vo.state}" style="--seat:${esc(s.color)}">
+        <button class="btn sm ghost icon h-find" data-focus-seat="${esc(s.id)}" title="Show on the floor" aria-label="Show on the floor">${icon("target", 16)}</button>
         <div class="h-top">${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "", "big")}
           <div class="grow"><h2>${esc(p.name)}</h2><div class="role">${esc(p.role)}${s.career ? ` · Level ${s.career.level} ${esc(s.career.title)}` : ""}</div>
-          <span class="t-word ${vo.tone}">${esc(vo.word)}</span></div></div>
+          <span class="m-word ${vo.tone}"><i></i>${esc(vo.word)}</span></div></div>
         <blockquote class="voice">“${esc(vo.line)}”</blockquote>
       </div>
       <div class="prings">${planRing("five_hour", "5 hours")}${planRing("weekly", "This week")}</div>
-      <div class="pace ${paceText.cls}">${icon(paceText.ic, 17)}<span>${esc(paceText.t)}</span>${s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}" title="Read the plan now">${icon("refresh", 14)}</button>` : ""}</div>
-      ${section(`At the desk · ${L.length}`, L.length ? L.map(x => sessRow(s, x)).join("") : `<div class="muted">${s.status === "limited" ? "Everyone went home: the seat is out of plan." : "Nobody here right now."}</div>`)}
-      ${section("Today", `<div class="diary">${icon("news", 16)}<span>${esc(diary(p, dstats))}</span></div>`)}
-      ${s.career ? section("Career", levelRow(s)) : ""}
-      ${careerHtml(s)}
-      ${section("Plan, last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
-        <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
-      ${section("Settings", `<div class="row between"><div class="grow"><div style="font-weight:550">${sc.enabled ? "On duty" : "On holiday"}</div>
-        <div class="hint">${sc.enabled ? `Gets ${sc.weight}% of new lanes, up to ${sc.max_lanes} at once. Running ${s.lanes} now.` : "No new lanes go here."}${sc.note ? " " + esc(sc.note) : ""}</div></div>
-        <label class="switch" title="On duty"><input type="checkbox" id="seatDuty" ${sc.enabled ? "checked" : ""} aria-label="On duty"><span></span></label></div>
-        ${s.kind === "claude" ? `<div class="copy" style="margin-top:12px"><code>CLAUDE_CONFIG_DIR=${esc(s.config_dir)} claude</code><button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(s.config_dir)} claude">${icon("copy", 14)}Copy</button></div>`
-          : `<div class="copy" style="margin-top:12px"><code>gpt -w -C &lt;folder&gt; "task"</code><button class="btn sm" data-copy='gpt -w -C <folder> "task"'>${icon("copy", 14)}Copy</button></div>`}
-        <div class="acct">${app.privacy() ? "Account hidden (share-safe)" : esc([a.name, a.email].filter(Boolean).join(" · "))}${h.tier ? " · " + esc(h.tier) : ""} · ${esc(h.detail || "")} · ${esc(s.label)}</div>`)}
-      ${recent.length ? section("Recently", recent.slice(0, 3).map(actRow).join("")) : ""}
-      <div class="row" style="margin-top:18px"><button class="btn sm" data-focus-seat="${esc(s.id)}">${icon("target", 15)}Show on the floor</button></div>`,
+      <div class="pace ${paceText.cls}">${icon(paceText.ic, 17)}<span>${esc(paceText.t)}</span>${s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}" title="Read the plan now" aria-label="Read the plan now">${icon("refresh", 14)}</button>` : ""}</div>
+      <div class="seg" role="tablist" aria-label="${esc(p.name)}">${tabs.filter(([k]) => k !== "career" || s.career).map(([k, label, ic]) => `<button role="tab" data-seat-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? "on" : ""}">${icon(ic, 15)}${label}</button>`).join("")}</div>
+      <div class="seg-body" role="tabpanel">${body}</div>`,
       bind(root) {
         bindSparks(root);
+        const pick = (k) => { seatTab = k; store.set("seatTab", k); app.rerender(true); const t = root.querySelector(`[data-seat-tab="${k}"]`); if (t) t.focus(); };
+        root.querySelectorAll("[data-seat-tab]").forEach((b, i, all) => {
+          b.addEventListener("click", () => pick(b.dataset.seatTab));
+          b.addEventListener("keydown", (e) => {   // arrow keys move between tabs, as in any tab list
+            const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+            if (d) { e.preventDefault(); pick(all[(i + d + all.length) % all.length].dataset.seatTab); }
+          });
+        });
         root.querySelectorAll("[data-badge]").forEach(b => b.addEventListener("click", () => { badgeSel = badgeSel === b.dataset.badge ? null : b.dataset.badge; app.rerender(true); }));
         const duty = root.querySelector("#seatDuty");
         if (duty) duty.addEventListener("change", async () => {
@@ -265,7 +277,7 @@ export function makePanels(app) {
       .sort((x, y) => y.f - x.f)[0];
     const sel = order.find(a => a.id === badgeSel);
     const info = sel ? `<div class="badge-info"><b>${esc(sel.name)}</b> · ${esc(sel.desc)}${c.unlocked[sel.id] ? ` · unlocked ${esc(dayTime(c.unlocked[sel.id]))}` : " · not yet"}</div>` : "";
-    return `<div class="career" style="--seat:${esc(s.color)}">` + section(`Career · ${got.length} of ${cat.length} achievements`,
+    return `<div class="career" style="--seat:${esc(s.color)}">` + section(`Achievements · ${got.length} of ${cat.length}`,
       `<div class="cstats">${tiles.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("")}</div>
       ${next ? `<div class="nextup">${icon("target", 16)}<div class="grow"><div><b>Next up: ${esc(next.a.name)}</b> <span>${big(Math.floor(next.have))} of ${big(next.need)} ${esc(next.unit)}</span></div><div class="xpbar"><i style="width:${Math.round(next.f * 100)}%"></i></div></div></div>` : ""}
       <div class="badges" role="list">${order.map(a => { const at = c.unlocked[a.id];
@@ -431,7 +443,8 @@ export function makePanels(app) {
 
   // ---------------------------------------------------------------------------------- rooms & news
   function services() {
-    const units = S().units || [];
+    const rank = (u) => u.active === "failed" ? 0 : u.active === "active" ? 2 : 1;   // failures first, like the racks on the floor
+    const units = [...(S().units || [])].sort((a, b) => rank(a) - rank(b));
     return { html: `${crumbs("Server room")}<h2>Server room</h2><p class="lede">Background services that keep lanes running: conductors, supervisors and the lanes themselves.</p>
       ${section(`Services · ${units.length}`, units.length ? units.map(u => `<div class="need ${u.active === "failed" ? "bad" : u.active === "active" ? "good" : "info"}"><span class="ico">${icon(u.active === "active" ? "play" : u.active === "failed" ? "alert" : "stop", 16)}</span>
         <div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(u.unit)}</div><div class="d">${esc(u.description)} · ${esc(u.active)}</div></div></div>`).join("") : `<div class="muted">No watched services. Add patterns to <code>watch_units</code> in the config.</div>`)}` };

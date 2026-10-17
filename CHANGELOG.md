@@ -3,6 +3,21 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.1.0] - 2026-10-17
+
+### Changed
+- The inspector is resizable: a handle between the floor and the inspector (drag, arrow keys, double-click to reset),
+  remembered per browser. The briefing and character pages adapt to the width with container queries.
+- The briefing is three blocks: status numbers with the next lane, Needs you, and one team row per character.
+  The welcome card became a one-time hint on the floor; the latest-news line moved to the floor only.
+- Character pages keep the voice and plan rings on top and split the rest into Now, Career and Settings tabs.
+- Larger, sentence-case section headings and body text in the inspector; the terminal command wraps instead of
+  scrolling; the header line says one sentence (the whole story is in its tooltip).
+
+### Fixed
+- The plan chart's future zone and gauge track used an undefined colour and drew as a black block.
+- The server room lists failed services first.
+
 ## [3.0.0] - 2026-10-17
 
 ### Added

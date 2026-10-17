@@ -68,14 +68,18 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Message all lanes** at once, for example "limits reset in 20 minutes: write your notes now".
 
 **The CEO's briefing**
-- Glance cards, not paragraphs: how many agents are working, idle and napping, and who gets the next lane.
+- Three blocks, always in the same order: how many sessions are working, idle and stopped (and who gets the next
+  lane), what needs you, and your team.
 - *Needs you*, grouped per seat ("Vega is out of plan: 2 sessions paused"), and each item with a one-click fix: copy
   the login command, open the chat, open the lane.
-- Your team as tiles: each character's face, a ring for the plan it has left, its level and one status word.
+- Your team as one row per character: face, level, mood in a word, and a bar for the plan it has left.
 - *While you were away*: after an hour or more away, it opens with what happened since you last looked. That covers
   reports filed, level-ups, trophies, lanes finished, limits hit and anything blocked, plus the five items to read first.
-- Each character's page: its voice, two plan rings with their resets, the pace, who is at the desk, today's diary,
-  its career and its settings.
+- Each character's page: its voice and two plan rings with their resets, then three tabs: **Now** (who is at the
+  desk, today's diary, the plan chart), **Career** (level, stats, trophies) and **Settings** (duty, terminal command,
+  account).
+- **Resizable**: drag the handle between the floor and the inspector, or focus it and use the arrow keys.
+  Double-click puts it back. The width is remembered, and the inspector lays itself out for the space it has.
 
 **Views**
 - **Timeline**: every session on every seat over the last 1 to 24 hours, coloured by state. It also shows usage,

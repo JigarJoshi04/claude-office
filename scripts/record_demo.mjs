@@ -29,7 +29,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The office page as the recorder sees it. Everything it touches is here.
 const UI = {
   floorReady: "#stage canvas",         // the floor has been drawn
-  dismissWelcome: "[data-dismiss-welcome]",   // the first-visit welcome card's close button (a fresh profile sees it)
+  dismissWelcome: "[data-dismiss-welcome]",   // the first-visit hint's close button on the floor (a fresh profile sees it)
   banner: ".lvl-banner",               // the "LEVEL UP!" banner across the floor; it shows for about 3.4 s, and only
                                        // on the Floor view
   stage: "#stage",                     // the floor's viewport; Ctrl + wheel over it zooms the camera

@@ -41,7 +41,7 @@
 <main class="main">
   <section class="viewport">
     <div class="view" id="viewFloor">
-      <div class="floor-frame"><div class="stage-scroll"><div class="stage" id="stage" aria-label="Office floor"></div></div></div>
+      <div class="floor-frame"><div class="stage-scroll"><div class="stage" id="stage" aria-label="Office floor"></div></div><div class="floor-hint" id="floorHint" hidden></div></div>
       <div class="latest" id="latest" style="margin-top:12px"></div>
       <div class="rightnow" id="rightnow"></div>
     </div>
@@ -49,6 +49,7 @@
     <div class="view" id="viewBoard" hidden></div>
     <div class="view" id="viewStats" hidden></div>
   </section>
+  <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-controls="panel" aria-label="Inspector width" tabindex="0" title="Drag to resize the inspector. Double-click to reset."><i></i></div>
   <aside class="panel" id="panel" aria-label="Inspector" tabindex="-1"><div class="panel-in"><div class="skeleton" style="width:60%"></div><div class="skeleton"></div><div class="skeleton" style="width:80%"></div></div></aside>
 </main>
 

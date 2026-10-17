@@ -10,7 +10,7 @@ export function ring(usedPct, color, label) {
   const frac = left == null ? 0 : left / 100;
   const col = left == null ? "var(--line-2)" : left <= 10 ? "var(--bad)" : left <= 25 ? "var(--warn)" : color;
   return `<svg class="ring" viewBox="0 0 64 64" role="img" aria-label="${label}: ${left == null ? "unknown" : Math.round(left) + "% left"}">
-    <circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--chip)" stroke-width="7"/>
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--line-2)" stroke-width="7"/>
     <circle cx="32" cy="32" r="${r}" fill="none" stroke="${col}" stroke-width="7" stroke-linecap="round"
       stroke-dasharray="${(c * frac).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 32 32)"/>
     <text x="32" y="34" text-anchor="middle">${left == null ? "–" : Math.round(left) + "%"}</text>
@@ -53,7 +53,7 @@ export function usageSpark(points, opts) {
     <line class="gl" x1="${padL}" x2="${W - padR}" y1="${y(0)}" y2="${y(0)}"/>
     <text class="ax" x="2" y="${y(100) + 3}">100%</text><text class="ax" x="6" y="${y(50) + 3}">50%</text>
     ${ticks.map(t => `<text class="ax" x="${x(t)}" y="${H - 3}" text-anchor="middle">${fmt(t)}</text>`).join("")}
-    <rect x="${x(now)}" y="${padT}" width="${Math.max(0, x(t1) - x(now))}" height="${H - padT - padB}" fill="var(--chip)" opacity=".55"/>
+    <rect x="${x(now)}" y="${padT}" width="${Math.max(0, x(t1) - x(now))}" height="${H - padT - padB}" fill="var(--line)" opacity="1"/>
     ${opts.reset && opts.reset < t1 ? `<line x1="${x(opts.reset)}" x2="${x(opts.reset)}" y1="${padT}" y2="${H - padB}" stroke="var(--info)" stroke-dasharray="2 2"/><text class="ax" x="${x(opts.reset) - 3}" y="${padT + 8}" text-anchor="end" style="fill:var(--info)">reset</text>` : ""}
     ${area ? `<path d="${area}" fill="${opts.color}" opacity=".14"/>` : ""}
     ${path ? `<path d="${path}" fill="none" stroke="${opts.color}" stroke-width="2" stroke-linejoin="round"/>` : ""}

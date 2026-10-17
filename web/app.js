@@ -1,6 +1,6 @@
 // Claude Office: the controller. Live data in; floor, inspector and views out.
 import { createOffice } from "./office.js";
-import { $, esc, store, toast, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL } from "./ui/util.js";
+import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL } from "./ui/util.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
@@ -95,6 +95,53 @@ const office = createOffice($("stage"), {
   onDouble: () => clearTimeout(panelScroll),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
+
+// ------------------------------------------------------------------------------------------------ inspector width
+// Drag the handle between the floor and the inspector (or use the arrow keys); double-click puts it back.
+// The width is a per-browser convenience; the floor refits itself through its ResizeObserver.
+const PANEL_W = { min: 340, def: 440, step: 24 };
+const panelMax = () => Math.max(PANEL_W.min, Math.min(860, document.querySelector(".main").clientWidth - 600));   // the floor keeps ~540px
+function setPanelW(w, save) {
+  const v = Math.round(Math.max(PANEL_W.min, Math.min(panelMax(), w)));
+  document.documentElement.style.setProperty("--panel-w", v + "px");
+  const sp = $("splitter");
+  sp.setAttribute("aria-valuenow", v); sp.setAttribute("aria-valuemin", PANEL_W.min); sp.setAttribute("aria-valuemax", panelMax());
+  sp.setAttribute("aria-valuetext", `${v} pixels wide`);
+  if (save) store.set("panelW", v);
+  return v;
+}
+(function splitter() {
+  const sp = $("splitter");
+  let start = null;
+  setPanelW(store.get("panelW", PANEL_W.def));
+  sp.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault(); sp.setPointerCapture(e.pointerId);
+    start = { x: e.clientX, w: $("panel").getBoundingClientRect().width };
+    document.body.classList.add("resizing");
+  });
+  sp.addEventListener("pointermove", (e) => { if (start) setPanelW(start.w + (start.x - e.clientX)); });
+  const end = () => { if (!start) return; start = null; document.body.classList.remove("resizing"); setPanelW($("panel").getBoundingClientRect().width, true); };
+  sp.addEventListener("pointerup", end); sp.addEventListener("pointercancel", end); sp.addEventListener("lostpointercapture", end);
+  sp.addEventListener("dblclick", () => { setPanelW(PANEL_W.def, true); toast("Inspector width reset."); });
+  sp.addEventListener("keydown", (e) => {
+    const w = $("panel").getBoundingClientRect().width;
+    const to = { ArrowLeft: w + PANEL_W.step, ArrowRight: w - PANEL_W.step, Home: PANEL_W.min, End: panelMax(), Enter: PANEL_W.def }[e.key];
+    if (to != null) { e.preventDefault(); setPanelW(to, true); }
+  });
+  addEventListener("resize", debounce(() => setPanelW(store.get("panelW", PANEL_W.def)), 150));
+})();
+
+// A first-visit hint on the floor itself, gone after the first click there.
+(function floorHint() {
+  const h = $("floorHint");
+  if (store.get("welcomed", false)) return;
+  h.innerHTML = `${icon("sparkles", 16)}<span>Click anyone to see what they are doing and talk to them.</span><button class="btn sm ghost" data-dismiss-welcome aria-label="Dismiss">${icon("x", 14)}</button>`;
+  h.hidden = false;
+  const done = () => { store.set("welcomed", true); h.hidden = true; };
+  h.querySelector("button").addEventListener("click", done);
+  $("stage").addEventListener("pointerdown", done, { once: true });
+})();
 
 // ------------------------------------------------------------------------------------------------ prefs
 function setPref(k, v) {
@@ -334,7 +381,10 @@ function renderTop() {
   const p = $("pulse");
   p.className = "pulse" + (bad ? " urgent" : warn ? " attn" : "");
   const n = snap.attention.length;
-  $("pulseText").textContent = pulse(snap, (s) => panels.persona(s), dayTime) + (n ? ` ${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} you.` : "") + (DEMO ? " (Demo office.)" : "");
+  // The header says the one thing worth a glance; the whole story is in its tooltip and the briefing.
+  const full = pulse(snap, (s) => panels.persona(s), dayTime), needs = n ? ` ${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} you.` : "";
+  $("pulseText").textContent = full.split(/(?<=\.) /)[0] + needs + (DEMO ? " (Demo office.)" : "");
+  p.title = full + needs;
 }
 let latestIdx = 0, latestSig = "";
 function renderLatest() {
