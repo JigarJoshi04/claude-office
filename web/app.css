@@ -668,8 +668,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb
 .team { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
 .tcard { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; box-shadow: var(--shadow); }
 .tcard .who { display: grid; grid-template-columns: 52px 1fr auto; gap: 14px; align-items: center; cursor: pointer; }
-.tcard .av { width: 52px; height: 52px; border-radius: 15px; }
-.tcard .av canvas { width: 34px; height: 43px; margin-top: 10px; }
+.tcard .who .av { width: 52px; height: 52px; border-radius: 15px; }   /* only the header avatar: session rows keep theirs */
+.tcard .who .av canvas { width: 34px; height: 43px; margin-top: 10px; }
 .tcard h3 { margin: 0; font-size: 17px; } .tcard .role { color: var(--muted); font-size: 13px; }
 .tcard .moodline { margin: 14px 0 6px; font-size: 14px; color: var(--text-2); }
 .stats-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
