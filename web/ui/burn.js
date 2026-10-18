@@ -11,7 +11,8 @@ export const big = (n) => (n >= 1e12 ? (n / 1e12).toFixed(n >= 1e13 ? 0 : 1) + "
 export const rungWords = (n) => n >= 1e12 ? `${n / 1e12} trillion` : n >= 1e9 ? `${n / 1e9} billion` : `${n / 1e6} million`;
 
 export function makeBurn(ctx) {
-  const { app, office, panels, store, DEMO, prefs, giftBox, toast, sound, replay } = ctx;
+  const { app, office, panels, store, DEMO, prefs, giftBox, toast, sound, replay, alarms } = ctx;
+  let lastTop = null;                                    // the top burner this page last saw, for the alarm
   const full = () => (prefs.game || "full") === "full" && !DEMO;
   const seatNow = (id) => app.snap() && app.snap().seats.find(x => x.id === id);
   const name = (id) => { const s = seatNow(id); return s ? panels.persona(s).name : id; };
@@ -27,7 +28,10 @@ export function makeBurn(ctx) {
 
   function onAll(d) {
     if (!d || !d.total) return;
-    office.setTopBurner(topBurner(d));
+    const top = topBurner(d);
+    office.setTopBurner(top);
+    if (alarms && !d.scanning && lastTop && top && top !== lastTop) alarms.topBurner(top, lastTop);
+    if (!d.scanning) lastTop = top || lastTop;
     office.setBurnBoard(d.seats || []);                  // the lobby TV's all-time channel
     office.setOdometer(d.total.all ? big(d.total.all) : null);
     const b = beltHolders(d.weeks);
@@ -54,7 +58,9 @@ export function makeBurn(ctx) {
   function milestone(list) {
     const top = list.length ? list[list.length - 1].at : 0, seen = store.get("milestone", null);
     if (top) store.set("milestone", top);
-    if (seen == null || top <= seen || !full()) return;
+    if (seen == null || top <= seen) return;
+    if (alarms) alarms.milestone(rungWords(top));       // an alarm rings at any game level
+    if (!full()) return;
     const words = rungWords(top), gift = giftBox.grant(null, "milestone", "epic");
     if (!gift) store.set("milestoneGift", top);          // the floor has no room (or a replay runs): it comes later
     sound.play("levelup");

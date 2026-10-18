@@ -1057,6 +1057,14 @@ export function makePanels(app) {
         row("Desktop notifications", "Reports, limits and logouts while this tab is in the background.", sw("notify", p.notify, "Desktop notifications")),
         row("Share-safe", "Blur what terminal sessions are about, and account emails.", sw("privacy", app.privacy(), "Share-safe")),
       ].join(""))}
+      ${section("Alarms", [
+        row("Burn alarm", "Say so when a seat burns more than this many million tokens in an hour. Empty is off.",
+          `<span class="numwrap"><input type="number" min="1" max="100000" step="1" class="numin" data-alarm-num="alarmBurnM" value="${p.alarmBurnM ?? ""}" placeholder="off" aria-label="Burn alarm, million tokens an hour"><span class="unit">M/h</span></span>`),
+        row("Run-out alarm", "Say so when a working seat's 5-hour window will run out within this many minutes. Empty is off.",
+          `<span class="numwrap"><input type="number" min="1" max="300" step="1" class="numin" data-alarm-num="alarmRunoutMin" value="${p.alarmRunoutMin ?? ""}" placeholder="off" aria-label="Run-out alarm, minutes"><span class="unit">min</span></span>`),
+        row("Milestones", "Say so when the office passes 1, 2 or 5 times a power of ten in tokens.", sw("alarmMilestone", !!p.alarmMilestone, "Milestone alarm")),
+        row("Top burner", "Say so when another character becomes the top burner of all time.", sw("alarmTopBurner", !!p.alarmTopBurner, "Top burner alarm")),
+      ].join("") + `<div class="hint">Alarms ring at every game level: a toast, a chime, and a desktop notification when this tab is in the background. Each rings once an hour at most.</div>`)}
       ${!sd ? section("Office", `<div class="hint">${settingsLoading ? "Loading…" : "Office settings are not available from this server."}</div>`) : `
       ${section("Office", `<div class="grid2"><label class="f">Office name<input type="text" id="setOffice" maxlength="40" value="${esc(sd.office_name || "")}"></label><label class="f">Your name<input type="text" id="setCeo" maxlength="40" value="${esc(sd.ceo_name || "")}"></label></div>`)}
       ${section("Characters", Object.entries(sd.seats || {}).map(([id, st]) => {
@@ -1079,6 +1087,7 @@ export function makePanels(app) {
         root.querySelectorAll("[data-motion-set]").forEach(b => b.addEventListener("click", () => { app.setPref("motion", b.dataset.motionSet); app.rerender(true); }));
         root.querySelectorAll("[data-game-set]").forEach(b => b.addEventListener("click", () => { app.setPref("game", b.dataset.gameSet); app.rerender(true); }));
         root.querySelectorAll("[data-pref]").forEach(c => c.addEventListener("change", () => app.setPref(c.dataset.pref, c.checked)));
+        root.querySelectorAll("[data-alarm-num]").forEach(i => i.addEventListener("change", () => { const v = i.value.trim(); app.setPref(i.dataset.alarmNum, v === "" || !(+v > 0) ? null : Math.round(+v)); }));
         const ts = root.querySelector("[data-test-sound]"); if (ts) ts.addEventListener("click", () => sound.preview("levelup"));
         const sv = root.querySelector("#setSave");
         if (sv) sv.addEventListener("click", async () => {

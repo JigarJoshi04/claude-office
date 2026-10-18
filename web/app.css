@@ -1482,3 +1482,8 @@ ul.loose li small { display: block; font-size: 12px; color: var(--muted); overfl
 .lc.good { color: var(--good); background: color-mix(in srgb, var(--good) 13%, transparent); } .lc.info { color: var(--info); background: color-mix(in srgb, var(--info) 13%, transparent); }
 h5.lh { margin: 14px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
 .b-links .count { margin-left: 4px; font: 700 11px var(--mono); padding: 1px 6px; border-radius: 99px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+/* burn alarms (3.38) */
+.numwrap { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.numin { width: 84px; height: 32px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text); font: 600 13px var(--mono); }
+.numwrap .unit { font: 600 12px var(--mono); color: var(--muted); white-space: nowrap; }
+@media (max-width: 480px) { .numin { width: 70px; } }

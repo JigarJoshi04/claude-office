@@ -351,3 +351,26 @@ test("Wrapped tells the month that ended", async () => {
   assert.equal(lastMonth(new Date(2026, 9, 2)), "2026-09");
   assert.equal(lastMonth(new Date(2027, 0, 1)), "2026-12");
 });
+
+test("burn alarms ring once, clear when they cool off, and never in the demo", async () => {
+  const { makeAlarms } = await import("../../web/ui/alarms.js");
+  const rang = [], seats = [{ id: "a", status: "working", tokens_1h_all: 60e6, forecast: { five_hour: { state: "runs_out", out_at: 1000 + 20 * 60 } } },
+    { id: "b", status: "idle", tokens_1h_all: 0 }];
+  const ctx = { app: { snap: () => ({ seats }) }, prefs: { alarmBurnM: 50, alarmRunoutMin: 30, alarmTopBurner: true, alarmMilestone: true },
+    toast: (t) => rang.push(t), notify: () => {}, sound: { play() {} }, panels: { persona: (s) => ({ name: s.id.toUpperCase() }) }, DEMO: false };
+  const al = makeAlarms(ctx), snap = { now: 1000, seats };
+  al.check(snap); al.check(snap);
+  assert.equal(rang.length, 2);                                   // burn and run-out, once each
+  assert.match(rang[0], /^A burned 60 M tokens/); assert.match(rang[1], /runs out .* about 20 min/);
+  seats[0].tokens_1h_all = 30e6; al.check(snap);                  // cooled off below 80%
+  seats[0].tokens_1h_all = 70e6; al.check(snap);
+  assert.equal(rang.length, 3);
+  al.milestone("50 billion"); al.milestone("50 billion");
+  assert.equal(rang.filter(t => /50 billion/.test(t)).length, 1);
+  al.topBurner("a", "b"); assert.match(rang.at(-1), /A is now the office's top burner .* ahead of B/);
+  const quiet = [], demo = makeAlarms({ ...ctx, toast: (t) => quiet.push(t), DEMO: true });
+  demo.check(snap); demo.milestone("1 million"); demo.topBurner("a", "b");
+  assert.equal(quiet.length, 0);
+  const off = makeAlarms({ ...ctx, toast: (t) => quiet.push(t), prefs: {} });
+  off.check(snap); assert.equal(quiet.length, 0);                 // no rules set: nothing rings
+});

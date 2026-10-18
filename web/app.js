@@ -21,6 +21,7 @@ import { makeRadio } from "./ui/radio.js";
 import { makeCards } from "./ui/charcard.js";
 import { renderTokens } from "./ui/tokens.js";
 import { makeBurn } from "./ui/burn.js";
+import { makeAlarms } from "./ui/alarms.js";
 import { hydrateStickers } from "./engine/stickers.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
@@ -279,7 +280,8 @@ if (prefs.radio) {
   addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 }
 const cards = makeCards({ app, panels, prefs });
-const burn = makeBurn({ app, office, panels, store, DEMO, prefs, giftBox, toast, sound, replay });
+const alarms = makeAlarms({ app, prefs, toast, notify, sound, panels, DEMO });
+const burn = makeBurn({ app, office, panels, store, DEMO, prefs, giftBox, toast, sound, replay, alarms });
 app.openCard = (id) => cards.open(id);
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
 // "Your office", scrolled to the sticker album.
@@ -431,6 +433,7 @@ function apply(next) {
   snap = next; setNow(snap.now);
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); game.renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
+  alarms.check(snap);                                 // this viewer's burn alarms (ui/alarms.js)
   if (!DEMO) { game.checkBadges(); game.cheerWeekly(); game.anniversaries(); }   // the demo office never hands out badges
   if (first) { app.tokensCache(); game.visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : QS.has("wrapped") ? wrapped.play() : weekReview.maybeMonday()), 3500); setTimeout(() => wrapped.maybeNewMonth(), 6000); }
   if (!replay.active()) giftBox.daily(game.visits()); // the first visit of a day finds a gift at the CEO desk

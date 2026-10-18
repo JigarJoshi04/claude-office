@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.38.0] - 2026-10-18
+
+### Added
+- Burn alarms in Settings, for this screen: a seat burning more than N million tokens in an hour, a working seat's
+  5-hour window running out within N minutes, the office passing a milestone, and the top burner changing hands.
+  Each rings once (a toast, a chime, a desktop notification when the tab is in the background) and again only after
+  it cools off or an hour passes. Alarms are not part of the game, so they ring at every game level.
+
 ## [3.37.1] - 2026-10-18
 
 ### Fixed

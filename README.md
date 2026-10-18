@@ -91,6 +91,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   ran each session.
 - **Shipped work earns XP**: commits (25), pushes (5), opened (50) and merged (150) pull requests, read from the
   transcripts, with "+3 commits" rising from the desk and five shipping achievements.
+- **Burn alarms**: your own number rules (tokens an hour, minutes to run-out, milestones, the top burner changing)
+  ring as a toast, a chime and a desktop notification.
 - **Loose ends**: work the agents left in git (uncommitted files, commits on no remote) and worktrees that are safe to
   remove, with the remove commands to copy. The office only reads.
 - **Ghost use**: a ghost floats in a room when its plan use climbs with nothing running on this machine (claude.ai,
