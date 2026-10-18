@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.13.0] - 2026-10-18
+
+### Added
+- The office radio: endless lo-fi made up in the browser with WebAudio (seventh chords on an electric piano, a round
+  bass, swung drums, a sparse melody, vinyl crackle; a new progression every eight bars). Click the boombox on the
+  CEO desk, press M, or use the menu or palette. It remembers being on and starts again at the first click or key.
+
 ## [3.12.0] - 2026-10-18
 
 ### Added

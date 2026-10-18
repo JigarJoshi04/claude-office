@@ -69,6 +69,7 @@ export function createOffice(stage, handlers) {
   const carried = new Set();           // gift ids still in a courier's hands (not on the floor yet)
   let happy = false;                   // the day's happy hour: party lights in the lobby and corridors
   let sets = new Set();                // finished album sets (rarities): their rewards on the floor
+  let radioOn = false;                 // the office radio is playing: notes rise from the boombox on the CEO desk
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
   let leavers = [];                   // agents walking out
@@ -350,6 +351,21 @@ export function createOffice(stage, handlers) {
     }
   }
 
+  // The office radio's boombox on the CEO desk; while it plays, its speakers pulse and notes drift up.
+  function drawBoombox(x, y, t) {
+    const beat = radioOn && !reduced && Math.floor(t / (60000 / 76)) % 2 === 0;
+    S.rect(ctx, x + 2, y - 1, 6, 1, "#5d6476"); S.rect(ctx, x, y, 10, 6, "#2b2f3a"); S.rect(ctx, x, y, 10, 1, "#454a5c");
+    S.rect(ctx, x + 1, y + 2, 3, 3, beat ? "#8a92a8" : "#5d6476"); S.rect(ctx, x + 6, y + 2, 3, 3, beat ? "#8a92a8" : "#5d6476");
+    S.rect(ctx, x + 4, y + 2, 2, 1, radioOn ? "#38e07b" : "#1a1c2b");
+    if (!radioOn || reduced) return;
+    for (let i = 0; i < 3; i++) {
+      const ph = ((t / 1000 + i * 0.73) % 2.2) / 2.2, nx = Math.round(x + 4 + Math.sin(ph * 6 + i) * 4), ny = Math.round(y - 3 - ph * 18);
+      ctx.globalAlpha = 1 - ph; const c = ["#ff9fd8", "#ffd24a", "#7fdbe6"][i];
+      S.rect(ctx, nx, ny + 2, 2, 2, c); S.rect(ctx, nx + 1, ny - 1, 1, 3, c); S.rect(ctx, nx + 2, ny - 1, 1, 1, c);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   // The common set: stickers slapped all along the lobby's wainscot, and two by the elevator.
   const DECALS = ["#ffd24a", "#e8475a", "#4fc36a", "#4f86c0", "#ff7ac8", "#ff8f3d", "#9b6bff", "#7fdbe6"];
   function drawStickerWall() {
@@ -438,6 +454,7 @@ export function createOffice(stage, handlers) {
     if (attn) { S.drawMark(ctx, dx + 64, dy - 4, urgent ? "!" : "?", t); lights.push({ x: dx + 66, y: dy + 6, r: 16, c: "#ff4d5e", i: 0.5 }); }
     S.drawMug(ctx, dx + 10, dy + 6, t, true, "#e8c66a");
     if (sets.has("legendary")) S.drawGoldDuck(ctx, dx + 51, dy + 3, t);   // the legendary set
+    drawBoombox(dx + 2, dy + 14, t);
     S.rect(ctx, dx + 16, dy + 5, 8, 6, S.P.white); S.rect(ctx, dx + 17, dy + 6, 6, 1, "#9aa3b5"); S.rect(ctx, dx + 17, dy + 8, 4, 1, "#9aa3b5");
     S.drawDeskLamp(ctx, dx + 50, dy - 4, true);
     lights.push({ x: dx + 39, y: dy + 4, r: 60, c: "#ffcf7a", i: 0.65 });
@@ -705,7 +722,7 @@ export function createOffice(stage, handlers) {
 
   function overlaySig() {
     return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
-      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label),
+      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn,
       [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
       snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, s.career && s.career.level, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
   }
@@ -720,6 +737,7 @@ export function createOffice(stage, handlers) {
     overlay.innerHTML = "";
     keepPops.forEach(el => overlay.appendChild(el));
     hot("room", "CEO desk: briefing and alerts", 70, L.ceo.y + 22, 120, 76, () => handlers.openCEO());
+    if (handlers.onRadio) hot("wallhot", radioOn ? "Office radio: playing, click to stop" : "Office radio: click for lo-fi", 96, L.ceo.y + 70, 15, 12, () => handlers.onRadio());
     hot("room", "Server closet: background services", L.server.x, L.server.y, L.server.w - 26, L.server.h, () => handlers.openServices());
     if (L.meet) hot("room", "Meeting room: programmes", L.meet.x, L.meet.y, L.meet.w, L.meet.h, () => handlers.openProgrammes());
     if (L.lounge) hot("room", "Lounge: seats on a break", L.lounge.x, L.lounge.y, L.lounge.w, L.lounge.h, () => handlers.openLounge());
@@ -1167,6 +1185,7 @@ export function createOffice(stage, handlers) {
       ovKey = ""; renderOverlay();
     },
     setHappy(on) { happy = !!on; },
+    setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },
     // Confetti where a gift was, as it opens.
     unwrap(id) { const p = L && giftSpots().find(x => x.g.id === id); if (p && !reduced) burst(p.x + 6, p.y + 4, 40, "confetti"); },

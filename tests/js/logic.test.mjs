@@ -258,3 +258,15 @@ test("Bug Squash: features and red bugs grow more common, spawns speed up, golde
   assert.ok(spawnGap(30) < spawnGap(0) && spawnGap(1000) === 0.28);
   assert.ok(KINDS.feature.pts < 0 && KINDS.gold.pts > KINDS.red.pts && KINDS.red.pts > KINDS.bug.pts);
 });
+
+test("the radio's chords: four-note sevenths, a new progression every eight bars", async () => {
+  const { chordAt } = await import("../../web/ui/radio.js");
+  for (let bar = 0; bar < 64; bar++) {
+    const c = chordAt(bar);
+    assert.equal(c.length, 4);
+    assert.ok(c.every((n, i) => i === 0 || n > c[i - 1]), "voiced upwards");
+    assert.ok(c[0] >= 50 && c[3] <= 82, "in a comfortable register");
+  }
+  assert.deepEqual(chordAt(3), chordAt(7));                   // the same four bars repeat…
+  assert.notDeepEqual(chordAt(0), chordAt(8));                // …until the progression changes
+});

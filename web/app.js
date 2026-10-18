@@ -16,6 +16,7 @@ import { makeFloor } from "./ui/floor.js";
 import { makeGiftBox } from "./ui/giftbox.js";
 import { makeWeekReview } from "./ui/weekreview.js";
 import { makeArcade } from "./ui/arcade.js";
+import { makeRadio } from "./ui/radio.js";
 import { hydrateStickers } from "./engine/stickers.js";
 import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
@@ -123,6 +124,7 @@ const office = createOffice($("stage"), {
   onLegend: (btn) => floor.legend(btn),
   onGift: (id) => giftBox.open(id),
   openArcade: () => arcade.open(),
+  onRadio: () => setRadio(!radio.on),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
@@ -219,6 +221,14 @@ const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView,
 app.gifts = giftBox;
 const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });
 app.playWeek = () => weekReview.play();
+// The office radio (ui/radio.js): remembered across visits, but browsers only start audio after a click or a key.
+const radio = makeRadio();
+radio.onChange((on) => office.setRadio(on));
+function setRadio(on) {
+  setPref("radio", on);
+  if (on ? radio.start() : (radio.stop(), true)) toast(on ? "Office radio on: lo-fi, made up as it plays. M turns it off." : "Office radio off.", "info", { ic: "volume", ms: 3500 });
+}
+if (prefs.radio) { const wake = () => { if (prefs.radio && !radio.on) radio.start(); }; addEventListener("pointerdown", wake, { once: true }); addEventListener("keydown", wake, { once: true }); }
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
 // "Your office", scrolled to the sticker album.
 function openAlbum() { go({ kind: "office" }); requestAnimationFrame(() => { const a = document.getElementById("album"); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }); }
@@ -834,7 +844,7 @@ function whatsNew() {
 function shortcuts() {
   const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S", "Floor, Timeline, Team, Today"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
-    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["\\", "Hide or show the inspector"],
+    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["M", "Office radio: lo-fi on or off"], ["\\", "Hide or show the inspector"],
     ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
   $("dialogBody").innerHTML = `<div class="dh"><b>Keyboard shortcuts</b><button class="btn sm ghost" id="kClose">${icon("x", 16)}</button></div>
     <div class="db"><table class="keys">${keys.map(([k, what]) => `<tr><td>${k.split(" ").map(x => `<kbd>${esc(x)}</kbd>`).join(" ")}</td><td>${esc(what)}</td></tr>`).join("")}</table></div>`;
@@ -853,7 +863,7 @@ function openMenu(focusItem) {
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
-    + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("arcade", "bug", "Play Bug Squash") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -879,6 +889,7 @@ function openMenu(focusItem) {
     else if (k === "daycard") shareDay();
     else if (k === "week") weekReview.play();
     else if (k === "arcade") arcade.open();
+    else if (k === "radio") setRadio(!radio.on);
     else if (k === "tour") tour();
     else if (k === "install") installApp();
     else if (k === "replay") { setView("floor"); replay.open(6); }
@@ -1046,6 +1057,7 @@ function paletteItems() {
     ...(giftBox.waiting().length ? [{ icon: icon("gift", 16), label: `Find the gift on the floor (${giftBox.waiting().length} waiting)`, keywords: "gift open present box", run: () => giftBox.seek() }] : []),
     { icon: icon("sparkles", 16), label: "Take the tour", keywords: "help onboarding guide tutorial how", run: () => tour() },
     { icon: icon("star", 16), label: "Share today's card", keywords: "share picture day summary post card", run: () => shareDay() },
+    { icon: icon("volume", 16), label: radio.on ? "Turn the office radio off" : "Turn the office radio on", keywords: "radio music lofi lo-fi sound play", run: () => setRadio(!radio.on) },
     { icon: icon("bug", 16), label: "Play Bug Squash", keywords: "game arcade bugs squash play fun", run: () => arcade.open() },
     { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
@@ -1109,6 +1121,7 @@ document.addEventListener("keydown", (e) => {
   if (k === "Escape" && document.querySelector(".legend")) { floor.legend(document.querySelector('[data-cam="legend"]')); return; }
   if (document.body.classList.contains("tv") && k === "Escape") { floor.setTv(false); return; }
   if (k === "v") { floor.setTv(!document.body.classList.contains("tv")); return; }
+  if (k === "m") { setRadio(!radio.on); return; }
   if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else { const back = $("panel").contains(document.activeElement); go({ kind: "ceo" }); if (back) $("panel").focus({ preventScroll: true }); } }
   else if (k === "h") go({ kind: "hire" });
   else if (k === "d") go({ kind: "divider" });
