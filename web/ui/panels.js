@@ -186,6 +186,7 @@ export function makePanels(app) {
   function needAction(a) {
     const st = a.seat && seatById(a.seat);
     if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
+    if (a.ask) return `<button class="btn sm primary" data-go="inbox">${icon("reply", 14)}Answer</button>`;
     if (a.session) return `<button class="btn sm" data-open-session="${esc(a.seat)}|${esc(a.session)}">${icon("chat", 14)}Open</button>`;
     if (a.lane) return `<button class="btn sm" data-lane-go="${esc(a.lane)}">${icon("briefcase", 14)}Open</button>`;
     if (a.unit) return `<button class="btn sm" data-go="services">${icon("server", 14)}Open</button>`;
@@ -270,7 +271,7 @@ export function makePanels(app) {
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
         <button data-go="news">${icon("news", 16)}News</button><button data-go="trophies">${icon("trophy", 16)}Trophies</button>
-        <button data-go="services">${icon("server", 16)}Services</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
+        <button data-go="services">${icon("server", 16)}Services</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
@@ -644,6 +645,42 @@ export function makePanels(app) {
     return { html: `${crumbs("Server room")}<h2>Server room</h2><p class="lede">Background services that keep lanes running: conductors, supervisors and the lanes themselves.</p>
       ${section(`Services · ${units.length}`, units.length ? units.map(u => `<div class="need ${u.active === "failed" ? "bad" : u.active === "active" ? "good" : "info"}"><span class="ico">${icon(u.active === "active" ? "play" : u.active === "failed" ? "alert" : "stop", 16)}</span>
         <div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(u.unit)}</div><div class="d">${esc(u.description)} · ${esc(u.active)}</div></div></div>`).join("") : `<div class="muted">No watched services. Add patterns to <code>watch_units</code> in the config.</div>`)}` };
+  }
+  // The Inbox (office/asks.py): questions agents asked with `python3 -m office ask`, and the CEO's answers, which go
+  // back to the asking session as a message. A half-written answer survives redraws.
+  const askDrafts = new Map();
+  function inbox() {
+    const list = S().asks || [], open = list.filter(a => a.status === "open"), done = list.filter(a => a.status !== "open");
+    const from = (a) => { const s = a.seat && seatById(a.seat); return `${s ? avatar("mascot-" + s.id, s.color) : `<span class="ask-av">${icon("bot", 16)}</span>`}<span class="grow"><b>${esc(a.name || a.where || "An agent")}</b><small>${s ? esc(P(s).name) + " · " : ""}${esc(relTime(a.ts))}</small></span>`; };
+    const card = (a) => `<div class="ask open"><div class="ask-h">${from(a)}</div><p class="ask-q">${esc(a.text)}</p>
+      <textarea class="ask-a" rows="3" maxlength="1000" data-ask-draft="${esc(a.id)}" placeholder="Your answer goes back to ${a.session ? "this session as a message" : "the Inbox (the office could not tell which session asked)"}" aria-label="Your answer">${esc(askDrafts.get(a.id) || "")}</textarea>
+      <div class="row wrap" style="gap:8px;margin-top:8px"><button class="btn sm primary" data-ask-send="${esc(a.id)}">${icon("send", 14)}Send the answer</button>
+        ${a.session && a.seat ? `<button class="btn sm ghost" data-open-session="${esc(a.seat)}|${esc(a.session)}">${icon("chat", 14)}Open the session</button>` : ""}
+        <button class="btn sm ghost" data-ask-dismiss="${esc(a.id)}">Dismiss</button></div></div>`;
+    const past = (a) => `<div class="ask done"><div class="ask-h">${from(a)}<span class="lc ${a.status === "answered" ? "good" : ""}">${a.status}</span></div><p class="ask-q">${esc(a.text)}</p>
+      ${a.answer ? `<p class="ask-ans">${icon("reply", 14)}<span>${esc(a.answer)}</span></p>` : ""}</div>`;
+    return { html: `${crumbs("Inbox")}<h2>Inbox</h2><p class="lede">Questions your agents asked you. An agent asks with <code>python3 -m office ask "…"</code> and keeps working; your answer goes back to its session as a message.</p>
+      ${section(`Waiting for you · ${open.length}`, open.map(card).join("") || `<div class="g-clear">${icon("check", 16)}No questions waiting.</div>`)}
+      ${done.length ? section("Answered", done.slice(0, 20).map(past).join("")) : ""}`,
+      bind(root) {
+        root.querySelectorAll("[data-ask-draft]").forEach(t => t.addEventListener("input", () => askDrafts.set(t.dataset.askDraft, t.value)));
+        root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
+        root.querySelectorAll("[data-ask-send]").forEach(b => b.addEventListener("click", async () => {
+          const id = b.dataset.askSend, text = (askDrafts.get(id) || "").trim();
+          if (!text) { toast("Write an answer first.", "info"); return; }
+          b.disabled = true;
+          try {
+            const r = await app.post("/api/ask/answer", { id, text });
+            askDrafts.delete(id);
+            toast(r.demo ? "Demo office: nothing was sent." : r.note ? `Answered. ${r.note}` : r.delivery === "review" ? "Sent. It waits for approval in that session's terminal." : "Sent to the session.", r.note ? "info" : "good");
+            app.refresh(); app.rerender(true);
+          } catch (e) { b.disabled = false; toast("Could not send: " + e.message, "bad"); }
+        }));
+        root.querySelectorAll("[data-ask-dismiss]").forEach(b => b.addEventListener("click", async () => {
+          try { await app.post("/api/ask/dismiss", { id: b.dataset.askDismiss }); askDrafts.delete(b.dataset.askDismiss); app.refresh(); app.rerender(true); }
+          catch (e) { toast("Could not dismiss: " + e.message, "bad"); }
+        }));
+      } };
   }
   // The PR shelf (office/prs.py): the repositories' recent pull requests, which desk works on each, and their checks.
   const CI_WORD = { pass: "checks pass", pending: "checks running", fail: "checks failed" };
@@ -1148,6 +1185,7 @@ export function makePanels(app) {
   }
   return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
-    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
-    isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings" };
+    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+    isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"
+      || (k === "inbox" && ([...askDrafts.values()].some(v => v.trim()) || !!(document.activeElement && document.activeElement.matches("[data-ask-draft]")))) };
 }

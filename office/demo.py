@@ -14,6 +14,7 @@ from .career import CATALOGUE, Career, new_seat, xp_for
 from .snapshot import Office
 from .history import DayLedger, HistoryStore
 from . import prices
+from .asks import Asks
 from .tokens import TokenLedger
 from .live import LiveOffice, public
 
@@ -251,6 +252,11 @@ class DemoOffice(LiveOffice):
                         default_workdir="/home/you/work")
         self.usage = _NoPoll()
         self.career = _demo_career()
+        self.asks = Asks(None)                    # one question waiting, so the Inbox and the ringing phone show
+        self.asks.add("Ship the rate limiter behind a flag today, or wait for Vega's review tomorrow?", "claude2", "l-rate", "api-rate-limits", "/home/you/work/apollo")
+        self.asks.items[-1]["ts"] = time.time() - 420
+        self.asks.add("The billing export has 3 customers with negative balances. Refund them or leave them for finance?", "claude2", "l-bill", "billing-migration", "/home/you/work/apollo")
+        self.asks.answer(self.asks.items[-1]["id"], "Leave them for finance, and list them in your report.", "direct")
         self._unlocks = list(DEMO_UNLOCKS)
         self._unlock_at = time.time() - 100     # the first celebration comes about 20 seconds in
         self.events: deque = deque(maxlen=200)
@@ -394,12 +400,13 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.40.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.41.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,
                 "next_pick": {"seat": ev["pick"], "why": ev["why"], "ranking": ev["ranking"]},
                 "suggested_weights": divider.suggest(seats, div)}
+        snap["asks"] = self.asks.view(30)
         snap["attention"] = Office._attention(snap)
         snap["totals"] = Office._totals(snap)
         # Every couple of minutes someone levels up or unlocks something, so the demo shows the celebration.

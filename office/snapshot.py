@@ -15,7 +15,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import config, divider, lanes, loose, prs, seats as seatmod, sessions
+from . import asks, config, divider, lanes, loose, prs, seats as seatmod, sessions
 from .career import CATALOGUE, Career
 from .history import DayLedger, HistoryStore
 from .tokens import TokenLedger
@@ -230,6 +230,7 @@ class Office(LiveOffice):
         self._ghost_said: dict = {}                 # seat -> when its ghost use last made news (once an hour)
         self.loose = loose.LooseEnds(config.STATE_DIR / "loose-roots.json")
         self.prs = prs.PullRequests()
+        self.asks = asks.Asks(config.STATE_DIR / "asks.json")
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -409,7 +410,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.40.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.41.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -429,6 +430,7 @@ class Office(LiveOffice):
                 if s["ghost"] and now - self._ghost_said.get(s["id"], 0) > 3600:
                     self._ghost_said[s["id"]] = now
                     self.emit("ghost", f"{s['label']}'s 5-hour use rose {s['ghost']['rise']:.0f}% in {s['ghost']['minutes']} min with nothing running on this machine", s["id"], "warn")
+        snap["asks"] = self.asks.view(30)
         snap["attention"] = self._attention(snap)
         snap["totals"] = self._totals(snap)
         for seat_id, kind, text in self.career.observe(snap):
@@ -470,6 +472,12 @@ class Office(LiveOffice):
     @staticmethod
     def _attention(snap: dict) -> list[dict]:
         items = []
+        labels = {s["id"]: s["label"] for s in snap.get("seats", [])}
+        for a in snap.get("asks") or []:                 # an agent's question waits for the CEO
+            if a.get("status") == "open":
+                who = a.get("name") or a.get("where") or "An agent"
+                items.append({"level": "warn", "seat": a.get("seat"), "ask": a["id"],
+                              "text": f"{who}{' on ' + labels[a['seat']] if a.get('seat') in labels else ''} asks: {a['text'][:140]}"})
         for s in snap["seats"]:
             label = s["label"]
             if (s.get("health") or {}).get("state") == "login":

@@ -46,3 +46,58 @@ class PullRequestTests(unittest.TestCase):
             self.assertEqual(prs.github_repo(tmp), "acme/rocket")
             (Path(tmp) / ".git" / "config").write_text('[remote "origin"]\n\turl = https://gitlab.com/acme/rocket.git\n')
             self.assertIsNone(prs.github_repo(tmp))
+
+
+class AskTests(unittest.TestCase):
+    def test_questions_find_their_session_and_answers_go_back(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from office import asks
+        from office.server import answer_question, ask_question
+
+        class FakeOffice:
+            def __init__(self):
+                self.asks = asks.Asks(Path(tempfile.mkdtemp()) / "asks.json")
+                self.events, self.sent = [], []
+                self.snap = {"seats": [{"id": "claude2", "label": "claude2", "kind": "claude", "sessions": [
+                    {"id": "11111111-2222-3333-4444-555555555555", "pid": 4242, "name": "api-rate-limits", "cwd": "/w/api", "live": True}]}]}
+            def get(self):
+                return self.snap
+            def emit(self, kind, text, seat=None, level="info", ts=None, extra=None):
+                self.events.append((kind, text, seat, extra))
+            def build(self):
+                return self.snap
+        office = FakeOffice()
+        r = ask_question(office, {"text": "Ship behind a flag?", "pids": [99, 4242, 1], "cwd": "/elsewhere"})
+        self.assertTrue(r["found_session"])
+        item = office.asks.get(r["id"])
+        self.assertEqual((item["seat"], item["session"], item["status"]), ("claude2", "11111111-2222-3333-4444-555555555555", "open"))
+        self.assertEqual(office.events[-1][:3], ("ask", "api-rate-limits on claude2 asks: Ship behind a flag?", "claude2"))
+        self.assertEqual(asks.session_for(office.snap, [], "/w/api")[0], "claude2")              # by folder, when it is the only one
+        self.assertEqual(asks.session_for(office.snap, [], "/nowhere"), (None, None, None))
+        import office.server as srv
+        real = srv.talk.send
+        srv.talk.send = lambda off, body, ids: office.sent.append(body) or {"ok": True, "delivery": "direct"}
+        try:
+            done = answer_question(office, {"id": r["id"], "text": "Yes, behind a flag."}, False, False)
+        finally:
+            srv.talk.send = real
+        self.assertEqual(done["delivery"], "direct")
+        self.assertIn("Yes, behind a flag.", office.sent[0]["text"])
+        self.assertEqual(office.asks.get(r["id"])["status"], "answered")
+        with self.assertRaises(ValueError):
+            answer_question(office, {"id": r["id"], "text": "again"}, False, False)              # closed
+        for bad in ({"text": ""}, {"text": "x" * 1001}, {"text": "x", "pids": "1"}, {"text": "x", "pids": [1.5]}):
+            with self.assertRaises(ValueError):
+                ask_question(office, bad)
+        r2 = ask_question(office, {"text": "Nobody knows me"})
+        self.assertFalse(r2["found_session"])
+        answer_question(office, {"id": r2["id"]}, True, False)
+        self.assertEqual(office.asks.get(r2["id"])["status"], "dismissed")
+        self.assertEqual([a["status"] for a in asks.Asks(office.asks.path).view()][:2], ["dismissed", "answered"])   # kept on disk
+
+    def test_parent_pids_walks_up(self):
+        import os
+        from office.asks import parent_pids
+        self.assertEqual(parent_pids()[0], os.getppid())

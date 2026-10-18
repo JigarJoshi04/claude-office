@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import checkpoint, config, divider, lanes, messaging, sessions, talk, settings, tokens
+from . import asks, checkpoint, config, divider, lanes, messaging, sessions, talk, settings, tokens
 
 MAX_BODY = 256 * 1024
 
@@ -60,6 +60,59 @@ def _number(value: str, message: str) -> int:
     return int(value)
 
 
+def ask_question(office, body: dict) -> dict:
+    """POST /api/ask: {"text", "pids"?, "cwd"?}. The session is found by the asking command's parent processes."""
+    text = body.get("text")
+    if not isinstance(text, str) or not 1 <= len(text.strip()) <= asks.MAX_TEXT:
+        raise ValueError(f"text must be 1-{asks.MAX_TEXT} characters")
+    pids = body.get("pids") or []
+    if not isinstance(pids, list) or len(pids) > 20 or any(type(p) is not int for p in pids):
+        raise ValueError("pids must be a short list of process ids")
+    cwd = body.get("cwd")
+    if cwd is not None and (not isinstance(cwd, str) or len(cwd) > 1024):
+        raise ValueError("cwd must be a path")
+    snap = office.get()
+    seat, session, name = asks.session_for(snap, pids, cwd)
+    item = office.asks.add(text.strip(), seat, session, name, cwd)
+    label = next((s["label"] for s in snap.get("seats", []) if s["id"] == seat), None)
+    who = name or item.get("where") or "An agent"
+    office.emit("ask", f"{who}{' on ' + label if label else ''} asks: {item['text'][:120]}", seat, "warn", extra={"ask": item["id"]})
+    office.build()
+    return {"ok": True, "id": item["id"], "found_session": bool(session)}
+
+
+def answer_question(office, body: dict, dismiss: bool, demo: bool) -> dict:
+    """POST /api/ask/answer {"id", "text"} sends the answer to the asking session as a message; /dismiss closes it."""
+    ask_id = body.get("id")
+    item = office.asks.get(ask_id) if isinstance(ask_id, str) else None
+    if not item:
+        raise ValueError("Unknown question")
+    if item["status"] != "open":
+        raise ValueError("That question is already closed")
+    if dismiss:
+        office.asks.dismiss(ask_id)
+        office.build()
+        return {"ok": True}
+    text = body.get("text")
+    if not isinstance(text, str) or not 1 <= len(text.strip()) <= asks.MAX_TEXT:
+        raise ValueError(f"Write an answer of 1-{asks.MAX_TEXT} characters")
+    delivery, note = None, None
+    if not demo and item.get("session") and item.get("seat"):
+        try:
+            r = talk.send(office, {"seat": item["seat"], "id": item["session"],
+                                   "text": f"The CEO answered your question ({item['text'][:200]}):\n\n{text.strip()}"},
+                          [s["id"] for s in office.get().get("seats", [])])
+            delivery = r.get("delivery")
+        except ValueError as e:
+            note = str(e)
+    elif not item.get("session"):
+        note = "The office could not tell which session asked, so the answer is kept here."
+    done = office.asks.answer(ask_id, text.strip(), delivery)
+    office.emit("answer", f"CEO answered {item.get('name') or 'an agent'}: {text.strip()[:80]}", item.get("seat"), "good")
+    office.build()
+    return {"ok": True, "delivery": delivery, "note": note, "ask": done}
+
+
 _EVENTS: list = []
 
 
@@ -99,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.40.0"
+    server_version = "ClaudeOffice/3.41.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -308,6 +361,10 @@ class Handler(BaseHTTPRequestHandler):
                 settings.save(body)
                 self.office.build()
                 return self._json(200, dict(settings.view(self.office.cfg, self.office.get().get("seats", [])), ok=True))
+            if path == "/api/ask":                        # an agent's question for the CEO (python3 -m office ask)
+                return self._json(200, ask_question(self.office, body))
+            if path in ("/api/ask/answer", "/api/ask/dismiss"):
+                return self._json(200, answer_question(self.office, body, path.endswith("dismiss"), self.demo))
             if path == "/api/event":                      # a script's news: a deploy, a cron job, a CI run
                 ev = inbound_event(body, [s["id"] for s in self.office.get().get("seats", [])])
                 if not _event_budget():

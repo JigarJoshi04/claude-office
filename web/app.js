@@ -347,7 +347,7 @@ function viewFromHash() {
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
-  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office", "loose", "prs"].includes(k) ? { kind: k } : { kind: "ceo" };
+  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office", "loose", "prs", "inbox"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 let revealT = 0;
@@ -522,6 +522,13 @@ function onNews(e) {
       sound.play(e.level === "bad" ? "bad" : e.level === "good" ? "report" : "arrive");
       toast(`${e.source ? e.source + ": " : ""}${text}`, tone, { ic: "bell", ms: 6000 });
       if (e.level === "bad" || e.level === "warn") notify(e.source || "Office news", text);
+      break;
+    }
+    case "ask": {                                      // an agent's question for the CEO (python3 -m office ask): an alert, at every level
+      sound.play("ring");
+      toast(text, "warn", { ic: "bell", ms: 9000 });
+      notify("A question for you", text);
+      if (e.seat) fx.sayAtSeat(e.seat, "I need a decision from the CEO.", 7000);
       break;
     }
     case "commit": {                                   // commits read from a session's transcript, one line per read
@@ -1059,6 +1066,7 @@ function paletteItems() {
     { icon: icon("settings", 16), label: "Settings", run: () => go({ kind: "settings" }) },
     { icon: icon("sliders", 16), label: "Keyboard shortcuts", hint: "?", keywords: "keys help hotkeys", run: shortcuts },
     { icon: icon("server", 16), label: "Server room", run: () => go({ kind: "services" }) },
+    { icon: icon("bell", 16), label: "Inbox: agents' questions", keywords: "ask questions answer decisions", run: () => go({ kind: "inbox" }) },
     { icon: icon("send", 16), label: "Pull requests", keywords: "pr github checks ci reviews", run: () => go({ kind: "prs" }) },
     { icon: icon("branch", 16), label: "Loose ends", keywords: "git worktrees uncommitted unpushed cleanup", run: () => go({ kind: "loose" }) },
   ];

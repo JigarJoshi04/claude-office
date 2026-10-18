@@ -245,6 +245,18 @@ Everything personal stays outside the repo, in `~/.config/claude-office/`:
 The office keeps its own records in `~/.local/state/claude-office/`: the usage cache, 24 hours of minute
 samples, the news, the message log and each seat's career. Lanes and checkpoints go in `~/.local/share/claude-office/`.
 
+## Agents can ask you
+
+An agent that needs a decision runs, from inside its session:
+
+```sh
+python3 -m office ask "Ship the rate limiter behind a flag today, or wait for review?"
+```
+
+and keeps working on what does not depend on it. The CEO's desk phone rings, Needs you shows the question with an
+Answer button, and the Inbox keeps it; your answer goes back to that session as a message. Office lanes are told they
+may ask, once, when a decision is truly yours.
+
 ## News from your scripts
 
 Deploy scripts, make targets, cron jobs and CI runners can put news on the floor: a toast, a line in the news, a

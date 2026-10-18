@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.41.0] - 2026-10-18
+
+### Added
+- Agents can ask you: `python3 -m office ask "Ship it behind a flag or wait for review?"`, run from inside a session,
+  rings the CEO's desk phone, raises a toast, a desktop notification and a Needs-you item with an Answer button, and
+  keeps the question in a new Inbox. The answer goes back to the asking session as a message (found by the command's
+  parent processes, or by its folder); the session keeps working meanwhile. Office lanes are told they may ask, once,
+  for decisions that are truly the CEO's. A half-written answer survives the page's redraws.
+- `POST /api/ask`, `/api/ask/answer` and `/api/ask/dismiss`; open questions ride in the snapshot as `asks`.
+
 ## [3.40.0] - 2026-10-18
 
 ### Fixed

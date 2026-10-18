@@ -8,6 +8,7 @@
                                    start an office lane
   lanes | stop ID | resume ID [--seat ID]
   checkpoint                       write the office down (resume commands for every session)
+  ask QUESTION                     (from inside a session) ask the CEO; the answer comes back as a message
   post TEXT [--level good|info|warn|bad] [--seat ID] [--source NAME] [--banner]
                                    put a script's news on the floor ("Prod deploy done")
   run-lane ID                      (internal) the lane supervisor that systemd runs
@@ -71,32 +72,53 @@ def cmd_hire(args) -> int:
     return 0
 
 
-def cmd_post(args) -> int:
-    """POST /api/event to the running office, with the per-install token (only this user can read it)."""
+def _post(path: str, body: dict, port: int | None) -> tuple[int, dict | None]:
+    """POST to the running office with the per-install token (only this user can read it): (status, JSON reply)."""
     import urllib.error
     import urllib.request
-    port = args.port or config.load_config().get("port", config.DEFAULT_PORT)
+    port = port or config.load_config().get("port", config.DEFAULT_PORT)
+    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", "X-Office-Token": config.api_token()})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            raw = r.read()
+            code = r.status
+    except urllib.error.HTTPError as e:
+        raw, code = e.read(), e.code
+    except OSError as e:
+        raise SystemExit(f"The office is not running on port {port}: {e}")
+    try:
+        out = json.loads(raw or b"{}")
+    except ValueError:                                 # not the office on that port
+        out = None
+    return code, out if isinstance(out, dict) else None
+
+
+def cmd_ask(args) -> int:
+    """Ask the CEO from inside a session: the office finds the session by this command's parent processes."""
+    import os
+    from .asks import parent_pids
+    code, out = _post("/api/ask", {"text": args.question, "pids": parent_pids(), "cwd": os.getcwd()}, args.port)
+    if code != 200:
+        print((out or {}).get("error") or f"HTTP {code}", file=sys.stderr)
+        return 1
+    print("Asked. Keep working on what does not depend on it: the CEO's answer comes back to this session as a message."
+          if out.get("found_session") else "Asked. The office could not tell which session this is, so the answer stays in its Inbox.")
+    return 0
+
+
+def cmd_post(args) -> int:
+    """POST /api/event to the running office: a script's news on the floor."""
     body = {"text": args.text, "level": args.level, "banner": args.banner}
     if args.seat:
         body["seat"] = args.seat
     if args.source:
         body["source"] = args.source
-    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/event", data=json.dumps(body).encode(), method="POST",
-                                 headers={"Content-Type": "application/json", "X-Office-Token": config.api_token()})
-    try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            r.read()
-        return 0
-    except urllib.error.HTTPError as e:
-        try:
-            err = json.loads(e.read() or b"{}")
-        except ValueError:                             # not the office on that port
-            err = None
-        print((err.get("error") if isinstance(err, dict) else None) or f"HTTP {e.code}", file=sys.stderr)
+    code, out = _post("/api/event", body, args.port)
+    if code != 200:
+        print((out or {}).get("error") or f"HTTP {code}", file=sys.stderr)
         return 1
-    except OSError as e:
-        print(f"The office is not running on port {port}: {e}", file=sys.stderr)
-        return 1
+    return 0
 
 
 def cmd_lanes(_args) -> int:
@@ -133,6 +155,9 @@ def main(argv=None) -> int:
     rs.add_argument("id")
     rs.add_argument("--seat")
     sub.add_parser("checkpoint")
+    ak = sub.add_parser("ask", help="ask the CEO a question (run it from inside a session)")
+    ak.add_argument("question")
+    ak.add_argument("--port", type=int)
     po = sub.add_parser("post", help="put a script's news on the floor")
     po.add_argument("text")
     po.add_argument("--level", choices=["good", "info", "warn", "bad"], default="info")
@@ -171,6 +196,8 @@ def main(argv=None) -> int:
         return 0
     if args.cmd == "post":
         return cmd_post(args)
+    if args.cmd == "ask":
+        return cmd_ask(args)
     if args.cmd == "run-lane":
         return lanes.run_lane(args.id)
     return 2
