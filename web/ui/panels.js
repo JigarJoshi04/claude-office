@@ -86,7 +86,7 @@ export function makePanels(app) {
   function laneRow(l) {
     const tn = { done: "good", finished: "good", running: "info", blocked: "warn", failed: "bad", waiting: "warn" }[l.status] || "info";
     return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop" }[l.status] || "briefcase", 16)}</span>
-      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${esc(l.status)}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
+      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status)}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
   }
 
   // ---------------------------------------------------------------------------------------- briefing
@@ -1073,6 +1073,11 @@ export function makePanels(app) {
         <label class="f">Permissions<select id="hPerm" ${isCodex ? "disabled" : ""}>
           <option value="acceptEdits" ${(d.permission_mode || ld.permission_mode) === "acceptEdits" ? "selected" : ""}>Edit files, run listed tools</option>
           <option value="bypassPermissions" ${(d.permission_mode || ld.permission_mode) === "bypassPermissions" ? "selected" : ""}>Full trust (skips every permission check)</option></select></label>
+        <label class="f">Then, in the same folder<select id="hThen">
+          <option value="" ${!d.chain ? "selected" : ""}>Nothing: it reports and stops</option>
+          <option value="review" ${d.chain === "review" ? "selected" : ""}>A second lane reviews its work</option>
+          <option value="fix-review" ${d.chain === "fix-review" ? "selected" : ""}>A lane fixes what it found, then another reviews the fix</option></select></label>
+        <div class="hint" style="margin:-6px 0 14px">Each stage starts when the one before reports done, with that report in its brief. A blocked report stops the chain.</div>
         <div class="setrow" style="border-top:0;padding-top:0"><div class="grow">Let me message it while it works<small>Messages from the office reach this lane directly instead of waiting for approval.</small></div>
           <label class="switch"><input type="checkbox" id="hMsg" ${d.allow_messages !== false ? "checked" : ""} ${isCodex ? "disabled" : ""} aria-label="Allow messages"><span></span></label></div>
         <div class="hint">${isCodex ? "Codex seat: it runs through the gpt bridge, so model, permissions and messages do not apply." : "Runs as a background service at low priority, with no windows."}</div>
@@ -1080,8 +1085,8 @@ export function makePanels(app) {
       ${section("Office lanes", `<div id="laneList">${laneListHtml()}</div>`)}`,
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
-        const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked }; store.set("hireDraft", hireDraft); };
-        ["hTitle", "hBrief", "hDir", "hModel", "hPerm"].forEach(id => q(id).addEventListener("input", save));
+        const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "" }; store.set("hireDraft", hireDraft); };
+        ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen"].forEach(id => q(id).addEventListener("input", save));
         q("hBrief").addEventListener("input", () => { q("hCheck").innerHTML = briefCheck(q("hBrief").value); });
         q("hMsg").addEventListener("change", save);
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
@@ -1127,7 +1132,7 @@ export function makePanels(app) {
           try {
             const r = await app.post("/api/lanes", hireDraft);
             if (r.demo) toast("Demo office: no lane was started.");
-            else { sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true }; store.set("hireDraft", hireDraft); }
+            else { sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true, chain: "" }; store.set("hireDraft", hireDraft); }
             app.refresh(); app.rerender(true);
           } catch (e) { toast("Could not hire: " + e.message, "bad"); q("hGo").disabled = false; }
         });

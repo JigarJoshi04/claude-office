@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.45.0] - 2026-10-18
+
+### Added
+- Lane chains: a hire can carry on in the same folder with "a second lane reviews its work" or "a lane fixes what it
+  found, then another reviews the fix". Each stage starts when the one before reports done, with that report in its
+  brief, on the same seat preference, model and permissions; a blocked report stops the chain. The lane list shows
+  "stage 2 of 3" and what comes next. `POST /api/lanes` takes `chain` (a preset name or up to four stages).
+
+### Fixed
+- The hire form's "Let me message it while it works" switch was ignored: every lane took messages directly.
+
 ## [3.44.0] - 2026-10-18
 
 ### Added

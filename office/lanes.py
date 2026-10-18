@@ -165,9 +165,43 @@ def unit_active(unit: str) -> bool:
 
 # ------------------------------------------------------------------------------------------------ create
 
+# Chains: stages that follow a lane in the same folder, each started when the one before reports DONE, with that
+# report in its brief. The presets the hire form offers:
+CHAIN_PRESETS = {
+    "review": [("Review", "Review the previous stage's work in this folder with fresh eyes. Read its report below, then the "
+                "changes (git log and git diff against the main branch). Check correctness, tests and edge cases, and "
+                "anything it skipped. Fix small problems yourself and list the rest in your report; do not redo the work.")],
+    "fix-review": [("Fix", "The previous stage investigated; its report is below. Fix what it found, with tests, in this folder, "
+                    "and commit on a branch. If it found nothing to fix, say so in your report and stop."),
+                   ("Review", "Review the previous stage's fix in this folder with fresh eyes. Read its report below, then the "
+                    "changes (git log and git diff against the main branch). Check correctness, tests and edge cases. Fix "
+                    "small problems yourself and list the rest in your report; do not redo the work.")],
+}
+MAX_STAGES = 5
+
+
+def chain_from(body_chain, title: str) -> list[dict]:
+    """The stages after a lane: a preset name ("review", "fix-review") or a list of {"title", "brief"}."""
+    if not body_chain:
+        return []
+    if isinstance(body_chain, str):
+        if body_chain not in CHAIN_PRESETS:
+            raise ValueError("Unknown chain")
+        return [{"title": f"{name}: {title}"[:80], "brief": brief} for name, brief in CHAIN_PRESETS[body_chain]]
+    if not isinstance(body_chain, list) or len(body_chain) > MAX_STAGES - 1:
+        raise ValueError(f"A chain has at most {MAX_STAGES} stages")
+    out = []
+    for st in body_chain:
+        if not isinstance(st, dict) or not isinstance(st.get("title"), str) or not isinstance(st.get("brief"), str) \
+                or not st["title"].strip() or not st["brief"].strip() or len(st["brief"]) > 20000:
+            raise ValueError("Every stage needs a title and a brief")
+        out.append({"title": " ".join(st["title"].split())[:80], "brief": st["brief"].strip()})
+    return out
+
+
 def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, permission_mode: str,
                 seat_ids: list[str], cfg: dict, launch: bool = True, allow_messages: bool = True,
-                resume_session: str | None = None) -> dict:
+                resume_session: str | None = None, chain: list[dict] | None = None, chain_of: dict | None = None) -> dict:
     title = " ".join(str(title).split())[:80]
     if not title or not str(brief).strip():
         raise ValueError("A lane needs a title and a brief")
@@ -196,6 +230,8 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         "permission_mode": permission_mode, "created_at": time.time(), "status": "queued",
         "seat": None, "runs": [], "unit": unit_name(lane_id), "allow_messages": bool(allow_messages),
         "resume_session": resume_session,
+        "chain": chain or [],                                  # the stages still to come after this one
+        "chain_of": chain_of or ({"step": 1, "of": 1 + len(chain), "first": lane_id} if chain else None),
     }
     save_lane(lane)
     if launch:
@@ -282,6 +318,28 @@ def build_prompt(lane: dict, seat_id: str, cfg: dict) -> str:
         f"`STATUS: DONE - <one line>` or `STATUS: BLOCKED - <reason>`, then a short summary of what changed "
         f"and how you verified it.\n{pre}\n\nTHE BRIEF:\n{(d / 'brief.md').read_text()}"
     )
+
+
+def _next_stage(lane: dict, cfg: dict) -> None:
+    """Start the chain's next stage in the same folder, with this stage's report in its brief; a BLOCKED report stops it."""
+    if lane["status"] != "done":
+        _log(lane["id"], "chain stopped: this stage is blocked, so the next one does not start")
+        return
+    nxt, rest = lane["chain"][0], lane["chain"][1:]
+    report = (lane_dir(lane["id"]) / "REPORT.md").read_text(errors="replace")[:20000]
+    of = lane.get("chain_of") or {"step": 1, "of": 1 + len(lane["chain"]), "first": lane["id"]}
+    brief = (f"{nxt['brief']}\n\n---\nYou are stage {of['step'] + 1} of {of['of']} in a chain. The previous stage, "
+             f"\"{lane['title']}\", worked in this same folder and reported:\n\n{report}")
+    seats = [s["id"] for s in config.discover_claude_seats(cfg)] + ([c["id"]] if (c := config.codex_seat_meta(cfg)) else [])
+    try:
+        new = create_lane(nxt["title"], brief, lane["workdir"], lane.get("seat_pref") or "auto", lane["model"],
+                          lane["permission_mode"], seats, cfg, allow_messages=lane.get("allow_messages", True),
+                          chain=rest, chain_of={"step": of["step"] + 1, "of": of["of"], "first": of["first"], "after": lane["id"]})
+        lane["chain_next"] = new["id"]
+        save_lane(lane)
+        _log(lane["id"], f"chain: started the next stage {new['id']}")
+    except (ValueError, OSError) as e:
+        _log(lane["id"], f"chain: could not start the next stage: {e}")
 
 
 def _log(lane_id: str, text: str) -> None:
@@ -406,6 +464,8 @@ def run_lane(lane_id: str) -> int:
             lane["finished_at"] = time.time()
             save_lane(lane)
             _log(lane_id, f"report written: {status_line}")
+            if lane.get("chain"):
+                _next_stage(lane, cfg)
             return 0
         # Choosing a seat and starting the agent happen under one lock, and the lock is held until the new
         # session shows up on that seat, so two runners never both take the last free slot.

@@ -152,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.44.0"
+    server_version = "ClaudeOffice/3.45.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -400,7 +400,9 @@ class Handler(BaseHTTPRequestHandler):
                 ld = cfg["lane_defaults"]
                 lane = lanes.create_lane(body.get("title", ""), body.get("brief", ""), body.get("workdir") or "",
                                          body.get("seat") or "auto", body.get("model") or ld["model"],
-                                         body.get("permission_mode") or ld["permission_mode"], seat_ids, cfg)
+                                         body.get("permission_mode") or ld["permission_mode"], seat_ids, cfg,
+                                         allow_messages=body.get("allow_messages") is not False,   # the form's switch
+                                         chain=lanes.chain_from(body.get("chain"), " ".join(str(body.get("title", "")).split())[:60]))
                 self.office.emit("lane", f"CEO hired office lane '{lane['title']}' ({lane['seat_pref']})", level="good")
                 return self._json(200, {"ok": True, "lane": lane})
             if path == "/api/lanes/stop":

@@ -136,3 +136,38 @@ class LaneTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ChainTests(unittest.TestCase):
+    def test_presets_validation_and_the_next_stage(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from office import lanes
+        self.assertEqual([x["title"] for x in lanes.chain_from("fix-review", "Flaky export test")], ["Fix: Flaky export test", "Review: Flaky export test"])
+        self.assertEqual(lanes.chain_from("", "x"), [])
+        for bad in ("nope", [{"title": "a"}], [{"title": "a", "brief": "b"}] * 5, [{"title": " ", "brief": "b"}]):
+            with self.assertRaises(ValueError):
+                lanes.chain_from(bad, "x")
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "work"; work.mkdir()
+            cfg = {"default_workdir": str(work), "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}}
+            with mock.patch.object(lanes, "lanes_dir", return_value=Path(tmp) / "lanes"), \
+                 mock.patch.object(lanes.config, "discover_claude_seats", return_value=[{"id": "claude"}]), \
+                 mock.patch.object(lanes.config, "codex_seat_meta", return_value=None):
+                (Path(tmp) / "lanes").mkdir()
+                first = lanes.create_lane("Investigate", "Find out why", str(work), "auto", "opus", "acceptEdits", ["claude"], cfg,
+                                          launch=False, chain=lanes.chain_from("fix-review", "Export"))
+                self.assertEqual(first["chain_of"]["of"], 3)
+                (lanes.lane_dir(first["id"]) / "REPORT.md").write_text("STATUS: DONE - the cache key ignores the locale\n")
+                with mock.patch.object(lanes, "start_unit"):
+                    first["status"] = "done"
+                    lanes._next_stage(first, cfg)
+                second = lanes.load_lane(lanes.load_lane(first["id"])["chain_next"])
+                self.assertEqual((second["title"], second["chain_of"]["step"], len(second["chain"])), ("Fix: Export", 2, 1))
+                brief = (lanes.lane_dir(second["id"]) / "brief.md").read_text()
+                self.assertIn("the cache key ignores the locale", brief)
+                self.assertIn("stage 2 of 3", brief)
+                blocked = dict(second, status="blocked")
+                lanes._next_stage(blocked, cfg)                       # a blocked stage stops the chain
+                self.assertNotIn("chain_next", lanes.load_lane(second["id"]))
