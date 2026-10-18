@@ -78,15 +78,25 @@ export function voice(seat, p, fmtTime) {
   return { state: st, line: text, word: st === "limited" && w && w.resets_at ? `Back ${fmtTime(w.resets_at)}` : word, tone };
 }
 
-// Teammates react to each other's news. {name} is the teammate the line is about.
+// Teammates react to each other's news. {name} is the teammate the line is about. Each kind has lines anyone can say
+// and lines in a personality's own voice, which come up twice as often from that character.
 const REACT = {
-  report: ["Nice one, {name}!", "{name} ships again.", "Another one for {name}.", "Good work, {name}."],
-  levelup: ["Congrats, {name}!", "Level up, {name}! Drinks later?", "{name} is moving up."],
-  limit: ["I've got room. Send {name}'s work my way.", "Rest up, {name}. I'll cover.", "Out already, {name}? I'm here."],
+  report: { common: ["Nice one, {name}!", "{name} ships again.", "Another one for {name}.", "Good work, {name}."],
+    "The Orchestrator": ["Logged it, {name}. Next item."], "The Builder": ["Green build, {name}? Respect."], "The Investigator": ["I'll read that one closely, {name}."],
+    "The Perfectionist": ["Tidy work, {name}."], "The Night Owl": ["Shipped before sunrise, {name}?"], "The Speedrunner": ["Beat my time, {name}. Barely."], "The Contractor": ["Deliverable noted, {name}."] },
+  levelup: { common: ["Congrats, {name}!", "Level up, {name}! Drinks later?", "{name} is moving up."],
+    "The Speedrunner": ["{name} levelled before me? Rematch."], "The Perfectionist": ["Well earned, {name}."], "The Contractor": ["A raise for {name}, I assume."] },
+  limit: { common: ["I've got room. Send {name}'s work my way.", "Rest up, {name}. I'll cover.", "Out already, {name}? I'm here."],
+    "The Orchestrator": ["Rerouting {name}'s queue."], "The Builder": ["I'll pick up {name}'s tools."], "The Night Owl": ["Sleep well, {name}. I'm up anyway."] },
+  achievement: { common: ["Trophy for {name}!", "{name}'s cabinet is filling up.", "Shiny, {name}."], "The Investigator": ["Evidence of greatness, {name}."] },
+  reset: { common: ["Welcome back, {name}.", "{name}'s plan is fresh. Let's go.", "Look who's back: {name}."], "The Speedrunner": ["Respawned, {name}? Go go go."] },
+  shipped: { common: ["Merged! That bell's for {name}.", "{name} lands another PR.", "Ding-ding, {name}."], "The Builder": ["Merged and green, {name}. Beautiful."] },
+  par: { common: ["{name} played the week perfectly.", "A birdie for {name}. Show-off."], "The Orchestrator": ["{name} paced that week just right."] },
 };
-export function reaction(kind, aboutName) {
-  const pool = REACT[kind] || [];
-  return pool.length ? pool[Math.floor(Math.random() * pool.length)].replace("{name}", aboutName) : "";
+export function reaction(kind, aboutName, role) {
+  const k = REACT[kind] || {}, own = k[role] || [];
+  const pool = [...own, ...own, ...(k.common || [])];
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)].replaceAll("{name}", aboutName) : "";
 }
 
 // A first-person line about today, from the day's stats: "Today I spent 1 h at work in 3 sessions…".
@@ -210,10 +220,20 @@ export const PERSONALITIES = [...ARCHETYPES, CODEX].map(a => ({ role: a.role, mo
 
 // Banter: now and then two characters at their desks trade a line about what is going on. `a` speaks first, `b`
 // answers. {a} and {b} are their names; the lines can be about a third character, never one of the two: {n} who is
-// napping, {l} whose plan runs low, {r} who just filed a report. Every exchange whose condition holds is a
-// candidate; one is picked at random among the candidates.
+// napping, {l} whose plan runs low, {r} who just filed a report, {t} the top burner today. The facts of the day come
+// in too: {g} goals left, {m} PRs merged. Every exchange whose condition holds is a candidate; one is picked at random
+// among the candidates, skipping the ones said lately.
 const BANTER = [
   { when: (o) => o.napper, lines: [["{n}'s napping again.", "Let them. They earned it."], ["Is {n} out of plan?", "Back after the reset. More coffee for us."]] },
+  { when: (o) => o.leader, lines: [["{t} is burning through tokens today.", "Someone get {t} a fire extinguisher."], ["Who's top of the burner board?", "{t}. Again."]] },
+  { when: (o) => o.goalsLeft > 0, lines: [["{g} goals left today.", "We've got this."], ["Did anyone look at today's goals?", "{g} to go. Pick one."]] },
+  { when: (o) => o.goalsLeft === 0, lines: [["All three goals done.", "There's a gift at the CEO's desk."], ["Goals done before lunch?", "Don't jinx tomorrow."]] },
+  { when: (o) => o.happy, lines: [["Happy hour!", "Gifts twice as likely. Ship something."], ["Is that party music?", "Happy hour. Half an hour only."]] },
+  { when: (o) => o.merges >= 2, lines: [["{m} merges today.", "That bell's had a workout."], ["Hear the bell?", "{m} times today. Earplugs on order."]] },
+  { when: (o) => o.weekday === 1, lines: [["Monday again.", "Fresh week, fresh scorecard."]] },
+  { when: (o) => o.weekday === 5, lines: [["Friday deploy?", "Only if the tests are green."], ["Weekend plans?", "Same as weekday plans, honestly."]] },
+  { when: (o) => o.season === "halloween", lines: [["Who carved the pumpkins?", "Pixel, probably."]] },
+  { when: (o) => o.season === "winter", lines: [["Snowing out there.", "Good. Nobody's leaving."]] },
   { when: (o) => o.busy >= 3, lines: [["Busy floor today.", "Heads down. Ship it."], ["Three builds at once?", "Four if you count mine."], ["How many sessions are we running?", "Enough that the elevator's tired."]] },
   { when: (o) => o.reporter, lines: [["Did you see {r}'s report?", "Clean work. Raising the bar."]] },
   { when: (o) => o.recentReport, lines: [["Another one shipped.", "That's the combo going."]] },
@@ -222,11 +242,15 @@ const BANTER = [
   { when: () => true, lines: [["Coffee?", "Always."], ["What are you on?", "Same thing as you, but with tests."], ["The cat's on my keyboard again.", "That's not a bug, that's Pixel."],
     ["Any word from the CEO?", "Only good news so far."], ["Nice desk upgrade.", "Level ups have perks."], ["Lunch at the lounge?", "After this build."]] },
 ];
-export function banter(o) {
-  const pool = BANTER.filter(b => b.when(o)).flatMap(b => b.lines.map(l => ({ l, w: b.when === BANTER[BANTER.length - 1].when ? 1 : 3 })));
+export function banter(o, said = new Set()) {
+  const all = BANTER.filter(b => b.when(o)).flatMap(b => b.lines.map(l => ({ l, w: b.when === BANTER[BANTER.length - 1].when ? 1 : 3 })));
+  const fresh = all.filter(x => !said.has(x.l[0])), pool = fresh.length ? fresh : all;   // lately said: only when nothing else fits
   const total = pool.reduce((n, x) => n + x.w, 0);
   let r = Math.random() * total;
   const pick = pool.find(x => (r -= x.w) < 0) || pool[0];
-  const fill = (s) => s.replace("{a}", o.a).replace("{b}", o.b).replace("{n}", o.napper).replace("{l}", o.low).replace("{r}", o.reporter);
+  const fill = (s) => s.replaceAll("{a}", o.a).replaceAll("{b}", o.b).replaceAll("{n}", o.napper).replaceAll("{l}", o.low).replaceAll("{r}", o.reporter)
+    .replaceAll("{t}", o.leader).replaceAll("{g}", String(o.goalsLeft)).replaceAll("{m}", String(o.merges));
+  said.add(pick.l[0]);
+  if (said.size > 8) said.delete(said.values().next().value);
   return [fill(pick.l[0]), fill(pick.l[1])];
 }

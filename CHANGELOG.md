@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.73.0] - 2026-10-19
+
+### Added
+- Teammates react to more of each other's news: trophies, fresh plans after a reset, merged PRs and a good week
+  (par or better), on top of reports, level ups and limits. Each personality has lines in its own voice, which it
+  says twice as often as the common ones.
+- Banter knows the day: who tops today's burner board, how many goals are left (or that all are done), happy hour,
+  the merges ringing the bell, Mondays, Fridays and the season. Lines said lately are not said again soon.
+
 ## [3.72.0] - 2026-10-19
 
 ### Added

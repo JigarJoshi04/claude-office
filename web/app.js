@@ -1,7 +1,7 @@
 // Claude Office: the controller. Live data in; floor, inspector and views out.
 import { createOffice } from "./office.js";
 import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss, setToastGate, clock } from "./ui/util.js";
-import { configureGoals } from "./ui/goals.js";
+import { configureGoals, goals } from "./ui/goals.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
@@ -491,12 +491,13 @@ function teammateReacts(e, kind) {
   if (!mates.length) return;
   const mate = mates[Math.floor(Math.random() * mates.length)];
   lastReaction = Date.now();
-  setTimeout(() => office.sayAtSeat(mate.id, reaction(kind, panels.persona(about).name), 6000), 1800);
+  setTimeout(() => office.sayAtSeat(mate.id, reaction(kind, panels.persona(about).name, panels.persona(mate).role), 6000), 1800);
 }
 
 // Banter: every couple of minutes two characters at their desks trade a line (ui/personas.js banter). Never during
 // replay or reduced motion, and never over another reaction.
 let lastReport = 0, lastReportSeat = null;
+const banterSaid = new Set();                          // the last few exchanges, not said again soon
 setInterval(() => {
   if (!snap || replay.active() || prefs.motion === "reduced" || prefs.game !== "full" || document.hidden || prefs.view !== "floor" || Date.now() - lastReaction < 15000) return;
   const awake = snap.seats.filter(s => !["limited", "offline", "benched"].includes(s.status) && live(s).length);
@@ -506,9 +507,13 @@ setInterval(() => {
   const napping = snap.seats.find(s => third(s) && s.status === "limited");
   const low = snap.seats.find(s => { const x = binding(s); return third(s) && x.left != null && x.left < 20 && s.status !== "limited"; });
   const recent = Date.now() - lastReport < 10 * 60000, reporter = recent && snap.seats.find(s => third(s) && s.id === lastReportSeat);
-  const h = new Date().getHours(), name = (s) => (s ? panels.persona(s).name : "");
-  const [l1, l2] = banter({ a: name(a), b: name(b), napper: name(napping), low: name(low), reporter: name(reporter),
-    busy: snap.seats.flatMap(s => live(s)).filter(x => x.state === "working").length, recentReport: recent, night: h >= 22 || h < 5 });
+  const now = new Date(), h = now.getHours(), name = (s) => (s ? panels.persona(s).name : "");
+  const today = app.tokensCache("today"), top = today && today.seats && [...today.seats].filter(x => x.seat && x.today > 0).sort((x, y) => y.today - x.today)[0];
+  const leader = top && snap.seats.find(s => third(s) && s.id === top.seat), gl = goals(app.statsCache(null));
+  const [l1, l2] = banter({ a: name(a), b: name(b), napper: name(napping), low: name(low), reporter: name(reporter), leader: name(leader),
+    busy: snap.seats.flatMap(s => live(s)).filter(x => x.state === "working").length, recentReport: recent, night: h >= 22 || h < 5,
+    goalsLeft: gl ? gl.filter(g => !g.done).length : undefined, happy: giftBox.happy(), merges: (snap.office.shipped_today || {}).prs_merged || 0,
+    weekday: now.getDay(), season: office.season() }, banterSaid);
   lastReaction = Date.now();
   office.sayAtSeat(a.id, l1, 5000);
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
@@ -581,7 +586,7 @@ function onNews(e) {
     case "limit": fx.alarm(e.seat, "Out of plan"); if (who) fx.sayAtSeat(e.seat, line(who, "limit"), 8000); teammateReacts(e, "limit"); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;
     case "login": fx.alarm(e.seat, "Logged out"); sound.play("bad"); toast(text, "bad"); notify("Seat logged out", text); break;
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
-    case "reset": toast(text, "good"); fx.celebrate(e.seat, null, "Fresh plan!"); sound.play("arrive"); if (who) fx.sayAtSeat(e.seat, line(who, "reset"), 6000); break;
+    case "reset": toast(text, "good"); fx.celebrate(e.seat, null, "Fresh plan!"); sound.play("arrive"); if (who) fx.sayAtSeat(e.seat, line(who, "reset"), 6000); teammateReacts(e, "reset"); break;
     case "stuck": if (who) fx.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
     case "levelup":
     case "achievement": {
@@ -590,7 +595,7 @@ function onNews(e) {
       fx.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
       if (lvl && seat && prefs.view === "floor") fx.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
       if (who) fx.sayAtSeat(e.seat, line(who, e.kind), 6500);
-      if (lvl) { teammateReacts(e, "levelup"); giftBox.grant(e.seat, "levelup"); }
+      if (lvl) { teammateReacts(e, "levelup"); giftBox.grant(e.seat, "levelup"); } else teammateReacts(e, "achievement");
       if (prefs.game === "full") sound.play(e.kind);
       if (prefs.game !== "off") toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
       notify(lvl ? "Level up" : "Achievement unlocked", text);
@@ -599,7 +604,7 @@ function onNews(e) {
     case "shipped": {                                  // a PR opened or merged, read from a session's transcript
       const merged = / merged$/.test(e.text);
       fx.celebrate(e.seat, null, merged ? "Merged!" : "PR opened");
-      if (merged) fx.ringBell(1); else fx.mail(e.seat, 1, "parcel");   // a merge rings the ship's bell in the lobby
+      if (merged) { fx.ringBell(1); teammateReacts(e, "shipped"); } else fx.mail(e.seat, 1, "parcel");   // a merge rings the ship's bell in the lobby
       if (who) fx.sayAtSeat(e.seat, merged ? "Merged. On to the next one." : "PR's up. Fingers crossed.", 6000);
       if (merged) { game.comboHit(e); giftBox.grant(e.seat, "shipped"); } else giftBox.earn(e.seat, "shipped");
       sound.play(merged ? "bell" : "report");
@@ -609,7 +614,7 @@ function onNews(e) {
     }
     case "par": {                                      // a seat's weekly plan closed, scored like a round of golf
       const good = /: (Eagle|Birdie|Par) \(/.test(e.text);
-      if (good && e.seat) fx.celebrate(e.seat, null, (/: (Eagle|Birdie|Par) \(/.exec(e.text) || [])[1] + "!");
+      if (good && e.seat) { fx.celebrate(e.seat, null, (/: (Eagle|Birdie|Par) \(/.exec(e.text) || [])[1] + "!"); teammateReacts(e, "par"); }
       if (prefs.game !== "off") toast(text, good ? "good" : "info", { ic: "flag", ms: 7000 });
       break;
     }

@@ -440,3 +440,25 @@ test("goals follow the office's pace, fit its size, stay put for the day and rer
   assert.equal(rerollGoals(st, c), false);                              // once a day
   assert.ok(canReroll("2026-10-20", c) === false && goalsFor("2026-10-20", c).length === 3 && canReroll("2026-10-20", c));   // a new day, a new set
 });
+
+test("teammates react in their own voice and banter about the day without repeating themselves", async () => {
+  const { reaction, banter } = await import("../../web/ui/personas.js");
+  for (const kind of ["report", "levelup", "limit", "achievement", "reset", "shipped", "par"]) {
+    const l = reaction(kind, "Vega", "The Builder");
+    assert.ok(l && l.includes("Vega") && !l.includes("{name}"), kind);
+  }
+  assert.equal(reaction("nope", "Vega"), "");
+  const base = { a: "Atlas", b: "Orion", napper: "", low: "", reporter: "", busy: 0, recentReport: false, night: false };
+  const facts = { ...base, leader: "Vega", goalsLeft: 2, merges: 3, happy: true, weekday: 5, season: "halloween" };
+  const said = new Set(), seen = new Set();
+  for (let i = 0; i < 60; i++) {
+    const [l1, l2] = banter(facts, said);
+    assert.ok(!/\{[a-z]\}|undefined/.test(l1 + l2), l1 + " / " + l2);
+    seen.add(l1);
+  }
+  assert.ok([...seen].some(x => /Vega|2 goals|3 merges|Happy hour|Friday|pumpkins/.test(x)), "the day's facts come up");
+  const s2 = new Set(), firsts = [];
+  for (let i = 0; i < 6; i++) firsts.push(banter(base, s2)[0]);
+  assert.equal(new Set(firsts).size, 6);                                  // nothing said twice in a row of six
+  assert.ok(s2.size <= 8);
+});
