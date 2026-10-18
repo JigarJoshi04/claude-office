@@ -251,7 +251,9 @@ export async function tokensPicture(app, t, rng) {
   g.font = "38px Silkscreen, monospace"; g.fillStyle = "#ffd8b0"; g.shadowColor = "#ff7a45"; g.shadowBlur = 16;
   g.fillText((snap.office.name || "Claude Office").toUpperCase().slice(0, 28), 60, 88); g.shadowBlur = 0;
   g.font = "500 22px Inter, sans-serif"; g.fillStyle = "#b8a99c";
-  g.fillText(`My AI team's tokens · ${{ today: "today", 7: "the last 7 days", 30: "the last 30 days", 90: "the last 90 days", all: t.since ? "since " + new Date(t.since + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "long" }) : "all time" }[rng]}`, 60, 126);
+  const span = rng.startsWith("m:") ? new Date(rng.slice(2) + "-15T12:00:00").toLocaleDateString([], { month: "long", year: "numeric" })
+    : { today: "today", 7: "the last 7 days", 30: "the last 30 days", 90: "the last 90 days", all: t.since ? "since " + new Date(t.since + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "long" }) : "all time" }[rng];
+  g.fillText(`My AI team's tokens · ${span}`, 60, 126);
   g.fillStyle = "#ffffff"; g.font = "800 92px Inter, sans-serif"; g.fillText(big(t.total.all), 60, 250);
   g.fillStyle = "#c9b9ab"; g.font = "600 20px Inter, sans-serif";
   g.fillText(`${big(t.total.cache)} cache reads · ${big(t.total.fresh)} fresh · ${big(t.total.output)} written`, 64, 288);

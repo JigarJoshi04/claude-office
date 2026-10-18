@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.28.0] - 2026-10-18
+
+### Added
+- Wrapped: a calendar month as a story (the tokens against the month before, a podium of the top three burners, what
+  it shipped, the biggest day and the model mix), ending in a picture. It plays on the first visit in a month's first
+  three days, for the month that ended, and from the menu or the palette; `?wrapped=1` in the demo.
+- `GET /api/tokens?range=m:YYYY-MM` for a calendar month.
+
 ## [3.27.0] - 2026-10-18
 
 ### Added

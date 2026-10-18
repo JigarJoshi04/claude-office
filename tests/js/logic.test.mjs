@@ -333,3 +333,9 @@ test("the Burner Belt goes to last week's top seat; milestones climb 1-2-5", asy
   assert.equal(rungWords(50e9), "50 billion");
   assert.equal(rungWords(2e6), "2 million");
 });
+
+test("Wrapped tells the month that ended", async () => {
+  const { lastMonth } = await import("../../web/ui/wrapped.js");
+  assert.equal(lastMonth(new Date(2026, 9, 2)), "2026-09");
+  assert.equal(lastMonth(new Date(2027, 0, 1)), "2026-12");
+});

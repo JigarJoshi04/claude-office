@@ -15,6 +15,7 @@ import { makeFloor } from "./ui/floor.js";
 import { makeGiftBox } from "./ui/giftbox.js";
 import { makeGame } from "./ui/game.js";
 import { makeWeekReview } from "./ui/weekreview.js";
+import { makeWrapped } from "./ui/wrapped.js";
 import { makeArcade } from "./ui/arcade.js";
 import { makeRadio } from "./ui/radio.js";
 import { makeCards } from "./ui/charcard.js";
@@ -243,6 +244,7 @@ app.gifts = giftBox;
 const game = makeGame({ app, office, panels, replay, store, DEMO, prefs, gifts: giftBox, view: () => view, renderPanel });
 const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });
 app.playWeek = () => weekReview.play();
+const wrapped = makeWrapped({ app, panels, store, DEMO, prefs, toast });
 app.badge = (id) => badge(award(id));            // badges from the panels (a hire, a replay)
 app.bump = (key, n, id) => badge(bump(key, n, id)); // counter badges (messages sent)
 app.badgeProgress = () => progress({ visits: game.visits(), stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });
@@ -409,7 +411,7 @@ function apply(next) {
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); game.renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   if (!DEMO) { game.checkBadges(); game.cheerWeekly(); game.anniversaries(); }   // the demo office never hands out badges
-  if (first) { app.tokensCache(); game.visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
+  if (first) { app.tokensCache(); game.visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : QS.has("wrapped") ? wrapped.play() : weekReview.maybeMonday()), 3500); setTimeout(() => wrapped.maybeNewMonth(), 6000); }
   if (!replay.active()) giftBox.daily(game.visits()); // the first visit of a day finds a gift at the CEO desk
   app.tokensCache();                                  // the odometer, the belt and milestones (fetched every 2 minutes)
   renderPanel(false);
@@ -770,7 +772,7 @@ function openMenu(focusItem) {
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
-    + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -795,6 +797,7 @@ function openMenu(focusItem) {
     else if (k === "tv") floor.setTv(true);
     else if (k === "daycard") shareDay();
     else if (k === "week") weekReview.play();
+    else if (k === "wrapped") wrapped.play();
     else if (k === "arcade") arcade.open();
     else if (k === "radio") setRadio(!radio.on);
     else if (k === "tour") tour();
@@ -971,6 +974,7 @@ function paletteItems() {
     ...(snap && snap.seats.length ? [{ icon: icon("star", 16), label: "Character cards", keywords: "card cards collectible trading character share picture", run: () => cards.open(snap.seats[0].id) }] : []),
     ...["full", "calm", "off"].filter(g => g !== (prefs.game || "full")).map(g => ({ icon: icon("sparkles", 16), label: `Game intensity: ${GAME_WORD[g]}`, keywords: "game calm work mode quiet focus off full celebrations", run: () => setPref("game", g) })),
     { icon: icon("bug", 16), label: "Play Bug Squash", keywords: "game arcade bugs squash play fun", run: () => arcade.open() },
+    { icon: icon("star", 16), label: "Last month, wrapped", keywords: "month wrapped review recap story year", run: () => wrapped.play() },
     { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },

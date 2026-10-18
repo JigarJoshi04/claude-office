@@ -138,3 +138,16 @@ class TokenViewTests(unittest.TestCase):
             self.assertEqual(v["seats"][0]["all"], 100)
             self.assertEqual(json.loads(p.read_text())["v"], 2)
             self.assertTrue(json.loads(p.read_text())["sessions"]["gone"]["legacy"])
+
+
+class MonthRangeTests(unittest.TestCase):
+    def test_a_calendar_month_against_the_one_before(self):
+        from office.demo import _demo_token_ledger
+        led = _demo_token_ledger()
+        seats = [{"id": i, "kind": "codex" if i == "astra" else "claude"} for i in ("claude", "claude2", "claude3", "claude4", "astra")]
+        v = led.view(seats, rng="m:2026-09")
+        self.assertEqual(len(v["days"]), 30)
+        self.assertEqual((v["days"][0]["day"], v["days"][-1]["day"]), ("2026-09-01", "2026-09-30"))
+        self.assertEqual(sum(d["all"] for d in v["days"]), v["total"]["all"])
+        self.assertIsNotNone(v["prev_total"])
+        self.assertEqual(len(led.view(seats, rng="m:2026-02")["days"]), 28)

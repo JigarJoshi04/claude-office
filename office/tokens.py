@@ -438,12 +438,22 @@ class TokenLedger:
         weekday-by-hour heat, models, projects, sessions and records, for a range (today, 7, 30, 90, all) and
         optionally one seat."""
         today = today or datetime.now().date().isoformat()
-        rng = rng if rng in RANGES else "all"
-        n = RANGES[rng]
         t = datetime.fromisoformat(today)
         span = lambda back, length: {(t.date() - timedelta(days=back + i)).isoformat() for i in range(length)}
-        cur = span(0, n) if n else None
-        prev = span(n, n) if n else None
+        month = re.fullmatch(r"m:(\d{4})-(\d{2})", rng or "")
+        if month:                                                         # a calendar month, against the month before
+            y, mo = int(month.group(1)), int(month.group(2))
+            first = datetime(y, mo, 1).date()
+            nxt = datetime(y + (mo == 12), mo % 12 + 1, 1).date()
+            before = datetime(y - (mo == 1), (mo - 2) % 12 + 1, 1).date()
+            cur = {(first + timedelta(days=i)).isoformat() for i in range((nxt - first).days)}
+            prev = {(before + timedelta(days=i)).isoformat() for i in range((first - before).days)}
+            n = len(cur)
+        else:
+            rng = rng if rng in RANGES else "all"
+            n = RANGES[rng]
+            cur = span(0, n) if n else None
+            prev = span(n, n) if n else None
         codex = next((x["id"] for x in seats if x.get("kind") == "codex"), None)
         known = {x["id"] for x in seats}
         with self.lock:
@@ -589,6 +599,7 @@ class TokenLedger:
             "today": sum(series.get(today, [0, 0, 0])[:2]),
             "seats": board,
             "days": [row(d, series[d]) for d in sorted(series)[-days:]] if cur is None else
+                    [row(d, series.get(d, [0, 0, 0])) for d in sorted(cur)] if month else
                     [row(d, series.get(d, [0, 0, 0])) for d in sorted(span(0, max(n, 7)))][-max(n, 7):],
             "calendar": [row(d, v) for d, v in sorted(series.items()) if d >= cal_from],
             "heat": {k: round(v) for k, v in heat.items()},

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import re
 import mimetypes
 import select
 import signal
@@ -64,7 +65,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.27.0"
+    server_version = "ClaudeOffice/3.28.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -142,8 +143,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, status_line(self.office.get(), q.get("style", "emoji")).encode() + b"\n", "text/plain; charset=utf-8")
             if url.path == "/api/tokens":
                 rng, seat = q.get("range", "all"), q.get("seat") or None
-                if rng not in tokens.RANGES:
-                    raise ValueError("range must be today, 7, 30, 90 or all")
+                if rng not in tokens.RANGES and not re.fullmatch(r"m:\d{4}-(0[1-9]|1[0-2])", rng):
+                    raise ValueError("range must be today, 7, 30, 90, all or m:YYYY-MM")
                 return self._json(200, self.office.tokens_view(rng, seat, q.get("sessions") == "all"))
             if url.path == "/api/week":
                 days = _number(q.get("days", "7"), "days must be an integer from 1 to 90")
