@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.88.0] - 2026-10-19
+
+### Added
+- The next 7 days, on Today: each seat's weekly plan as a bar: plan left, when it runs dry at this week's pace
+  (drawn as a projection), its weekly reset, and the fresh week after; with a warning for any stretch when no seat on
+  duty could take work. `capacity` in the snapshot (office/forecast.py), using the divider's weekly guard.
+
 ## [3.87.0] - 2026-10-19
 
 ### Added

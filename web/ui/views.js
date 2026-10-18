@@ -90,6 +90,7 @@ export function renderStats(el, app) {
     </div>
     ${weekCard(app, st.day || todayStr)}
     ${parCard(app)}
+    ${capacityCard(app)}
     ${limitsCard(app)}
     ${st.day === todayStr || !st.day ? waitCard(app.tokensCache("today"), { label: "today", who: (id) => (id ? nameOf(id) : "Unknown seat"), priv: app.privacy(), section: true }) : ""}
     ${tokensCard(app)}
@@ -163,6 +164,34 @@ function parCard(app) {
       return `<tr style="--seat:${esc(s.color)}"><td><span class="who"><i data-portrait="mascot-${esc(s.id)}|${esc(s.color)}|"></i>${esc(nameOf(s))}</span></td>${"<td></td>".repeat(pad)}${s.par.past.map(cell).join("")}${nowCell(s.par.now)}
         <td class="num"><b class="par-total ${s.par.season == null ? "" : s.par.season <= 0 ? "under" : "over"}">${s.par.season == null ? "–" : parMark(s.par.season)}</b></td></tr>`; }).join("")}</tbody></table></div>
     <p class="hint" style="margin-top:10px">Use most of a week's plan without running out: 60% is par, 90% a birdie, 97% an eagle. Running out of the week is a bogey (a double after 6 hours waiting), and so is leaving most of it unused. Hitting the 5-hour wall is noted, not scored; a seat on holiday rests.</p></div>`;
+}
+
+// The next seven days of plan (office/forecast.py): each seat's week as a bar: plan left, run dry at this week's pace
+// (a projection), the weekly reset, and the fresh week after it; red bands where no seat on duty could take work.
+function capacityCard(app) {
+  const snap = app.snap(), c = snap.capacity;
+  if (!c || !c.seats || !c.seats.length) return "";
+  const t0 = c.now, span = c.horizon, x = (t) => Math.max(0, Math.min(100, (t - t0) / span * 100));
+  const day = (t) => new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+  const nameOf = (id) => { const s = snap.seats.find(q => q.id === id); return s ? personaFor(s, snap.seats.findIndex(q => q.id === id)).name : id; };
+  const colour = (id) => (snap.seats.find(q => q.id === id) || {}).color || "#888";
+  const ticks = Array.from({ length: 8 }, (_, i) => { const d = new Date((t0 + i * 86400) * 1000); d.setHours(0, 0, 0, 0); return d.getTime() / 1000; }).filter(t => t > t0 && t < t0 + span);
+  const row = (k) => {
+    const out = k.out_at, rs = k.resets_at;
+    const segs = k.benched ? [[t0, t0 + span, "rest"]]
+      : [[t0, out != null ? out : rs, "left"], ...(out != null ? [[out, rs, "dry"]] : []), [rs, t0 + span, "fresh"]];
+    const words = k.benched ? "on holiday" : k.out_now ? `out of its week until ${day(rs)}` : out != null ? `runs dry about ${day(out)} at this pace, back ${day(rs)}` : `lasts the week, resets ${day(rs)}`;
+    return `<div class="cap-row" style="--seat:${esc(colour(k.seat))}"><span class="cap-name">${esc(nameOf(k.seat))}</span>
+      <svg class="cap-bar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="${esc(nameOf(k.seat))}: ${esc(words)}">${segs.filter(g => g[1] > g[0]).map(([a, b, cls]) => `<rect class="${cls}" x="${x(a).toFixed(2)}" y="1" width="${Math.max(0.3, x(b) - x(a)).toFixed(2)}" height="8" rx="1.2"/>`).join("")}
+        ${rs < t0 + span ? `<rect class="reset" x="${(x(rs) - 0.25).toFixed(2)}" y="0" width="0.5" height="10"/>` : ""}${ticks.map(t => `<rect class="tick" x="${x(t).toFixed(2)}" y="0" width="0.12" height="10"/>`).join("")}</svg>
+      <small>${esc(words)}</small></div>`;
+  };
+  const dry = (c.dry || []).map(([a, b]) => `${day(a)} to ${day(b)}`);
+  return `<div class="view-card"><div class="section-h"><h4>The next 7 days</h4><span class="hint">each seat's weekly plan, at this week's pace</span></div>
+    <div class="cap-days">${ticks.map(t => `<span style="left:${x(t).toFixed(2)}%">${esc(new Date(t * 1000).toLocaleDateString([], { weekday: "short" }))}</span>`).join("")}</div>
+    ${c.seats.map(row).join("")}
+    ${dry.length ? `<p class="cap-dry">${icon("alert", 15)}No seat on duty could take work ${esc(dry.join(", "))}.</p>` : ""}
+    <p class="hint" style="margin-top:8px">Green: plan left. Red: out of its week, until the white line, its weekly reset. The pace is the week's use so far drawn straight on, so it says where today's habits lead, not what will happen.</p></div>`;
 }
 
 // Hours lost to limits, the last 7 days: how long each seat sat out of plan, and how long no Claude seat could take work.
