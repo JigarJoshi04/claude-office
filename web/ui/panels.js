@@ -587,7 +587,9 @@ export function makePanels(app) {
         <div class="grow"><h2>${esc(snap.office.name || "Claude Office")}</h2>
           <div class="ol-sub">${ol.xp.toLocaleString()} XP · ${(ol.next - ol.xp).toLocaleString()} to level ${ol.level + 1}</div>
           <div class="ol-bar"><i style="width:${Math.round(ol.progress * 100)}%"></i></div>
-          <p class="lede">Everyone's work adds up. Every office level unlocks something new on the floor.</p></div></div>
+          <p class="lede">Everyone's work adds up. Every office level unlocks something new on the floor.${(() => { const since = Math.min(...snap.seats.map(x => (x.career && x.career.since) || Infinity));
+            if (!isFinite(since)) return ""; const days = Math.max(0, Math.floor((snap.now - since) / 86400));
+            return ` Open since ${esc(new Date(since * 1000).toLocaleDateString([], { day: "numeric", month: "long" }))} (${days === 0 ? "today" : days === 1 ? "1 day" : days + " days"}).`; })()}</p></div></div>
       ${nxt ? `<div class="ol-next">${icon(nxt.icon, 18)}<div class="grow"><b>Next: ${esc(nxt.name)}</b><span>${esc(nxt.desc)}</span></div><em>Level ${nxt.level}</em></div>` : `<div class="ol-next done">${icon("trophy", 18)}<div class="grow"><b>Everything is unlocked.</b><span>The office is complete. Keep the streak going.</span></div></div>`}
       ${section(`Unlocks · ${ol.unlocked.size} of ${UNLOCKS.length}`, `<div class="ol-grid">${UNLOCKS.map(u => { const on = ol.unlocked.has(u.id);
         return `<div class="ol-card ${on ? "on" : ""}"><span class="ol-ic">${icon(on ? u.icon : "lock", 18)}</span><b>${esc(u.name)}</b><span>${esc(on ? u.desc : `Unlocks at office level ${u.level}`)}</span></div>`; }).join("")}</div>`)}
