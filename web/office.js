@@ -405,7 +405,7 @@ export function createOffice(stage, handlers) {
   // seat naps, is on holiday or is logged out, and dark-ish when nobody is in.
   function drawRoom(pod, t, lights, env) {
     const s = pod.seat, room = pod.room, wr = windowRect(room), st = s.status;
-    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night);
+    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night, weatherOf(s));
     if (env.night) lights.push({ x: wr.x + wr.w / 2, y: wr.y + wr.h + 6, r: 24, c: "#9bb8ff", i: 0.2 });
     const live = s.sessions.filter(x => x.live !== false);
     const dark = st === "offline" ? 0.5 : st === "limited" ? 0.42 : st === "benched" ? 0.3 : !live.length ? 0.2 : 0;
@@ -423,6 +423,14 @@ export function createOffice(stage, handlers) {
       S.rect(ctx, ux + 8, uy + 6, 1, 18, "#d7d2c4");
       for (let i = 0; i < 4; i++) S.rect(ctx, ux + i * 4, uy + 2 - (i === 1 || i === 2 ? 2 : 0), 4, 5, i % 2 ? "#f4f1ea" : "#e0364a");
     }
+  }
+
+  // A room's mood weather in its window: rain while the seat is out of plan, clouds while its plan runs low.
+  function weatherOf(s) {
+    if (s.status === "limited") return "rain";
+    if (s.status === "benched" || s.status === "offline") return "clear";
+    const lefts = ["five_hour", "weekly"].map(k => { const w = (s.usage || {})[k]; return w && w.pct != null ? 100 - w.pct : null; }).filter(v => v != null);
+    return lefts.length && Math.min(...lefts) < 20 ? "cloudy" : "clear";
   }
 
   function drawPod(pod, t, lights) {

@@ -32,6 +32,13 @@ export function alpha(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+// a + (b − a)·f for two "#rrggbb" colours
+export function blend(a, b, f) {
+  const p = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const x = p(a), y = p(b);
+  return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * f).toString(16).padStart(2, "0")).join("");
+}
+
 export function hashOf(str) {
   let h = 2166136261;
   for (let i = 0; i < (str || "").length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -408,17 +415,33 @@ export function drawBookshelf(ctx, x, y, w) {
   }
 }
 
-export function drawWindow(ctx, x, y, w, h, sky, t, night) {
+// weather: "clear", "cloudy" (a seat's plan is running low) or "rain" (it is out of plan): each room's own mood sky.
+export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear") {
   rect(ctx, x - 2, y - 2, w + 4, h + 4, P.trim);
   const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, sky[0]); g.addColorStop(1, sky[1]);
+  const grey = weather === "rain" ? 0.7 : weather === "cloudy" ? 0.45 : 0;
+  const mix = (c) => grey ? blend(c, night ? "#1b2030" : "#7c8698", grey) : c;
+  g.addColorStop(0, mix(sky[0])); g.addColorStop(1, mix(sky[1]));
   ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  if (weather !== "clear") {
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    const cloud = night ? "#2b3142" : weather === "rain" ? "#7d8596" : "#c9d0dc", drift = Math.floor(t / 260);
+    for (let i = 0; i < 3; i++) {
+      const cx = x + ((drift + i * 19) % (w + 20)) - 10, cy = y + 2 + i * 3;
+      rect(ctx, cx, cy + 1, 12, 3, cloud); rect(ctx, cx + 2, cy, 7, 1, cloud);
+    }
+    if (weather === "rain") for (let i = 0; i < 9; i++) {
+      const rx = x + (hashOf("r" + i + x) % w) - ((t / 40 + i * 5) % 6), ry = y + ((t / 22 + i * 7) % (h + 4)) - 4;
+      rect(ctx, rx, ry, 1, 3, night ? "rgba(150,170,210,0.6)" : "rgba(220,232,250,0.85)");
+    }
+    ctx.restore();
+  }
   if (night) {
     for (let i = 0; i < 7; i++) {
       const sx = x + (hashOf("s" + i + x) % w), sy = y + (hashOf("y" + i + x) % Math.max(1, h - 8));
       if ((Math.floor(t / 900) + i) % 5) rect(ctx, sx, sy, 1, 1, "#fff8d0");
     }
-    rect(ctx, x + w - 9, y + 3, 4, 4, "#f4f1d0"); rect(ctx, x + w - 8, y + 3, 3, 3, sky[0]);   // moon
+    if (weather === "clear") { rect(ctx, x + w - 9, y + 3, 4, 4, "#f4f1d0"); rect(ctx, x + w - 8, y + 3, 3, 3, sky[0]); }   // moon
     for (let i = 0; i < w; i += 5) {
       const bh = 5 + (hashOf("b" + (x + i)) % 10);
       rect(ctx, x + i, y + h - bh, 5, bh, "#121625");
@@ -426,9 +449,11 @@ export function drawWindow(ctx, x, y, w, h, sky, t, night) {
       if (hashOf("m" + (x + i)) % 4 === 0) rect(ctx, x + i + 1, y + h - bh + 5, 1, 1, "#ffd76a");
     }
   } else {
-    const cx = (Math.floor(t / 200) % (w + 24)) - 12;
-    rect(ctx, x + cx, y + 5, 9, 2, "rgba(255,255,255,0.92)"); rect(ctx, x + cx + 2, y + 4, 5, 1, "rgba(255,255,255,0.92)");
-    rect(ctx, x + w - 10, y + 3, 5, 5, "#fff2a8");
+    if (weather === "clear") {
+      const cx = (Math.floor(t / 200) % (w + 24)) - 12;
+      rect(ctx, x + cx, y + 5, 9, 2, "rgba(255,255,255,0.92)"); rect(ctx, x + cx + 2, y + 4, 5, 1, "rgba(255,255,255,0.92)");
+      rect(ctx, x + w - 10, y + 3, 5, 5, "#fff2a8");
+    }
     for (let i = 0; i < w; i += 6) { const bh = 4 + (hashOf("b" + (x + i)) % 8); rect(ctx, x + i, y + h - bh, 6, bh, "rgba(60,80,115,0.55)"); }
   }
   rect(ctx, x + Math.floor(w / 2), y, 1, h, P.trim);
