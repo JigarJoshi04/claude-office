@@ -51,6 +51,17 @@ class SettingsTests(unittest.TestCase):
                 settings.validate(body)
         self.assertEqual(settings.validate({"seats": {"a": {"nickname": None}}})["seats"]["a"]["nickname"], None)
 
+    def test_personality_style_is_one_of_the_archetypes(self):
+        ok = settings.validate({"seats": {"a": {"style": "The Night Owl"}, "b": {"style": None}}})
+        self.assertEqual(ok["seats"]["a"]["style"], "The Night Owl")
+        self.assertIsNone(ok["seats"]["b"]["style"])
+        for bad in ("The Hacker", "", 3, ["The Builder"]):
+            with self.subTest(style=bad), self.assertRaises(ValueError):
+                settings.validate({"seats": {"a": {"style": bad}}})
+        with tempfile.TemporaryDirectory() as tmp, patch.object(config, "CONFIG_DIR", Path(tmp)):
+            cfg = settings.save({"seats": {"a": {"style": "The Builder"}}})
+            self.assertEqual(settings.view(cfg, [dict(cfg["seats"]["a"], id="a")])["seats"]["a"]["style"], "The Builder")
+
     def test_invalid_update_or_failed_replace_keeps_existing_config(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(config, "CONFIG_DIR", Path(tmp)):
             path = Path(tmp) / "config.json"

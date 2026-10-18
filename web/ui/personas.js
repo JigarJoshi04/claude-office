@@ -108,7 +108,8 @@ export function line(p, key) {
 
 export function personaFor(seat, index = 0) {
   index = Math.max(0, index);                 // a seat not (yet) in the list still gets a character
-  const base = seat.kind === "codex" ? CODEX : ARCHETYPES[index % ARCHETYPES.length];   // one character per seat, in order
+  const chosen = seat.style && [...ARCHETYPES, CODEX].find(a => a.role === seat.style);   // a personality picked in Settings
+  const base = chosen || (seat.kind === "codex" ? CODEX : ARCHETYPES[index % ARCHETYPES.length]);   // else one per seat, in order
   return {
     name: seat.nickname || (seat.kind === "codex" ? "Astra" : NAMES[index % NAMES.length]),
     archetype: base.role,          // the voice and room decor follow the archetype, even under a custom role
@@ -181,3 +182,6 @@ export function pulse(snap, persona, fmtTime) {
   return parts.join(" ");
 }
 function words(n) { return ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"][n] || String(n); }
+
+// The personalities a seat can take (Settings → Characters): each brings its own voice, room floor and furniture.
+export const PERSONALITIES = [...ARCHETYPES, CODEX].map(a => ({ role: a.role, motto: a.motto }));

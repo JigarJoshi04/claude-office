@@ -107,3 +107,15 @@ test("seasons: Halloween, Diwali and the winter holidays", async () => {
   assert.equal(at("2027-10-29"), "diwali");                // in 2027 Diwali falls inside the Halloween weeks and wins
   assert.equal(at("2026-07-01"), null);
 });
+
+test("a personality picked in Settings sets the voice and room style", async () => {
+  const { personaFor, PERSONALITIES } = await import("../../web/ui/personas.js");
+  assert.equal(PERSONALITIES.length, 7);
+  const auto = personaFor({ id: "a", kind: "claude" }, 0), owl = personaFor({ id: "a", kind: "claude", style: "The Night Owl" }, 0);
+  assert.notEqual(auto.archetype, "The Night Owl");
+  assert.equal(owl.archetype, "The Night Owl");
+  assert.equal(owl.role, "The Night Owl");
+  assert.equal(personaFor({ id: "a", kind: "claude", style: "The Night Owl", role: "Lead" }, 0).role, "Lead");   // a custom role still wins
+  assert.equal(personaFor({ id: "a", kind: "claude", style: "Nonsense" }, 0).archetype, auto.archetype);          // unknown → automatic
+  assert.equal(personaFor({ id: "x", kind: "claude" }, -1).name, personaFor({ id: "x", kind: "claude" }, 0).name);  // a seat not in the list
+});

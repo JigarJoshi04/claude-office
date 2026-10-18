@@ -103,6 +103,7 @@ def discover_claude_seats(cfg: dict) -> list[dict]:
             "nickname": over.get("nickname"),
             "role": over.get("role"),
             "motto": over.get("motto"),
+            "style": over.get("style"),
             "color": over.get("color", PALETTE[i % len(PALETTE)]),
         })
     return seats
@@ -124,6 +125,7 @@ def codex_seat_meta(cfg: dict) -> dict | None:
         "nickname": over.get("nickname"),
         "role": over.get("role"),
         "motto": over.get("motto"),
+        "style": over.get("style"),
         "color": over.get("color", ASTRA_COLOR),
     }
 

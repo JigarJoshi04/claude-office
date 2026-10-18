@@ -3,7 +3,7 @@ import { esc, fmtTok, ago, until, clock, dur, pct, live, store, toast, debounce,
   STATE_LABEL, SEAT_LABEL } from "./util.js";
 import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
-import { personaFor, binding, leftOf, voice, diary } from "./personas.js";
+import { personaFor, binding, leftOf, voice, diary, PERSONALITIES } from "./personas.js";
 import { sound } from "./sound.js";
 import { goals, streak } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
@@ -799,7 +799,8 @@ export function makePanels(app) {
         return `<div class="persona-edit"><div class="head">${avatar("mascot-" + id, st.color || "#888888")}<div class="grow"><b>${esc(per.name)}</b> <span class="hint">${esc(st.label || id)}</span></div><input type="color" data-color="${esc(id)}" value="${esc(st.color || "#888888")}" aria-label="${esc(id)} colour"></div>
           <label class="f">Name<input type="text" data-nick="${esc(id)}" maxlength="24" placeholder="${esc(per.name)}" value="${esc(st.nickname || "")}"></label>
           <label class="f">Role<input type="text" data-role="${esc(id)}" maxlength="40" placeholder="${esc(per.role)}" value="${esc(st.role || "")}"></label>
-          <label class="f full">Motto<input type="text" data-motto="${esc(id)}" maxlength="90" placeholder="${esc(per.motto)}" value="${esc(st.motto || "")}"></label></div>`; }).join(""))}
+          <label class="f full">Motto<input type="text" data-motto="${esc(id)}" maxlength="90" placeholder="${esc(per.motto)}" value="${esc(st.motto || "")}"></label>
+          <label class="f full">Personality: voice and room<select data-style="${esc(id)}"><option value="">Automatic (${esc(seat ? personaFor({ ...seat, style: null }, S().seats.findIndex(x => x.id === id)).archetype : "by order")})</option>${PERSONALITIES.map(x => `<option value="${esc(x.role)}" ${st.style === x.role ? "selected" : ""}>${esc(x.role)} · ${esc(x.motto)}</option>`).join("")}</select></label></div>`; }).join(""))}
       ${section("Jarvis voice", `${row("Announce out loud", sd.voice_available ? "Speaks short alerts through jarvis-say. Off by default." : "jarvis-say was not found on this machine.", `<label class="switch"><input type="checkbox" id="setVoice" ${voice.enabled ? "checked" : ""} ${sd.voice_available ? "" : "disabled"} aria-label="Voice"><span></span></label>`)}
         <div class="row wrap" style="gap:6px;margin:10px 0">${VOICE.map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-vev="${k}" ${(voice.events || []).includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
         <div class="grid2"><label class="f">Quiet from (hour)<input type="number" min="0" max="23" id="setQ1" value="${(voice.quiet_hours || [23, 8])[0]}"></label><label class="f">Until (hour)<input type="number" min="0" max="23" id="setQ2" value="${(voice.quiet_hours || [23, 8])[1]}"></label></div>`)}
@@ -822,6 +823,7 @@ export function makePanels(app) {
           root.querySelectorAll("[data-role]").forEach(i => put(i.dataset.role, "role", i.value.trim()));
           root.querySelectorAll("[data-motto]").forEach(i => put(i.dataset.motto, "motto", i.value.trim()));
           root.querySelectorAll("[data-color]").forEach(i => put(i.dataset.color, "color", i.value));
+          root.querySelectorAll("[data-style]").forEach(i => put(i.dataset.style, "style", i.value || null));
           try { const r = await app.post("/api/settings", body); settingsData = r.demo ? settingsData : null; result(r, "Saved. The office redecorates on the next refresh."); app.refresh(); }
           catch (e) { toast("Could not save: " + e.message, "bad"); }
         });

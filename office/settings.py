@@ -11,13 +11,15 @@ from .live import public
 
 VOICE_DEFAULTS = {"enabled": False, "events": ["report", "limit", "login", "lane"], "quiet_hours": [23, 8]}
 VOICE_EVENTS = {"report", "limit", "login", "lane", "usage", "stuck"}
+# A seat's personality (its voice and room style); the names match web/ui/personas.js ARCHETYPES.
+STYLES = {"The Orchestrator", "The Builder", "The Investigator", "The Perfectionist", "The Night Owl", "The Speedrunner", "The Contractor"}
 _LOCK = threading.Lock()
 
 
 def view(cfg, seats):
     return public({"office_name": cfg.get("office_name", "Claude Office"),
                    "ceo_name": cfg.get("ceo", {}).get("name", "CEO"),
-                   "seats": {s["id"]: {k: s.get(k) for k in ("label", "nickname", "color", "role", "motto")} for s in seats},
+                   "seats": {s["id"]: {k: s.get(k) for k in ("label", "nickname", "color", "role", "motto", "style")} for s in seats},
                    "voice": {k: cfg.get("voice", {}).get(k, v) for k, v in VOICE_DEFAULTS.items()},
                    "voice_available": shutil.which("jarvis-say") is not None})
 
@@ -54,6 +56,10 @@ def validate(body):
             for key, maximum, optional in (("label", 40, False), ("nickname", 24, True), ("role", 40, True), ("motto", 90, True)):
                 if key in entry:
                     dest[key] = name(entry[key], key, maximum, optional)
+            if "style" in entry:
+                if entry["style"] is not None and (not isinstance(entry["style"], str) or entry["style"] not in STYLES):
+                    raise ValueError("style must be one of the personalities")
+                dest["style"] = entry["style"]
             if "color" in entry:
                 if not isinstance(entry["color"], str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", entry["color"]):
                     raise ValueError("color must be #RRGGBB")
