@@ -9,7 +9,11 @@ export const TOKEN_METRICS = {
   all: ["All tokens", "everything the models processed, cache reads included"],
   fresh: ["Fresh", "input, cache writes and output: what was new to the model"],
   output: ["Output", "what the models wrote"],
+  usd: ["API value", "what the same tokens would cost at API list prices (the plans pay far less)"],
 };
+// Dollars, short: $0.42, $12.30, $1,234, $12.3k, $1.2M.
+export const money = (n) => (n >= 1e6 ? "$" + (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? "$" + (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + "k"
+  : n >= 100 ? "$" + Math.round(n).toLocaleString() : "$" + (n || 0).toFixed(2));
 const big = (n) => (n >= 1e9 ? (n / 1e9).toFixed(n >= 1e11 ? 0 : 1) + " B" : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + " M" : fmtTok(n));
 export const modelName = (m) => {
   if (!m) return "?";
@@ -46,6 +50,7 @@ export function tokensCard(app) {
     <div class="muted">Reading the transcripts on this machine for the first time. This takes a few seconds.</div></div>`;
   const key = app.tokenMetric(), [label] = TOKEN_METRICS[key] || TOKEN_METRICS.all;
   const val = (r) => r[key] || 0, snap = app.snap(), priv = app.privacy();
+  const fmt = (n) => (key === "usd" ? money(n) : big(n));
   const todayOf = (r) => (r.today_by ? val(r.today_by) : key === "all" ? r.today || 0 : 0);   // today, in the measure shown
   const seatOf = (id) => snap.seats.find(s => s.id === id);
   const who = (id) => { const s = seatOf(id); return s ? personaFor(s, snap.seats.findIndex(x => x.id === id)).name : "Unknown seat"; };
@@ -57,26 +62,27 @@ export function tokensCard(app) {
       <span class="rk">${i + 1}</span>${seat ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(color)}|"></i>` : `<span class="tb-unk">?</span>`}
       <span class="grow"><span class="tb-name"><b>${esc(who(s.seat))}</b>${i === 0 ? `<em class="tb-flame">${icon("flame", 13)}Top burner</em>` : ""}</span>
         <span class="tb-bar"><i style="width:${(val(s) / max * 100).toFixed(1)}%"></i></span></span>
-      <span class="tb-v"><b>${big(val(s))}</b><small>${share}%${todayOf(s) ? ` · ${big(todayOf(s))} today` : ""}</small></span></div>`;
+      <span class="tb-v"><b>${fmt(val(s))}</b><small>${share}%${todayOf(s) ? ` · ${fmt(todayOf(s))} today` : ""}</small></span></div>`;
   }).join("");
   // the last 60 days as bars, months marked under them
   const days = t.days || [], dmax = Math.max(1, ...days.map(val)), W = days.length * 10, H = 90, today = days.length ? days[days.length - 1].day : "";
   const bars = days.map((d, i) => { const h = val(d) > 0 ? Math.max(2, Math.round(val(d) / dmax * H)) : 0, x = i * 10 + 1;
-    return `<rect class="${d.day === today ? "on" : ""}" x="${x}" y="${H - h}" width="8" height="${h}" rx="1.5"><title>${esc(new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${val(d).toLocaleString()}</title></rect>`; }).join("");
+    return `<rect class="${d.day === today ? "on" : ""}" x="${x}" y="${H - h}" width="8" height="${h}" rx="1.5"><title>${esc(new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${key === "usd" ? money(val(d)) : val(d).toLocaleString()}</title></rect>`; }).join("");
   const marks = days.map((d, i) => d.day.endsWith("-01") || (i === 0 && d.day.slice(8) < "25") ? `<span style="left:${(i / Math.max(1, days.length) * 100).toFixed(2)}%">${esc(new Date(d.day + "T12:00:00").toLocaleDateString([], { month: "short" }))}</span>` : "").join("");
-  const months = (t.months || []).slice(-4).map(m => `<span><b>${big(val(m))}</b>${esc(new Date(m.month + "-15T12:00:00").toLocaleDateString([], { month: "long" }))}</span>`).join("");
+  const months = (t.months || []).slice(-4).map(m => `<span><b>${fmt(val(m))}</b>${esc(new Date(m.month + "-15T12:00:00").toLocaleDateString([], { month: "long" }))}</span>`).join("");
   const sessions = (t.sessions || []).slice(0, 6).map((s, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(s.project || "a session")}</b>
-    <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""} · ${(s.messages || 0).toLocaleString()} responses</small></span><em>${big(val(s))}</em></li>`).join("");
+    <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""} · ${(s.messages || 0).toLocaleString()} responses</small></span><em>${fmt(val(s))}</em></li>`).join("");
   const projects = (t.projects || []).slice(0, 6).map((p, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(p.project)}</b>
-    <small>${p.sessions} session${p.sessions === 1 ? "" : "s"}${p.top_seat ? ` · mostly ${esc(who(p.top_seat))}` : ""}</small></span><em>${big(p.all)}</em></li>`).join("");
+    <small>${p.sessions} session${p.sessions === 1 ? "" : "s"}${p.top_seat ? ` · mostly ${esc(who(p.top_seat))}` : ""}</small></span><em>${fmt(val(p))}</em></li>`).join("");
   const mmax = Math.max(1, ...(t.models || []).map(val));
-  const models = (t.models || []).filter(m => val(m) > 0).slice(0, 6).map(m => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${big(val(m))}</em></li>`).join("");
+  const models = (t.models || []).filter(m => val(m) > 0).slice(0, 6).map(m => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${fmt(val(m))}</em></li>`).join("");
   return `<div class="view-card tok" id="tokens"><div class="section-h"><h4>All-time tokens</h4><button class="btn sm ghost" data-tok-open title="Ranges, rank movement, a calendar and the hours of the week (K)">${icon("flame", 13)}Open Tokens</button><span class="grow"></span>
       <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(TOKEN_METRICS).map(([k, [l, d]]) => `<button data-tok-metric="${k}" class="${k === key ? "on" : ""}" title="${esc(d)}">${l}</button>`).join("")}</div></div>
-    <div class="tok-hero"><b>${big(total)}</b><span>${label.toLowerCase()}${since ? ` since ${esc(since)}` : ""}</span>${todayOf(t) ? `<em>${big(todayOf(t))} today</em>` : ""}</div>
+    <div class="tok-hero"><b>${fmt(total)}</b><span>${label.toLowerCase()}${since ? ` since ${esc(since)}` : ""}</span>${todayOf(t) ? `<em>${fmt(todayOf(t))} today</em>` : ""}</div>
     <div class="tok-parts"><span title="Tokens read back from the prompt cache: cheap, and most of the volume">${icon("refresh", 13)}${big(t.total.cache)} cache reads</span>
       <span title="Input, cache writes and output">${icon("zap", 13)}${big(t.total.fresh)} fresh</span><span title="What the models wrote">${icon("send", 13)}${big(t.total.output)} output</span>
-      <span>${icon("chat", 13)}${(t.total.messages || 0).toLocaleString()} responses · ${(t.total.sessions || 0).toLocaleString()} sessions</span></div>
+      <span>${icon("chat", 13)}${(t.total.messages || 0).toLocaleString()} responses · ${(t.total.sessions || 0).toLocaleString()} sessions</span>
+      ${t.total.usd ? `<span class="tok-usd" title="What the same tokens would cost at API list prices">${icon("coin", 13)}${money(t.total.usd)} at API prices${t.value && t.value.multiple ? ` · ${t.value.multiple}× the plans` : ""}</span>` : ""}</div>
     <div class="tok-grid"><div><h5>Who burns the most</h5><div class="tb-list">${burners || `<div class="muted">Nothing counted yet.</div>`}</div></div>
       <div><h5>Per day, last ${days.length} days</h5><svg class="tok-days" viewBox="0 0 ${Math.max(W, 10)} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(label)} per day for the last ${days.length} days">${bars}</svg><div class="tok-mlabels">${marks}</div>
         <div class="tok-months">${months}</div></div></div>
@@ -130,6 +136,7 @@ function renderTokensInner(el, app) {
   const seatOf = (id) => snap.seats.find(s => s.id === id);
   const who = (id) => { const s = seatOf(id); return s ? personaFor(s, snap.seats.findIndex(x => x.id === id)).name : "Unknown seat"; };
   const val = (r) => (r ? r[key] || 0 : 0);
+  const fmt = (n) => (key === "usd" ? money(n) : big(n));
   const todayOf = (r) => (r.today_by ? val(r.today_by) : key === "all" ? r.today || 0 : 0);
   const gameOff = (p.game || "full") === "off";
   const head = `<div class="tp-head"><div class="grow"><h3>Tokens${seat ? ` · ${esc(who(seat))}` : ""}</h3><p>${seat ? `Everything ${esc(who(seat))} burned` : "Who burns the most, and when"}, counted from the transcripts on this machine.</p></div>
@@ -137,8 +144,8 @@ function renderTokensInner(el, app) {
     <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(TOKEN_METRICS).map(([k, [l, d]]) => `<button data-tok-metric="${k}" class="${k === key ? "on" : ""}" title="${esc(d)}">${l}</button>`).join("")}</div>
     ${seat ? `<button class="btn sm" data-tp-seat="">${icon("x", 14)}All characters</button>` : ""}<button class="btn sm" data-tp-csv>${icon("download", 14)}CSV</button><button class="btn sm" data-tp-share>${icon("star", 14)}Picture</button></div>`;
   if (!t) { el.innerHTML = `<div class="view-card">${head}<div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`; bind(); return; }
-  const total = val(t.total), prev = t.prev_total ? t.prev_total.all : null;
-  const delta = key === "all" && prev && !t.prev_partial ? Math.round((total - prev) / prev * 100) : null;
+  const total = val(t.total), prev = t.prev_total ? t.prev_total[key === "usd" ? "usd" : "all"] : null;
+  const delta = (key === "all" || key === "usd") && prev && !t.prev_partial ? Math.round((total - prev) / prev * 100) : null;
   const liveNow = snap.seats.filter(s => !seat || s.id === seat).reduce((a, s) => a + (s.tokens_1h_all || 0), 0);
   // the leaderboard, with how each character moved since the period before
   const board = (t.seats || []).filter(s => val(s) > 0), max = Math.max(1, ...board.map(val)), sum = board.reduce((a, s) => a + val(s), 0);
@@ -146,16 +153,16 @@ function renderTokensInner(el, app) {
     const st = seatOf(s.seat), color = st ? st.color : "#82889f", mv = s.prev_rank == null ? null : s.prev_rank - (i + 1);
     const move = s.prev_rank == null ? (rng === "all" ? "" : `<em class="mv new" title="Not on the board ${esc(prevWord[rng] || "")}">new</em>`)
       : mv > 0 ? `<em class="mv up" title="Up from #${s.prev_rank}">▲${mv}</em>` : mv < 0 ? `<em class="mv down" title="Down from #${s.prev_rank}">▼${-mv}</em>` : `<em class="mv same" title="Same place as ${esc(prevWord[rng] || "")}">=</em>`;
-    return `<div class="tb-row ${i === 0 ? "first" : ""} ${s.seat === seat ? "sel" : ""}" style="--seat:${esc(color)}" ${st ? `data-tp-seat="${esc(s.seat)}" role="button" tabindex="0" aria-label="${esc(who(s.seat))}: ${big(val(s))}, show only ${esc(who(s.seat))}"` : ""}>
+    return `<div class="tb-row ${i === 0 ? "first" : ""} ${s.seat === seat ? "sel" : ""}" style="--seat:${esc(color)}" ${st ? `data-tp-seat="${esc(s.seat)}" role="button" tabindex="0" aria-label="${esc(who(s.seat))}: ${fmt(val(s))}, show only ${esc(who(s.seat))}"` : ""}>
       <span class="rk">${i + 1}</span>${st ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(color)}|"></i>` : `<span class="tb-unk">?</span>`}
       <span class="grow"><span class="tb-name"><b>${esc(who(s.seat))}</b>${move}${i === 0 ? `<em class="tb-flame">${icon("flame", 13)}${rng === "all" ? "Top burner" : "Burning hottest"}</em>` : ""}</span>
         <span class="tb-bar"><i style="width:${(val(s) / max * 100).toFixed(1)}%"></i></span></span>
-      <span class="tb-v"><b>${big(val(s))}</b><small>${sum ? Math.round(val(s) / sum * 100) : 0}% · ${s.sessions} session${s.sessions === 1 ? "" : "s"}</small></span></div>`;
+      <span class="tb-v"><b>${fmt(val(s))}</b><small>${sum ? Math.round(val(s) / sum * 100) : 0}% · ${s.sessions} session${s.sessions === 1 ? "" : "s"}</small></span></div>`;
   }).join("") || `<div class="muted">No tokens ${esc(rangeWord[rng])}.</div>`;
   // days in the range, as bars
   const days = t.days || [], dmax = Math.max(1, ...days.map(val));
   const bars = days.map((d, i) => { const h = val(d) > 0 ? Math.max(2, Math.round(val(d) / dmax * 100)) : 0, w = 100 / days.length;
-    return `<rect x="${(i * w + w * 0.12).toFixed(2)}" y="${100 - h}" width="${(w * 0.76).toFixed(2)}" height="${h}" class="${i === days.length - 1 ? "on" : ""}"><title>${esc(new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${val(d).toLocaleString()}</title></rect>`; }).join("");
+    return `<rect x="${(i * w + w * 0.12).toFixed(2)}" y="${100 - h}" width="${(w * 0.76).toFixed(2)}" height="${h}" class="${i === days.length - 1 ? "on" : ""}"><title>${esc(new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${key === "usd" ? money(val(d)) : val(d).toLocaleString()}</title></rect>`; }).join("");
   const firstDay = days[0] && new Date(days[0].day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" });
   // the calendar: 26 weeks, Monday at the top, five shades of one hue
   const cal = t.calendar || [], cmax = Math.max(1, ...cal.map(val)), byDay = Object.fromEntries(cal.map(d => [d.day, d]));
@@ -164,7 +171,7 @@ function renderTokensInner(el, app) {
   for (let i = 0, d = new Date(start); d <= end; i++, d.setDate(d.getDate() + 1)) {
     const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`, v = val(byDay[k]);
     const lvl = v <= 0 ? 0 : Math.min(4, 1 + Math.floor(v / cmax * 4));
-    cells += `<i class="l${lvl}" style="grid-row:${((d.getDay() + 6) % 7) + 1};grid-column:${Math.floor(i / 7) + 1}" title="${esc(d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${v ? big(v) : "nothing"}"></i>`;
+    cells += `<i class="l${lvl}" style="grid-row:${((d.getDay() + 6) % 7) + 1};grid-column:${Math.floor(i / 7) + 1}" title="${esc(d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${v ? fmt(v) : "nothing"}"></i>`;
   }
   // the week's hours: Monday to Sunday down, midnight to 11 PM across
   const heat = t.heat || {}, hmax = Math.max(1, ...Object.values(heat));
@@ -187,40 +194,56 @@ function renderTokensInner(el, app) {
     if (!sh || !(sh.commits || sh.prs_opened)) return "";
     const lean = gameOff ? null : leanHolder(t.weeks);
     const rows = (t.seats || []).filter(s => s.commits || s.prs_opened || s.prs_merged).sort((a, b) => b.commits - a.commits).map(s => {
-      const st = seatOf(s.seat), per = s.commits ? s.all / s.commits : null;
+      const st = seatOf(s.seat), per = s.commits ? (key === "usd" ? s.usd : s.all) / s.commits : null;
       return `<tr style="--seat:${esc(st ? st.color : "#82889f")}"><td><span class="who">${st ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(st.color)}|"></i>` : ""}${esc(who(s.seat))}${lean && lean.seat === s.seat ? ` <em class="lean" title="Lean ribbon: fewest tokens per commit last week">${icon("check", 11)}Lean</em>` : ""}</span></td>
-        <td class="num">${s.commits.toLocaleString()}</td><td class="num">${s.prs_merged}<small> / ${s.prs_opened}</small></td><td class="num">+${fmtTok(s.insertions)} <small>−${fmtTok(s.deletions)}</small></td><td class="num">${per ? big(per) : "–"}</td></tr>`; }).join("");
+        <td class="num">${s.commits.toLocaleString()}</td><td class="num">${s.prs_merged}<small> / ${s.prs_opened}</small></td><td class="num">+${fmtTok(s.insertions)} <small>−${fmtTok(s.deletions)}</small></td><td class="num">${per ? fmt(per) : "–"}</td></tr>`; }).join("");
     return `<div class="view-card"><h5>What it shipped · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
       <div class="tok-parts"><span>${icon("check", 13)}${sh.commits.toLocaleString()} commits</span><span>${icon("send", 13)}${sh.pushes.toLocaleString()} pushes</span>
         <span>${icon("star", 13)}${sh.prs_merged} PRs merged of ${sh.prs_opened} opened</span><span>+${fmtTok(sh.insertions)} −${fmtTok(sh.deletions)} lines</span>
-        ${sh.commits && key === "all" ? `<span>${icon("flame", 13)}${big(total / sh.commits)} tokens a commit</span>` : ""}</div>
-      ${rows ? `<div class="table-scroll"><table class="league ship"><thead><tr><th>Character</th><th class="num">Commits</th><th class="num">PRs merged / opened</th><th class="num">Lines</th><th class="num">Tokens a commit</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+        ${sh.commits && key === "all" ? `<span>${icon("flame", 13)}${big(total / sh.commits)} tokens a commit</span>` : sh.commits && key === "usd" ? `<span>${icon("coin", 13)}${money(total / sh.commits)} a commit at API prices</span>` : ""}</div>
+      ${rows ? `<div class="table-scroll"><table class="league ship"><thead><tr><th>Character</th><th class="num">Commits</th><th class="num">PRs merged / opened</th><th class="num">Lines</th><th class="num">${key === "usd" ? "API value a commit" : "Tokens a commit"}</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
       <p class="hint">Counted from the git and gh commands the sessions ran, when they succeeded.${lean ? ` Lean ribbon: ${esc(who(lean.seat))}, with the fewest tokens per commit last week (${big(lean.perCommit)}).` : ""}</p></div>`;
+  }
+  // What the same tokens would cost on the API, against what the plans cost for the same days.
+  function valueCard() {
+    const v = t.value;
+    if (!v || !v.usd) return "";
+    const rows = (t.seats || []).filter(s => s.usd > 0).sort((a, b) => b.usd - a.usd).map(s => {
+      const st = seatOf(s.seat), plan = s.plan_month, cost = plan ? plan * v.days / 30.44 : null;
+      return `<tr style="--seat:${esc(st ? st.color : "#82889f")}"><td><span class="who">${st ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(st.color)}|"></i>` : ""}${esc(who(s.seat))}</span></td>
+        <td class="num">${plan != null ? `${money(plan)}<small>/mo</small>` : `<small>not set</small>`}</td><td class="num">${money(s.usd)}</td>
+        <td class="num">${cost ? `<b>${(s.usd / cost).toFixed(s.usd / cost >= 10 ? 0 : 1)}×</b>` : "–"}</td></tr>`; }).join("");
+    return `<div class="view-card tp-valuecard"><h5>What the plans bought · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+      <div class="tp-value">${icon("coin", 22)}<div class="grow"><b>${money(v.usd)}</b><span>at API list prices ${esc(rangeWord[rng])}${seat ? ` for ${esc(who(seat))}` : ""}</span></div>
+        ${v.multiple ? `<div class="tp-mult"><b>${v.multiple >= 10 ? Math.round(v.multiple) : v.multiple}×</b><span>what the plans cost<br>(${money(v.plan_usd)} for ${v.days} day${v.days === 1 ? "" : "s"})</span></div>` : ""}</div>
+      ${rows ? `<div class="table-scroll"><table class="league ship"><thead><tr><th>Character</th><th class="num">Plan</th><th class="num">At API prices</th><th class="num">Paid back</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+      <p class="hint">Every response priced at Anthropic's and OpenAI's list prices (October 2026): input, 5-minute and 1-hour cache writes, cache reads and output, with fast mode. Tokens only: web searches are left out.${v.estimated ? ` ${money(v.estimated)} of it is estimated from totals kept before prices were.` : ""} A plan's cost is its list price for the tier unless you set it in Settings.</p></div>`;
   }
   const list = (items, fn) => items.length ? `<ol>${items.map(fn).join("")}</ol>` : `<p class="muted">Nothing ${esc(rangeWord[rng])}.</p>`;
   const sessions = list((t.sessions || []).slice(0, 8), (s, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(s.project || "a session")}</b>
-    <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""}</small></span><em>${big(val(s))}</em></li>`);
+    <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""}</small></span><em>${fmt(val(s))}</em></li>`);
   const projects = list((t.projects || []).slice(0, 8), (p, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(p.project)}</b>
-    <small>${p.sessions} session${p.sessions === 1 ? "" : "s"}${p.top_seat && !seat ? ` · mostly ${esc(who(p.top_seat))}` : ""}</small></span><em>${big(val(p))}</em></li>`);
+    <small>${p.sessions} session${p.sessions === 1 ? "" : "s"}${p.top_seat && !seat ? ` · mostly ${esc(who(p.top_seat))}` : ""}</small></span><em>${fmt(val(p))}</em></li>`);
   const mmax = Math.max(1, ...(t.models || []).map(val));
-  const models = list((t.models || []).filter(m => val(m) > 0).slice(0, 8), (m) => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${big(val(m))}</em></li>`);
+  const models = list((t.models || []).filter(m => val(m) > 0).slice(0, 8), (m) => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${fmt(val(m))}</em></li>`);
   el.innerHTML = `<div class="tokpage">
     <div class="view-card">${head}
-      <div class="tp-hero"><div><b>${big(total)}</b><span>${esc(label.toLowerCase())} ${esc(rangeWord[rng])}</span></div>
+      <div class="tp-hero"><div><b>${fmt(total)}</b><span>${esc(label.toLowerCase())} ${esc(rangeWord[rng])}</span></div>
         ${delta != null ? `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% on ${esc(prevWord[rng])}</em>`
           : t.prev_partial && prevWord[rng] ? `<em class="same" title="The transcripts on this machine start ${esc(t.since || "")}">${esc(prevWord[rng][0].toUpperCase() + prevWord[rng].slice(1))}: not all on record</em>` : ""}
         <em class="live" title="All tokens the sessions at work processed in the last hour, cache reads included">${icon("flame", 13)}${big(liveNow)} in the last hour</em>
-        ${rng !== "today" && todayOf(t) ? `<em>${big(todayOf(t))} today</em>` : ""}</div>
+        ${rng !== "today" && todayOf(t) ? `<em>${fmt(todayOf(t))} today</em>` : ""}</div>
       <div class="tok-parts"><span>${icon("refresh", 13)}${big(t.total.cache)} cache reads</span><span>${icon("zap", 13)}${big(t.total.fresh)} fresh</span><span>${icon("send", 13)}${big(t.total.output)} output</span><span>${icon("chat", 13)}${(t.total.sessions || 0).toLocaleString()} sessions</span></div></div>
     <div class="tp-grid"><div class="view-card"><h5>${seat ? "Where it ranks" : "Who burns the most"} · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tb-list">${rows}</div>
         ${(() => { const b = beltHolders(t.weeks); return b.holder && !gameOff ? `<p class="tp-belt">${icon("belt", 15)}<span><b>Burner Belt: ${esc(who(b.holder))}</b>, the most tokens last week${b.leader && b.leader !== b.holder ? ` · ${esc(who(b.leader))} leads this week` : b.leader ? " and leads this week too" : ""}.</span></p>` : ""; })()}
         ${!seat && board.length ? `<p class="hint">Click a character to see only theirs.${rng === "all" ? "" : " Arrows: places moved since " + esc(prevWord[rng]) + "."}</p>` : ""}</div>
       <div class="view-card"><h5>Per day${firstDay ? ` · from ${esc(firstDay)}` : ""}</h5><svg class="tp-bars" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${esc(label)} per day">${bars}</svg>
-        <div class="tok-months">${(t.months || []).slice(-4).map(m => `<span><b>${big(val(m))}</b>${esc(new Date(m.month + "-15T12:00:00").toLocaleDateString([], { month: "long" }))}</span>`).join("")}</div></div></div>
+        <div class="tok-months">${(t.months || []).slice(-4).map(m => `<span><b>${fmt(val(m))}</b>${esc(new Date(m.month + "-15T12:00:00").toLocaleDateString([], { month: "long" }))}</span>`).join("")}</div></div></div>
     <div class="tp-grid"><div class="view-card"><h5>Calendar · 26 weeks</h5><div class="tp-cal" role="img" aria-label="Tokens per day over 26 weeks">${cells}</div>
         <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div>
       <div class="view-card"><h5>The week's hours${rng === "all" ? "" : " · " + esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tp-heat" role="img" aria-label="Tokens by weekday and hour">${hlabels}${hcells}</div>
         <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div></div>
+    ${valueCard()}
     ${shipCard()}
     ${records ? `<div class="view-card"><h5>Records${seat ? ` · ${esc(who(seat))}` : ""}</h5><div class="tp-recs">${records}</div></div>` : ""}
     <div class="view-card tok"><div class="tok-lists"><div><h5>Hungriest sessions</h5>${sessions}</div><div><h5>Projects</h5>${projects}</div><div><h5>Models</h5><ul class="tok-models">${models.replace(/^<ol>|<\/ol>$/g, "")}</ul></div></div>
@@ -253,8 +276,8 @@ async function downloadCsv(app, rng, seat, who) {
     const t = await r.json(), priv = app.privacy();
     const q = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
     const iso = (s) => (s ? new Date(s * 1000).toISOString() : "");
-    const lines = [["character", "seat", "project", "session", "session_first", "session_last", "all_tokens", "fresh", "cache_reads", "output", "session_responses"].join(","),
-      ...t.sessions.map(s => [q(who(s.seat)), q(s.seat || ""), q(priv ? "" : s.project), q(s.id), q(iso(s.first)), q(iso(s.last)), s.all, s.fresh, s.cache, s.output, s.messages].join(","))];
+    const lines = [["character", "seat", "project", "session", "session_first", "session_last", "all_tokens", "fresh", "cache_reads", "output", "api_usd", "session_responses"].join(","),
+      ...t.sessions.map(s => [q(who(s.seat)), q(s.seat || ""), q(priv ? "" : s.project), q(s.id), q(iso(s.first)), q(iso(s.last)), s.all, s.fresh, s.cache, s.output, s.usd ?? "", s.messages].join(","))];
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
     a.download = `tokens-${rng}${seat ? "-" + seat : ""}.csv`;
@@ -284,8 +307,9 @@ export async function tokensPicture(app, t, rng) {
   g.fillStyle = "#ffffff"; g.font = "800 92px Inter, sans-serif"; g.fillText(big(t.total.all), 60, 250);
   g.fillStyle = "#c9b9ab"; g.font = "600 20px Inter, sans-serif";
   g.fillText(`${big(t.total.cache)} cache reads · ${big(t.total.fresh)} fresh · ${big(t.total.output)} written`, 64, 288);
-  const sh = t.shipped || {};
-  if (sh.commits) { g.fillStyle = "#7df0ad"; g.fillText(`${sh.commits.toLocaleString()} commits · ${sh.prs_merged} PRs merged · ${big(t.total.all / sh.commits)} tokens a commit`, 64, 322); }
+  const sh = t.shipped || {}, v = t.value;
+  if (v && v.usd) { g.fillStyle = "#ffd27a"; g.fillText(`${money(v.usd)} at API list prices${v.multiple ? ` · ${v.multiple >= 10 ? Math.round(v.multiple) : v.multiple}× what the plans cost` : ""}`, 64, 320); }
+  if (sh.commits) { g.fillStyle = "#7df0ad"; g.fillText(`${sh.commits.toLocaleString()} commits · ${sh.prs_merged} PRs merged · ${big(t.total.all / sh.commits)} tokens a commit`, 64, v && v.usd ? 350 : 322); }
   // the ranking
   const board = (t.seats || []).filter(s => s.seat && s.all > 0), boardSum = board.reduce((a, s) => a + s.all, 0) || 1;
   const place = focus ? board.findIndex(s => s.seat === focus) : 0;

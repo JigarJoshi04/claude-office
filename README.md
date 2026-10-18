@@ -89,6 +89,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   character: who burns the most and who moved, a calendar, the hours of the week, records, the hungriest sessions,
   projects and models, what it shipped (commits, PRs, lines, tokens per commit), CSV export, and a live burn meter. Counted from the transcripts and attributed to the seat that
   ran each session.
+- **API value**: every response priced at Anthropic's and OpenAI's list prices (5-minute and 1-hour cache writes,
+  cache reads, output, fast mode), per character, model, project, day and month, against what the plans cost for the
+  same days: "$9,030 at API list prices, 15× what the plans cost". A plan is priced by its tier (Pro, Max 5x, Max 20x)
+  unless you set it per character in Settings.
 - **Character cards**: each character as a collectible card, framed Bronze to Holo by level, to save or post.
 - **Your week in review**: on Mondays (or from the menu) the last seven days play as a short story, ending in a
   picture to post: reports against the week before, agent hours, the star of the week and what you collected.
@@ -247,6 +251,7 @@ set -g status-right '#(curl -s 127.0.0.1:7420/api/status.txt?style=plain)'
 | What a session is doing | Its transcript, read incrementally |
 | History and stats | One sample a minute, kept for 24 hours |
 | All-time tokens | The `usage` of every response in the transcripts, read once and then incrementally; a session's seat from its `session-env` folder |
+| API value | Each response's `usage` (cache write split, speed, inference region) at the list prices in `office/prices.py` |
 | Codex seat | `~/.codex/sessions` rollouts and the rate limits Codex records. Codex lanes run `codex exec` with a workspace-write sandbox (or a `gpt` wrapper, when one is installed). |
 
 ## Safety

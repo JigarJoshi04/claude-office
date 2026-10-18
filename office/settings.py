@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import threading
 
-from . import config
+from . import config, prices
 from .live import public
 
 VOICE_DEFAULTS = {"enabled": False, "events": ["report", "limit", "login", "lane"], "quiet_hours": [23, 8]}
@@ -19,7 +19,8 @@ _LOCK = threading.Lock()
 def view(cfg, seats):
     return public({"office_name": cfg.get("office_name", "Claude Office"),
                    "ceo_name": cfg.get("ceo", {}).get("name", "CEO"),
-                   "seats": {s["id"]: {k: s.get(k) for k in ("label", "nickname", "color", "role", "motto", "style")} for s in seats},
+                   "seats": {s["id"]: {**{k: s.get(k) for k in ("label", "nickname", "color", "role", "motto", "style", "plan_usd")},
+                                       "plan_default": prices.plan_usd({"health": s.get("health")})} for s in seats},
                    "voice": {k: cfg.get("voice", {}).get(k, v) for k, v in VOICE_DEFAULTS.items()},
                    "voice_available": shutil.which("jarvis-say") is not None})
 
@@ -60,6 +61,11 @@ def validate(body):
                 if entry["style"] is not None and (not isinstance(entry["style"], str) or entry["style"] not in STYLES):
                     raise ValueError("style must be one of the personalities")
                 dest["style"] = entry["style"]
+            if "plan_usd" in entry:                       # what the seat's plan costs a month; None goes back to its tier's price
+                v = entry["plan_usd"]
+                if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 10000):
+                    raise ValueError("plan_usd must be a number from 0 to 10000")
+                dest["plan_usd"] = v
             if "color" in entry:
                 if not isinstance(entry["color"], str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", entry["color"]):
                     raise ValueError("color must be #RRGGBB")

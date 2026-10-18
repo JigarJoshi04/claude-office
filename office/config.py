@@ -104,6 +104,7 @@ def discover_claude_seats(cfg: dict) -> list[dict]:
             "role": over.get("role"),
             "motto": over.get("motto"),
             "style": over.get("style"),
+            "plan_usd": over.get("plan_usd"),
             "color": over.get("color", PALETTE[i % len(PALETTE)]),
         })
     return seats
@@ -126,6 +127,7 @@ def codex_seat_meta(cfg: dict) -> dict | None:
         "role": over.get("role"),
         "motto": over.get("motto"),
         "style": over.get("style"),
+        "plan_usd": over.get("plan_usd"),          # what its plan costs a month, when set in Settings (prices.py)
         "color": over.get("color", ASTRA_COLOR),
     }
 

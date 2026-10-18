@@ -3,7 +3,7 @@
 // picture. It plays on the first visit of a new month (for the month that ended), and from the menu or the palette.
 import { $, esc, avatar, hydratePortraits } from "./util.js";
 import { icon } from "./icons.js";
-import { modelName, tokensPicture } from "./tokens.js";
+import { modelName, tokensPicture, money } from "./tokens.js";
 
 const SLIDE_MS = 6000;
 const big = (n) => (n >= 1e12 ? (n / 1e12).toFixed(1) + " T" : n >= 1e9 ? (n / 1e9).toFixed(n >= 1e11 ? 0 : 1) + " B" : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + " M" : Math.round(n).toLocaleString());
@@ -33,6 +33,10 @@ export function makeWrapped(ctx) {
     slides.push(`<div class="wr-eyebrow">Tokens</div><div class="wr-big">${esc(big(t.total.all).split(" ")[0])}<small> ${esc(big(t.total.all).split(" ")[1] || "")}</small></div>
       <p class="wr-sub">${delta == null ? (t.prev_partial && t.prev_total && t.prev_total.all ? "The month before is only partly on record." : "Your first month on record.") : delta >= 0 ? `<b class="up">▲ ${delta}%</b> on the month before.` : `<b class="down">▼ ${-delta}%</b> on the month before.`}</p>
       <p class="wr-hint">About ${esc(big(t.total.all / Math.max(1, days.filter(d => d.all > 0).length)))} on a working day. ${esc(big(t.total.output))} of it written by the models.</p>`);
+    const v = t.value;
+    if (v && v.usd) slides.push(`<div class="wr-eyebrow">What the plans bought</div><div class="wr-big">${esc(money(v.usd))}</div>
+      <p class="wr-sub">at API list prices${v.multiple ? `: <b class="up">${v.multiple >= 10 ? Math.round(v.multiple) : v.multiple}×</b> what the plans cost for the month` : ""}.</p>
+      <p class="wr-hint">Every response priced as if it had gone through the API. The plans paid ${esc(money(v.plan_usd))}.</p>`);
     if (top3.length) {
       const order = top3.length === 3 ? [top3[1], top3[0], top3[2]] : top3.length === 2 ? [top3[1], top3[0]] : [top3[0]];
       slides.push(`<div class="wr-eyebrow">The podium</div><div class="wr-podium">${order.map(s => { const st = seatOf(s.seat), place = top3.indexOf(s) + 1;

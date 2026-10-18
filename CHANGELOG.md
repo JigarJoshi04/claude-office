@@ -3,6 +3,25 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.30.0] - 2026-10-18
+
+### Added
+- API value: what every response would cost at API list prices (Anthropic's and OpenAI's pricing pages, October
+  2026), counting 5-minute and 1-hour cache writes, cache reads and output, fast mode, US-only inference and Haiku
+  5.5's long-prompt tier. A fourth measure on the Today card and the Tokens tab, next to All, Fresh and Output: the
+  leaderboard, days, months, calendar, models, projects and sessions all switch to dollars.
+- What the plans bought: a card on the Tokens tab with the range's value against what the plans cost for the same
+  days ("15× what the plans cost") and each character's payback. Plans are priced by tier (Pro $20, Max 5x $100,
+  Max 20x $200 a month) unless set per character in Settings (`plan_usd`); the Codex seat has no price until set.
+- The value on the picture, on Wrapped (a slide of its own), on the character page and in the CSV (`api_usd`).
+- `/api/tokens` returns `usd` on every row, `value` (`usd`, `plan_usd`, `multiple`, `plans`, `estimated`) and
+  `prev_total.usd`.
+
+### Changed
+- The ledger prices each response as it reads it, once per response. Shipped work and prices share a rules version,
+  and this one recounts both from the transcripts on disk (about 25 seconds on a month of four busy seats). Sessions
+  whose transcripts are gone are estimated from their totals, and the page says how much is estimated.
+
 ## [3.29.2] - 2026-10-18
 
 ### Fixed

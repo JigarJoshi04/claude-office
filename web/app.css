@@ -1438,3 +1438,14 @@ table.ship small { color: var(--muted); }
 .wr-models { display: grid; gap: 8px; width: min(340px, 100%); margin-top: 8px; text-align: left; }
 .wr-models div { display: grid; grid-template-columns: 90px 1fr 40px; gap: 8px; align-items: center; font-size: 13.5px; }
 .wr-models i { display: block; height: 10px; border-radius: 99px; background: linear-gradient(90deg, #ff7ac8, #ffb36b); } .wr-models b { font: 700 12.5px var(--mono); }
+/* the tokens at API list prices against the plans (3.30) */
+.tp-value { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.tp-value > .ic { color: #ffc94a; flex: none; }
+.tp-value .grow { min-width: 0; } .tp-value .grow b { display: block; font: 800 34px/1.05 Inter, sans-serif; letter-spacing: -.02em; color: var(--text); }
+.tp-value .grow span { font-size: 13px; color: var(--muted); }
+.tp-mult { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 14px; background: linear-gradient(110deg, rgba(255,201,74,.18), rgba(255,201,74,.06)); box-shadow: inset 0 0 0 1px rgba(255,201,74,.35); }
+.tp-mult b { font: 800 28px/1 Inter, sans-serif; color: #ffd27a; } .tp-mult span { font-size: 12px; line-height: 1.35; color: var(--text-2); }
+:root[data-theme="light"] .tp-mult b { color: #8a5a00; } :root[data-theme="light"] .tp-value > .ic { color: #a87400; }
+.tok-parts .tok-usd { color: #ffd27a; } :root[data-theme="light"] .tok-parts .tok-usd { color: #8a5a00; }
+.tp-valuecard td.num, .tp-valuecard th.num { white-space: nowrap; } .tp-valuecard table.ship .who { gap: 6px; }
+@media (max-width: 480px) { .tp-valuecard th:nth-child(2), .tp-valuecard td:nth-child(2) { display: none; } }   /* a phone keeps value and payback */

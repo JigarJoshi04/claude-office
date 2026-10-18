@@ -23,8 +23,10 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from . import prices
+
 VERSION = 2
-SHIP_RULES = 3                # bumped when the rules for shipped work change: every transcript's commands are read again
+SHIP_RULES = 4                # bumped when the rules for shipped work or prices change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -160,10 +162,10 @@ class TokenLedger:
                 self._legacy = d
                 return self._empty()
             if d.get("v") == VERSION:
-                if d.get("sr") != SHIP_RULES:          # recount shipped work from the transcripts still on disk
+                if d.get("sr") != SHIP_RULES:          # recount shipped work and costs from the transcripts still on disk
                     d["files_out"] = {}
                     for r in (d.get("sessions") or {}).values():
-                        r.pop("g", None)
+                        r.pop("g", None); r.pop("$", None); r.pop("$m", None)
                     d["sr"] = SHIP_RULES
                 for k, v in self._empty().items():
                     d.setdefault(k, v)
@@ -281,7 +283,9 @@ class TokenLedger:
         offset, last_id = rec
         if size < offset:                                  # rewritten from scratch: start over from here on
             offset = size
-        out_off = min(self.data.setdefault("files_out", {}).get(key, 0), size)   # shipped work has its own offset
+        out = self.data.setdefault("files_out", {}).get(key, 0)          # shipped work and costs have their own offset
+        out_off, self._xlast = (out if isinstance(out, list) else [out, None])
+        out_off = min(out_off, size)
         start = min(offset, out_off)
         if size == start:
             return False
@@ -300,7 +304,7 @@ class TokenLedger:
                     last_id = self._last
                 if at >= out_off:
                     changed |= self._ship(raw, sid)
-        self.data["files_out"][key] = pos
+        self.data["files_out"][key] = [pos, self._xlast]
         if pos <= offset:
             return changed
         if not self.data["sessions"].get(sid, {}).get("p"):
@@ -311,15 +315,17 @@ class TokenLedger:
         return changed
 
     def _ship(self, raw: bytes, sid: str) -> bool:
-        """Bash calls that commit, push, or open or merge a PR, counted when their result comes back without an error."""
+        """Bash calls that commit, push, or open or merge a PR, counted when their result comes back without an error;
+        and each API response's list price (see prices.py)."""
         m = re.search(rb'"timestamp":\s*"([^"]+)"', raw)
         if m:
             self._ts = m.group(1).decode()
+        priced = self._cost(raw, sid) if b'"usage"' in raw and b'"assistant"' in raw else False   # a line can carry both
         if b'"tool_use"' in raw and b'"Bash"' in raw and (b"git" in raw or b"gh " in raw):
             try:
                 d = json.loads(raw)
             except ValueError:
-                return False
+                return priced
             content = (d.get("message") or {}).get("content") if isinstance(d, dict) else None
             for c in content if isinstance(content, list) else []:
                 if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Bash":
@@ -329,9 +335,9 @@ class TokenLedger:
                         self._pending[c.get("id")] = (kinds, cmd)
                         if len(self._pending) > 500:
                             self._pending.pop(next(iter(self._pending)))
-            return False
+            return priced
         if b'"tool_result"' not in raw or not self._pending:
-            return False
+            return priced
         try:
             d = json.loads(raw)
         except ValueError:
@@ -360,6 +366,30 @@ class TokenLedger:
             if self.scans and (v[2] or v[3]) and at and time.time() - at < 900:     # fresh PR news, never from the first read
                 self.events.append({"session": sid, "kind": "pr_merged" if v[3] else "pr_opened", "pr": pr_number(kinds if v[3] else {"pr_open"}, cmd, text), "at": at})
         return changed
+
+    def _cost(self, raw: bytes, sid: str) -> bool:
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return False
+        m = d.get("message") if isinstance(d, dict) else None
+        u = m.get("usage") if isinstance(m, dict) else None
+        if d.get("type") != "assistant" or not isinstance(u, dict):
+            return False
+        mid = m.get("id")
+        if mid and mid == self._xlast:                      # one response, several lines: priced once
+            return False
+        self._xlast = mid
+        model = m.get("model") or "?"
+        usd = prices.response_cost(model, u)
+        if not usd:
+            return False
+        day, _ = _when(d.get("timestamp"))
+        with self.lock:
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+            c = s.setdefault("$", {}); c[day or "?"] = c.get(day or "?", 0) + usd
+            cm = s.setdefault("$m", {}); cm[model] = cm.get(model, 0) + usd
+        return True
 
     def take_events(self) -> list:
         """PRs opened or merged since the last call (from scans after the first), for the office's news."""
@@ -510,6 +540,24 @@ class TokenLedger:
                     v = trip(v); tot[0] += v[0]; tot[1] += v[1]; tot[2] += v[2]
             return tot
         mine = {sid: r for sid, r in sessions.items() if seat is None or seat_of(r) == seat}
+        priced: dict = {}
+        def usd_days(sid, r):                                             # a session's list price per day, in USD
+            if sid in priced:
+                return priced[sid]
+            if r.get("$"):
+                out = {d: v / 1e6 for d, v in r["$"].items()}
+            else:                                                         # counted before costs were kept: estimated
+                ms = r.get("m") or {}
+                whole = sum(ms.values()) or 1
+                out = {}
+                for d, v in (r.get("d") or {}).items():
+                    f, c, o = trip(v)
+                    x = [prices.estimate(m, f * w / whole, c * w / whole, o * w / whole) for m, w in ms.items()]
+                    if any(y is not None for y in x):
+                        out[d] = sum(y for y in x if y is not None)
+            priced[sid] = out
+            return out
+        usd_in = lambda sid, r, keep: sum(v for d, v in usd_days(sid, r).items() if keep is None or d in keep)
         def ship_sum(r, keep):                                            # a session's shipped work over a set of days
             tot = [0] * len(SHIP)
             for d, v in (r.get("g") or {}).items():
@@ -525,17 +573,19 @@ class TokenLedger:
                 for i, v in enumerate(g):
                     x[i] += v
         per_seat, prev_seat, projects, models, heat = {}, {}, {}, {}, {}
-        listed = []
+        listed, estimated = [], 0.0
         for sid, r in sessions.items():
             k = seat_of(r)
             f, c, o = sums(r, cur)
+            usd = usd_in(sid, r, cur)
             if prev is not None:
                 pf, pc, po = sums(r, prev)
-                ps = prev_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0})
-                ps["all"] += pf + pc; ps["fresh"] += pf; ps["output"] += po
+                ps = prev_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0, "usd": 0})
+                ps["all"] += pf + pc; ps["fresh"] += pf; ps["output"] += po; ps["usd"] += usd_in(sid, r, prev)
             if f + c:
-                st = per_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0, "sessions": 0, "today": 0, "today_by": [0, 0, 0], "m": {}})
-                st["all"] += f + c; st["fresh"] += f; st["output"] += o; st["sessions"] += 1
+                st = per_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0, "usd": 0, "sessions": 0, "today": 0, "today_by": [0, 0, 0], "today_usd": 0, "m": {}})
+                st["all"] += f + c; st["fresh"] += f; st["output"] += o; st["usd"] += usd; st["sessions"] += 1
+                st["today_usd"] += usd_days(sid, r).get(today, 0)
                 td = trip((r.get("d") or {}).get(today, [0, 0, 0]))
                 st["today"] += td[0] + td[1]
                 st["today_by"] = [a + b for a, b in zip(st["today_by"], td)]
@@ -544,21 +594,29 @@ class TokenLedger:
             if sid not in mine or not f + c:
                 continue
             whole = max(1, r.get("f", 0) + r.get("c", 0))
+            cost_m = r.get("$m") or {}
+            cost_whole = sum(cost_m.values()) or 1
             for m, v in (r.get("m") or {}).items():                       # a session's range, split by its models
                 share = v / whole
-                mm = models.setdefault(m, {"all": 0, "fresh": 0, "output": 0})
+                mm = models.setdefault(m, {"all": 0, "fresh": 0, "output": 0, "usd": 0})
                 mm["all"] += round((f + c) * share); mm["fresh"] += round(f * share); mm["output"] += round(o * share)
+                mm["usd"] += usd * (cost_m.get(m, 0) / cost_whole if cost_m else share)
+            for m in cost_m:                                              # a model priced but never counted (rare)
+                if m not in (r.get("m") or {}):
+                    models.setdefault(m, {"all": 0, "fresh": 0, "output": 0, "usd": 0})["usd"] += usd * cost_m[m] / cost_whole
+            if not r.get("$") and r.get("s") != "@codex" and usd:
+                estimated += usd
             if r.get("p") and r.get("s") != "@codex":
-                pr = projects.setdefault(r["p"], {"all": 0, "fresh": 0, "output": 0, "sessions": 0, "seats": {}})
-                pr["all"] += f + c; pr["fresh"] += f; pr["output"] += o; pr["sessions"] += 1
+                pr = projects.setdefault(r["p"], {"all": 0, "fresh": 0, "output": 0, "usd": 0, "sessions": 0, "seats": {}})
+                pr["all"] += f + c; pr["fresh"] += f; pr["output"] += o; pr["usd"] += usd; pr["sessions"] += 1
                 if k:
                     pr["seats"][k] = pr["seats"].get(k, 0) + f + c
             if cur is None:                                               # the heatmap follows the range when it can
                 for wh, v in (r.get("h") or {}).items():
                     heat[wh] = heat.get(wh, 0) + v
-            listed.append((sid, r, f, c, o, k))
+            listed.append((sid, r, f, c, o, k, usd))
         if cur is not None:                                               # hours are not kept per day: use the sessions active in range
-            for sid, r, f, c, o, k in listed:
+            for sid, r, f, c, o, k, _ in listed:
                 whole = max(1, r.get("f", 0) + r.get("c", 0))
                 for wh, v in (r.get("h") or {}).items():
                     heat[wh] = heat.get(wh, 0) + v * (f + c) / whole
@@ -570,14 +628,23 @@ class TokenLedger:
             for r in mine.values():
                 for d, v in (r.get("d") or {}).items():
                     v = trip(v); x = series.setdefault(d, [0, 0, 0]); x[0] += v[0]; x[1] += v[1]; x[2] += v[2]
-        row = lambda d, v: {"day": d, "all": v[0] + v[1], "fresh": v[0], "output": v[2]}
-        by = lambda v: {"all": v[0] + v[1], "fresh": v[0], "output": v[2]}               # one day, every measure
+        usd_series: dict = {}
+        for sid, r in mine.items():
+            for d, v in usd_days(sid, r).items():
+                usd_series[d] = usd_series.get(d, 0) + v
+        row = lambda d, v: {"day": d, "all": v[0] + v[1], "fresh": v[0], "output": v[2], "usd": round(usd_series.get(d, 0), 2)}
+        by = lambda v, usd=0: {"all": v[0] + v[1], "fresh": v[0], "output": v[2], "usd": round(usd, 2)}   # one day, every measure
         in_range = {d: v for d, v in series.items() if cur is None or d in cur}
         tot = [sum(v[i] for v in in_range.values()) for i in range(3)]
         months: dict = {}
         for d, v in series.items():
-            m = months.setdefault(d[:7], [0, 0, 0]); m[0] += v[0]; m[1] += v[1]; m[2] += v[2]
-        board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")}, "today_by": by(v["today_by"]),
+            m = months.setdefault(d[:7], [0, 0, 0, 0]); m[0] += v[0]; m[1] += v[1]; m[2] += v[2]
+        for d, v in usd_series.items():
+            if d[:7] in months:
+                months[d[:7]][3] += v
+        tot_usd = sum(v for d, v in usd_series.items() if cur is None or d in cur)
+        board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")}, "usd": round(v["usd"], 2),
+                         "today_by": by(v["today_by"], v["today_usd"]),
                          "top_model": max(v["m"], key=v["m"].get) if v["m"] else None,
                          **dict(zip(SHIP, shipped_by.get(k, [0] * len(SHIP))))} for k, v in per_seat.items()), key=lambda x: -x["all"])
         if prev is not None:
@@ -631,31 +698,43 @@ class TokenLedger:
             while run_total >= rung:
                 milestones.append({"at": rung, "day": d})
                 rung = next_rung(rung)
+        # What the plans cost over the range, against the list price of the tokens of the seats on them.
+        plan_days = (len([d for d in cur if d <= today]) if cur is not None else
+                     (t.date() - datetime.fromisoformat(min(day_rows)).date()).days + 1 if day_rows else 0)
+        plans = {x["id"]: p for x in seats if (seat is None or x["id"] == seat) and (p := prices.plan_usd(x)) is not None}
+        plan_cost = sum(plans.values()) * plan_days / 30.44
+        covered = sum(b["usd"] for b in board if b["seat"] in plans)
+        for b in board:
+            b["plan_month"] = plans.get(b["seat"])
         return {
+            "value": {"usd": round(tot_usd, 2), "estimated": round(min(estimated, tot_usd), 2), "plans": plans, "days": plan_days,
+                      "plan_usd": round(plan_cost, 2), "covered_usd": round(covered, 2),
+                      "multiple": round(covered / plan_cost, 1) if plan_cost else None},
             "scanning": scanning or not scanned_at, "scanned_at": scanned_at or None,
             "since": min(day_rows) if day_rows else None, "range": rng, "seat": seat,
             "shipped": dict(zip(SHIP, [sum(v[i] for k, v in shipped_by.items() if seat is None or k == seat) for i in range(len(SHIP))])),
-            "total": {"all": tot[0] + tot[1], "fresh": tot[0], "cache": tot[1], "output": tot[2],
+            "total": {"all": tot[0] + tot[1], "fresh": tot[0], "cache": tot[1], "output": tot[2], "usd": round(tot_usd, 2),
                       "messages": sum((r.get("n", 0) for r in mine.values())) if cur is None else None,
                       "sessions": len(listed)},
-            "prev_total": ({"all": sum(sum(series.get(d, [0, 0, 0])[:2]) for d in prev)} if prev is not None else None),
+            "prev_total": ({"all": sum(sum(series.get(d, [0, 0, 0])[:2]) for d in prev), "usd": round(sum(usd_series.get(d, 0) for d in prev), 2)}
+                           if prev is not None else None),
             "prev_partial": bool(prev is not None and day_rows and min(day_rows) > min(prev)),   # the period before is not all on record
             "today": sum(series.get(today, [0, 0, 0])[:2]),
-            "today_by": by(series.get(today, [0, 0, 0])),
+            "today_by": by(series.get(today, [0, 0, 0]), usd_series.get(today, 0)),
             "seats": board,
             "days": [row(d, series[d]) for d in sorted(series)[-days:]] if cur is None else
                     [row(d, series.get(d, [0, 0, 0])) for d in sorted(cur)] if month else
                     [row(d, series.get(d, [0, 0, 0])) for d in sorted(span(0, max(length, 7)))],
             "calendar": [row(d, v) for d, v in sorted(series.items()) if d >= cal_from],
             "heat": {k: round(v) for k, v in heat.items()},
-            "months": [{"month": m, "all": v[0] + v[1], "fresh": v[0], "output": v[2]} for m, v in sorted(months.items())],
-            "models": sorted(({"model": m, **v} for m, v in models.items() if v["all"] > 0), key=lambda x: -x["all"]),
-            "projects": sorted(({"project": p, "all": v["all"], "fresh": v["fresh"], "output": v["output"], "sessions": v["sessions"],
+            "months": [{"month": m, "all": v[0] + v[1], "fresh": v[0], "output": v[2], "usd": round(v[3], 2)} for m, v in sorted(months.items())],
+            "models": sorted(({"model": m, **v, "usd": round(v["usd"], 2)} for m, v in models.items() if v["all"] > 0 or v["usd"] > 0), key=lambda x: -x["all"]),
+            "projects": sorted(({"project": p, "all": v["all"], "fresh": v["fresh"], "output": v["output"], "usd": round(v["usd"], 2), "sessions": v["sessions"],
                                  "top_seat": max(v["seats"], key=v["seats"].get) if v["seats"] else None}
                                 for p, v in projects.items()), key=lambda x: -x["all"])[:12],
-            "sessions": [{"id": short_id(sid), "project": r.get("p"), "seat": k, "all": f + c, "fresh": f, "cache": c, "output": o,
+            "sessions": [{"id": short_id(sid), "project": r.get("p"), "seat": k, "all": f + c, "fresh": f, "cache": c, "output": o, "usd": round(usd, 2),
                           "messages": r.get("n", 0), "first": r.get("fi"), "last": r.get("l")}
-                         for sid, r, f, c, o, k in (top if all_sessions else top[:12])],
+                         for sid, r, f, c, o, k, usd in (top if all_sessions else top[:12])],
             "records": records,
             "weeks": weeks,
             "milestones": milestones,

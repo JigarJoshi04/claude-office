@@ -11,6 +11,7 @@ import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
 import { SETS, setsDone, happyHourFor, happyNow, MAX_WAITING, GRANT_ROOM, SWAP } from "./gifts.js";
 import { md } from "./md.js";
+import { money } from "./tokens.js";
 
 const TEMPLATES = [
   { name: "Fix a failing test", ic: "check", title: "Fix failing test: ", brief: "Goal: make the failing test pass without weakening it.\nWhere: <test file or CI job>\nContext: <what changed recently>\nDone when: the test passes locally and the full suite is green.\nVerify: run the suite and paste the summary in the report." },
@@ -385,7 +386,7 @@ export function makePanels(app) {
     if (i < 0) return "";
     const r = rows[i], b = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + " B" : n >= 1e6 ? (n / 1e6).toFixed(1) + " M" : fmtTok(n));
     return `<button class="alltok ${i === 0 ? "first" : ""}" data-view-go="stats" data-anchor="tokens" title="All-time tokens in the Today view">${icon("flame", 15)}
-      <span class="grow"><b>${b(r.all)} tokens all time</b><span>#${i + 1} of ${rows.length}${i === 0 ? ", the office's top burner" : ""} · ${b(r.output)} written · ${r.sessions} sessions</span></span>${icon("chevronRight", 14)}</button>`;
+      <span class="grow"><b>${b(r.all)} tokens all time</b><span>#${i + 1} of ${rows.length}${i === 0 ? ", the office's top burner" : ""} · ${b(r.output)} written · ${r.sessions} sessions${r.usd ? ` · ${money(r.usd)} at API prices` : ""}</span></span>${icon("chevronRight", 14)}</button>`;
   }
   function careerHtml(s) {
     const c = s.career, cat = S().achievements || [];
@@ -1019,6 +1020,7 @@ export function makePanels(app) {
         return `<div class="persona-edit"><div class="head">${avatar("mascot-" + id, st.color || "#888888")}<div class="grow"><b>${esc(per.name)}</b> <span class="hint">${esc(st.label || id)}</span></div><input type="color" data-color="${esc(id)}" value="${esc(st.color || "#888888")}" aria-label="${esc(id)} colour"></div>
           <label class="f">Name<input type="text" data-nick="${esc(id)}" aria-label="Name for ${esc(st.label || id)}" maxlength="24" placeholder="${esc(per.name)}" value="${esc(st.nickname || "")}"></label>
           <label class="f">Role<input type="text" data-role="${esc(id)}" aria-label="Role for ${esc(per.name)}" maxlength="40" placeholder="${esc(per.role)}" value="${esc(st.role || "")}"></label>
+          <label class="f">Plan, USD a month<input type="number" min="0" max="10000" step="1" inputmode="decimal" data-plan="${esc(id)}" aria-label="Plan price a month for ${esc(per.name)}" placeholder="${st.plan_default != null ? esc(String(st.plan_default)) + " (list price)" : "not set"}" value="${st.plan_usd != null ? esc(String(st.plan_usd)) : ""}"></label>
           <label class="f full">Motto<input type="text" data-motto="${esc(id)}" aria-label="Motto for ${esc(per.name)}" maxlength="90" placeholder="${esc(per.motto)}" value="${esc(st.motto || "")}"></label>
           <label class="f full">Personality: voice and room<select data-style="${esc(id)}" aria-label="Personality for ${esc(per.name)}: voice and room"><option value="">Automatic (${esc(seat ? personaFor({ ...seat, style: null }, S().seats.findIndex(x => x.id === id)).archetype : "by order")})</option>${PERSONALITIES.map(x => `<option value="${esc(x.role)}" ${st.style === x.role ? "selected" : ""}>${esc(x.role)} · ${esc(x.motto)}</option>`).join("")}</select></label></div>`; }).join(""))}
       ${section("Jarvis voice", `${row("Announce out loud", sd.voice_available ? "Speaks short alerts through jarvis-say. Off by default." : "jarvis-say was not found on this machine.", `<label class="switch"><input type="checkbox" id="setVoice" ${voice.enabled ? "checked" : ""} ${sd.voice_available ? "" : "disabled"} aria-label="Voice"><span></span></label>`)}
@@ -1045,6 +1047,7 @@ export function makePanels(app) {
           root.querySelectorAll("[data-motto]").forEach(i => put(i.dataset.motto, "motto", i.value.trim()));
           root.querySelectorAll("[data-color]").forEach(i => put(i.dataset.color, "color", i.value));
           root.querySelectorAll("[data-style]").forEach(i => put(i.dataset.style, "style", i.value || null));
+          root.querySelectorAll("[data-plan]").forEach(i => put(i.dataset.plan, "plan_usd", i.value.trim() === "" ? null : Math.min(10000, Math.max(0, +i.value || 0))));
           try { const r = await app.post("/api/settings", body); settingsData = r.demo ? settingsData : null; result(r, "Saved. The office redecorates on the next refresh."); app.refresh(); }
           catch (e) { toast("Could not save: " + e.message, "bad"); }
         });
