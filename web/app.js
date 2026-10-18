@@ -917,7 +917,7 @@ function openMenu(focusItem) {
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
     + "<hr>" + item("daycard", "star", "Share today's card") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
-    + "<hr>" + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
+    + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
   // Keyboard: focus lands on the first item; arrows move, Home/End jump, Tab leaves (Escape is handled globally).
@@ -941,6 +941,7 @@ function openMenu(focusItem) {
     else if (k === "tv") setTv(true);
     else if (k === "daycard") shareDay();
     else if (k === "tour") tour();
+    else if (k === "install") installApp();
     else if (k === "replay") { setView("floor"); replay.open(6); }
     else if (k === "broadcast") broadcast();
     else if (k === "picture") savePicture();
@@ -949,6 +950,17 @@ function openMenu(focusItem) {
     if (["sound", "notify", "privacy", "theme", "text"].includes(k)) openMenu(k);   // a toggle keeps the menu open on that item
   }));
   setTimeout(() => document.addEventListener("mousedown", function close(ev) { if (!m.contains(ev.target) && ev.target !== $("btnMenu") && !$("btnMenu").contains(ev.target)) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); document.removeEventListener("mousedown", close); } }), 0);
+}
+
+// Install as an app: the browser offers it when the manifest is valid; the menu shows the item while it does.
+let installPrompt = null;
+addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; });
+addEventListener("appinstalled", () => { installPrompt = null; toast("Installed. Claude Office opens in its own window now.", "good"); });
+async function installApp() {
+  if (!installPrompt) { toast("This browser cannot install it from here: use its menu, \"Install Claude Office\".", "info"); return; }
+  installPrompt.prompt();
+  try { await installPrompt.userChoice; } catch { /* dismissed */ }
+  installPrompt = null;
 }
 
 // ------------------------------------------------------------------------------------------------ views
