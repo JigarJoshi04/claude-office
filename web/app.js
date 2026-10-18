@@ -4,6 +4,7 @@ import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLog
 import { configureGoals, goals, localDay } from "./ui/goals.js";
 import * as scrapbook from "./ui/scrapbook.js";
 import { openStandupMode } from "./ui/standupmode.js";
+import { makeRecorder } from "./ui/recorder.js";
 import { openPoster } from "./ui/poster.js";
 import { makeDirector } from "./ui/director.js";
 import { makePanels } from "./ui/panels.js";
@@ -233,6 +234,7 @@ const office = createOffice($("stage"), {
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
 const replay = makeReplay(app, office, document.querySelector(".floor-frame"));   // the floor plays back the day (ui/replay.js)
+const recorder = makeRecorder({ office, replay, frame: document.querySelector(".floor-frame") });   // clips and timelapses (ui/recorder.js)
 const director = makeDirector({ office, prefs, replay });   // the camera flies to what just happened (ui/director.js)
 function setDirector(on) {
   setPref("director", !!on); office.setDirector(!!on);
@@ -1091,7 +1093,7 @@ function openMenu(focusItem) {
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
     + item("dnd", "moon", "Do not disturb", dndOn() ? `Until ${clock(snap.office.dnd_until)}` : "Off", dndOn())
     + item("night", lightsOut() ? "sun" : "moon", lightsOut() ? "Lights on" : "Goodnight…")
-    + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("clip", "play", "Record a 15-second clip") + item("timelapse", "rewind", "Record today's timelapse") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -1120,6 +1122,8 @@ function openMenu(focusItem) {
     else if (k === "week") weekReview.play();
     else if (k === "wrapped") wrapped.play();
     else if (k === "arcade") arcade.open();
+    else if (k === "clip") { setView("floor"); recorder.clip(15); }
+    else if (k === "timelapse") { setView("floor"); recorder.timelapse(24); }
     else if (k === "radio") setRadio(!radio.on);
     else if (k === "tour") tour();
     else if (k === "install") installApp();
@@ -1336,6 +1340,8 @@ function paletteItems() {
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("star", 16), label: "Scrapbook", keywords: "photos moments memories album pictures", run: () => go({ kind: "scrapbook" }) },
+    { icon: icon("play", 16), label: "Record a clip of the floor", hint: "15 s", keywords: "record video clip webm capture gif", run: () => { setView("floor"); recorder.clip(15); } },
+    { icon: icon("rewind", 16), label: "Record today's timelapse", keywords: "record video timelapse day replay webm", run: () => { setView("floor"); recorder.timelapse(24); } },
     { icon: icon("users", 16), label: "Standup on the floor", keywords: "standup morning lounge gather walk", run: () => { setView("floor"); standupScene(true); } },
     { icon: icon("tv", 16), label: "Standup mode", hint: "2 min", keywords: "standup present screen share meeting slides morning", run: () => presentStandup() },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },

@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.120.0] - 2026-10-19
+
+### Added
+- Clips of the floor: record 15 seconds of the office as it is, or today's timelapse (the last 24 hours played back
+  at speed and recorded end to end, about a minute), saved as a .webm. From the menu or Ctrl+K; a red REC badge
+  counts the time and stops it early. Only the pixel floor is recorded (names and bubbles are not in the video), and
+  nothing leaves the machine. Chrome and Edge.
+
 ## [3.119.0] - 2026-10-19
 
 ### Added

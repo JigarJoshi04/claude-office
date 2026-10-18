@@ -154,6 +154,7 @@ export function makeReplay(app, office, frame) {
   const api = {
     open, close,
     active: () => !!hist,
+    done: () => !!hist && t >= hist.now,           // played to the end (the timelapse recorder stops there)
     toggle: () => (hist ? (playing ? pause() : play()) : null),
     step: (min) => { if (!hist) return; pause(); t = Math.max(hist.from, Math.min(hist.now, t + min * 60)); office.reset(); render(); },
   };
