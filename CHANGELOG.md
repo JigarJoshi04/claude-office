@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.85.0] - 2026-10-19
+
+### Added
+- Touch that works on the floor: pinch with two fingers to zoom (around the point between them, panning as they
+  move), and hold a finger on a room for its menu (open, card, zoom in, hire a lane, holiday, terminal command).
+
+### Fixed
+- On a touch screen the page scrolls from the floor at normal zoom (the floor took every touch); zoomed in, one
+  finger still pans the floor.
+
 ## [3.84.0] - 2026-10-19
 
 ### Added

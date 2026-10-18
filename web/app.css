@@ -123,7 +123,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 /* ------------------------------------------------------------------------------------------ main */
 .main { display: grid; grid-template-columns: minmax(0, 1fr) 20px var(--panel-w, 440px); gap: 18px 0; padding: 12px 22px 22px; min-height: 0; align-items: start; }
 .viewport { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-.stage { position: relative; overflow: hidden; border-radius: 18px; background: var(--floor-bg); line-height: 0; user-select: none; touch-action: none;
+.stage { position: relative; overflow: hidden; border-radius: 18px; background: var(--floor-bg); line-height: 0; user-select: none; touch-action: pan-x pan-y;
   box-shadow: 0 0 0 1px var(--line-2), 0 30px 70px rgba(0,0,0,.45); }
 .stage.zoomed { cursor: grab; } .stage.dragging { cursor: grabbing; }
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
@@ -1640,3 +1640,4 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .setup-step { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); margin-top: 6px; }
 .setup-step .grow { min-width: 0; } .setup-step b { display: block; font-size: 13.5px; } .setup-step small { display: block; font-size: 12px; color: var(--muted); line-height: 1.4; }
 .setup-step .btn { flex: none; }
+.stage.zoomed { touch-action: none; }               /* zoomed in, one finger pans the floor, not the page */

@@ -1245,6 +1245,7 @@ export function createOffice(stage, handlers) {
     const dz = cam.tz - cam.z, dx = cam.tx - cam.x, dy = cam.ty - cam.y;
     if (!force && Math.abs(dz) < 0.001 && Math.abs(dx) < 0.3 && Math.abs(dy) < 0.3) {
       if (dz || dx || dy) { cam.z = cam.tz; cam.x = cam.tx; cam.y = cam.ty; world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.z})`; }
+      stage.classList.toggle("zoomed", cam.tz > 1.01);
       return false;
     }
     if (reduced || force) { cam.z = cam.tz; cam.x = cam.tx; cam.y = cam.ty; }
@@ -1285,17 +1286,47 @@ export function createOffice(stage, handlers) {
   });
 
   let dragStart = null, dragMoved = false;
+  // Touch: two fingers pinch to zoom (around the point between them, and pan as they move); a finger held still on a
+  // room opens its menu. One finger at 1× scrolls the page, as anywhere else (CSS touch-action).
+  const touches = new Map();
+  let pinch = null, press = 0, swallowClick = false;
+  const pinchState = () => { const [a, b] = [...touches.values()], r = stage.getBoundingClientRect();
+    return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top }; };
   stage.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || e.target.closest(".cam")) return;
+    if (e.pointerType === "touch" && !e.target.closest(".cam")) {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
+      clearTimeout(press);
+      if (touches.size === 2) { const st = pinchState(); pinch = { ...st, tz: cam.tz, tx: cam.tx, ty: cam.ty }; dragStart = null; userCam(); return; }
+      const room = e.target.closest('[data-k^="pod:"], [data-k^="plate:"]');
+      if (room && handlers.onRoomMenu) press = setTimeout(() => {
+        const t = touches.get(e.pointerId);
+        if (!t || touches.size !== 1 || Math.hypot(t.x - t.x0, t.y - t.y0) > 8) return;
+        swallowClick = true; peek(null);
+        handlers.onRoomMenu(room.dataset.k.split(":").slice(1).join(":"), t.x, t.y, room);
+      }, 550);
+    }
+    if (e.button !== 0 || e.target.closest(".cam") || pinch) return;
     dragStart = { x: e.clientX, y: e.clientY, tx: cam.tx, ty: cam.ty }; dragMoved = false;
   });
+  stage.addEventListener("click", (e) => { if (swallowClick) { swallowClick = false; e.stopPropagation(); e.preventDefault(); } }, true);   // the tap that ended a long press
   window.addEventListener("pointermove", (e) => {
+    const t = touches.get(e.pointerId);
+    if (t) { t.x = e.clientX; t.y = e.clientY; }
+    if (pinch && touches.size === 2) {
+      const st = pinchState(), z = Math.max(1, Math.min(4, pinch.tz * st.d / pinch.d));
+      const wx = (pinch.mx - pinch.tx) / pinch.tz, wy = (pinch.my - pinch.ty) / pinch.tz;   // the floor point under the fingers stays there
+      cam.tz = z; cam.tx = st.mx - wx * z; cam.ty = st.my - wy * z; clampCam(cam); applyCam(true);
+      return;
+    }
     if (!dragStart) return;
     const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
     if (!dragMoved && Math.hypot(dx, dy) > 5 && cam.tz > 1.01) { dragMoved = true; userCam(); stage.classList.add("dragging"); }
     if (dragMoved) { cam.tx = dragStart.tx + dx; cam.ty = dragStart.ty + dy; clampCam(cam); applyCam(true); }
   });
-  window.addEventListener("pointerup", () => {
+  const lift = (e) => { touches.delete(e.pointerId); clearTimeout(press); if (touches.size < 2) pinch = null; };
+  window.addEventListener("pointercancel", lift);
+  window.addEventListener("pointerup", (e) => {
+    lift(e);
     if (!dragStart) return;
     dragStart = null; stage.classList.remove("dragging");
     setTimeout(() => { dragMoved = false; }, 0);
