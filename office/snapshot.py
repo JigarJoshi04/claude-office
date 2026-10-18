@@ -159,7 +159,7 @@ def _codex_seat(meta: dict, now: float) -> dict:
             "state_file": None, "report_file": None, "report_status": None, "transcript": s.get("rollout"),
             "resume_cmd": (f"gpt -R {s.get('id')} \"...\"" if wrapper else f"codex resume {s.get('id')}") if s.get("id") else None,
         })
-    return dict(meta, start_cmd='gpt -w -C <folder> "task"' if wrapper else "codex -C <folder>",
+    return dict(meta, start_cmd='gpt -w -C "$PWD" "your task"' if wrapper else 'codex -C "$PWD"',
                 account={"name": "ChatGPT plan", "email": None, "org": None, "role": None},
                 health={"state": "ok" if data.get("available", True) else "login",
                         "detail": data.get("error") or "Codex CLI", "tier": data.get("model") or meta.get("model"),
@@ -385,7 +385,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.19.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.20.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,

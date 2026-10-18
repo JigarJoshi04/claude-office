@@ -112,7 +112,7 @@ export function makeFloor(ctx) {
     const s = snap && snap.seats.find(z => z.id === id);
     if (!s) return;
     const p = panels.persona(s), duty = s.divider ? s.divider.enabled !== false : s.status !== "benched";
-    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || "codex -C <folder>";
+    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || 'codex -C "$PWD"';
     const items = [
       ["open", "users", `Open ${p.name}`], ["card", "star", `${p.name}'s card`], ["zoom", "target", "Zoom in on the room"], ["hire", "plus", `Hire a lane for ${p.name}`],
       ["duty", duty ? "sun" : "briefcase", duty ? "Send on holiday" : "Back on duty"], ["copy", "copy", s.kind === "claude" ? "Copy the terminal command" : "Copy the Codex command"],

@@ -79,7 +79,7 @@ const app = {
   weekCache: () => {   // the last 14 days for the week chart (/api/week), refreshed every 2 minutes
     if ((!week || Date.now() - week.at > 120000) && !inflight.has("week")) {
       inflight.add("week");
-      fetch("/api/week?days=14").then(r => r.ok ? r.json() : null).then(d => { week = { data: d && d.days ? d.days : [], at: Date.now() }; inflight.delete("week"); if (prefs.view === "stats") renderMain(); })
+      fetch("/api/week?days=15").then(r => r.ok ? r.json() : null).then(d => { week = { data: d && d.days ? d.days : [], at: Date.now() }; inflight.delete("week"); if (prefs.view === "stats") renderMain(); })
         .catch(() => { week = { data: [], at: Date.now() }; inflight.delete("week"); });
     }
     return week ? week.data : null;
@@ -988,7 +988,10 @@ $("btnMenu").addEventListener("click", (e) => { e.stopPropagation(); openMenu();
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 let konami = 0;
 document.addEventListener("keydown", (e) => {
+  // Not while typing or with a dialog or the palette open; the B and A that finish the code are not shortcuts.
+  if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || document.querySelector(".palette-back, dialog[open]")) { konami = 0; return; }
   konami = e.key === KONAMI[konami] ? konami + 1 : e.key === KONAMI[0] ? 1 : 0;
+  if (konami > 8) e.stopImmediatePropagation();
   if (konami < KONAMI.length) return;
   konami = 0;
   if (!snap || replay.active()) return;

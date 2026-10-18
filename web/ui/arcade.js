@@ -46,7 +46,7 @@ export function makeArcade(ctx) {
     const code = Array.from({ length: 14 }, (_, i) => ({ indent: (i * 7) % 4, parts: Array.from({ length: 2 + (i * 5) % 4 }, (_, k) => ({ w: 6 + ((i * 13 + k * 7) % 22), c: ["#c678dd", "#56b6c2", "#e5c07b", "#98c379", "#7f848e"][(i + k) % 5] })) }));
 
     function start() {
-      Object.assign(st, { on: true, t: 0, score: 0, bugs: [], splats: [], pops: [], next: 0.4, last: performance.now() });
+      Object.assign(st, { on: true, t: 0, score: 0, bugs: [], splats: [], pops: [], next: 0.4, last: performance.now(), t0: performance.now() });
       over.hidden = true; cv.focus();
       cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
     }
@@ -81,8 +81,8 @@ export function makeArcade(ctx) {
     function loop(now) {
       const dt = Math.min(0.05, (now - st.last) / 1000); st.last = now;
       if (st.on) {
-        st.t += dt;
-        if (st.t >= ROUND) { draw(); finish(); return; }
+        st.t = (now - st.t0) / 1000;                     // the clock is real time, however slow the frames
+        if (st.t >= ROUND) { d.querySelector("[data-arc-time]").textContent = 0; draw(); finish(); return; }
         st.next -= dt;
         if (st.next <= 0) {
           const kind = spawnKind(Math.random(), st.t), a = Math.random() * Math.PI * 2, k = KINDS[kind];

@@ -1244,7 +1244,12 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .wr-act .btn.ghost { color: #fff; }
 .wr-tap { position: absolute; top: 40px; bottom: 0; z-index: 1; width: 50%; border: 0; padding: 0; background: transparent; cursor: pointer; }
 .wr-tap.prev { left: 0; cursor: w-resize; } .wr-tap.next { right: 0; cursor: e-resize; }
-.wr-tap:focus-visible { outline: 2px solid #ff9fd8; outline-offset: -6px; border-radius: 16px; }
+.wr:focus { outline: none; }
+.wr-hint .ic { display: inline-block; vertical-align: -2px; }
+/* the always-dark dialogs (week review, cards, arcade): secondary buttons read on dark in both themes */
+#dialog.week-review .btn:not(.primary), #dialog.card-view .btn:not(.primary), #dialog.arcade .btn:not(.primary) {
+  color: #fff; background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); box-shadow: none; }
+#dialog.week-review .btn:not(.primary):hover, #dialog.card-view .btn:not(.primary):hover, #dialog.arcade .btn:not(.primary):hover { background: rgba(255,255,255,.18); }
 :root[data-motion="reduced"] .wr-slide { animation: none; }
 @media (max-width: 420px) { .wr-big { font-size: 88px; } .wr-title { font-size: 28px; } .wr-star .av { width: 104px; height: 104px; } .wr-star .av canvas { width: 60px; height: 75px; margin-top: 18px; } }
 
@@ -1266,7 +1271,8 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .arc-hud { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-top: 12px; font-size: 14px; color: #c9c2e0; }
 .arc-hud b { font: 800 18px var(--mono); color: #fff; }
 .arc-hud .muted { margin-left: auto; font-size: 12.5px; }
-@media (max-width: 560px) { .arc-hud .muted { display: none; } .arc-title { font-size: 26px; } }
+@media (max-width: 560px) { .arc-hud .muted { display: none; } .arc-title { font-size: 22px; }
+  .arc-over { place-content: safe center; gap: 8px; padding: 10px; overflow: auto; } .arc-over p { font-size: 13px; line-height: 1.45; } .arc-over .btn { padding-block: 6px; } }
 
 /* ------------------------------------------------------------------ badge progress (3.15) */
 .almost { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 10px; padding: 9px 12px; border: 0; border-radius: 14px; cursor: pointer; text-align: left;

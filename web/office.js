@@ -193,7 +193,7 @@ export function createOffice(stage, handlers) {
       if (!walkStep(c, dt)) continue;
       if (c.phase === "in") {                        // drop the box, then head back
         carried.delete(c.gift); settled = true;
-        if (!reduced) burst(c.drop[0] + 6, c.drop[1] + 4, 8, "spark");
+        if (!reduced) burst(c.drop[0] + 5, c.drop[1] - 6, 8, "spark");   // at the box, just above the courier
         c.phase = "out"; c.path = c.back;
       } else { c.gone = true; openElevator(); }
     }
@@ -213,7 +213,9 @@ export function createOffice(stage, handlers) {
   }
   // A courier out of the elevator, down the clear lane between the palm and the CEO desk, to the gift's spot.
   function sendCourier(p) {
-    const ex = ELEVATOR.x + 8, ey = ELEVATOR.y + 18, lane = 85, drop = [p.x - 12, p.y - 6];   // lane: clear of the palm, the board and the desk
+    // lane: clear of the palm, the board and the desk; it comes in below the boxes already waiting and stands in front of
+    // where its own goes, so it never steps on another gift.
+    const ex = ELEVATOR.x + 8, ey = ELEVATOR.y + 18, lane = 85, drop = [p.x + 1, p.y + 10];
     const there = [[ex, WALK_Y], [lane, WALK_Y], [lane, drop[1]], drop];
     carried.add(p.g.id);
     couriers.push({ gift: p.g.id, color: p.color, x: ex, y: ey, path: there, back: [[lane, drop[1]], [lane, WALK_Y], [ex, WALK_Y], [ex, ey]],

@@ -94,6 +94,7 @@ export function makeRadio() {
     clearInterval(timer);
     if (ac) { master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(master.gain.value, ac.currentTime); master.gain.linearRampToValueAtTime(0, ac.currentTime + 0.6); }
     if (crackle) { const c = crackle; crackle = null; setTimeout(() => { try { c.stop(); } catch { /* stopped */ } }, 700); }
+    if (ac) setTimeout(() => { if (!on && ac.state === "running") ac.suspend(); }, 800);   // no idle audio thread while off
     listeners.forEach(f => f(false));
   }
   return { start, stop, toggle: () => (on ? (stop(), false) : start()), get on() { return on; }, onChange: (f) => listeners.add(f) };

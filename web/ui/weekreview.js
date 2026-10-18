@@ -10,7 +10,9 @@ import { fit, roundRect } from "./daycard.js";
 
 // days: the last 14 days from /api/week, oldest first. album: sticker id -> {n, first}; badges: id -> earned at (s);
 // goalDays: days on which every goal was done. Everything is counted over the last seven days.
-export function weekSummary(days, { album = {}, badges = {}, goalDays = [] } = {}) {
+// end: the last day to count (default: the last in days). On a Monday the review tells last week, ending yesterday.
+export function weekSummary(days, { album = {}, badges = {}, goalDays = [], end = null } = {}) {
+  if (end && days) days = days.filter(d => d.day <= end);
   if (!days || days.length < 7) return null;
   const last = days.slice(-7), before = days.slice(-14, -7);
   const sum = (xs, f) => xs.reduce((a, d) => a + f(d), 0);
@@ -45,7 +47,10 @@ export function makeWeekReview(ctx) {
   const persona = (s) => panels.persona(s);
 
   function summary() {
-    return weekSummary(app.weekCache(), { album: gifts.album(), badges: DEMO ? {} : earned(), goalDays: store.get("goalDays", []) });
+    // On a Monday the story is last week, Monday to Sunday (as the weekly challenge counts it); other days, the last seven.
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    const end = new Date().getDay() === 1 ? localDay(d) : null;
+    return weekSummary(app.weekCache(), { album: gifts.album(), badges: DEMO ? {} : earned(), goalDays: store.get("goalDays", []), end });
   }
 
   function slides(w) {
@@ -92,16 +97,17 @@ export function makeWeekReview(ctx) {
     const w = summary();
     if (!w) { toast("The week needs a few more days on record. Try again soon.", "info"); app.weekCache(); return false; }
     const list = slides(w), d = $("dialog");
-    let i = 0, timer = 0, startedAt = 0, paused = false;
+    let i = 0, timer = 0, startedAt = 0, paused = false, left = SLIDE_MS;
     d.classList.add("week-review");
-    $("dialogBody").innerHTML = `<div class="wr" role="group" aria-roledescription="story" aria-label="Your week">
+    $("dialogBody").innerHTML = `<div class="wr" role="group" aria-roledescription="story" aria-label="Your week. Arrows move between slides, Space pauses." tabindex="-1">
       <div class="wr-bars">${list.map(() => `<i><b></b></i>`).join("")}</div>
       <button class="btn sm ghost wr-x" data-wr-close aria-label="Close">${icon("x", 16)}</button>
       <div class="wr-stage" aria-live="polite"></div>
-      <button class="wr-tap prev" data-wr-prev aria-label="Previous"></button><button class="wr-tap next" data-wr-next aria-label="Next"></button></div>`;
+      <button class="wr-tap prev" data-wr-prev aria-label="Previous" tabindex="-1"></button><button class="wr-tap next" data-wr-next aria-label="Next" tabindex="-1"></button></div>`;
     const stage = d.querySelector(".wr-stage"), bars = [...d.querySelectorAll(".wr-bars b")];
     const show = (n) => {
       i = Math.max(0, Math.min(list.length - 1, n));
+      paused = false; left = SLIDE_MS;
       stage.innerHTML = `<div class="wr-slide k-${list[i].k}">${list[i].html}</div>`;
       hydratePortraits(stage, 6);
       stage.querySelectorAll("i[data-sticker]").forEach(el => { const st = STICKERS.find(s => s.id === el.dataset.sticker.split("|")[0]); if (st) el.replaceWith(stickerCanvas(st, 4, { t: 900 })); });
@@ -114,6 +120,13 @@ export function makeWeekReview(ctx) {
         requestAnimationFrame(() => { bars[i].style.transition = `width ${SLIDE_MS}ms linear`; bars[i].style.width = "100%"; });
         timer = setTimeout(() => show(i + 1), SLIDE_MS);
       } else bars[i].style.width = "100%";
+    };
+    // Resume the paused slide where it stopped, not from the start.
+    const resume = () => {
+      if (prefs.motion === "reduced" || i >= list.length - 1) return;
+      startedAt = performance.now() - (SLIDE_MS - left);
+      requestAnimationFrame(() => { bars[i].style.transition = `width ${left}ms linear`; bars[i].style.width = "100%"; });
+      timer = setTimeout(() => show(i + 1), left);
     };
     const bind = () => {
       const q = (s) => stage.querySelector(s);
@@ -131,17 +144,17 @@ export function makeWeekReview(ctx) {
     const keys = (e) => {
       if (e.key === "ArrowRight") { e.preventDefault(); show(i + 1); }
       else if (e.key === "ArrowLeft") { e.preventDefault(); show(i - 1); }
-      else if (e.key === " " && !(e.target instanceof HTMLButtonElement)) {   // space pauses and resumes the story
+      else if (e.key === " " && !(e.target instanceof HTMLButtonElement && e.target.closest(".wr-act, .wr-x"))) {   // Space pauses and resumes
         e.preventDefault(); paused = !paused;
-        if (paused) { clearTimeout(timer); const b = bars[i], wpx = getComputedStyle(b).width; b.style.transition = "none"; b.style.width = wpx; }
-        else show(i);
+        if (paused) { clearTimeout(timer); left = Math.max(0, SLIDE_MS - (performance.now() - startedAt)); const b = bars[i], wpx = getComputedStyle(b).width; b.style.transition = "none"; b.style.width = wpx; }
+        else resume();
       }
     };
     d.addEventListener("keydown", keys);
     d.addEventListener("close", () => { clearTimeout(timer); d.removeEventListener("keydown", keys); d.classList.remove("week-review"); }, { once: true });
     d.showModal();
     show(0);
-    d.querySelector("[data-wr-next]").focus({ preventScroll: true });
+    d.querySelector(".wr").focus({ preventScroll: true });
     if (!DEMO) store.set("weekShown", localDay());
     return true;
   }
@@ -168,8 +181,9 @@ export function makeWeekReview(ctx) {
     g.fillText(fit(g, (snap.office.name || "Claude Office").toUpperCase(), W - 120), 60, 92); g.shadowBlur = 0;
     g.font = "500 22px Inter, sans-serif"; g.fillStyle = "#a1a7bc";
     g.fillText(`My AI team's week · ${dayName(w.from, { day: "numeric", month: "long" })} – ${dayName(w.to, { day: "numeric", month: "long" })}`, 60, 130);
-    const big = [[String(w.reports), "reports filed", w.delta == null ? "" : `${w.delta >= 0 ? "▲" : "▼"} ${Math.abs(w.delta)}% on the week before`],
-      [fmtH(w.hours) + " h", "of agent work", `${(w.hours / 8).toFixed(1)} working days`], [w.calls >= 1e4 ? Math.round(w.calls / 1000) + "k" : w.calls.toLocaleString(), "tool calls", ""],
+    const short = (n) => (n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M" : n >= 1e4 ? Math.round(n / 1000) + "k" : n.toLocaleString());
+    const big = [[short(w.reports), "reports filed", w.delta == null ? "" : `${w.delta >= 0 ? "▲" : "▼"} ${Math.abs(w.delta)}% on the week before`],
+      [fmtH(w.hours) + " h", "of agent work", `${(w.hours / 8).toFixed(1)} working days`], [short(w.calls), "tool calls", ""],
       [`${w.activeDays}/7`, "days with work", w.goalDays ? `${w.goalDays} with every goal` : ""]];
     big.forEach(([v, l, s], k) => {
       const x = 60 + (k % 2) * 300, y = 170 + Math.floor(k / 2) * 170;
@@ -178,14 +192,15 @@ export function makeWeekReview(ctx) {
       g.fillStyle = "#c6cad8"; g.font = "600 19px Inter, sans-serif"; g.fillText(l, x + 22, y + 104);
       if (s) { g.fillStyle = "#ff9fd8"; g.font = "500 16px Inter, sans-serif"; g.fillText(s, x + 22, y + 130); }
     });
-    const star = w.stars.map(id => snap.seats.find(s => s.id === id)).filter(Boolean)[0];
+    const tied = w.stars.map(id => snap.seats.find(s => s.id === id)).filter(Boolean), star = tied[0];
     const sx = 700, sy = 170;
     g.fillStyle = "rgba(255,210,74,0.10)"; roundRect(g, sx, sy, 440, 320, 22); g.fill();
     g.strokeStyle = "rgba(255,210,74,0.45)"; g.lineWidth = 2; roundRect(g, sx, sy, 440, 320, 22); g.stroke();
-    g.fillStyle = "#ffd24a"; g.font = "700 15px Inter, sans-serif"; g.fillText("STAR OF THE WEEK", sx + 28, sy + 40);
+    g.fillStyle = "#ffd24a"; g.font = "700 15px Inter, sans-serif"; g.fillText(tied.length > 1 ? "STARS OF THE WEEK" : "STAR OF THE WEEK", sx + 28, sy + 40);
     if (star) {
       g.imageSmoothingEnabled = false; g.drawImage(portrait("mascot-" + star.id, star.color, { scale: 10, crown: true }), sx + 28, sy + 64);
-      g.fillStyle = "#ffffff"; g.font = "800 36px Inter, sans-serif"; g.fillText(fit(g, persona(star).name, 240), sx + 170, sy + 130);
+      g.fillStyle = "#ffffff"; g.font = `800 ${tied.length > 1 ? 28 : 36}px Inter, sans-serif`;
+      g.fillText(fit(g, tied.slice(0, 3).map(s => persona(s).name).join(" and "), 240), sx + 170, sy + 130);
       g.fillStyle = "#c6cad8"; g.font = "500 18px Inter, sans-serif"; g.fillText(`${w.starDays} day${w.starDays === 1 ? "" : "s"} on top`, sx + 170, sy + 162);
     } else { g.fillStyle = "#a1a7bc"; g.font = "500 20px Inter, sans-serif"; g.fillText("Nobody on top this week.", sx + 28, sy + 100); }
     const st = w.stickers.map(id => STICKERS.find(s => s.id === id)).filter(Boolean).slice(0, 5);

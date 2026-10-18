@@ -290,7 +290,7 @@ export function makePanels(app) {
       const when = w && w.resets_at ? `${s.status === "limited" && key === binding(s).key ? "Back" : "Resets"} ${dayTime(w.resets_at)}` : w && w.reset_since_read ? "Reset since the last reading" : left == null ? "No reading yet" : "Reset time unknown";
       return `<div class="pring">${ring(left, s.color, 58)}<div><b>${label}</b><small>${when}</small>${w && w.resets_at ? `<small>${inWords(w.resets_at)}</small>` : ""}</div></div>`;
     };
-    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || "codex -C <folder>";
+    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || 'codex -C "$PWD"';
     const tabs = [["now", "Now", "clock"], ["career", "Career", "trophy"], ["settings", "Settings", "sliders"]];
     const tab = tabs.some(([k]) => k === seatTab) && (s.career || seatTab !== "career") ? seatTab : "now";
     const body = tab === "career" ? `${levelRow(s)}${careerHtml(s)}`

@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.20.0] - 2026-10-18
+
+### Fixed
+- Ten bugs from the 3.11–3.16 QA pass: Space in the week review skipped instead of pausing (and focus sat on invisible
+  tap areas); its Copy button was invisible in the light theme; the Monday review covered Tuesday to today instead of
+  last week; a focus box cut through every slide; a tie for star of the week showed one name on the picture; badge
+  icons broke the collection slide; the secret code ran behind dialogs and flipped to the Team view; the Codex command
+  did not paste into a shell; Bug Squash's start screen overflowed phones at large text and showed "Time 1" at the end.
+- Pausing the week review resumes where it stopped; the week picture formats big numbers; couriers no longer step on
+  waiting gifts; Bug Squash rounds last 30 real seconds on slow machines; the radio's audio engine sleeps when off.
+
 ## [3.19.0] - 2026-10-18
 
 ### Added

@@ -299,3 +299,12 @@ test("character card tiers by level", async () => {
   assert.deepEqual([1, 4, 5, 9, 10, 15, 19, 20, 40].map(l => tierFor(l).name), ["Rookie", "Rookie", "Bronze", "Bronze", "Silver", "Gold", "Gold", "Holo", "Holo"]);
   assert.equal(tierFor(undefined).name, "Rookie");
 });
+
+test("on a Monday the week review tells last week, Monday to Sunday", async () => {
+  const { weekSummary } = await import("../../web/ui/weekreview.js");
+  const days = Array.from({ length: 15 }, (_, i) => ({ day: `2026-10-${String(5 + i).padStart(2, "0")}`, reports: 1, sessions: 1, active_min: 0, tool_calls: 0 }));   // Mon 5 … Mon 19
+  const w = weekSummary(days, { end: "2026-10-18" });
+  assert.equal(w.from, "2026-10-12");
+  assert.equal(w.to, "2026-10-18");
+  assert.equal(w.prev, 7);                                                      // the week before is complete too
+});
