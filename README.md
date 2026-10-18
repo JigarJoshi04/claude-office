@@ -12,7 +12,7 @@ And the office grows with the work: characters level up and earn gear, the offic
 a robot vacuum, a dog and fireworks, and there are daily goals, a weekly "beat last week" challenge, combos, gifts
 with stickers to collect and badges to chase. Replay the day on the floor, put it on a spare screen in TV mode, or share a picture of the day.
 
-![Claude Office in demo mode: a visitor lane walks in from the elevator, a character card opens, then a session's Chat, the Team view and the Timeline](docs/demo.gif)
+![Claude Office in demo mode: a level-up banner, a visitor lane walking in from the elevator, a character card, a session's Chat, the Team view, the Timeline and a gift opening on the floor](docs/demo.gif)
 
 *Every screenshot and recording is demo mode (`python3 -m office serve --demo`): made-up seats, no real accounts.*
 

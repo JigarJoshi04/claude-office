@@ -4,8 +4,9 @@
 // It starts a fresh demo office on a free port (or uses --url), launches headless Chrome with a throwaway
 // profile and drives it over the DevTools protocol. The cut opens on the "LEVEL UP!" banner the demo office
 // shows about 20 s after it starts, then follows a visitor lane: the floor overview, a zoom into the pod it is
-// walking to (its character's card opens in the panel), the walk-in, a zoom back out, a session's Chat, then a
-// few seconds each of the Team view and the Timeline. Frames are resampled to a steady rate and encoded with
+// walking to (its character's card opens in the panel), the walk-in, a zoom back out, a session's Chat, a few
+// seconds each of the Team view and the Timeline, and last the morning's gift opening on the floor (a sticker pops
+// out). Frames are resampled to a steady rate and encoded with
 // ffmpeg. Chrome, its profile, the frames and any server it started are cleaned up on exit, also after an
 // error or Ctrl-C.
 //
@@ -44,6 +45,9 @@ const UI = {
                                        // and a click opens that session on its Chat tab
   teamTab: '[data-view="board"]',      // the Team view (?view=board)
   timelineTab: '[data-view="timeline"]',
+  floorTab: '[data-view="floor"]',
+  gift: ".hot.gift",                   // a gift box on the floor; the demo's morning delivery waits at the CEO desk
+  giftShown: "dialog[open] .gr-st",    // the opened gift's sticker in the reveal dialog
   wheelZoom: 0.0025,                   // the camera zooms by exp(-deltaY * this) per wheel event (office.js)
 };
 
@@ -69,6 +73,7 @@ const SHOT = {
   chat: 2.8,          // a session's Chat, next to the floor
   team: 2.3,          // the Team view
   timeline: 2.3,      // the Timeline view
+  gift: 2.8,          // a gift opening on the floor: the box shakes, a sticker pops out
 };
 
 const LIMITS = { mp4: 6 * 1024 * 1024, gif: 6.6 * 1024 * 1024 };   // the GIF stays under 7 MB (decimal) too
@@ -590,6 +595,16 @@ async function main() {
       await park();
       await sleep(secs * 1000);
     }
+    // 5. Back on the floor, the morning's gift opens.
+    if (SHOT.gift && (await page.click(UI.floorTab)) && (await page.waitFor(`!!document.querySelector(${JSON.stringify(UI.gift)})`, 4))) {
+      await sleep(400);
+      if (await page.domClick(UI.gift)) {
+        mark("gift");
+        await page.waitFor(`!!document.querySelector(${JSON.stringify(UI.giftShown)})`, 3);
+        await park();
+        await sleep(SHOT.gift * 1000);
+      }
+    } else if (SHOT.gift) log("no gift on the floor; leaving the gift out");
     const t1 = now();
     mark("end");
     await rec.stop();
