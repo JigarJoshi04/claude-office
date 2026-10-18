@@ -128,11 +128,13 @@ def _demo_ledger():
         reports, mins = (2 + int(k * 4)) if weekend else (9 + int(k * 12)), (60 + int(k * 120)) if weekend else (300 + int(k * 420))
         seats = {sid: {"active_min": int(mins * w), "sessions": max(1, int(6 * w)), "lanes": int(3 * w), "reports": int(reports * w),
                        "limits": 1 if (sid == "claude3" and i % 3 == 0) else 0, "tokens_fresh": int(mins * w * 9000),
-                       "tool_calls": int(mins * w * 5.5), "peak_p5": 60.0}
+                       "tool_calls": int(mins * w * 5.5), "peak_p5": 60.0,
+                       "limited_min": {"claude3": 95, "claude2": 40}.get(sid, 0) if i % 3 == 0 else (25 if sid == "claude3" and not weekend else 0)}
                  for sid, w in (("claude", 0.1), ("claude2", 0.35), ("claude3", 0.25), ("claude4", 0.2), ("astra", 0.1))}
         led.note({"day": d.isoformat(), "seats": seats, "mvp": {"seat": "claude2" if i % 2 else "claude3", "why": "the most XP"},
                   "office": {"sessions": sum(s["sessions"] for s in seats.values()), "reports": sum(s["reports"] for s in seats.values()),
                              "limits": sum(s["limits"] for s in seats.values()), "lanes_hired": 2 + i % 3, "busiest_seat": "claude2",
+                             "all_out_min": 20 if i % 6 == 0 else 0,
                              "longest_session": None, "first_activity": None, "last_activity": None},
                   "digest": ["Atlas did the most work."]})
     return led
@@ -424,7 +426,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.52.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.53.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

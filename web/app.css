@@ -1527,3 +1527,6 @@ ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
 .stalebar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border-radius: 14px;
   background: var(--surface); color: var(--text); box-shadow: var(--shadow), inset 0 0 0 1px var(--line-2); font-size: 13.5px; max-width: calc(100vw - 32px); }
 .stalebar > .ic { color: var(--info); flex: none; } .stalebar span { min-width: 0; }
+/* hours lost to limits (3.53) */
+.lim-row { display: grid; grid-template-columns: minmax(70px, 140px) 1fr auto; align-items: center; gap: 12px; padding: 5px 0; font-size: 13.5px; }
+.lim-row .tb-bar i { background: var(--seat); } .lim-row b { font: 700 12.5px var(--mono); min-width: 52px; text-align: right; }

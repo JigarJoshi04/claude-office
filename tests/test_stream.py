@@ -151,7 +151,7 @@ class StreamTests(unittest.TestCase):
             self.assertRegex(json.loads(response.read())["error"], r"must be an integer from 1 to (24|90)|day must be YYYY-MM-DD")
         week = json.loads(self.open("/api/week?days=14").read())["days"]
         self.assertEqual(len(week), 14)
-        self.assertEqual(set(week[0]), {"day", "reports", "sessions", "active_min", "tool_calls", "limits", "lanes_hired", "mvp"})
+        self.assertEqual(set(week[0]), {"day", "reports", "sessions", "active_min", "tool_calls", "limits", "lanes_hired", "mvp", "limited_min", "all_out_min"})
         self.assertEqual(week, sorted(week, key=lambda d: d["day"]))
         self.assertGreater(sum(d["reports"] for d in week[:-1]), 0)   # the demo carries made-up earlier days
         headers = {"Content-Type": "application/json"}
@@ -180,7 +180,7 @@ class StreamTests(unittest.TestCase):
             self.office.emit("report", "Demo report")
             self.office.build()
         self.assertEqual(self.office.get()["office"]["started_at"], before)
-        self.assertEqual(self.office.get()["office"]["version"], "3.52.0")
+        self.assertEqual(self.office.get()["office"]["version"], "3.53.0")
 
 
 class StatusLineTests(unittest.TestCase):

@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.53.0] - 2026-10-18
+
+### Added
+- Hours lost to limits, on the Today view: how long each seat sat out of plan over the last 7 days, and how long no
+  Claude seat could take work at all. The history samples whether each seat is limited each minute and the day
+  ledger keeps `limited_min` per seat and `all_out_min` for the office; `/api/week` returns them.
+
 ## [3.52.0] - 2026-10-18
 
 ### Added

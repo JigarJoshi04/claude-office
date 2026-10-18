@@ -25,7 +25,7 @@ class HistoryTests(unittest.TestCase):
             self.assertFalse(store.record(snap(100059)))
             self.assertTrue(store.record(snap(100060)))
             raw = json.loads(path.read_text().splitlines()[0])
-            self.assertEqual(raw["seats"]["a"], [20, None, 1, 1, 8])
+            self.assertEqual(raw["seats"]["a"], [20, None, 1, 1, 8, 0])
             self.assertEqual(raw["sessions"]["one"], ["a", "one", "lane", "working", None, None, 10, 2])
             with path.open("a") as f:
                 f.write('junk\nnull\n{"ts":100000,"seats":{},"sessions":{"bad":[]}}\n')
@@ -44,7 +44,7 @@ class HistoryTests(unittest.TestCase):
         result = h.query(snap(10430, "waiting"))
         self.assertEqual(result["step"], 60)
         self.assertEqual(result["from"], 10430 - 21600)
-        self.assertEqual(result["seats"]["a"]["series"][-1], [10430, 20, None, 1, 1, 8])
+        self.assertEqual(result["seats"]["a"]["series"][-1], [10430, 20, None, 1, 1, 8, 0])
         session = result["sessions"][0]
         self.assertEqual(session["segments"], [[10000, 10120, "working"], [10120, 10180, "waiting"], [10400, 10430, "waiting"]])
         self.assertTrue(session["live"])
@@ -115,6 +115,17 @@ class StatsTests(unittest.TestCase):
         self.h.record(snap(t + 60, tokens=100, started=t - 600))
         out = self.h.stats(snap(t + 120, tokens=130, started=t - 600), "2026-10-16")
         self.assertEqual(out["seats"]["a"]["tokens_fresh"], 30)
+
+    def test_minutes_out_of_plan_per_seat_and_for_the_whole_office(self):
+        t = self.start
+        two = lambda ts, a_out, b_out: {"now": ts, "lanes": [], "seats": [
+            {"id": "a", "kind": "claude", "status": "limited" if a_out else "working", "usage": {}, "sessions": []},
+            {"id": "b", "kind": "claude", "status": "limited" if b_out else "idle", "usage": {}, "sessions": []}]}
+        for i, (a_out, b_out) in enumerate([(1, 0), (1, 1), (1, 1), (0, 1)]):
+            self.h.record(two(t + 60 + i * 60, a_out, b_out))
+        out = self.h.stats(two(t + 300, 0, 0), "2026-10-16")
+        self.assertEqual((out["seats"]["a"]["limited_min"], out["seats"]["b"]["limited_min"]), (3, 3))
+        self.assertEqual(out["office"]["all_out_min"], 2)                          # both out at once: no Claude seat free
 
     def test_baseline_survives_restart_without_a_previous_day_sample(self):
         t = self.start

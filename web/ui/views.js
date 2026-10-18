@@ -89,6 +89,7 @@ export function renderStats(el, app) {
       </div>
     </div>
     ${weekCard(app, st.day || todayStr)}
+    ${limitsCard(app)}
     ${tokensCard(app)}
     ${(st.digest || []).length ? `<div class="view-card"><div class="section-h"><h4>The day in a few lines</h4></div><ul class="digest">${st.digest.map(x => `<li>${esc(human(x))}</li>`).join("")}</ul></div>` : ""}
     <div class="view-card"><div class="section-h"><h4>Diaries</h4></div><div class="diaries">${rows.map(r => { const p = personaFor(r.seat, snap.seats.findIndex(x => x.id === r.seat.id));
@@ -140,6 +141,21 @@ export function dayText(st, app, nameOf) {
 // show is highlighted; hovering a bar shows that day's numbers; the header compares with the seven days before.
 const WEEK_METRICS = { reports: ["Reports", (d) => d.reports, (v) => String(v)], hours: ["Agent hours", (d) => d.active_min / 60, (v) => v >= 10 ? Math.round(v) + " h" : v.toFixed(1) + " h"],
   calls: ["Tool calls", (d) => d.tool_calls, (v) => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 10000 ? Math.round(v / 1000) + "k" : v.toLocaleString()] };
+// Hours lost to limits, the last 7 days: how long each seat sat out of plan, and how long no Claude seat could take work.
+function limitsCard(app) {
+  const days = (app.weekCache() || []).slice(-7), snap = app.snap();
+  const per = {}; let allOut = 0;
+  for (const d of days) { for (const [sid, m] of Object.entries(d.limited_min || {})) per[sid] = (per[sid] || 0) + m; allOut += d.all_out_min || 0; }
+  const rows = Object.entries(per).filter(([, m]) => m >= 5).sort((a, b) => b[1] - a[1]);
+  if (!rows.length) return "";
+  const hrs = (m) => (m >= 60 ? `${(m / 60).toFixed(m >= 600 ? 0 : 1)} h` : `${m} min`), max = Math.max(...rows.map(r => r[1]));
+  const name = (sid) => { const s = snap.seats.find(x => x.id === sid); return s ? personaFor(s, snap.seats.indexOf(s)).name : sid; };
+  const color = (sid) => (snap.seats.find(x => x.id === sid) || {}).color || "#82889f";
+  return `<div class="view-card"><div class="section-h"><h4>Hours lost to limits</h4><span class="hint">the last 7 days</span></div>
+    ${rows.map(([sid, m]) => `<div class="lim-row" style="--seat:${esc(color(sid))}"><span class="grow">${esc(name(sid))}</span><span class="tb-bar"><i style="width:${(m / max * 100).toFixed(1)}%"></i></span><b>${hrs(m)}</b></div>`).join("")}
+    <p class="hint">${allOut >= 5 ? `For ${hrs(allOut)} no Claude seat could take work at all: lanes waited.` : "There was always a Claude seat free to take work."} The divider moves new lanes to seats with plan left; a seat that runs dry often may need a bigger plan.</p></div>`;
+}
+
 function weekCard(app, shown) {
   const days = app.weekCache();
   if (!days) return `<div class="view-card"><div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`;

@@ -35,7 +35,7 @@ class LedgerTests(unittest.TestCase):
             self.assertEqual([d["reports"] for d in week], [5, 0, 2])
             self.assertEqual(week[2]["active_min"], 30)
             self.assertEqual(week[1], {"day": "2026-10-17", "reports": 0, "sessions": 0, "active_min": 0, "tool_calls": 0,
-                                       "limits": 0, "lanes_hired": 0, "mvp": None})
+                                       "limits": 0, "lanes_hired": 0, "mvp": None, "limited_min": {}, "all_out_min": 0})
 
     def test_empty_days_are_not_kept_and_old_days_age_out(self):
         led = DayLedger(None, keep_days=3)

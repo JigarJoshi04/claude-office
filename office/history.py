@@ -24,7 +24,8 @@ def sample(snapshot):
         out["seats"][seat["id"]] = [
             (usage.get("five_hour") or {}).get("pct"), (usage.get("weekly") or {}).get("pct"),
             sum(x.get("state") in ("working", "waiting") for x in live),
-            sum(x.get("kind") == "lane" for x in live), seat.get("tokens_1h") or 0]
+            sum(x.get("kind") == "lane" for x in live), seat.get("tokens_1h") or 0,
+            1 if seat.get("status") == "limited" else 0]                 # out of plan this minute (hours lost to limits)
         for x in live:
             out["sessions"][x["id"]] = [seat["id"], x.get("name"), x.get("kind", "desk"),
                 x.get("state") if x.get("state") in STATES else "idle", x.get("title"),
@@ -110,7 +111,9 @@ class DayLedger:
                         "active_min": sum((s or {}).get("active_min") or 0 for s in seats.values()),
                         "tool_calls": sum((s or {}).get("tool_calls") or 0 for s in seats.values()),
                         "limits": o.get("limits") or 0, "lanes_hired": o.get("lanes_hired") or 0,
-                        "mvp": (st.get("mvp") or {}).get("seat")})
+                        "mvp": (st.get("mvp") or {}).get("seat"),
+                        "limited_min": {sid: (s or {}).get("limited_min") or 0 for sid, s in seats.items() if (s or {}).get("limited_min")},
+                        "all_out_min": o.get("all_out_min") or 0})
         return out
 
     def _save(self):
@@ -159,7 +162,7 @@ class HistoryStore:
                                     and now - RETENTION <= row["ts"] <= now
                                     and isinstance(row.get("seats"), dict)
                                     and isinstance(row.get("sessions"), dict)
-                                    and all(isinstance(x, list) and len(x) == 5 for x in row["seats"].values())
+                                    and all(isinstance(x, list) and len(x) in (5, 6) for x in row["seats"].values())   # 6: with "limited" (3.53)
                                     and all(isinstance(x, list) and len(x) == 8 for x in row["sessions"].values())):
                                 self.rows.append(row)
                         except (ValueError, TypeError):
@@ -303,17 +306,18 @@ class HistoryStore:
         return (self.ledger or DayLedger(None)).week(today, n)
 
     def _stats(self, snapshot, day, start, end, rows, points, events):
-        seats, active, ids, lane_ids = {}, {}, {}, {}
+        seats, active, ids, lane_ids, limited, all_out = {}, {}, {}, {}, {}, set()
 
         def ensure(sid):
             if sid not in seats:
                 seats[sid] = dict(active_min=0, sessions=0, lanes=0, reports=0, limits=0,
-                                  tokens_fresh=0, tool_calls=0, peak_p5=None)
-                active[sid], ids[sid], lane_ids[sid] = set(), set(), set()
+                                  tokens_fresh=0, tool_calls=0, peak_p5=None, limited_min=0)
+                active[sid], ids[sid], lane_ids[sid], limited[sid] = set(), set(), set(), set()
             return seats[sid]
 
         for s in snapshot.get("seats", []):
             ensure(s["id"])
+        snap_claude = {s["id"] for s in snapshot.get("seats", []) if s.get("kind") == "claude"}
         previous = {}
         first = dict(self.first_seen)
         for row in rows:
@@ -340,12 +344,17 @@ class HistoryStore:
                     dest = ensure(sid)
                     if x[0] is not None:
                         dest["peak_p5"] = max(dest["peak_p5"] or 0, x[0])
+                    if len(x) > 5 and x[5]:
+                        limited[sid].add(int(row["ts"] // 60))
+                claude = [x for sid, x in row["seats"].items() if sid in snap_claude]
+                if claude and all(len(x) > 5 and x[5] for x in claude):      # no Claude seat could take work this minute
+                    all_out.add(int(row["ts"] // 60))
         day_events = [e for e in self.events(start, end, events) if e["ts"] < end]
         for e in day_events:
             if e.get("seat") and e.get("kind") in ("report", "limit"):
                 ensure(e["seat"])["reports" if e["kind"] == "report" else "limits"] += 1
         for sid, dest in seats.items():
-            dest.update(active_min=len(active[sid]), sessions=len(ids[sid]), lanes=len(lane_ids[sid]))
+            dest.update(active_min=len(active[sid]), sessions=len(ids[sid]), lanes=len(lane_ids[sid]), limited_min=len(limited[sid]))
         sessions = timelines(points, min(snapshot["now"], end))
         duration = lambda s: sum(b - a for a, b, _ in s["segments"]) / 60
         longest = max(sessions, key=duration, default=None)
@@ -364,7 +373,7 @@ class HistoryStore:
         hired = sum(start <= ts < end for ts in created.values())
         office = {"sessions": len({sid for r in points for sid in r["sessions"]}),
                   "reports": sum(e.get("kind") == "report" for e in day_events),
-                  "limits": sum(e.get("kind") == "limit" for e in day_events), "lanes_hired": hired,
+                  "limits": sum(e.get("kind") == "limit" for e in day_events), "lanes_hired": hired, "all_out_min": len(all_out),
                   "busiest_seat": max((sid for sid in seats if seats[sid]["active_min"]),
                                       key=lambda sid: seats[sid]["active_min"], default=None),
                   "longest_session": {"name": longest["name"], "seat": longest["seat"],
