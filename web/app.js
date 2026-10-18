@@ -495,6 +495,16 @@ function onNews(e) {
       notify(lvl ? "Level up" : "Achievement unlocked", text);
       break;
     }
+    case "shipped": {                                  // a PR opened or merged, read from a session's transcript
+      const merged = / merged$/.test(e.text);
+      fx.celebrate(e.seat, null, merged ? "Merged!" : "PR opened");
+      if (who) fx.sayAtSeat(e.seat, merged ? "Merged. On to the next one." : "PR's up. Fingers crossed.", 6000);
+      if (merged) { game.comboHit(e); giftBox.grant(e.seat, "shipped"); } else giftBox.earn(e.seat, "shipped");
+      sound.play("report");
+      toast(text, "good", { ic: "check", ms: 5000 });
+      notify(merged ? "PR merged" : "PR opened", text);
+      break;
+    }
     case "reply": sound.play("arrive"); toast(text, "good"); notify("A session replied", text); for (const k of chats.keys()) chats.get(k).at = 0; break;
     case "lane":
       if (e.level === "good") { fx.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); giftBox.earn(e.seat, "lane"); }

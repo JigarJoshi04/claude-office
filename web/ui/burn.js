@@ -2,7 +2,7 @@
 // Belt (last week's heaviest burner, Monday to Sunday) and its handover, milestones on the 1-2-5 ladder (1 M, 2 M,
 // 5 M, 10 M, …) with a plaque and an epic gift, and broken records. Ceremonies happen in a real office at Full game
 // intensity; the first look only remembers where things stand, so a reload never re-celebrates.
-import { topBurner, beltHolders } from "./tokens.js";
+import { topBurner, beltHolders, leanHolder } from "./tokens.js";
 
 export const big = (n) => (n >= 1e12 ? (n / 1e12).toFixed(n >= 1e13 ? 0 : 1) + " T" : n >= 1e9 ? (n / 1e9).toFixed(n >= 1e11 ? 0 : 1) + " B"
   : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + " M" : String(Math.round(n)));
@@ -21,6 +21,8 @@ export function makeBurn(ctx) {
     office.setOdometer(d.total.all ? big(d.total.all) : null);
     const b = beltHolders(d.weeks);
     office.setBelt(b.holder);
+    const lean = leanHolder(d.weeks);
+    office.setLean(lean ? lean.seat : null);
     if (d.scanning) return;                              // no ceremonies on half-read numbers
     belt(b); milestone(d.milestones || []); records(d.records || {});
   }

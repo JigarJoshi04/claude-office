@@ -3,6 +3,20 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.24.0] - 2026-10-18
+
+### Added
+- What the tokens shipped: commits, pushes, PRs opened and merged, and lines changed, read from the git and gh
+  commands sessions ran (counted when the command succeeded), per character and range in the Tokens tab, with
+  tokens per commit.
+- The Lean ribbon: last week's fewest tokens per commit (at least three commits), on the nameplate and in the Tokens tab.
+- A PR opened or merged in a session becomes office news within a minute: confetti, a line from the character, a
+  combo step and a gift for a merge.
+
+### Changed
+- The token ledger reads every minute; shipped work has its own offset, so existing ledgers read their transcripts
+  once more for it without counting tokens twice.
+
 ## [3.23.0] - 2026-10-18
 
 ### Added

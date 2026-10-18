@@ -24,6 +24,15 @@ export function beltHolders(weeks) {
   return { holder: top(weeks && weeks[weeks.length - 2]), week: weeks && weeks.length > 1 ? weeks[weeks.length - 2].week : null, leader: top(weeks && weeks[weeks.length - 1]) };
 }
 
+// The Lean ribbon: last week's fewest tokens per commit, among seats with at least three commits.
+export function leanHolder(weeks) {
+  const w = weeks && weeks[weeks.length - 2];
+  if (!w || !w.commits) return null;
+  const rows = Object.entries(w.commits).filter(([, n]) => n >= 3).map(([k, n]) => [k, (w.seats[k] || 0) / n]).filter(([, r]) => r > 0);
+  rows.sort((a, b) => a[1] - b[1]);
+  return rows.length >= 2 ? { seat: rows[0][0], perCommit: rows[0][1] } : null;   // a ribbon needs someone to beat
+}
+
 // The seat with the most tokens of all time (for the flame on the floor and the character page), or null.
 export function topBurner(t) {
   const s = t && t.seats && t.seats.find(x => x.seat);
@@ -149,6 +158,22 @@ export function renderTokens(el, app) {
     rec.longest_run && rec.longest_run.days > 1 && [icon("zap", 16), "Longest run", `${rec.longest_run.days} days`, `in a row with tokens, to ${new Date(rec.longest_run.until + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" })}`],
     rec.busiest_hour && [icon("clock", 16), "Busiest hour", `${DAYS[rec.busiest_hour.weekday]} ${rec.busiest_hour.hour}:00`, "the hour of the week that burns the most"],
   ].filter(Boolean).map(([ic, k, v, sub]) => `<div class="tp-rec"><span class="ic-w">${ic}</span><span><small>${k}</small><b>${v}</b><span>${sub}</span></span></div>`).join("");
+  // What the tokens bought: commits, pushes, PRs and lines, read from the sessions' own git and gh commands.
+  function shipCard() {
+    const sh = t.shipped;
+    if (!sh || !(sh.commits || sh.prs_opened)) return "";
+    const lean = leanHolder(t.weeks);
+    const rows = (t.seats || []).filter(s => s.commits || s.prs_opened || s.prs_merged).sort((a, b) => b.commits - a.commits).map(s => {
+      const st = seatOf(s.seat), per = s.commits ? s.all / s.commits : null;
+      return `<tr style="--seat:${esc(st ? st.color : "#82889f")}"><td><span class="who">${st ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(st.color)}|"></i>` : ""}${esc(who(s.seat))}${lean && lean.seat === s.seat ? ` <em class="lean" title="Lean ribbon: fewest tokens per commit last week">${icon("check", 11)}Lean</em>` : ""}</span></td>
+        <td class="num">${s.commits.toLocaleString()}</td><td class="num">${s.prs_merged}<small> / ${s.prs_opened}</small></td><td class="num">+${fmtTok(s.insertions)} <small>−${fmtTok(s.deletions)}</small></td><td class="num">${per ? big(per) : "–"}</td></tr>`; }).join("");
+    return `<div class="view-card"><h5>What it shipped · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+      <div class="tok-parts"><span>${icon("check", 13)}${sh.commits.toLocaleString()} commits</span><span>${icon("send", 13)}${sh.pushes.toLocaleString()} pushes</span>
+        <span>${icon("star", 13)}${sh.prs_merged} PRs merged of ${sh.prs_opened} opened</span><span>+${fmtTok(sh.insertions)} −${fmtTok(sh.deletions)} lines</span>
+        ${sh.commits && key === "all" ? `<span>${icon("flame", 13)}${big(total / sh.commits)} tokens a commit</span>` : ""}</div>
+      ${rows ? `<div class="table-scroll"><table class="league ship"><thead><tr><th>Character</th><th class="num">Commits</th><th class="num">PRs merged / opened</th><th class="num">Lines</th><th class="num">Tokens a commit</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+      <p class="hint">Counted from the git and gh commands the sessions ran, when they succeeded.${lean ? ` Lean ribbon: ${esc(who(lean.seat))}, with the fewest tokens per commit last week (${big(lean.perCommit)}).` : ""}</p></div>`;
+  }
   const list = (items, fn) => items.length ? `<ol>${items.map(fn).join("")}</ol>` : `<p class="muted">Nothing ${esc(rangeWord[rng])}.</p>`;
   const sessions = list((t.sessions || []).slice(0, 8), (s, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(s.project || "a session")}</b>
     <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""}</small></span><em>${big(val(s))}</em></li>`);
@@ -172,6 +197,7 @@ export function renderTokens(el, app) {
         <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div>
       <div class="view-card"><h5>The week's hours${rng === "all" ? "" : " · " + esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tp-heat" role="img" aria-label="Tokens by weekday and hour">${hlabels}${hcells}</div>
         <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div></div>
+    ${shipCard()}
     ${records ? `<div class="view-card"><h5>Records${seat ? ` · ${esc(who(seat))}` : ""}</h5><div class="tp-recs">${records}</div></div>` : ""}
     <div class="view-card tok"><div class="tok-lists"><div><h5>Hungriest sessions</h5>${sessions}</div><div><h5>Projects</h5>${projects}</div><div><h5>Models</h5><ul class="tok-models">${models.replace(/^<ol>|<\/ol>$/g, "")}</ul></div></div>
       <p class="hint">Since ${t.since ? esc(new Date(t.since + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "long" })) : "the first transcript"}. Claude Code keeps about a month of transcripts; the office keeps its totals from then on. Fresh: input, cache writes and output. Cache reads are tokens read back from the prompt cache.</p></div>

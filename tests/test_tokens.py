@@ -73,6 +73,39 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class ShippingTests(unittest.TestCase):
+    def test_commands_and_results(self):
+        from office.tokens import ship_kinds, shipped
+        self.assertEqual(ship_kinds("git add -A && git commit -q -m x && git push -q origin main"), {"commit", "push"})
+        self.assertEqual(ship_kinds("cd /r && git -C /repo commit -m y"), {"commit"})
+        self.assertEqual(ship_kinds("echo git commit; grep 'git push' log"), set())
+        self.assertEqual(ship_kinds("gh pr create --fill && gh pr merge 3 --squash"), {"pr_open", "pr_merge"})
+        self.assertEqual(shipped({"commit"}, "[main abc1234] msg\n 3 files changed, 20 insertions(+), 4 deletions(-)"), [1, 0, 0, 0, 20, 4])
+        self.assertEqual(shipped({"commit"}, "nothing to commit, working tree clean"), [0] * 6)
+        self.assertEqual(shipped({"commit", "push"}, ""), [1, 1, 0, 0, 0, 0])             # -q prints nothing
+        self.assertEqual(shipped({"push"}, "Everything up-to-date"), [0] * 6)
+        self.assertEqual(shipped({"pr_open"}, "https://github.com/a/b/pull/42"), [0, 0, 1, 0, 0, 0])
+
+    def test_scan_counts_successful_commands_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proj = root / ".claude" / "projects" / "-w"
+            proj.mkdir(parents=True)
+            (root / ".claude" / "session-env" / "s1").mkdir(parents=True)
+            use = lambda i, cmd: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": "m" + i, "content": [
+                {"type": "tool_use", "id": "t" + i, "name": "Bash", "input": {"command": cmd}}]}}) + "\n"
+            res = lambda i, out, err=False: json.dumps({"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "t" + i, "content": out, "is_error": err}]}}) + "\n"
+            (proj / "s1.jsonl").write_text(use("1", "git commit -m a") + res("1", "[main 1234567] a\n 1 file changed, 5 insertions(+)")
+                                           + use("2", "git push") + res("2", "fatal: rejected", True)
+                                           + use("3", "gh pr create --fill") + res("3", "https://github.com/x/y/pull/7"))
+            led = TokenLedger(root / "tokens.json", [("claude", root / ".claude")])
+            led.scan(); led.scan()
+            v = led.view([{"id": "claude", "kind": "claude"}], today="2026-10-18")
+            self.assertEqual(v["shipped"], {"commits": 1, "pushes": 0, "prs_opened": 1, "prs_merged": 0, "insertions": 5, "deletions": 0})
+            self.assertEqual(led.take_events(), [])                                       # the first read never makes news
+
+
 class TokenViewTests(unittest.TestCase):
     def test_ranges_seats_previous_ranks_and_v1_migration(self):
         from office.demo import _demo_token_ledger

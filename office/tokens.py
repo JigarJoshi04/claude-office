@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from datetime import datetime, timedelta
@@ -24,6 +25,44 @@ from pathlib import Path
 
 VERSION = 2
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
+# Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
+SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
+_STAT = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?")
+_PUSHED = re.compile(r"\b[0-9a-f]{7,40}\.\.[0-9a-f]{7,40}\s+\S+ -> \S+|\* \[new branch\]")
+_PR_URL = re.compile(r"/pull/(\d+)")
+_GIT = r"(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*git\b(?:\s+-[-\w]+(?:[ =][^\s;&|]+)?)*\s+"   # git starting a command
+
+
+def ship_kinds(cmd: str) -> set:
+    """What a shell command would ship if it succeeds: commit, push, pr_open, pr_merge."""
+    out = set()
+    if re.search(_GIT + r"commit\b", cmd):
+        out.add("commit")
+    if re.search(_GIT + r"push\b", cmd):
+        out.add("push")
+    if re.search(r"(?:^|[;&|(\n])\s*gh\s+pr\s+create\b", cmd):
+        out.add("pr_open")
+    if re.search(r"(?:^|[;&|(\n])\s*gh\s+pr\s+merge\b", cmd):
+        out.add("pr_merge")
+    return out
+
+
+def shipped(kinds: set, text: str) -> list:
+    """[commits, pushes, prs_opened, prs_merged, insertions, deletions] that a successful command's output shows."""
+    v = [0, 0, 0, 0, 0, 0]
+    low = text.lower()
+    if "commit" in kinds and "nothing to commit" not in low and "no changes added" not in low:
+        v[0] = max(1, len(re.findall(r"^\[[^\]\n]+ [0-9a-f]{7,40}\]", text, re.M)))   # `git commit -q` prints nothing
+        for m in _STAT.finditer(text):
+            v[4] += int(m.group(2) or 0)
+            v[5] += int(m.group(3) or 0)
+    if "push" in kinds and "rejected" not in low and "everything up-to-date" not in low and (_PUSHED.search(text) or not text.strip()):
+        v[1] = 1
+    if "pr_open" in kinds and _PR_URL.search(text):
+        v[2] = 1
+    if "pr_merge" in kinds and "not mergeable" not in low and "failed" not in low:
+        v[3] = 1
+    return v
 MAX_SESSIONS = 20000          # far beyond a busy year; the oldest drop off first
 
 
@@ -69,11 +108,15 @@ class TokenLedger:
         self.scanning = False
         self.scanned_at = 0.0
         self._legacy = None                     # a version 1 ledger, merged after the first rebuild
+        self._pending: dict = {}                # Bash tool_use id -> what it would ship, until its result arrives
+        self._ts = None                         # the last timestamp seen in the file being read (results carry none)
+        self.events: list = []                  # newly shipped PRs, for the office's news (see take_events)
+        self.scans = 0
         self.data = self._load()
 
     # -- state ----------------------------------------------------------------------------------------------------
     def _empty(self) -> dict:
-        return {"v": VERSION, "files": {}, "codex": {}, "sessions": {}, "days": {}, "models": {}}
+        return {"v": VERSION, "files": {}, "files_out": {}, "codex": {}, "sessions": {}, "days": {}, "models": {}}
 
     def _load(self) -> dict:
         try:
@@ -156,6 +199,7 @@ class TokenLedger:
                         del self.data["sessions"][sid]
             if self._legacy is not None:
                 self._merge_legacy(); changed = True
+            self.scans += 1
             if changed:
                 self._save()
         finally:
@@ -197,27 +241,91 @@ class TokenLedger:
         offset, last_id = rec
         if size < offset:                                  # rewritten from scratch: start over from here on
             offset = size
-        if size == offset:
+        out_off = min(self.data.setdefault("files_out", {}).get(key, 0), size)   # shipped work has its own offset
+        start = min(offset, out_off)
+        if size == start:
             return False
         project_dir, sid = self._session_of(root, path)
         changed = False
-        pos = offset
+        pos = start
+        self._ts = None
         with open(path, "rb") as fh:                       # line by line: a transcript can be hundreds of MB
-            fh.seek(offset)
+            fh.seek(start)
             for raw in fh:
                 if not raw.endswith(b"\n"):                # a line still being written: read it next time
                     break
-                pos += len(raw)
-                changed |= self._take(raw, sid, last_id)
-                last_id = self._last
-        if pos == offset:
-            return False
+                at, pos = pos, pos + len(raw)
+                if at >= offset:
+                    changed |= self._take(raw, sid, last_id)
+                    last_id = self._last
+                if at >= out_off:
+                    changed |= self._ship(raw, sid)
+        self.data["files_out"][key] = pos
+        if pos <= offset:
+            return changed
         if not self.data["sessions"].get(sid, {}).get("p"):
             with self.lock:
                 if sid in self.data["sessions"]:
                     self.data["sessions"][sid]["p"] = project_dir.rsplit("-", 1)[-1] or project_dir
         self.data["files"][key] = [pos, last_id]
         return changed
+
+    def _ship(self, raw: bytes, sid: str) -> bool:
+        """Bash calls that commit, push, or open or merge a PR, counted when their result comes back without an error."""
+        m = re.search(rb'"timestamp":"([^"]+)"', raw)
+        if m:
+            self._ts = m.group(1).decode()
+        if b'"tool_use"' in raw and b'"Bash"' in raw and (b"git" in raw or b"gh " in raw):
+            try:
+                d = json.loads(raw)
+            except ValueError:
+                return False
+            content = (d.get("message") or {}).get("content") if isinstance(d, dict) else None
+            for c in content if isinstance(content, list) else []:
+                if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Bash":
+                    kinds = ship_kinds(str((c.get("input") or {}).get("command") or ""))
+                    if kinds:
+                        self._pending[c.get("id")] = kinds
+                        if len(self._pending) > 500:
+                            self._pending.pop(next(iter(self._pending)))
+            return False
+        if b'"tool_result"' not in raw or not self._pending:
+            return False
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return False
+        content = (d.get("message") or {}).get("content") if isinstance(d, dict) else None
+        changed = False
+        for c in content if isinstance(content, list) else []:
+            if not isinstance(c, dict) or c.get("type") != "tool_result" or c.get("tool_use_id") not in self._pending:
+                continue
+            kinds = self._pending.pop(c["tool_use_id"])
+            if c.get("is_error"):
+                continue
+            body = c.get("content")
+            text = body if isinstance(body, str) else " ".join(x.get("text", "") for x in body if isinstance(x, dict)) if isinstance(body, list) else ""
+            v = shipped(kinds, text)
+            if not any(v):
+                continue
+            day, _ = _when(self._ts)
+            with self.lock:
+                s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+                g = s.setdefault("g", {}).setdefault(day or "?", [0] * len(SHIP))
+                for i, x in enumerate(v):
+                    g[i] += x
+            changed = True
+            at = _epoch(self._ts)
+            if self.scans and (v[2] or v[3]) and at and time.time() - at < 900:     # fresh PR news, never from the first read
+                pr = _PR_URL.search(text)
+                self.events.append({"session": sid, "kind": "pr_merged" if v[3] else "pr_opened", "pr": int(pr.group(1)) if pr else None, "at": at})
+        return changed
+
+    def take_events(self) -> list:
+        """PRs opened or merged since the last call (from scans after the first), for the office's news."""
+        with self.lock:
+            out, self.events = self.events, []
+        return out
 
     def _take(self, raw: bytes, sid: str, last_id) -> bool:
         """One transcript line: count it if it is a new API response. Sets self._last to the response id seen."""
@@ -352,6 +460,20 @@ class TokenLedger:
                     v = trip(v); tot[0] += v[0]; tot[1] += v[1]; tot[2] += v[2]
             return tot
         mine = {sid: r for sid, r in sessions.items() if seat is None or seat_of(r) == seat}
+        def ship_sum(r, keep):                                            # a session's shipped work over a set of days
+            tot = [0] * len(SHIP)
+            for d, v in (r.get("g") or {}).items():
+                if keep is None or d in keep:
+                    for i, x in enumerate(v):
+                        tot[i] += x
+            return tot
+        shipped_by: dict = {}
+        for sid, r in sessions.items():
+            g = ship_sum(r, cur)
+            if any(g):
+                x = shipped_by.setdefault(seat_of(r), [0] * len(SHIP))
+                for i, v in enumerate(g):
+                    x[i] += v
         per_seat, prev_seat, projects, models, heat = {}, {}, {}, {}, {}
         listed = []
         for sid, r in sessions.items():
@@ -403,7 +525,8 @@ class TokenLedger:
         for d, v in series.items():
             m = months.setdefault(d[:7], [0, 0, 0]); m[0] += v[0]; m[1] += v[1]; m[2] += v[2]
         board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")},
-                         "top_model": max(v["m"], key=v["m"].get) if v["m"] else None} for k, v in per_seat.items()), key=lambda x: -x["all"])
+                         "top_model": max(v["m"], key=v["m"].get) if v["m"] else None,
+                         **dict(zip(SHIP, shipped_by.get(k, [0] * len(SHIP))))} for k, v in per_seat.items()), key=lambda x: -x["all"])
         if prev is not None:
             order = [k for k, v in sorted(prev_seat.items(), key=lambda kv: -kv[1]["all"]) if v["all"] > 0]
             for b in board:
@@ -438,12 +561,16 @@ class TokenLedger:
         for back in range(7, -1, -1):
             start = monday - timedelta(days=7 * back)
             keep = {(start + timedelta(days=i)).isoformat() for i in range(7)}
-            per = {}
+            per, commits = {}, {}
             for r in sessions.values():
                 f, c, _ = sums(r, keep)
-                if f + c and seat_of(r):
-                    per[seat_of(r)] = per.get(seat_of(r), 0) + f + c
-            weeks.append({"week": start.isoformat(), "seats": dict(sorted(per.items(), key=lambda kv: -kv[1]))})
+                k = seat_of(r)
+                if f + c and k:
+                    per[k] = per.get(k, 0) + f + c
+                n = ship_sum(r, keep)[0]
+                if n and k:
+                    commits[k] = commits.get(k, 0) + n
+            weeks.append({"week": start.isoformat(), "seats": dict(sorted(per.items(), key=lambda kv: -kv[1])), "commits": commits})
         # milestones: the first day the office's running total crossed 1, 2 and 5 times each power of ten from a million
         milestones, run_total, rung = [], 0, 1_000_000
         for d in sorted(day_rows):
@@ -454,6 +581,7 @@ class TokenLedger:
         return {
             "scanning": scanning or not scanned_at, "scanned_at": scanned_at or None,
             "since": min(day_rows) if day_rows else None, "range": rng, "seat": seat,
+            "shipped": dict(zip(SHIP, [sum(v[i] for k, v in shipped_by.items() if seat is None or k == seat) for i in range(len(SHIP))])),
             "total": {"all": tot[0] + tot[1], "fresh": tot[0], "cache": tot[1], "output": tot[2],
                       "messages": sum((r.get("n", 0) for r in mine.values())) if cur is None else None,
                       "sessions": len(listed)},

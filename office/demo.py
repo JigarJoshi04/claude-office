@@ -119,8 +119,11 @@ def _demo_token_ledger() -> TokenLedger:
                 proj = projects[seat][int(rnd("p", d, seat, k) * len(projects[seat]))]
                 start = datetime(d.year, d.month, d.day, 9 + int(rnd("h", d, seat, k) * 11)).timestamp()
                 hours = {f"{d.weekday()}-{h}": (f + c) // 2 for h in (int(9 + rnd("h", d, seat, k) * 11), int(9 + rnd("h", d, seat, k) * 11) + 1) if h < 24}
+                commits = int(rnd("c", d, seat, k) * 7 * (1.4 if seat == "claude3" else 1))     # Vega ships lean
+                prs = 1 if rnd("pr", d, seat, k) < 0.25 else 0
                 sessions[sid] = {"p": proj, "s": "@codex" if seat == "astra" else seat, "fi": start, "l": start + 5400, "m": {mo: f + c},
-                                 "d": {d.isoformat(): [f, c, o]}, "h": hours, "f": f, "c": c, "o": o, "n": int(size / 1e5)}
+                                 "d": {d.isoformat(): [f, c, o]}, "h": hours, "f": f, "c": c, "o": o, "n": int(size / 1e5),
+                                 "g": {d.isoformat(): [commits, int(commits > 0), prs, prs if rnd("m", d, seat, k) < 0.8 else 0, commits * 37, commits * 9]}}
                 r = days.setdefault(d.isoformat(), {"f": 0, "c": 0, "o": 0, "n": 0}); r["f"] += f; r["c"] += c; r["o"] += o; r["n"] += int(size / 1e5)
                 m = models.setdefault(mo, {"f": 0, "c": 0, "o": 0, "n": 0}); m["f"] += f; m["c"] += c; m["o"] += o
     led.data = {"v": 2, "files": {}, "codex": {}, "sessions": sessions, "days": days, "models": models}
@@ -304,7 +307,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.23.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.24.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

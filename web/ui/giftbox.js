@@ -27,6 +27,7 @@ export function makeGiftBox(ctx) {
     if (KINDS[g.from]) return KINDS[g.from][0] + ": open it";
     if (who && g.from === "levelup") return `${who}'s level-up gift: open it`;
     if (who && g.from === "combo") return `A combo gift from ${who}: open it`;
+    if (who && g.from === "shipped") return `${who}'s shipping gift: open it`;
     return who ? `A gift from ${who}: open it` : "A gift: open it";
   };
   const fromLine = (g) => g.from === "daily" && g.streak ? `Day ${g.streak} of your visit streak` : KINDS[g.from] ? KINDS[g.from][1] : nameOf(g.seat, g) ? `From ${nameOf(g.seat, g)}${g.from === "levelup" ? ", for levelling up" : g.from === "combo" ? ", for the combo" : ""}` : "";

@@ -386,7 +386,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.23.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.24.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -512,12 +512,22 @@ class Office(LiveOffice):
             self.stop.wait(4)
 
     def _tokens_run(self) -> None:
-        """The all-time token ledger: a first full read once the seats are known, then what was appended, every 2 min."""
+        """The token ledger: a first full read once the seats are known, then what was appended, every minute. PRs
+        opened or merged since the last read become office news."""
         self.stop.wait(3)
-        def live():   # sessions the office has seen live, by seat: covers sessions whose session-env is gone
+        while not self.stop.is_set():
             snap = self.get() or {}
-            return {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
-        self.tokens.run(self.stop, live)
+            live = {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
+            try:
+                self.tokens.scan(live)
+                for e in self.tokens.take_events():
+                    rec = self.tokens.data["sessions"].get(e["session"]) or {}
+                    seat = rec.get("s") if rec.get("s") in {s["id"] for s in snap.get("seats", [])} else None
+                    what = f"PR #{e['pr']}" if e.get("pr") else "a PR"
+                    self.emit("shipped", f"{rec.get('p') or 'A session'}: {what} {'merged' if e['kind'] == 'pr_merged' else 'opened'}", seat, "good")
+            except Exception:                         # the ledger is a nicety; never let it stop the office
+                pass
+            self.stop.wait(60)
 
     def tokens_view(self, rng: str = "all", seat: str | None = None, all_sessions: bool = False) -> dict:
         snap = self.get() or {}

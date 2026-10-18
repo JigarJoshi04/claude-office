@@ -87,7 +87,7 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   up always brings a gift, a daily happy hour doubles the odds, and each finished rarity puts something on the floor.
 - **Tokens** (K): every token since the oldest transcript on the machine, by range (today to all time) and per
   character: who burns the most and who moved, a calendar, the hours of the week, records, the hungriest sessions,
-  projects and models, CSV export, and a live burn meter. Counted from the transcripts and attributed to the seat that
+  projects and models, what it shipped (commits, PRs, lines, tokens per commit), CSV export, and a live burn meter. Counted from the transcripts and attributed to the seat that
   ran each session.
 - **Character cards**: each character as a collectible card, framed Bronze to Holo by level, to save or post.
 - **Your week in review**: on Mondays (or from the menu) the last seven days play as a short story, ending in a

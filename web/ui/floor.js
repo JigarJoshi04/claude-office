@@ -71,7 +71,7 @@ export function makeFloor(ctx) {
     const snap = app.snap();
     const el = document.querySelector(".tv-ticker .tk-in");
     if (!el || !snap) return;
-    const ICON = { report: "✓", levelup: "★", achievement: "🏆", limit: "⏸", reset: "↻", arrive: "→", leave: "←", lane: "▣" };
+    const ICON = { report: "✓", levelup: "★", achievement: "🏆", limit: "⏸", reset: "↻", arrive: "→", leave: "←", lane: "▣", shipped: "⇪" };
     const items = (snap.events || []).slice(-8).reverse().map(e => `<span class="tk-item ${esc(e.level || "")}"><b>${ICON[e.kind] || "•"}</b>${esc(panels.humanise(e.text))}<em>${esc(relTime(e.ts))}</em></span>`).join("");
     const html = items || `<span class="tk-item">Quiet in the office.</span>`;
     if (el.dataset.html !== html) { el.innerHTML = html + html; el.dataset.html = html; el.style.setProperty("--tk-dur", Math.max(30, (snap.events || []).slice(-8).length * 9) + "s"); }

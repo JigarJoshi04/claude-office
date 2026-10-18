@@ -74,6 +74,7 @@ export function createOffice(stage, handlers) {
   let burner = null;                   // the seat with the most tokens of all time: a flame on its nameplate
   let odometer = null;                 // the office's all-time tokens, on the lobby wall under the neon
   let belt = null;                     // last week's heaviest burner: a belt on its nameplate
+  let lean = null;                     // last week's fewest tokens per commit: a green ribbon on its nameplate
   let game = "full";                   // game intensity: "full", "calm" (no banners, confetti, banter or party) or "off"                 // the office radio is playing: notes rise from the boombox on the CEO desk
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
@@ -735,7 +736,7 @@ export function createOffice(stage, handlers) {
 
   function overlaySig() {
     return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
-      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner, belt, odometer, game,
+      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner, belt, lean, odometer, game,
       [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
       snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, s.career && s.career.level, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
   }
@@ -793,7 +794,8 @@ export function createOffice(stage, handlers) {
     const line = plateLine(s, live);
     const lv = (s.career ? `<em class="lv" title="Level ${s.career.level} ${esc(s.career.title)}">${s.career.level}</em>` : "")
       + (burner === s.id ? `<em class="pl-burn" title="The office's top token burner, all time">${icon("flame", 12)}</em>` : "")
-      + (belt === s.id && game !== "off" ? `<em class="pl-belt" title="Burner Belt: the most tokens last week">${icon("belt", 12)}</em>` : "");
+      + (belt === s.id && game !== "off" ? `<em class="pl-belt" title="Burner Belt: the most tokens last week">${icon("belt", 12)}</em>` : "")
+      + (lean === s.id && game !== "off" ? `<em class="pl-lean" title="Lean ribbon: the fewest tokens per commit last week">${icon("check", 11)}</em>` : "");
     const need = handlers.needsFor ? handlers.needsFor(s.id) : (snap.attention || []).filter(a => a.seat === s.id).length;   // as Needs you groups them
     if (need) plate.classList.add("needs");
     plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span class="pl-chip ${line.tone}">${esc(line.main)}</span></span>` +
@@ -1218,6 +1220,7 @@ export function createOffice(stage, handlers) {
     setGameLevel(level) { game = ["full", "calm", "off"].includes(level) ? level : "full"; if (game !== "full") happy = false; ovKey = ""; renderOverlay(); },
     gameLevel: () => game,
     setOdometer(text) { if (text !== odometer) { odometer = text || null; ovKey = ""; renderOverlay(); } },
+    setLean(id) { if (id !== lean) { lean = id || null; ovKey = ""; renderOverlay(); } },
     setBelt(id) { if (id !== belt) { belt = id || null; ovKey = ""; renderOverlay(); } },
     setTopBurner(id) { if (id !== burner) { burner = id || null; ovKey = ""; renderOverlay(); } },
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
