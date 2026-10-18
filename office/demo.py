@@ -48,7 +48,7 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "title": title, "task": task or title, "last_prompt": None,
         "last_text": "Tests pass locally; pushing the branch and opening the PR next.",
         "limit_text": "You've hit your session limit · resets 9:40pm (Asia/Kolkata)" if state == "limited" else None,
-        "model": "claude-opus-5-5", "tool_calls": 40 + hash(sid) % 160, "recent": recent,
+        "model": DEMO_MODEL.get(sid, "claude-opus-5-5"), "tool_calls": 40 + hash(sid) % 160, "recent": recent,
         "tokens_total": tokens * 3,
         "tokens_1h": {"fresh": tokens, "cached": tokens * 30, "turns": tokens // 4000},
         "tokens_5h": {"fresh": tokens * 3, "cached": tokens * 90, "turns": tokens // 1300},
@@ -72,6 +72,8 @@ DEMO_RISKS = {"l-bill": [{"id": "demo-risk-1", "ago": 420, "rule": "force_push",
 
 DEMO_HELPERS = {"d-orch": ["Check the overnight lanes' reports", "Read the failing CI logs", "Draft tomorrow's lane briefs"]}
 
+
+DEMO_MODEL = {"l-rate": "claude-sonnet-5-5", "l-search": "claude-haiku-5-5", "l-bill": "claude-fable-5-1", "c-docs": "gpt-5-codex", "c-visit": "gpt-5-codex"}
 
 DEMO_PHASE = {"l-rate": "testing", "l-bill": "debugging", "c-docs": "wrapping up", "d-orch": "exploring", "l-search": "building", "c-visit": "exploring"}
 
@@ -506,7 +508,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.105.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.106.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},

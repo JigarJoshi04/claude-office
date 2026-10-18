@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.106.0] - 2026-10-19
+
+### Added
+- Pets with routines. Pixel the cat now and then walks into the room burning the most tokens this hour and naps by
+  the warmest desk; Biscuit the dog walks a newcomer from the elevator to their room; and whoever ships a PR or files
+  a good report gets a visit from both, with a little heart. Pets go in and out through the doors, like everyone.
+- Which model sits at a desk: each desk's name tag carries the model's colour (Opus purple, Sonnet blue, Haiku green,
+  Fable gold, Codex teal), the room's hover card names it, and Haiku types faster.
+
 ## [3.105.0] - 2026-10-19
 
 ### Added

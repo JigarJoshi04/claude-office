@@ -686,6 +686,7 @@ function onNews(e) {
     default: break;
   }
   if (!replay.active()) director.push({ kind: e.kind, seat: e.seat, session: sid, merged: e.kind === "shipped" && / merged$/.test(e.text) });
+  if (!replay.active() && e.seat && (e.kind === "shipped" || e.kind === "report" && e.level === "good") && prefs.game !== "off") office.petsCheer(e.seat);   // the pets come to see
   loadStats(null, true);
 }
 function findSessionByText(text) {

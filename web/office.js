@@ -150,6 +150,7 @@ export function createOffice(stage, handlers) {
           if (!first && !reduced) {      // a new arrival walks in from the elevator
             const p = pathTo(L, pod, slot);
             a.mode = "walking"; a.x = p[0][0]; a.y = p[0][1]; a.path = p.slice(1); openElevator();
+            if (has("dog") && performance.now() - (dog.greeted || 0) > 20000) { dog.greeted = performance.now(); petVisit(dog, pod, "sit", 9000, 4); }   // Biscuit walks them in
             if (persona && game === "full") said.set(x.id, { text: persona(pod.seat).lines.arrive, until: performance.now() + 9000, at: performance.now() });
           }
           agents.set(x.id, a);
@@ -182,17 +183,51 @@ export function createOffice(stage, handlers) {
     if (inLounge(x, y)) { const lo = L.lounge, dx = lo.x + lo.w / 2, cy = lo.y + lo.h + 5; return [[dx, y], [dx, cy], [SPX, cy]]; }
     return [[SPX, y]];
   }
+  // Into a room and back out: through its door (as the workers walk), to a spot on the aisle in front of the desk.
+  const podWay = (pod) => ({ corrY: pod.corr - 2, doorX: pod.door.x - 5, aisleY: pod.room.y + pod.room.h - 44 });
+  function petLegs(p) {
+    if (!p.inPod || !L.pods.includes(p.inPod)) return catLegs(p.x, p.y);
+    const w = podWay(p.inPod);
+    return [[w.doorX, w.aisleY], [w.doorX, w.corrY], [SPX, w.corrY]];
+  }
+  // A pet goes to a room for a reason (a nap on the warmest desk, walking a newcomer in, a cheer for a ship), then
+  // stays a while in that pose before it wanders again.
+  function petVisit(p, pod, pose, ms, offset = 16) {
+    if (!L || reduced || !pod || p.inPod === pod && p.mode !== "walk") return;
+    const w = podWay(pod);
+    p.path = [...petLegs(p), [SPX, w.corrY], [w.doorX, w.corrY], [w.doorX, w.aisleY], [w.doorX + offset, w.aisleY]];
+    [p.tx, p.ty] = p.path.shift(); p.mode = "walk"; p.after = { pose, ms, pod };
+    p.inPod = null;
+  }
+  // The warmest desk: the room burning the most tokens this hour (its desks run hot).
+  function warmestPod() {
+    let best = null, most = 0;
+    for (const pod of L.pods) {
+      const n = pod.seat.sessions.filter(x => x.live !== false).reduce((a, x) => a + ((x.tokens_1h || {}).fresh || 0), 0);
+      if (n > most) { most = n; best = pod; }
+    }
+    return best;
+  }
   function stepPet(p, dt, t) {
     if (!L || reduced) return;
     if (p.mode === "walk") {
       const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy), v = p.speed * dt;
       if (Math.abs(dx) > 0.5) p.facing = dx > 0 ? 1 : -1;
       if (d <= v && p.path.length) { p.x = p.tx; p.y = p.ty; [p.tx, p.ty] = p.path.shift(); }
+      else if (d <= v && p.after) {                 // arrived on a visit: settle in for its while
+        p.x = p.tx; p.y = p.ty; p.mode = p.after.pose; p.until = t + p.after.ms; p.inPod = p.after.pod; p.after = null;
+        if (p.mode === "sit" && !reduced) burst(p.x + 6, p.y + 2, 5, "heart");
+      }
       else if (d <= v) { p.x = p.tx; p.y = p.ty; p.mode = inLounge(p.x, p.y) && Math.random() < 0.6 ? "sleep" : "sit"; p.until = t + (p.mode === "sleep" ? 25000 : 4000 + Math.random() * 7000); }
       else { p.x += dx / d * v; p.y += dy / d * v; }
     } else if (t > p.until) {
+      if (p === cat && !p.inPod && Math.random() < 0.3) {         // Pixel likes the warmest desk for a nap
+        const warm = warmestPod();
+        if (warm) { petVisit(p, warm, "sleep", 30000, 22); return; }
+      }
       const spots = catSpots(), [nx, ny] = spots[Math.floor(Math.random() * spots.length)];
-      const out = catLegs(p.x, p.y), back = catLegs(nx, ny).reverse();
+      const out = petLegs(p), back = catLegs(nx, ny).reverse();
+      p.inPod = null;
       p.path = [...out, [SPX, back[0][1]], ...back.slice(1), [nx, ny]];
       [p.tx, p.ty] = p.path.shift(); p.mode = "walk";
     }
@@ -829,7 +864,7 @@ export function createOffice(stage, handlers) {
         S.drawMonitorBack(ctx, x - 3, pod.y + 31, a && !off ? screenFor(a.sess, pose) : null);
         if (a && a.sess.test_ok != null && !off) S.drawBuildLight(ctx, x - 7, pod.y + 34, a.sess.test_ok, reduced ? 0 : t);
         if (a) drawDeskBits(a, x, true, pod, t, lights);
-        if (a && pose !== "sleep") S.drawHands(ctx, x, pod.y + 42, a.look, pose, t + slot * 333);
+        if (a && pose !== "sleep") S.drawHands(ctx, x, pod.y + 42, a.look, pose, (t + slot * 333) * (/haiku/i.test(a.sess.model || "") ? 1.7 : 1));   // Haiku types fast
         if (a && pose === "sleep") S.drawZ(ctx, x + 8, sp.seatY - 6, t + slot * 500);
         // The mug steams while its owner waits on a long tool, or while an idle session's prompt cache is still warm.
         if (a && (pose === "idle" || pose === "wait")) S.drawMug(ctx, x + 12, pod.y + 43, t, pose === "wait" || !!(a.sess.cache && a.sess.cache.until > Date.now() / 1000));
@@ -879,6 +914,9 @@ export function createOffice(stage, handlers) {
     else { S.rect(ctx, pod.x + POD_W - 17, pod.y + 40, 3, 3, lamp); if (status === "working" && Math.floor(t / 600) % 2) S.rect(ctx, pod.x + POD_W - 18, pod.y + 39, 5, 5, S.alpha(lamp, 0.3)); }
   }
 
+  // The model behind a desk, by the colour on its name tag (the peek card names it).
+  const LANYARD = [[/opus/i, "#c678dd"], [/sonnet/i, "#5b8def"], [/haiku/i, "#38e07b"], [/fable/i, "#ffb347"], [/gpt|codex|o\d/i, "#56b6c2"]];
+  const lanyard = (model) => model ? (LANYARD.find(([re]) => re.test(model)) || [null, "#9aa3b5"])[1] : null;
   // What a desk says about its session at a glance: the CI lamp on the screen's corner (its PR's checks), the task
   // list as a strip, and its context as a pile of paper that grows towards the model's window (red when nearly full).
   function drawDeskBits(a, x, top, pod, t, lights) {
@@ -1007,7 +1045,7 @@ export function createOffice(stage, handlers) {
   function overlaySig() {
     return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
       (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner, belt, lean, odometer, game, mailroom.length, snap.office.shipped_today && [snap.office.shipped_today.commits, snap.office.shipped_today.prs_opened, snap.office.shipped_today.prs_merged],
-      [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
+      [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind, a.sess.model]), leavers.map(a => a.id),
       snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, s.career && s.career.level, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
   }
 
@@ -1110,6 +1148,8 @@ export function createOffice(stage, handlers) {
       b.dataset.k = "worker:" + sess.id;
       roomMenu(b);                               // people sit mid-room: a right-click on them is a right-click on the room
       const tg = div("tag" + (isSel ? " show" : ""), short(sess.name), sp.cx + 5, sp.top ? pod.y + 45 : pod.y + 86);
+      const ly = lanyard(sess.model);              // the name tag wears the model's colour: which brain sits there
+      if (ly) { tg.classList.add("mdl-tag"); tg.style.setProperty("--m", ly); }
       b.addEventListener("mouseenter", () => { hoverId = sess.id; tg.classList.add("show"); renderBubbles(); spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); peek(s.id, podHot); });
       b.addEventListener("mouseleave", () => { hoverId = null; if (!isSel) tg.classList.remove("show"); renderBubbles(); if (spot === s.id) spot = null; if (handlers.onHoverSeat) handlers.onHoverSeat(null); peek(null); });
     }
@@ -1377,8 +1417,8 @@ export function createOffice(stage, handlers) {
     L.pods.forEach(p => { p.y = null; });
     for (const a of agents.values()) if (a.mode === "walking") { a.mode = "seated"; a.path = []; }   // walkers on the old plan sit down
     leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; });
-    cat.x = cat.tx = 140; cat.y = cat.ty = WALK_Y + 10; cat.path = []; cat.mode = "sit"; cat.until = 0;
-    dog.x = dog.tx = 40; dog.y = dog.ty = WALK_Y + 10; dog.path = []; dog.mode = "sit"; dog.until = 0;
+    cat.x = cat.tx = 140; cat.y = cat.ty = WALK_Y + 10; cat.path = []; cat.mode = "sit"; cat.until = 0; cat.inPod = cat.after = null;
+    dog.x = dog.tx = 40; dog.y = dog.ty = WALK_Y + 10; dog.path = []; dog.mode = "sit"; dog.until = 0; dog.inPod = dog.after = null;
     assign();
   }
   function resize() {
@@ -1626,6 +1666,8 @@ export function createOffice(stage, handlers) {
         ...L.open.map(o => ({ text: "GARDEN", x: o.x + 8, y: o.y + BACK_LABEL }))].filter(Boolean) : [] }),
     zoom(dir) { userCam(); const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
     userCamAt: () => userCamAt,
+    // Whoever just shipped gets a visit from both pets (the cat, and the dog once it is unlocked).
+    petsCheer(seatId) { const pod = L && L.pods.find(p => p.seat.id === seatId); if (!pod) return; petVisit(cat, pod, "sit", 12000, 28); if (has("dog")) petVisit(dog, pod, "sit", 12000, 40); },
     focusShipBoard() { if (L) { const b = BOARD(); focusRect(b.x - 6, b.y - 18, 60, 64); } },
     setDirector(on) { const b = document.querySelector('[data-cam="director"]'); if (b) { b.setAttribute("aria-pressed", String(!!on)); b.classList.toggle("on", !!on); } },
     pan(dx, dy) { userCam(); cam.tx += dx; cam.ty += dy; clampCam(cam); },
