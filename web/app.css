@@ -833,7 +833,17 @@ body.tv .top, body.tv .tabs, body.tv .dock, body.tv .panel, body.tv .splitter, b
 body.tv .main { grid-template-columns: minmax(0, 1fr); padding: 0; height: 100%; }
 body.tv .viewport, body.tv #viewFloor { height: 100%; min-height: 0; }
 body.tv #viewFloor { display: flex; flex-direction: column; overflow: hidden; }
-body.tv #viewFloor .floor-frame { flex: 1; min-height: 0; padding-top: calc(54px * var(--ui-zoom, 1)); background: #070912; }
+body.tv #viewFloor .floor-frame { flex: 1; min-height: 0; padding-top: calc(54px * var(--ui-zoom, 1)); padding-bottom: calc(44px * var(--ui-zoom, 1)); background: #070912; }
+.tv-ticker { position: absolute; left: 0; right: 0; bottom: 0; z-index: 8; display: flex; align-items: center; height: 44px; zoom: var(--ui-zoom, 1);
+  background: #070912; border-top: 1px solid rgba(255,255,255,.06); color: #eef0f6; overflow: hidden; pointer-events: none; }
+.tv-ticker .tk-label { flex: none; height: 100%; display: grid; place-items: center; padding: 0 16px; font: 400 13px var(--pixel); letter-spacing: .08em; color: #1b0c05; background: #ff7a45; }
+.tv-ticker .tk-track { flex: 1; min-width: 0; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+.tv-ticker .tk-in { display: inline-flex; gap: 48px; padding-left: 40px; white-space: nowrap; animation: ticker var(--tk-dur, 40s) linear infinite; }
+.tv-ticker .tk-item { display: inline-flex; align-items: baseline; gap: 10px; font-size: 16px; font-weight: 550; }
+.tv-ticker .tk-item b { color: #ffd479; } .tv-ticker .tk-item.good b { color: #7df0ad; } .tv-ticker .tk-item.bad b, .tv-ticker .tk-item.warn b { color: #ff9aa5; }
+.tv-ticker .tk-item em { font-style: normal; font-size: 13px; color: rgba(238,240,246,.55); }
+@keyframes ticker { to { transform: translateX(-50%); } }
+:root[data-motion="reduced"] .tv-ticker .tk-in { animation: none; }
 body.tv #viewFloor .stage-scroll, body.tv #viewFloor .stage { height: 100%; width: 100%; }
 body.tv #viewFloor .stage { --fit: contain; border-radius: 0; box-shadow: none; }
 body.tv .stage-scroll .stage { width: 100%; }

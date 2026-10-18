@@ -232,6 +232,16 @@ function tvTour() {
   if (el) peekCard(s.id, el.getBoundingClientRect());
   const hud = document.querySelector(".tv-hud .tv-line");
   if (hud) hud.textContent = $("pulseText").textContent;
+  tvTicker();
+}
+// TV mode's news ticker: the latest news scrolls along the bottom, in plain words, with when it happened.
+function tvTicker() {
+  const el = document.querySelector(".tv-ticker .tk-in");
+  if (!el || !snap) return;
+  const ICON = { report: "✓", levelup: "★", achievement: "🏆", limit: "⏸", reset: "↻", arrive: "→", leave: "←", lane: "▣" };
+  const items = (snap.events || []).slice(-8).reverse().map(e => `<span class="tk-item ${esc(e.level || "")}"><b>${ICON[e.kind] || "•"}</b>${esc(panels.humanise(e.text))}<em>${esc(relTime(e.ts))}</em></span>`).join("");
+  const html = items || `<span class="tk-item">Quiet in the office.</span>`;
+  if (el.dataset.html !== html) { el.innerHTML = html + html; el.dataset.html = html; el.style.setProperty("--tk-dur", Math.max(30, (snap.events || []).slice(-8).length * 9) + "s"); }
 }
 function setTv(on) {
   if (on === document.body.classList.contains("tv")) return;
@@ -241,6 +251,8 @@ function setTv(on) {
     hud.className = "tv-hud";
     hud.innerHTML = `<span class="tv-brand">${esc(snap ? snap.office.name || "Claude Office" : "Claude Office")}</span><i class="tv-dot"></i><span class="tv-line">${esc($("pulseText").textContent)}</span><span class="tv-clock"></span><button class="btn sm ghost" data-tv-exit>${icon("x", 14)}Exit TV</button>`;
     document.querySelector(".floor-frame").appendChild(hud);
+    const tk = document.createElement("div"); tk.className = "tv-ticker"; tk.setAttribute("aria-hidden", "true"); tk.innerHTML = `<span class="tk-label">News</span><div class="tk-track"><div class="tk-in"></div></div>`;
+    document.querySelector(".floor-frame").appendChild(tk);
     hud.querySelector("[data-tv-exit]").addEventListener("click", () => setTv(false));
     document.body.classList.add("tv");
     if (!DEMO) badge(award("big_screen"));
@@ -250,6 +262,7 @@ function setTv(on) {
     document.body.classList.remove("tv");
     clearInterval(tvTimer); office.spotlight(null); peekCard(null);
     const hud = document.querySelector(".tv-hud"); if (hud) hud.remove();
+    const tk = document.querySelector(".tv-ticker"); if (tk) tk.remove();
     if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
   }
 }
