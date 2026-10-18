@@ -75,6 +75,12 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - When you step away from the computer (the screen locks, or no input for five minutes), the CEO's chair empties and
   banners wait for you. **Director cam** (🎬 by the zoom buttons) flies the camera to whatever just happened, and
   stands back while you move it yourself.
+- **Pets with routines**: Pixel naps by the warmest desk (the room burning the most tokens), Biscuit walks newcomers
+  from the elevator to their room, and both visit whoever just shipped. **The night shift**: from 9 pm empty rooms
+  switch off one by one and a janitor mops the corridors; the morning's first session gets a "First one in" banner.
+- **Who is doing what, at a glance**: each desk's name tag carries its model's colour (Opus, Sonnet, Haiku, Fable,
+  Codex), and every working session has a phase (exploring, building, testing, debugging, wrapping up) read from
+  its last few steps.
 - **Replay** (`R`): the floor plays back the last 6 or 24 hours from the office's own history, at up to 900×. People
   come and go, reports burst into confetti and level-ups get their banner as they happened; scrub with the timeline,
   `Space` pauses, the arrows step, `Esc` returns to live.
@@ -94,7 +100,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Beat last week**: a weekly challenge to file 10% more reports than last week, with a Record week celebration.
 - **The day's rhythm**: a morning card recaps yesterday and names today's goals; an evening card wraps the day up.
 - **Gifts and a sticker album**: a report or a finished lane sometimes leaves a gift box in that character's room,
-  and a delivery waits at the CEO desk every morning. Open them for 24 pixel-art stickers in four rarities; five
+  and a delivery waits at the CEO desk every morning. Open them for 28 pixel-art stickers in four rarities, plus
+  seasonal ones (a pumpkin, a diya, a snowflake, a firework) that only turn up in their season; five
   spares swap for a rare-or-better gift. Only one sticker is Legendary. Finishing all goals, a big combo or a level
   up always brings a gift, a daily happy hour doubles the odds, and each finished rarity puts something on the floor.
 - **Tokens** (K): every token since the oldest transcript on the machine, by range (today to all time) and per
@@ -129,7 +136,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Office radio**: press M (or click the boombox on the CEO desk) for endless lo-fi, made up as it plays. No files,
   nothing fetched.
 - **Bug Squash**: the lounge's arcade cabinet plays a 30-second game of squashing bugs (not features) on a code
-  editor, for a gift when you beat your best.
+  editor, for a gift when you beat your best. The **Daily run** spawns the same bugs for everyone all day; each day's
+  best is kept for 30 days and today's glows on the cabinet.
+- **The scrapbook**: level-ups, trophies, office levels and all-goals days are photographed on the floor as they
+  happen, as captioned polaroids to flip through.
 - **Badges for you**: nineteen of them (one a secret), from *Inbox zero* and *Hiring manager* to *Collector* and *Night owl*.
 - **Seasons**: pumpkins and bats for Halloween, lamps and a rangoli for Diwali, a tree and snow in December.
 - **Combos**: reports and finished lanes within 15 minutes of each other chain into a combo (×2, ×3, …) with a timer
@@ -162,6 +172,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   at that terminal, because that is Claude Code's own safety rule and the office respects it.
 - Agents can answer you: the office has its own inbox, and replies show up in the chat and as a toast.
 - **Find** anything in a conversation: matches are highlighted and Enter jumps between them.
+- **Ask about it** (with the office analyst on): ask a question about any session ("did it run the tests?") and get
+  an answer from its transcript, citing the entries it relied on, without the session knowing.
 - **Follow up** on a finished session. Your message starts a lane that resumes that exact conversation.
 - **Message all lanes** at once, for example "limits reset in 20 minutes: write your notes now".
 
@@ -169,13 +181,19 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - Always in the same order: how many sessions are working, idle and stopped (and who gets the next lane), what
   needs you, today's goals, and your team.
 - *Needs you*, grouped per seat ("Vega is out of plan: 2 sessions paused"), and each item with a one-click fix: copy
-  the login command, open the chat, open the lane.
+  the login command, open the chat, open the lane. It also catches: **unresolved review comments** on a desk's PR
+  (Forward to it writes them into that session's message box), **risky actions** (a force-push, a delete outside a
+  temp folder, an infrastructure apply, a secrets file written: see Safety), **two sessions writing in one working
+  tree**, and a **report that says done while its last test run failed** (every report gets a Verified, Unverified
+  or Contradicted chip from its own transcript).
+- **Your review queue**: the PRs waiting for your review, each with a Reviewer button that fills the hiring desk with a
+  read-only review brief.
 - Your team as one row per character: face, level, mood in a word, and a bar for the plan it has left.
 - **Today's goals**: three targets every day, drawn from six kinds (reports, tool calls, agent hours, sessions,
   lanes hired, characters at work) and sized to your office's own pace over the last two weeks, as rings. Finishing
   one celebrates on the floor; finishing all three every day builds a streak. One reroll a day swaps the unfinished.
 - **This morning's standup**: Yesterday, Today and Blockers, written from the office's own records and ready to copy
-  into Slack. **Reminders**: a note for a time, or for when a seat's plan is back, a session or lane finishes, or a
+  into Slack, or **present it** as a two-minute set of slides for a screen share. **Reminders**: a note for a time, or for when a seat's plan is back, a session or lane finishes, or a
   PR merges. A new office gets a **set-up checklist** that ticks itself off.
 - *While you were away*: after an hour or more away (or ten minutes away from the computer with the page left open), one line says what happened since you last looked (reports
   filed, level-ups, trophies, lanes finished, limits hit, anything blocked); open it for the items to read first.
@@ -201,13 +219,17 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 
 **Running the office**
 - **Load divider**: drag the borders of the split bar to share new lanes between seats. Send a seat on holiday, cap
-  its lanes, or set usage guards. Adapt-to-plan mode shrinks a seat's share as its plan runs out. Scripts follow it
-  too: `seat=$(claude-office pick-seat)`.
+  its lanes, or set usage guards. Adapt-to-plan mode shrinks a seat's share as its plan runs out; Spend-the-week-evenly
+  gives more to a seat behind its week (use it or lose it). Keep a seat free in your working hours, and a lane that
+  asks for a model stays off a seat whose week for that model is spent (each seat's page shows its per-model limits).
+  Scripts follow it too: `seat=$(claude-office pick-seat --model opus)`.
 - **Hiring desk**: six brief templates, plus your own (Save as a template). *Next up* suggests ready briefs from
   blocked reports, failed lanes and PRs whose checks fail.
   - Lanes run as low-priority background services.
   - A lane keeps notes, moves to another seat if its seat hits a limit, and files a report when done.
   - You can stop, resume, re-hire or chat with any lane.
+  - Give a lane a time limit, start it later or put it in the backlog, or write a list in "For each" for one lane
+    per line.
   - After a restart or a crash, lanes that were cut off say so in Needs you, with one button to resume them all.
 - **Checkpoint**: writes every session and its resume command to a file, for before you restart. Every hour the office
   also keeps `office-checkpoint-latest.md` and `resume-latest.sh` up to date while terminal sessions are live; after a
@@ -215,6 +237,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Save a picture of the office**: a PNG of the floor with each character's nameplate, sized as it is, for a 16:9
   slide, a square post or a phone story, with the date if you like. It has no session names or accounts in it, so it
   is safe to post.
+- **In a terminal**: `claude-office top` shows the seats, what needs you, every session with its phase, the lanes and
+  the news, and messages a session or stops a lane from the keyboard.
 - **Everything else**: Ctrl/⌘ K command palette, share-safe mode for screen sharing, 8-bit sound effects, desktop
   notifications, optional Jarvis voice alerts, a day theme, and reduced motion.
 
