@@ -66,6 +66,15 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   a room) and their room lights up on the floor while their row lights up in the list.
 - Every room has its own weather: its window rains while the seat is out of plan and clouds over while its plan runs
   low.
+- Screens show the tool: a turning globe while an agent browses the web, a prompt for the shell, a crawling bar while
+  tests run, a plug for another service. A flask by the desk turns green or red with its last test run.
+- **The ship board** in the lobby keeps today's commits, PRs and merges in chalk. Commits fly to its outbox as
+  envelopes, and every merge rings the brass ship's bell.
+- When a lane moves to another seat after a limit, its worker picks up a box and walks down the corridor to the new
+  room. Gifts that find the floor full wait in the mailroom's pigeonholes behind the hiring counter.
+- When you step away from the computer (the screen locks, or no input for five minutes), the CEO's chair empties and
+  banners wait for you. **Director cam** (🎬 by the zoom buttons) flies the camera to whatever just happened, and
+  stands back while you move it yourself.
 - **Replay** (`R`): the floor plays back the last 6 or 24 hours from the office's own history, at up to 900×. People
   come and go, reports burst into confetti and level-ups get their banner as they happened; scrub with the timeline,
   `Space` pauses, the arrows step, `Esc` returns to live.
@@ -91,7 +100,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Tokens** (K): every token since the oldest transcript on the machine, by range (today to all time) and per
   character: who burns the most and who moved, a calendar, the hours of the week, records, the hungriest sessions,
   projects and models, what it shipped (commits, PRs, lines, tokens per commit), CSV export, and a live burn meter. Counted from the transcripts and attributed to the seat that
-  ran each session.
+  ran each session. Click a project for its own page: tokens and API value per day, who worked on it, its biggest
+  sessions and lanes, what it shipped, and the days as CSV.
 - **Shipped work earns XP**: commits (25), pushes (5), opened (50) and merged (150) pull requests, read from the
   transcripts, with "+3 commits" rising from the desk and five shipping achievements.
 - **Pull requests and CI lamps**: the recent PRs of your repositories with checks, reviews and the desk on each
@@ -161,10 +171,13 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - *Needs you*, grouped per seat ("Vega is out of plan: 2 sessions paused"), and each item with a one-click fix: copy
   the login command, open the chat, open the lane.
 - Your team as one row per character: face, level, mood in a word, and a bar for the plan it has left.
-- **Today's goals**: three new targets every day, drawn from six kinds (reports, tool calls, agent hours, sessions,
-  lanes hired, characters at work) at three difficulties, as rings. Finishing one
-  celebrates on the floor; finishing all three every day builds a streak.
-- *While you were away*: after an hour or more away, one line says what happened since you last looked (reports
+- **Today's goals**: three targets every day, drawn from six kinds (reports, tool calls, agent hours, sessions,
+  lanes hired, characters at work) and sized to your office's own pace over the last two weeks, as rings. Finishing
+  one celebrates on the floor; finishing all three every day builds a streak. One reroll a day swaps the unfinished.
+- **This morning's standup**: Yesterday, Today and Blockers, written from the office's own records and ready to copy
+  into Slack. **Reminders**: a note for a time, or for when a seat's plan is back, a session or lane finishes, or a
+  PR merges. A new office gets a **set-up checklist** that ticks itself off.
+- *While you were away*: after an hour or more away (or ten minutes away from the computer with the page left open), one line says what happened since you last looked (reports
   filed, level-ups, trophies, lanes finished, limits hit, anything blocked); open it for the items to read first.
 - News reads like people talk: "tpl-fix finished: ready for review · #1679", "visitor-lane started at Orion's desk".
 - Each character's page: its voice and two plan rings with their resets, then three tabs: **Now** (who is at the
@@ -183,13 +196,15 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Team**: persona cards with both plan windows and everyone at each desk.
 - **Today**: the last seven days as a chart (reports, agent hours or tool calls, against the week before), employee of
   the day, a league table (time at work, sessions, reports, limits, tool calls, tokens, peak
-  usage) and a short digest of the day.
+  usage) and a short digest of the day. **Par for the week** scores each seat's weekly plan like golf (use most of it
+  without running out), and **Waiting on you** says how long sessions sat waiting for your reply, with the median.
 
 **Running the office**
 - **Load divider**: drag the borders of the split bar to share new lanes between seats. Send a seat on holiday, cap
   its lanes, or set usage guards. Adapt-to-plan mode shrinks a seat's share as its plan runs out. Scripts follow it
   too: `seat=$(claude-office pick-seat)`.
-- **Hiring desk**: six brief templates, plus your own (Save as a template).
+- **Hiring desk**: six brief templates, plus your own (Save as a template). *Next up* suggests ready briefs from
+  blocked reports, failed lanes and PRs whose checks fail.
   - Lanes run as low-priority background services.
   - A lane keeps notes, moves to another seat if its seat hits a limit, and files a report when done.
   - You can stop, resume, re-hire or chat with any lane.
@@ -197,8 +212,9 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Checkpoint**: writes every session and its resume command to a file, for before you restart. Every hour the office
   also keeps `office-checkpoint-latest.md` and `resume-latest.sh` up to date while terminal sessions are live; after a
   restart, `sh resume-latest.sh` reopens each of them in a tmux window.
-- **Save a picture of the office**: a PNG of the floor with each character's level and status. It has no session
-  names or accounts in it, so it is safe to post.
+- **Save a picture of the office**: a PNG of the floor with each character's nameplate, sized as it is, for a 16:9
+  slide, a square post or a phone story, with the date if you like. It has no session names or accounts in it, so it
+  is safe to post.
 - **Everything else**: Ctrl/⌘ K command palette, share-safe mode for screen sharing, 8-bit sound effects, desktop
   notifications, optional Jarvis voice alerts, a day theme, and reduced motion.
 
