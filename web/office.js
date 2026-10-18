@@ -359,6 +359,24 @@ export function createOffice(stage, handlers) {
     }
   }
 
+  // Token burn on the floor: embers rise off a desk while its seat burns tokens, more and faster the harder it burns
+  // (tokens processed in the last hour). Part of the game: none at Calm or Off, and still under reduced motion.
+  function drawEmbers(s, desk, t, lights) {
+    const b = s.tokens_1h_all || 0, level = b >= 60e6 ? 3 : b >= 15e6 ? 2 : b >= 2e6 ? 1 : 0;   // tokens in the last hour
+    if (!level || game !== "full" || s.status === "limited") return;
+    const n = [0, 5, 9, 14][level], cols = ["#ffd24a", "#ff9b3d", "#ff7a45"], speed = [0, 2.4, 1.8, 1.3][level];
+    for (let i = 0; i < n; i++) {
+      const h = S.hashOf(s.id + "e" + i), ph = reduced ? ((h >>> 3) % 100) / 100 : ((t / 1000 + (h % 1000) / 1000 * speed) % speed) / speed;
+      const x = desk.x + 4 + ((h >>> 8) % Math.max(1, desk.w - 8)) + Math.round(Math.sin(ph * 6 + i) * 1.5), y = Math.round(desk.y + 4 - ph * (18 + level * 5));
+      ctx.globalAlpha = Math.max(0, 1 - ph);
+      const big = ph < 0.5;
+      S.rect(ctx, x, y, big ? 2 : 1, big ? 2 : 1, cols[(h >>> 4) % 3]);
+      if (big) S.rect(ctx, x, y, 1, 1, "#fff2c0");                 // a hot core while it is young
+    }
+    ctx.globalAlpha = 1;
+    lights.push({ x: desk.x + desk.w / 2, y: desk.y, r: 18 + level * 8, c: "#ff7a45", i: 0.12 + level * 0.08 });
+  }
+
   // The office radio's boombox on the CEO desk; while it plays, its speakers pulse and notes drift up.
   function drawBoombox(x, y, t) {
     const beat = radioOn && !reduced && Math.floor(t / (60000 / 76)) % 2 === 0;
@@ -562,6 +580,7 @@ export function createOffice(stage, handlers) {
     const dark = st === "offline" ? 0.5 : st === "limited" ? 0.42 : st === "benched" ? 0.3 : !live.length ? 0.2 : 0;
     drawDecorLive(ctx, room, pod.arch, t, dark < 0.25);
     drawPod(pod, t, lights);
+    drawEmbers(s, deskFor(pod), t, lights);          // over the people, so they read as rising off the desk
     if (dark) { ctx.fillStyle = `rgba(6,8,22,${dark})`; ctx.fillRect(room.x + 2, room.y + 3, room.w - 4, room.h - 7); }
     else lights.push({ x: room.x + room.w / 2, y: room.y + 82 + room.dy, r: 74, c: "#ffd59a", i: live.some(x => x.state === "working") ? 0.38 : 0.2 });
     const dx = pod.door.x, dy = room.y + room.h - 4;

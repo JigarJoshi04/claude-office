@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.27.0] - 2026-10-18
+
+### Added
+- Embers rise off a desk while its seat burns tokens, more and faster the harder it burns (2 M, 15 M and 60 M tokens
+  in the last hour), with a warm glow at night. Part of the game: none at Calm or Off.
+
 ## [3.26.0] - 2026-10-18
 
 ### Added
