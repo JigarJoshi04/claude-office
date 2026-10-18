@@ -147,10 +147,10 @@ export function makeWeekReview(ctx) {
   }
 
   // The first visit of a Monday plays last week (once), when there is a week to show and nothing else is open.
-  function maybeMonday() {
+  function maybeMonday(tries = 0) {
     if (DEMO || new Date().getDay() !== 1 || store.get("weekShown", "") === localDay()) return;
     const w = summary();
-    if (!w) { setTimeout(maybeMonday, 4000); return; }
+    if (!w) { if (tries < 5) setTimeout(() => maybeMonday(tries + 1), 4000); return; }   // the week is still loading (or too short)
     if (w.empty || $("dialog").open || document.querySelector(".tour-card")) return;
     play();
   }
