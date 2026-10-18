@@ -30,7 +30,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 8                # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 10               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -116,6 +116,7 @@ def shipped(kinds: set, text: str) -> list:
 
 
 _COMMIT_ITEM = re.compile(r"^\[([^\]\n]+?) ([0-9a-f]{7,40})\] (.+)$", re.M)
+_COMMIT_MSG = re.compile(r"\bcommit\b[^|;&\n]*?\s-[a-zA-Z]*m[ =]?(?:\"((?:\\.|[^\"\\])*)\"|'([^']*)'|(\S+))")
 _PR_TITLE = re.compile(r"--title[ =](?:\"((?:\\.|[^\"\\])*)\"|'([^']*)'|(\S+))")
 
 
@@ -126,6 +127,10 @@ def ship_items(kinds: set, cmd: str, text: str, v: list) -> list[dict]:
     if v[0]:
         for m in _COMMIT_ITEM.finditer(text):
             out.append({"k": "c", "sha": m.group(2)[:9], "sub": " ".join(m.group(3).split())[:120], "b": m.group(1).split()[-1][:60]})
+        if not out:                                       # a quiet commit (-q) prints nothing: its message from the command
+            m = _COMMIT_MSG.search(cmd)
+            msg = next((g for g in m.groups() if g), "") if m else ""
+            out.append({"k": "c", "sha": None, "sub": " ".join(msg.split())[:120] or "a commit"})
     if v[2]:
         t = _PR_TITLE.search(cmd)
         out.append({"k": "po", "n": pr_number({"pr_open"}, cmd, text), "sub": " ".join((next((g for g in t.groups() if g), "") if t else "").split())[:120]})
@@ -507,8 +512,9 @@ class TokenLedger:
                     lst = s.setdefault("sl", {}).setdefault(day or "?", [])
                     have = {x.get("sha") for x in lst if x.get("sha")}
                     for it in ship_items(kinds, cmd, text, v):
-                        if len(lst) < 40 and not (it.get("sha") and it["sha"] in have):
+                        if not (it.get("sha") and it["sha"] in have):
                             lst.append(dict(it, at=_epoch(self._ts)))
+                    del lst[:-60]                               # the newest 60 a session shipped that day
             changed = True
             at = _epoch(self._ts)
             if self.scans and at and time.time() - at < 900:     # fresh work makes news and XP, never from the first read

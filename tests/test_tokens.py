@@ -445,6 +445,9 @@ class ShipItemsTests(unittest.TestCase):
         k = ship_kinds(cmd)
         items = ship_items(k, cmd, text, shipped(k, text))
         self.assertEqual([(i["k"], i["sha"], i["sub"], i["b"]) for i in items], [("c", "7e416a1", "3.126.0: utilities", "main"), ("c", "1b2c3d4", "Second one", "main")])
+        quiet = 'git commit -qm "Fix the limiter" && git push -q'
+        k = ship_kinds(quiet)
+        self.assertEqual(ship_items(k, quiet, "", shipped(k, "")), [{"k": "c", "sha": None, "sub": "Fix the limiter"}])   # -q prints nothing
         cmd = "gh pr create --title 'Smooth bursts' --body x"
         k = ship_kinds(cmd)
         self.assertEqual(ship_items(k, cmd, "https://github.com/a/b/pull/482\n", shipped(k, "https://github.com/a/b/pull/482\n")),

@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.128.0] - 2026-10-19
+
+### Fixed
+- Shipped missed every quiet commit (`git commit -q` prints no "[branch sha] subject" line, and agents commit that
+  way): the subject now comes from the command's own message. A busy session keeps its newest 60 items a day (not its
+  first 40). The ledger reads its transcripts once more.
+
 ## [3.127.0] - 2026-10-19
 
 ### Added

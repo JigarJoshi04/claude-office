@@ -161,7 +161,7 @@ function shippedCard(app, day, nameOf) {
   for (const it of d.items) { const k = it.project || "elsewhere"; if (!by.has(k)) by.set(k, []); by.get(k).push(it); }
   const n = (k) => d.items.filter(x => x.k === k).length;
   const who = (it) => it.seat ? `<span class="sh-who">${esc(nameOf(it.seat))}</span>` : "";
-  const row = (it) => it.k === "c" ? `<li><code>${esc(it.sha)}</code><span>${priv ? "a commit" : esc(it.sub)}</span>${who(it)}</li>`
+  const row = (it) => it.k === "c" ? `<li><code>${it.sha ? esc(it.sha) : "·······"}</code><span>${priv ? "a commit" : esc(it.sub)}</span>${who(it)}</li>`
     : it.k === "po" ? `<li><b class="sh-pr">PR #${it.n || "?"}</b><span>opened${!priv && it.sub ? ": " + esc(it.sub) : ""}</span>${who(it)}</li>`
     : `<li><b class="sh-pr good-t">PR #${it.n || "?"}</b><span>merged</span>${who(it)}</li>`;
   return `<div class="view-card sh-card"><div class="row between"><h4>${icon("send", 16)}Shipped</h4><span class="hint">${n("c")} commit${n("c") === 1 ? "" : "s"} · ${n("po")} PR${n("po") === 1 ? "" : "s"} opened · ${n("pm")} merged</span></div>
