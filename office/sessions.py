@@ -208,6 +208,19 @@ def _user_text(content) -> str | None:
     return t
 
 
+def task_view(tr) -> dict | None:
+    """The session's task list: how many are done, what it is on now, and the list (at most 20, unfinished first)."""
+    if not tr or not tr.tasks:
+        return None
+    items = list(tr.tasks.values())
+    done = sum(1 for x in items if x["status"] == "completed")
+    now = next((x for x in items if x["status"] == "in_progress"), None)
+    order = {"in_progress": 0, "pending": 1, "completed": 2}
+    shown = items if len(items) <= 20 else sorted(items, key=lambda x: order.get(x["status"], 3))[:20]   # the list's own order
+    return {"done": done, "total": len(items), "now": (now["active"] or now["subject"]) if now else None,
+            "items": [{"subject": x["subject"], "status": x["status"]} for x in shown]}
+
+
 def cache_view(tr) -> dict | None:
     """The session's prompt cache: until when it is warm, the context it holds, and what a reply saves while it is
     warm (a cooled cache is written again at the cache-write price instead of read at the cache-read price)."""
@@ -221,7 +234,8 @@ def cache_view(tr) -> dict | None:
 class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
-                 "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context")
+                 "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context",
+                 "tasks", "task_pending")
 
     def __init__(self, path: Path):
         self.path = path
@@ -248,6 +262,8 @@ class TranscriptState:
         self.cache_at = None        # the main chain's last API response: its prompt cache lives until cache_at + cache_ttl
         self.cache_ttl = 300        # 5 minutes, or an hour once the session writes 1-hour cache entries
         self.context = 0            # that response's prompt: input, cache reads and cache writes
+        self.tasks: dict = {}       # the session's own task list (TaskCreate/TaskUpdate, or TodoWrite): id -> task
+        self.task_pending: dict = {}   # TaskCreate tool_use id -> (subject, activeForm), until its result names the id
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -270,6 +286,15 @@ class TranscriptState:
         msg = d.get("message")
         if not isinstance(msg, dict):
             msg = {}
+        if t == "user" and not d.get("isSidechain") and self.task_pending and isinstance(msg.get("content"), list):
+            for c in msg["content"]:                # "Task #3 created successfully: …" gives a new task its id
+                if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") in self.task_pending:
+                    subject, active = self.task_pending.pop(c["tool_use_id"])
+                    body = c.get("content")
+                    body = body if isinstance(body, str) else " ".join(x.get("text", "") for x in body if isinstance(x, dict)) if isinstance(body, list) else ""
+                    m = re.search(r"Task #(\w+) created", body)
+                    if m and not c.get("is_error"):
+                        self.tasks[m.group(1)] = {"subject": subject, "active": active, "status": "pending"}
         if t == "user" and not d.get("isSidechain"):
             text = _user_text(msg.get("content"))
             if text:
@@ -318,6 +343,8 @@ class TranscriptState:
             if not isinstance(c, dict):
                 continue
             if c.get("type") == "tool_use":
+                if not d.get("isSidechain"):
+                    self._task_tool(c)
                 self.tool_calls += 1
                 text, kind = describe_tool(str(c.get("name") or ""), c.get("input") or {})
                 if d.get("isSidechain"):
@@ -328,6 +355,29 @@ class TranscriptState:
                 self._push(ts, "Writing: " + _short(c["text"], 70), "talk")
             elif c.get("type") == "thinking" and not d.get("isSidechain"):
                 self._push(ts, "Thinking", "think", dedupe=True)
+
+    def _task_tool(self, c: dict) -> None:
+        """Follow the session's task list: TaskCreate and TaskUpdate (Claude Code today), TodoWrite (before)."""
+        name, inp = c.get("name"), c.get("input") if isinstance(c.get("input"), dict) else {}
+        if name == "TaskCreate" and isinstance(inp.get("subject"), str):
+            self.task_pending[c.get("id")] = (redact(_short(inp["subject"], 120)), redact(_short(str(inp.get("activeForm") or ""), 120)) or None)
+            if len(self.task_pending) > 50:
+                self.task_pending.pop(next(iter(self.task_pending)))
+        elif name == "TaskUpdate" and str(inp.get("taskId") or "") in self.tasks:
+            task = self.tasks[str(inp["taskId"])]
+            if inp.get("status") == "deleted":
+                del self.tasks[str(inp["taskId"])]
+                return
+            if inp.get("status") in ("pending", "in_progress", "completed"):
+                task["status"] = inp["status"]
+            if isinstance(inp.get("subject"), str):
+                task["subject"] = redact(_short(inp["subject"], 120))
+            if isinstance(inp.get("activeForm"), str):
+                task["active"] = redact(_short(inp["activeForm"], 120))
+        elif name == "TodoWrite" and isinstance(inp.get("todos"), list):
+            self.tasks = {str(i + 1): {"subject": redact(_short(str(x.get("content") or ""), 120)), "active": redact(_short(str(x.get("activeForm") or ""), 120)) or None,
+                                       "status": x.get("status") if x.get("status") in ("pending", "in_progress", "completed") else "pending"}
+                          for i, x in enumerate(inp["todos"][:40]) if isinstance(x, dict)}
 
     def _push(self, ts, text, kind, dedupe=False):
         if dedupe and self.recent and self.recent[-1]["text"] == text:
@@ -509,6 +559,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "tokens_1h": tr.tokens(now - 3600) if tr else None,
             "tokens_5h": tr.tokens(now - 5 * 3600) if tr else None,
             "cache": cache_view(tr),
+            "tasks": task_view(tr),
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,
             "report_file": report_file,

@@ -446,6 +446,7 @@ export function makePanels(app) {
           ${x && x.model ? pill(x.model.replace(/^claude-/, "")) : ""}
           ${x && x.git ? gitChip(x) : ""}
           ${x && x.cache && x.state !== "working" ? cachePill(x) : ""}
+          ${x && x.tasks ? `<span class="pill ${x.tasks.done === x.tasks.total ? "good" : ""}" title="Its task list: ${x.tasks.done} of ${x.tasks.total} done">${icon("check", 13)}${x.tasks.done}/${x.tasks.total} tasks</span>` : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
       ${tab === "chat" && conv ? `<div class="chat-find">${icon("search", 15)}<input type="search" id="chatFind" placeholder="Find in this conversation" aria-label="Find in this conversation" value="${esc(chatFind.get(v.id) || "")}" autocomplete="off"><span class="cf-n" aria-live="polite"></span></div>` : ""}
@@ -606,6 +607,9 @@ export function makePanels(app) {
     return `${section("Right now", `<div class="now ${x.state}"><span class="caret"></span>${icon(KIND_ICON[x.activity_kind] || "dot", 18)}<span style="min-width:0;overflow-wrap:anywhere">${priv(x, x.activity)}</span></div>
         <div class="hint" style="margin-top:6px">${x.quiet_s != null ? `Last sign of life ${dur(x.quiet_s)} ago.` : ""}${x.limit_text ? " " + esc(x.limit_text) : ""}</div>`)}
       ${x.title || x.task ? section("Working on", `${x.title ? `<div style="font-weight:600;margin-bottom:8px">${priv(x, x.title)}</div>` : ""}${x.task ? `<div class="quote">${priv(x, x.task)}</div>` : ""}`) : ""}
+      ${x.tasks ? section(`Tasks · ${x.tasks.done} of ${x.tasks.total} done`, `<div class="taskbar" role="progressbar" aria-valuemin="0" aria-valuemax="${x.tasks.total}" aria-valuenow="${x.tasks.done}" aria-label="Tasks done"><i style="width:${Math.round(x.tasks.done / x.tasks.total * 100)}%"></i></div>
+        <ul class="tasklist">${x.tasks.items.map(t => `<li class="${t.status}">${icon(t.status === "completed" ? "check" : t.status === "in_progress" ? "play" : "dot", 14)}<span>${priv(x, t.subject)}</span>${t.status === "in_progress" ? `<em>now</em>` : ""}</li>`).join("")}</ul>
+        ${x.tasks.total > x.tasks.items.length ? `<div class="hint">and ${x.tasks.total - x.tasks.items.length} more</div>` : ""}`) : ""}
       ${x.state_file ? section("Progress notes", d && d.state_tail ? `<pre class="pre">${esc(d.state_tail)}</pre>` : `<div class="hint">${d ? "Empty so far." : "Loading…"}</div>`) : ""}
       ${x.report_status ? section("Report", d && d.report ? `<div class="doc md">${md(d.report)}</div>` : `<div class="quote">${esc(x.report_status)}</div>`, d && d.report ? `<button class="btn sm ghost" data-copy="${esc(d.report)}">${icon("copy", 14)}Copy</button>` : "") : ""}
       ${section("Burn", `<div class="tiles"><div class="tile"><div class="v">${fmtTok(t1.fresh)}</div><div class="tk">fresh tokens, last hour</div></div>

@@ -1457,3 +1457,12 @@ table.ship small { color: var(--muted); }
 :root[data-motion="reduced"] .pill.cache.warm.soon { animation: none; }
 .pill.cache.cold { color: #8fb6ff; background: rgba(122,168,255,.12); }
 :root[data-theme="light"] .pill.cache.warm { color: #9a4a00; } :root[data-theme="light"] .pill.cache.warm.soon { color: #a8350d; } :root[data-theme="light"] .pill.cache.cold { color: #2f5bb8; }
+/* a session's own task list (3.34) */
+.taskbar { height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin-bottom: 10px; }
+.taskbar i { display: block; height: 100%; background: var(--good); border-radius: inherit; }
+.tasklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.tasklist li { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; color: var(--text-2); }
+.tasklist li > .ic { flex: none; margin-top: 2px; color: var(--faint); }
+.tasklist li.completed span { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.tasklist li.completed > .ic { color: var(--good); } .tasklist li.in_progress { color: var(--text); font-weight: 600; } .tasklist li.in_progress > .ic { color: var(--info); }
+.tasklist li em { margin-left: auto; font: 700 10.5px var(--mono); font-style: normal; text-transform: uppercase; color: var(--info); }

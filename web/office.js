@@ -642,6 +642,8 @@ export function createOffice(stage, handlers) {
           if (a.sess.kind === "desk") { S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x, sp.seatY - 1, 10, 1, "#2a2d38"); }
         }
         S.drawMonitorBack(ctx, x - 3, pod.y + 31);
+        const tk = a && a.sess.tasks;            // the session's task list as a strip across the back of its screen
+        if (tk && tk.total) { S.rect(ctx, x - 1, pod.y + 33, 12, 2, "#5b6378"); S.rect(ctx, x - 1, pod.y + 33, Math.round(12 * tk.done / tk.total), 2, tk.done === tk.total ? "#ffd24a" : "#3ddc84"); }
         if (a && pose !== "sleep") S.drawHands(ctx, x, pod.y + 42, a.look, pose, t + slot * 333);
         if (a && pose === "sleep") S.drawZ(ctx, x + 8, sp.seatY - 6, t + slot * 500);
         // The mug steams while its owner waits on a long tool, or while an idle session's prompt cache is still warm.

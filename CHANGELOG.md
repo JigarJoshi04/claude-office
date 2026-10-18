@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.34.0] - 2026-10-18
+
+### Added
+- Each session's own task list (TaskCreate and TaskUpdate, or TodoWrite before them), read from its transcript: a
+  progress bar across the back of its screen on the floor (gold when every task is done), "2/5 tasks" on its page and
+  its dock card, and a checklist on its Overview with the task in progress marked "now". Helpers' lists stay theirs.
+  Blurred for terminals in share-safe mode.
+
 ## [3.33.0] - 2026-10-18
 
 ### Added

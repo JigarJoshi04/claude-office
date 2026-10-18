@@ -308,3 +308,27 @@ class PromptCacheTests(unittest.TestCase):
         c = sessions.cache_view(st)
         self.assertEqual((c["until"], c["ttl"]), (start + 60 + 3600, 3600))
         self.assertAlmostEqual(c["saves_usd"], round(403_010 * (8 - 0.2) / 1e6, 2))
+
+
+class TaskListTests(unittest.TestCase):
+    def test_task_create_update_and_todo_write(self):
+        import json
+        st = sessions.TranscriptState(Path("/x.jsonl"))
+        use = lambda tid, name, inp, side=False: json.dumps({"type": "assistant", "isSidechain": side, "timestamp": "2026-10-18T10:00:00Z",
+                                                             "message": {"id": "m" + tid, "content": [{"type": "tool_use", "id": tid, "name": name, "input": inp}]}}).encode()
+        res = lambda tid, text: json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": text}]}}).encode()
+        self.assertIsNone(sessions.task_view(st))
+        for i, subject in enumerate(["Read the code", "Fix the bug", "Open the PR"], 1):
+            st.feed_line(use(f"t{i}", "TaskCreate", {"subject": subject, "activeForm": subject.replace("Read", "Reading")}))
+            st.feed_line(res(f"t{i}", f"Task #{i} created successfully: {subject}"))
+        st.feed_line(use("u1", "TaskUpdate", {"taskId": "1", "status": "completed"}))
+        st.feed_line(use("u2", "TaskUpdate", {"taskId": "2", "status": "in_progress"}))
+        st.feed_line(use("h1", "TaskCreate", {"subject": "A helper's own task"}, side=True))   # helpers keep their own lists
+        v = sessions.task_view(st)
+        self.assertEqual((v["done"], v["total"], v["now"]), (1, 3, "Fix the bug"))
+        self.assertEqual([x["status"] for x in v["items"]], ["completed", "in_progress", "pending"])
+        st.feed_line(use("u3", "TaskUpdate", {"taskId": "3", "status": "deleted"}))
+        self.assertEqual(sessions.task_view(st)["total"], 2)
+        st.feed_line(use("w1", "TodoWrite", {"todos": [{"content": "Old style", "status": "completed", "activeForm": "Old"}, {"content": "Next", "status": "pending"}]}))
+        v = sessions.task_view(st)
+        self.assertEqual((v["done"], v["total"], v["now"]), (1, 2, None))
