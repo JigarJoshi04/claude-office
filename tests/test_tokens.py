@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -13,8 +14,22 @@ def line(mid, ts, inp=10, out=5, cw=100, cr=1000, model="claude-opus-5-5", cwd="
                                    "cache_creation_input_tokens": cw, "cache_read_input_tokens": cr}}}) + "\n"
 
 
+def in_utc(tc: unittest.TestCase) -> None:
+    """Read the test's dates (UTC days) in UTC wherever it runs, and put the zone back afterwards."""
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = "UTC"; time.tzset()
+    def back():
+        if old is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old
+        time.tzset()
+    tc.addCleanup(back)
+
+
 class TokenLedgerTests(unittest.TestCase):
     def setUp(self):
+        in_utc(self)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name)
@@ -358,3 +373,38 @@ class ShippedOnTests(unittest.TestCase):
         self.assertIs(led.shipped_on("2026-10-19", {"claude2", "astra"}, "astra"), out)   # cached until the next read
         led.scanned_at = 2.0
         self.assertEqual(led.shipped_on("2026-10-17", {"claude2"})["commits"], 0)
+
+
+class WaitTests(unittest.TestCase):
+    def test_waits_on_a_person_from_turn_end_to_typed_prompt(self):
+        from office.tokens import wait_median
+        in_utc(self)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proj = root / ".claude" / "projects" / "-w"
+            (proj / "s1" / "subagents").mkdir(parents=True)
+            ts = lambda m: f"2026-10-18T10:{m:02d}:00Z" if m < 60 else f"2026-10-18T{10 + m // 60}:{m % 60:02d}:00Z"
+            usage = {"input_tokens": 1, "output_tokens": 1}
+            asst = lambda m, stop, side=False: json.dumps({"type": "assistant", "isSidechain": side, "timestamp": ts(m), "message": {"id": f"m{m}", "model": "claude-opus-5-5", "usage": usage, "stop_reason": stop}}) + "\n"
+            user = lambda m, src, side=False: json.dumps({"type": "user", "isSidechain": side, "timestamp": ts(m), "promptSource": src, "message": {"role": "user", "content": "go"}}) + "\n"
+            tool = lambda m: json.dumps({"type": "user", "timestamp": ts(m), "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t", "content": "ok"}]}}) + "\n"
+            lines = [asst(0, "end_turn"), user(5, "typed"),                 # waited 5 minutes
+                     asst(6, "tool_use"), tool(7), user(8, "typed"),          # typed while it worked: no wait
+                     asst(9, None), asst(10, "end_turn"), user(11, "system"), # a finished helper woke it: not waiting
+                     asst(12, "end_turn"), asst(13, "end_turn", side=True), user(14, "typed", side=True), user(13, "typed"),   # a side chain is not the person
+                     asst(20, "end_turn"), user(200, "typed")]                # three hours: away, not waiting
+            (proj / "s1.jsonl").write_text("".join(lines[:7]))
+            (proj / "s1" / "subagents" / "agent-a.jsonl").write_text(asst(0, "end_turn") + user(30, "typed"))
+            led = TokenLedger(root / "tokens.json", [("claude", root / ".claude")])
+            led.scan()
+            with open(proj / "s1.jsonl", "a") as fh:                         # the rest arrives later: the turn's end is remembered
+                fh.write("".join(lines[7:]))
+            led.scan()
+            w = led.data["sessions"]["s1"]["w"]["2026-10-18"]
+            self.assertEqual((w[0], w[1], w[2], w[3]), (360, 2, 300, 1))
+            v = led.view([{"id": "claude", "kind": "claude"}], today="2026-10-18", rng="today")["waits"]
+            self.assertEqual((v["seconds"], v["replies"], v["away"]), (360, 2, 1))
+            self.assertEqual(v["longest"][0]["wait_s"], 300)
+            self.assertTrue(60 <= v["median_s"] <= 300)
+        self.assertEqual(wait_median([0, 0, 2, 0]), 25)
+        self.assertIsNone(wait_median([0, 0, 0]))

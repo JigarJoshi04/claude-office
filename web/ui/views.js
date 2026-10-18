@@ -4,7 +4,7 @@ import { timeline, bindTips } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, leftOf, voice, diary } from "./personas.js";
 import { localDay } from "./goals.js";
-import { tokensCard, bindTokens, focusKey, refocus as refocusTokens } from "./tokens.js";
+import { tokensCard, bindTokens, focusKey, refocus as refocusTokens, waitCard, waitFor } from "./tokens.js";
 
 export function renderTimeline(el, app) {
   const hours = app.prefs().tlHours || 6;
@@ -90,6 +90,7 @@ export function renderStats(el, app) {
     </div>
     ${weekCard(app, st.day || todayStr)}
     ${limitsCard(app)}
+    ${st.day === todayStr || !st.day ? waitCard(app.tokensCache("today"), { label: "today", who: (id) => (id ? nameOf(id) : "Unknown seat"), priv: app.privacy(), section: true }) : ""}
     ${tokensCard(app)}
     ${(st.digest || []).length ? `<div class="view-card"><div class="section-h"><h4>The day in a few lines</h4></div><ul class="digest">${st.digest.map(x => `<li>${esc(human(x))}</li>`).join("")}</ul></div>` : ""}
     <div class="view-card"><div class="section-h"><h4>Diaries</h4></div><div class="diaries">${rows.map(r => { const p = personaFor(r.seat, snap.seats.findIndex(x => x.id === r.seat.id));
@@ -129,6 +130,7 @@ export function dayText(st, app, nameOf) {
   lines.push(`- ${o.reports || 0} report${o.reports === 1 ? "" : "s"} filed, ${hrs >= 10 ? Math.round(hrs) : hrs.toFixed(1)} h of agent work, ${o.sessions || 0} sessions`);
   if (t && t.shipped && (t.shipped.commits || t.shipped.prs_merged)) lines.push(`- Shipped: ${t.shipped.commits} commit${t.shipped.commits === 1 ? "" : "s"}${t.shipped.prs_merged ? `, ${t.shipped.prs_merged} PR${t.shipped.prs_merged === 1 ? "" : "s"} merged` : ""}`);
   if (t && t.total && t.total.all) { const top = (t.seats || []).find(s => s.seat); lines.push(`- Tokens: ${fmtTok(t.total.all)}${top ? `, most by ${nameOf(top.seat)}` : ""}`); }
+  if (t && t.waits && t.waits.replies) lines.push(`- Waited on you: ${waitFor(t.waits.seconds)} over ${t.waits.replies} repl${t.waits.replies === 1 ? "y" : "ies"}${t.waits.median_s != null ? `, median reply ${waitFor(t.waits.median_s)}` : ""}`);
   if (st.mvp && st.mvp.seat) lines.push(`- Employee of the day: ${nameOf(st.mvp.seat)}${st.mvp.why ? ` (${st.mvp.why})` : ""}`);
   const busy = Object.entries(seats).filter(([, s]) => s.reports || s.active_min).sort((a, b) => b[1].active_min - a[1].active_min)
     .map(([id, s]) => `${nameOf(id)} ${Math.round(s.active_min / 60 * 10) / 10} h${s.reports ? `, ${s.reports} report${s.reports === 1 ? "" : "s"}` : ""}`);

@@ -3,6 +3,21 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.64.0] - 2026-10-19
+
+### Added
+- Waiting on you: how long sessions sat finished, waiting for the next prompt you typed, with the median reply and
+  the longest waits. On Today and on the Tokens page for any range (with a bar per day), and in "Copy as text".
+  Read by the token ledger from the transcripts (a turn's end to the next typed prompt); lanes and helpers never
+  wait on you, and a gap over two hours is time away. `waits` in `/api/tokens`.
+
+### Changed
+- The ledger reads every transcript once more after this update (about half a minute), to count the waits from
+  the start; it shows the numbers from before until it is done.
+
+### Fixed
+- The ledger and price tests read their dates in UTC, so they pass in any timezone (they failed far from UTC).
+
 ## [3.63.0] - 2026-10-19
 
 ### Added

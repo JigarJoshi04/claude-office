@@ -37,6 +37,26 @@ export function leanHolder(weeks) {
   return rows.length >= 2 ? { seat: rows[0][0], perCommit: rows[0][1] } : null;   // a ribbon needs someone to beat
 }
 
+// A wait, said short: "40 s", "6 min", "2 h 05 min".
+export const waitFor = (s) => (s < 60 ? `${Math.round(s)} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${Math.floor(s / 3600)} h ${String(Math.round(s % 3600 / 60)).padStart(2, "0")} min`);
+
+// Waiting on you: how long sessions sat finished, waiting for the next prompt someone typed (office/tokens.py
+// _note_wait), the median reply and the longest waits. `who` names a seat; `priv` hides the projects.
+export function waitCard(t, { label, who, priv, section = false }) {
+  const w = t && t.waits;
+  if (!w || !w.replies) return "";
+  const days = Object.entries(w.days || {}), max = Math.max(1, ...days.map(([, v]) => v[0]));
+  const at = (ts) => new Date(ts * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const day = (ts) => new Date(ts * 1000).toLocaleDateString([], { weekday: "short" });
+  return `<div class="view-card wait-card">${section ? `<div class="section-h"><h4>Waiting on you</h4><span class="hint">${esc(label)}</span></div>` : `<h5>Waiting on you · ${esc(label)}</h5>`}
+    <div class="wait-hero"><b>${esc(waitFor(w.seconds))}</b><span>sessions waited for your reply, over ${w.replies.toLocaleString()} repl${w.replies === 1 ? "y" : "ies"}</span>
+      ${w.median_s != null ? `<em title="Half your replies came sooner than this">${icon("clock", 13)}median reply ${esc(waitFor(w.median_s))}</em>` : ""}</div>
+    ${days.length > 1 ? `<div class="wait-days" role="img" aria-label="Waiting per day">${days.map(([d, v]) => `<i style="height:${Math.max(4, v[0] / max * 100).toFixed(0)}%" title="${esc(new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${esc(waitFor(v[0]))} over ${v[1]} repl${v[1] === 1 ? "y" : "ies"}"></i>`).join("")}</div>` : ""}
+    ${w.longest.length ? `<ol class="wait-list">${w.longest.map(x => `<li><span class="grow"><b class="${priv ? "private" : ""}">${esc(x.project || "a session")}</b>
+      <small>${esc(who(x.seat))} · from ${esc(days.length > 1 ? day(x.at) + " " : "")}${esc(at(x.at))}</small></span><em>${esc(waitFor(x.wait_s))}</em></li>`).join("")}</ol>` : ""}
+    <p class="hint">From the end of a turn to the next prompt you typed, in the sessions you talk to. Lanes never wait on you; a gap of more than two hours is time away, not waiting${w.away ? ` (${w.away} ${w.away === 1 ? "time" : "times"} here)` : ""}.</p></div>`;
+}
+
 // The seat with the most tokens of all time (for the flame on the floor and the character page), or null.
 export function topBurner(t) {
   const s = t && t.seats && t.seats.find(x => x.seat);
@@ -265,6 +285,7 @@ function renderTokensInner(el, app) {
         <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div></div>
     ${valueCard()}
     ${whereCard()}
+    ${waitCard(t, { label: RANGES.find(r => r[0] === rng)[1].toLowerCase(), who, priv })}
     ${shipCard()}
     ${records ? `<div class="view-card"><h5>Records${seat ? ` · ${esc(who(seat))}` : ""}</h5><div class="tp-recs">${records}</div></div>` : ""}
     <div class="view-card tok"><div class="tok-lists"><div><h5>Hungriest sessions</h5>${sessions}</div><div><h5>Projects</h5>${projects}</div><div><h5>Models</h5><ul class="tok-models">${models.replace(/^<ol>|<\/ol>$/g, "")}</ul></div></div>

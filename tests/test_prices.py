@@ -1,5 +1,7 @@
 import json
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -47,6 +49,11 @@ class PriceTests(unittest.TestCase):
 
 
 class LedgerValueTests(unittest.TestCase):
+    def setUp(self):
+        old = os.environ.get("TZ")                       # its dates are UTC days: read them in UTC wherever it runs
+        os.environ["TZ"] = "UTC"; time.tzset()
+        self.addCleanup(lambda: (os.environ.pop("TZ", None) if old is None else os.environ.__setitem__("TZ", old), time.tzset()))
+
     def test_each_response_is_priced_once_and_set_against_the_plans(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

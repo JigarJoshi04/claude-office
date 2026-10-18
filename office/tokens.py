@@ -30,10 +30,15 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 5                # bumped when the rules for shipped work or prices change: every transcript is read again
+SHIP_RULES = 6                # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
+# Waits on a person, in seconds: the histogram's upper edges. A gap past the last one is time away, not waiting.
+WAIT_EDGES = (10, 20, 30, 45, 60, 90, 120, 180, 240, 300, 420, 600, 900, 1200, 1800, 2400, 3600, 5400, 7200)
+_STOP = re.compile(rb'"stop_reason":\s*"(\w+)"')
+_ASST, _USER = re.compile(rb'"type":\s*"assistant"'), re.compile(rb'"type":\s*"user"')
+_SIDE, _META, _TYPED = re.compile(rb'"isSidechain":\s*true'), re.compile(rb'"isMeta":\s*true'), re.compile(rb'"promptSource":\s*"typed"')
 _STAT = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?")
 _PUSHED = re.compile(r"\b[0-9a-f]{7,40}\.{2,3}[0-9a-f]{7,40}\s+\S+ -> \S+|\* \[new branch\]")   # "..." is a forced update
 _PUSH_FAIL = re.compile(r"! \[(?:remote )?rejected\]|error: failed to push|^fatal:", re.M)
@@ -145,6 +150,20 @@ def _when(ts: str | None) -> tuple[str | None, str | None]:
     return t.date().isoformat(), f"{t.weekday()}-{t.hour}"
 
 
+def wait_median(hist) -> int | None:
+    """The median wait (seconds) from a histogram over WAIT_EDGES, read off linearly inside its bucket."""
+    n = sum(hist)
+    if not n:
+        return None
+    half, run = n / 2, 0
+    for i, c in enumerate(hist):
+        if c and run + c >= half:
+            lo = WAIT_EDGES[i - 1] if i else 0
+            return round(lo + (WAIT_EDGES[i] - lo) * (half - run) / c)
+        run += c
+    return WAIT_EDGES[-1]
+
+
 def _epoch(ts: str | None) -> float | None:
     if not ts:
         return None
@@ -202,7 +221,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
-                        kept = {k: r.pop(k) for k in ("g", "$", "$m") if k in r}
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
@@ -342,6 +361,7 @@ class TokenLedger:
         out = self.data.setdefault("files_out", {}).get(key, 0)          # shipped work and costs have their own offset
         out = out if isinstance(out, list) else [out, None]
         out_off, self._xlast, self._xusd = out[0], out[1], (out[2] if len(out) > 2 else 0)
+        self._wait_end = out[3] if len(out) > 3 else None
         out_off = min(out_off, size)
         start = min(offset, out_off)
         if size == start:
@@ -366,7 +386,9 @@ class TokenLedger:
                     last_id = self._last
                 if at >= out_off:
                     changed |= self._ship(raw, sid)
-        self.data["files_out"][key] = [pos, self._xlast, self._xusd]
+                    if not self._helper_file:              # helpers never wait on a person
+                        changed |= self._note_wait(raw, sid)
+        self.data["files_out"][key] = [pos, self._xlast, self._xusd, self._wait_end]
         if pos <= offset:
             return changed
         if not self.data["sessions"].get(sid, {}).get("p"):
@@ -450,6 +472,40 @@ class TokenLedger:
                 pr = pr_number(kinds if v[3] else {"pr_open"}, cmd, text) if v[2] or v[3] else None
                 self.events.append({"session": sid, "kind": kind, "v": v[:4], "pr": pr, "at": at})
         return changed
+
+    def _note_wait(self, raw: bytes, sid: str) -> bool:
+        """How long a session waited on its person: from a turn's end to the next prompt someone typed. Kept per day as
+        [seconds, replies, longest, away, when the longest began, then a histogram over WAIT_EDGES]. Lanes never wait
+        (nobody types to them); a prompt from the harness (a finished helper, a script) means it was not waiting."""
+        if _SIDE.search(raw):
+            return False
+        if _ASST.search(raw):
+            m = _STOP.search(raw)
+            if m:                                          # null while a response is still being written
+                self._wait_end = _epoch(self._ts) if m.group(1) == b"end_turn" else None
+            return False
+        if not _USER.search(raw) or b'"tool_result"' in raw or _META.search(raw):
+            return False
+        if not _TYPED.search(raw):
+            self._wait_end = None
+            return False
+        end, at = self._wait_end, _epoch(self._ts)
+        self._wait_end = None
+        if end is None or at is None or at < end:
+            return False
+        gap = at - end
+        day, _ = _when(self._ts)
+        with self.lock:
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+            w = s.setdefault("w", {}).setdefault(day or "?", [0, 0, 0, 0, None] + [0] * len(WAIT_EDGES))
+            if gap > WAIT_EDGES[-1]:
+                w[3] += 1
+                return True
+            w[0] += round(gap); w[1] += 1
+            if gap > w[2]:
+                w[2], w[4] = round(gap), round(end)
+            w[5 + next(i for i, e in enumerate(WAIT_EDGES) if gap <= e)] += 1
+        return True
 
     def _cost(self, raw: bytes, sid: str) -> bool:
         try:
@@ -856,6 +912,17 @@ class TokenLedger:
                 if cur is None or d in cur:
                     for i in range(4):
                         where[i] += v[i]
+        waits, longest, wait_days = [0, 0, 0] + [0] * len(WAIT_EDGES), [], {}  # seconds, replies, away, histogram
+        for sid, r in mine.items():
+            for d, v in (r.get("w") or {}).items():
+                if cur is None or d in cur:
+                    waits[0] += v[0]; waits[1] += v[1]; waits[2] += v[3]
+                    for i in range(len(WAIT_EDGES)):
+                        waits[3 + i] += v[5 + i]
+                    x = wait_days.setdefault(d, [0, 0]); x[0] += v[0]; x[1] += v[1]
+                    if v[2]:
+                        longest.append((v[2], v[4], sid, r))
+        longest.sort(key=lambda x: -x[0])
         board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")}, "usd": round(v["usd"], 2),
                          "today_by": by(v["today_by"], v["today_usd"]),
                          "top_model": max(v["m"], key=v["m"].get) if v["m"] else None,
@@ -923,6 +990,10 @@ class TokenLedger:
         return {
             "where": {"helpers": where[0], "main": max(0, tot[0] + tot[1] - where[0]), "thinking": where[1], "output": tot[2],
                       "searches": where[2], "fetches": where[3]},
+            "waits": {"seconds": waits[0], "replies": waits[1], "away": waits[2], "median_s": wait_median(waits[3:]),
+                      "days": dict(sorted(wait_days.items())) if cur is not None else None,
+                      "longest": [{"wait_s": w, "at": at, "id": short_id(sid), "project": r.get("p"), "seat": seat_of(r)}
+                                  for w, at, sid, r in longest[:5]]},
             "value": {"usd": round(tot_usd, 2), "estimated": round(min(estimated, tot_usd), 2), "plans": plans, "days": plan_days,
                       "plan_usd": round(plan_cost, 2), "covered_usd": round(covered, 2),
                       "multiple": round(covered / plan_cost, 1) if plan_cost else None},
