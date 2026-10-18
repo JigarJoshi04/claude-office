@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.87.0] - 2026-10-19
+
+### Added
+- Fix the red build in one click: a failing open PR on the PR shelf has "Fix the checks", which fills the hiring desk
+  with a ready brief (read the failing checks and the failed job's log, fix the cause on its branch, push, confirm,
+  never merge) in the folder of the desk working on that branch. Nothing starts until you hire.
+
 ## [3.86.0] - 2026-10-19
 
 ### Added

@@ -832,19 +832,21 @@ export function makePanels(app) {
     if (!d.available) return { html: head + `<div class="muted">The GitHub CLI (<code>gh</code>) is not installed here, so there is nothing to show.</div>` };
     if (!d.repos.length) return { html: head + `<div class="muted">${d.scanning ? "Asking GitHub…" : "No GitHub repositories yet: the office learns them from the folders its sessions work in."}</div>` };
     const REVIEW = { approved: ["good", "approved"], changes_requested: ["bad", "changes requested"], review_required: ["", "needs review"] };
-    const row = (p) => {
+    const row = (p, repo) => {
       const desk = p.at_desk && seatById(p.at_desk.seat);
+      const cwd = desk && ((desk.sessions || []).find(x => x.id === p.at_desk.session) || {}).cwd;
+      const fix = p.checks === "fail" && (p.state === "open" || p.state === "draft") ? `<button class="lc bad" data-fix-pr="${esc(JSON.stringify([repo, p.number, p.title, p.branch || "", cwd || ""]))}" title="Fill the hiring desk with a brief to fix it (nothing starts until you hire)">Fix the checks</button>` : "";
       return `<li class="pr ${esc(p.state)}"><span class="ci-dot ${esc(p.checks || "none")}" title="${p.checks ? "Checks " + CI_WORD[p.checks] : "No checks"}"></span>
         <span class="grow"><a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer"><b>#${p.number}</b> <span class="${pv ? "private" : ""}">${esc(p.title)}</span></a>
         <small><span class="${pv ? "private" : ""}">${esc(p.branch || "")}</span>${p.updated ? " · " + esc(relTime(Date.parse(p.updated) / 1000)) : ""}</small></span>
         <span class="lc-tags">${p.state === "draft" ? `<em class="lc">draft</em>` : ""}${p.review && REVIEW[p.review] ? `<em class="lc ${REVIEW[p.review][0]}">${REVIEW[p.review][1]}</em>` : ""}
-          ${desk ? `<button class="lc info" data-open-session="${esc(desk.id)}|${esc(p.at_desk.session)}" title="The session on this branch">${esc(P(desk).name)}'s desk</button>` : ""}</span></li>`; };
+          ${desk ? `<button class="lc info" data-open-session="${esc(desk.id)}|${esc(p.at_desk.session)}" title="The session on this branch">${esc(P(desk).name)}'s desk</button>` : ""}${fix}</span></li>`; };
     const repos = d.repos.map(r => {
       const open = r.prs.filter(p => p.state === "open" || p.state === "draft"), merged = r.prs.filter(p => p.state === "merged"), closed = r.prs.filter(p => p.state === "closed");
       const failing = open.filter(p => p.checks === "fail").length;
       return section(`${esc(r.repo)}${r.error ? ` · <span class="hint">could not reach GitHub</span>` : ""}`, `
-        <h5 class="lh">Open · ${open.length}${failing ? ` · <span style="color:var(--bad)">${failing} failing</span>` : ""}</h5>${open.length ? `<ul class="loose prs">${open.map(row).join("")}</ul>` : `<div class="hint">No open pull requests.</div>`}
-        ${merged.length ? `<h5 class="lh">Merged · ${merged.length}</h5><ul class="loose prs">${merged.slice(0, 8).map(row).join("")}</ul>${merged.length > 8 ? `<p class="hint">and ${merged.length - 8} more of the last ${r.prs.length}.</p>` : ""}` : ""}
+        <h5 class="lh">Open · ${open.length}${failing ? ` · <span style="color:var(--bad)">${failing} failing</span>` : ""}</h5>${open.length ? `<ul class="loose prs">${open.map(p => row(p, r.repo)).join("")}</ul>` : `<div class="hint">No open pull requests.</div>`}
+        ${merged.length ? `<h5 class="lh">Merged · ${merged.length}</h5><ul class="loose prs">${merged.slice(0, 8).map(p => row(p, r.repo)).join("")}</ul>${merged.length > 8 ? `<p class="hint">and ${merged.length - 8} more of the last ${r.prs.length}.</p>` : ""}` : ""}
         ${closed.length ? `<p class="hint">${closed.length} closed without merging.</p>` : ""}`); }).join("");
     // What changed this week, in plain words: every PR merged in the last 7 days, to read or to paste into a standup.
     const weekAgo = Date.now() - 7 * 86400e3;
@@ -854,7 +856,17 @@ export function makePanels(app) {
     const weekHtml = nWeek ? section(`Merged this week · ${nWeek}`, `${week.map(r => `<h5 class="lh">${esc(r.repo)} · ${r.prs.length}</h5><ul class="tasklist">${r.prs.map(p => `<li class="completed-ok">${icon("check", 14)}<span class="${pv ? "private" : ""}">${esc(p.title)}</span><em>#${p.number}</em></li>`).join("")}</ul>`).join("")}
       <div class="row" style="margin-top:10px"><button class="btn sm" data-copy="${esc(notes)}" data-copy-note="This week's merged pull requests are on the clipboard.">${icon("copy", 14)}Copy as notes</button></div>`) : "";
     return { html: `${head}<p class="hint">${d.scanning ? "Asking GitHub…" : "Refreshed every few minutes."}</p>${weekHtml}${repos}`,
-      bind(root) { root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); })); } };
+      bind(root) {
+        root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
+        // A failing PR: the hiring desk gets a ready brief to fix it, in the folder of the desk on its branch.
+        root.querySelectorAll("[data-fix-pr]").forEach(b => b.addEventListener("click", () => {
+          const [repo, n, title, branch, cwd] = JSON.parse(b.dataset.fixPr);
+          if ((hireDraft.title.trim() || hireDraft.brief.trim()) && !confirm("Replace the brief on the hiring desk with one to fix this PR?")) return;
+          hireDraft = { ...hireDraft, title: `Fix the checks on PR #${n}`, workdir: cwd || hireDraft.workdir,
+            brief: `Pull request #${n} ("${title}") in ${repo} has failing checks${branch ? ` on the branch ${branch}` : ""}.\n\nWork on that branch${cwd ? " (this folder has it checked out)" : " (switch to it, or use its worktree)"}. Read the failing checks with \`gh pr checks ${n} -R ${repo}\` and the failing job's log (\`gh run view --log-failed\`), fix the cause, push, and confirm the checks pass. Do not merge.` };
+          store.set("hireDraft", hireDraft); app.go({ kind: "hire" });
+        }));
+      } };
   }
   // Loose ends (office/loose.py): work left in git that is nowhere else, and worktrees that are safe to remove.
   function loose() {
