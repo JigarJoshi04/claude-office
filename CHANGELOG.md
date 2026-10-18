@@ -3,6 +3,21 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.6.0] - 2026-10-18
+
+### Added
+- A day ledger (`state/days.json`, 120 days): each day's Today numbers are kept, so earlier days and the week are real.
+  `GET /api/week?days=N` serves the last N days (1–90). Yesterday is backfilled from history when missing.
+- "This week" in Today: the last seven days as bars, one measure at a time, the change against the week before, the
+  best day, the star of the week and the totals.
+- The weekly challenge: beat last week's reports by 10%, with a Record week celebration and badge. It waits until the
+  office has a week on record.
+- The day's rhythm: a morning card recaps yesterday and names today's goals; an evening card wraps the day up.
+
+### Fixed
+- Session avatars in Team cards overlapped their text.
+- The replay bar wraps on phones; dock cards stop at 440 px wide.
+
 ## [3.5.0] - 2026-10-18
 
 ### Added

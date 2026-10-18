@@ -72,6 +72,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   lobby palms, a robot vacuum, flowers in every room, a delivery drone, gold elevator doors, Biscuit the office dog, a
   neon show, a hot-air balloon, fireworks at night, gold nameplates and a golden statue of you. "Your office" lists
   them all, what comes next and who built the most.
+- **Beat last week**: a weekly challenge to file 10% more reports than last week, with a Record week celebration.
+- **The day's rhythm**: a morning card recaps yesterday and names today's goals; an evening card wraps the day up.
 - **Badges for you**: twelve of them, from *Inbox zero* and *Hiring manager* to *Time traveller* and *Night owl*.
 - **Seasons**: pumpkins and bats for Halloween, lamps and a rangoli for Diwali, a tree and snow in December.
 - **Combos**: reports and finished lanes within 15 minutes of each other chain into a combo (×2, ×3, …) with a timer
@@ -132,7 +134,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Timeline**: every session on every seat over the last 1 to 24 hours, coloured by state. It also shows usage,
   news markers, upcoming resets, and a ✕ where a seat runs out at its current pace.
 - **Team**: persona cards with both plan windows and everyone at each desk.
-- **Today**: employee of the day, a league table (time at work, sessions, reports, limits, tool calls, tokens, peak
+- **Today**: the last seven days as a chart (reports, agent hours or tool calls, against the week before), employee of
+  the day, a league table (time at work, sessions, reports, limits, tool calls, tokens, peak
   usage) and a short digest of the day.
 
 **Running the office**
