@@ -11,6 +11,7 @@ import { goals, streak } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
 import { dayCard } from "./ui/daycard.js";
 import { award, bump } from "./ui/badges.js";
+import { startTour } from "./ui/tour.js";
 import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
 
@@ -180,12 +181,19 @@ applyPanel();
 (function floorHint() {
   const h = $("floorHint");
   if (store.get("welcomed", false)) return;
-  h.innerHTML = `${icon("sparkles", 16)}<span>Click anyone to see what they are doing and talk to them.</span><button class="btn sm ghost" data-dismiss-welcome aria-label="Dismiss">${icon("x", 14)}</button>`;
+  h.innerHTML = `${icon("sparkles", 16)}<span>New here? Click anyone to see what they are doing and talk to them.</span><button class="btn sm primary" data-tour>Show me around</button><button class="btn sm ghost" data-dismiss-welcome aria-label="Dismiss">${icon("x", 14)}</button>`;
   h.hidden = false;
   const done = () => { store.set("welcomed", true); h.hidden = true; };
-  h.querySelector("button").addEventListener("click", done);
+  h.querySelector("[data-dismiss-welcome]").addEventListener("click", done);
+  h.querySelector("[data-tour]").addEventListener("click", () => { done(); tour(); });
   $("stage").addEventListener("pointerdown", done, { once: true });
 })();
+
+// The guided tour (ui/tour.js): from the first-visit hint, the menu or the palette. It needs the floor and the briefing.
+function tour() {
+  setView("floor"); if (!prefs.panel) setPref("panel", true); go({ kind: "ceo" });
+  setTimeout(() => startTour(), 300);
+}
 
 // ------------------------------------------------------------------------------------------------ floor cards
 // Room peek: hover a room for a moment and a card says who it is, how they feel, how much plan is left and who is at
@@ -804,7 +812,7 @@ function openMenu(focusItem) {
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
     + "<hr>" + item("daycard", "star", "Share today's card") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
-    + "<hr>" + item("settings", "settings", "Settings");
+    + "<hr>" + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
   // Keyboard: focus lands on the first item; arrows move, Home/End jump, Tab leaves (Escape is handled globally).
@@ -827,6 +835,7 @@ function openMenu(focusItem) {
     else if (k === "checkpoint") checkpoint();
     else if (k === "tv") setTv(true);
     else if (k === "daycard") shareDay();
+    else if (k === "tour") tour();
     else if (k === "replay") { setView("floor"); replay.open(6); }
     else if (k === "broadcast") broadcast();
     else if (k === "picture") savePicture();
@@ -975,6 +984,7 @@ function paletteItems() {
     { icon: icon("sliders", 16), label: "Load divider", hint: "D", keywords: "split weights bench", run: () => go({ kind: "divider" }) },
     { icon: icon("floor", 16), label: "Floor", hint: "F", run: () => setView("floor") },
     { icon: icon("star", 16), label: "Your office: level and unlocks", keywords: "office level unlocks xp progress", run: () => go({ kind: "office" }) },
+    { icon: icon("sparkles", 16), label: "Take the tour", keywords: "help onboarding guide tutorial how", run: () => tour() },
     { icon: icon("star", 16), label: "Share today's card", keywords: "share picture day summary post card wrapped", run: () => shareDay() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => setTv(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },

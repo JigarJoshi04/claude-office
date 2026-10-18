@@ -957,3 +957,15 @@ body.tv .peek { width: 340px; }
 .combo.hot .cb-x { animation: combohot 1s ease-in-out infinite alternate; }
 @keyframes combohot { to { transform: scale(1.12); color: #ffd24a; } }
 :root[data-motion="reduced"] .combo, :root[data-motion="reduced"] .combo .cb-x { animation: none; }
+
+/* the first-run tour */
+.tour-shade { position: fixed; inset: 0; z-index: 90; background: transparent; }
+.tour-ring { position: fixed; z-index: 91; border-radius: 16px; pointer-events: none; transition: all .35s cubic-bezier(.2,.8,.2,1);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 9999px rgba(4,6,14,.62), 0 0 30px rgba(255,122,69,.5); }
+.tour-card { position: fixed; z-index: 92; width: min(360px, calc(100vw - 24px)); padding: 16px 16px 12px; border-radius: 16px; zoom: var(--ui-zoom, 1);
+  background: var(--surface); color: var(--text); box-shadow: 0 24px 60px rgba(0,0,0,.5), 0 0 0 1px var(--line-2); animation: fadein .25s ease; }
+.tour-card .tc-step { font: 700 11.5px var(--mono); letter-spacing: .06em; color: var(--accent); text-transform: uppercase; }
+.tour-card h3 { margin: 6px 0 4px; font-size: 17px; }
+.tour-card p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: var(--text-2); }
+.tour-card .tc-row { display: flex; align-items: center; gap: 6px; }
+.floor-hint .btn.primary { box-shadow: none; }
