@@ -72,7 +72,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Install it as an app** (☰ → Install as an app, in Chrome or Edge): its own window, and a badge on its icon with the
   number of things that need you.
 - **TV mode** (`V`, or open `/?tv=1` on a spare screen): the floor alone, full screen, with a status strip and a clock,
-  while a slow tour lights up each room and shows its card.
+  while a slow tour lights up each room and shows its card. Every third step a slide in big type takes the screen:
+  today's burners, the day so far, what shipped and how many things need you (counts only). The screen stays awake,
+  the cursor hides, it dims at night and reloads itself after an update. `&slides=burn,today,shipped,needs` (or
+  `none`), `&every=12` (seconds) and `&dim=22-7` (or `0`) tune it.
 
 **The office levels up**
 - Everyone's XP adds up to an office level (the gold ring next to the name). Each level unlocks something on the floor:

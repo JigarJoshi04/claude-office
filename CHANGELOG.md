@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.67.0] - 2026-10-19
+
+### Added
+- TV mode plays a playlist: between room tours, a slide in big type takes the screen (today's burners, the day so
+  far, what shipped, and how many things need you, as counts only). `?slides=`, `?every=` and `?dim=` tune it.
+- TV mode keeps the screen awake (asked again when the tab comes back), hides the cursor when idle, dims at night,
+  drifts a pixel every ten minutes against burn-in, and reloads itself (still on TV) after the office updates.
+
+### Fixed
+- TV mode's news ticker follows share-safe mode: who, and what kind of news, never what it says.
+
 ## [3.66.0] - 2026-10-19
 
 ### Added

@@ -1,6 +1,6 @@
 // The floor's cards and screens: the room peek (hover a room), the room menu (right-click a room), the floor legend
 // (the ? camera button) and TV mode (V). Moved out of app.js; `ctx` carries what they need from the app.
-import { $, esc, toast, live, hydratePortraits, dayTime, relTime } from "./util.js";
+import { $, esc, toast, live, hydratePortraits, dayTime, relTime, fmtTok } from "./util.js";
 import { icon } from "./icons.js";
 import { voice, leftOf } from "./personas.js";
 
@@ -41,11 +41,29 @@ export function makeFloor(ctx) {
   addEventListener("scroll", () => { peekEl.hidden = true; }, { passive: true, capture: true });
 
   // TV mode: the floor alone, full screen, for a second monitor or a wall. A heads-up line keeps the time and the
-  // office's one-sentence status; every few seconds the tour lights up the next room with people in it and shows its card.
-  let tvTimer = 0, tvAt = -1;
+  // office's one-sentence status; every few seconds the tour lights up the next room with people in it and shows its card,
+  // and every third step a slide in big type takes the screen instead (?slides=burn,today,shipped,needs or none,
+  // ?every=seconds). The screen stays awake, the cursor hides, it dims at night (?dim=22-7, or 0), drifts a pixel now and
+  // then against burn-in, and reloads itself after the office updates.
+  let tvTimer = 0, tvAt = -1, tvStep = 0, slideAt = -1, bootVersion = null;
+  const SLIDES = ["burn", "today", "shipped", "needs"];
+  const slideList = () => { const q = QS.get("slides"); if (q === "none") return []; const l = (q ? q.split(",") : SLIDES).filter(x => SLIDES.includes(x)); return l.length ? l : SLIDES; };
+  const tvEvery = () => Math.max(6, Math.min(120, +QS.get("every") || 9)) * 1000;
   function tvTour() {
     const snap = app.snap();
     if (!snap || !document.body.classList.contains("tv")) return;
+    const slides = slideList();
+    if (slides.length) { app.tokensCache("today"); app.statsCache(null); }   // the slides' numbers, ready before they show
+    tvStep++;
+    if (slides.length && tvStep % 3 === 0 && !replay.active()) {
+      if (bootVersion && snap.office.version && snap.office.version !== bootVersion) {   // the office updated: start fresh, still on TV
+        const u = new URL(location.href); u.searchParams.set("tv", "1"); location.replace(u); return;
+      }
+      slideAt = (slideAt + 1) % slides.length;
+      showSlide(slides[slideAt]);
+      return;
+    }
+    showSlide(null);
     const seats = [...snap.seats.filter(s => live(s).length), ...snap.seats.filter(s => !live(s).length)];
     if (!seats.length) return;
     tvAt = (tvAt + 1) % seats.length;
@@ -57,6 +75,78 @@ export function makeFloor(ctx) {
     tvExtra();
     tvTicker();
   }
+  // A slide in big type over the floor: the day's burn, the day so far, what shipped, and what needs the CEO (counts
+  // only: a wall screen never shows what anyone is working on).
+  function slideHtml(kind) {
+    const snap = app.snap(), name = (id) => { const s = snap.seats.find(x => x.id === id); return s ? panels.persona(s).name : "Someone"; };
+    const colour = (id) => (snap.seats.find(x => x.id === id) || {}).color || "#888";
+    const tile = (v, k) => `<div class="tvs-tile"><b>${esc(String(v))}</b><span>${esc(k)}</span></div>`;
+    const head = (eyebrow, title) => `<div class="tvs-eyebrow">${esc(eyebrow)}</div><h2>${esc(title)}</h2>`;
+    if (kind === "burn") {
+      const t = app.tokensCache("today");
+      if (!t || !t.seats) return head("Tokens today", "Counting…");
+      const rows = [...t.seats].filter(x => x.seat && x.today > 0).sort((a, b) => b.today - a.today).slice(0, 5), max = Math.max(1, ...rows.map(x => x.today));
+      return head("Tokens today", `${fmtTok(t.today || 0)} tokens so far`) + `<div class="tvs-bars">${rows.map(x => `<div class="tvs-bar" style="--seat:${esc(colour(x.seat))}"><span>${esc(name(x.seat))}</span><i><em style="width:${(x.today / max * 100).toFixed(1)}%"></em></i><b>${esc(fmtTok(x.today))}</b></div>`).join("") || `<p class="tvs-note">Nobody has burned a token yet today.</p>`}</div>`;
+    }
+    if (kind === "today") {
+      const st = app.statsCache(null), o = (st && st.office) || {}, seats = (st && st.seats) || {};
+      const hrs = Object.values(seats).reduce((a, x) => a + (x.active_min || 0), 0) / 60;
+      return head("Today", st && st.mvp && st.mvp.seat ? `Employee of the day: ${name(st.mvp.seat)}` : "The day so far")
+        + `<div class="tvs-tiles">${tile(o.reports || 0, o.reports === 1 ? "report filed" : "reports filed")}${tile(hrs >= 10 ? Math.round(hrs) : hrs.toFixed(1), "hours of agent work")}${tile(o.sessions || 0, "sessions")}</div>`;
+    }
+    if (kind === "shipped") {
+      const sh = snap.office.shipped_today, w = (app.tokensCache("today") || {}).waits;
+      return head("Shipped today", sh && sh.prs_merged ? `${sh.prs_merged} merged, ding-ding` : "From the desks to main")
+        + `<div class="tvs-tiles">${tile(sh ? sh.commits : "–", "commits")}${tile(sh ? sh.prs_opened : "–", "PRs opened")}${tile(sh ? sh.prs_merged : "–", "PRs merged")}</div>`
+        + (w && w.replies ? `<p class="tvs-note">Median reply to an agent today: ${esc(w.median_s < 60 ? Math.round(w.median_s) + " s" : Math.round(w.median_s / 60) + " min")}</p>` : "");
+    }
+    const att = panels.needsList();                     // grouped as Needs you groups them, so the counts agree
+    if (!att.length) return head("Needs you", "All clear") + `<p class="tvs-note">Nothing needs the CEO right now.</p>`;
+    const plan = (a) => a.nearly || a.grouped || /usage|limit|runs out|window/i.test(a.text || "");
+    const kinds = [["questions", att.filter(a => a.ask).length], ["lanes", att.filter(a => a.lane).length],
+      ["plan limits", att.filter(a => !a.ask && !a.lane && plan(a)).length]];
+    const other = att.length - kinds.reduce((n, k) => n + k[1], 0);
+    return head("Needs you", `${att.length} thing${att.length === 1 ? "" : "s"} need${att.length === 1 ? "s" : ""} the CEO`)
+      + `<div class="tvs-tiles">${[...kinds, ["other", other]].filter(k => k[1]).map(([k, n]) => tile(n, k)).join("")}</div>`;
+  }
+  function showSlide(kind) {
+    const frame = document.querySelector(".floor-frame");
+    let el = frame && frame.querySelector(".tv-slide");
+    if (!kind) { if (el) el.classList.remove("show"); return; }
+    if (!el && frame) { el = document.createElement("div"); el.className = "tv-slide"; el.setAttribute("aria-live", "polite"); frame.appendChild(el); }
+    if (!el) return;
+    office.spotlight(null); peekCard(null);
+    el.dataset.kind = kind;
+    el.innerHTML = `<div class="tvs-in">${slideHtml(kind)}</div>`;
+    requestAnimationFrame(() => el.classList.add("show"));
+  }
+  // The screen stays awake while TV mode is on (asked again when the tab comes back), and the cursor hides when idle.
+  let wake = null, idleT = 0;
+  async function keepAwake(on) {
+    try {
+      if (on && "wakeLock" in navigator && document.visibilityState === "visible" && !wake) {
+        wake = await navigator.wakeLock.request("screen");
+        wake.addEventListener("release", () => { wake = null; });
+      } else if (!on && wake) { const w = wake; wake = null; await w.release(); }
+    } catch { wake = null; }                       // not allowed here (a plain-HTTP LAN screen): nothing to do
+  }
+  document.addEventListener("visibilitychange", () => { if (document.body.classList.contains("tv")) keepAwake(true); });
+  addEventListener("mousemove", () => {
+    if (!document.body.classList.contains("tv")) return;
+    document.body.classList.remove("tv-idle"); clearTimeout(idleT);
+    idleT = setTimeout(() => document.body.classList.add("tv-idle"), 3000);
+  }, { passive: true });
+  // Night dimming and a slow pixel drift (burn-in), checked every minute.
+  function tvAmbient() {
+    if (!document.body.classList.contains("tv")) return;
+    const [a, b] = (QS.get("dim") || "22-7").split("-").map(Number), h = new Date().getHours();
+    const night = QS.get("dim") !== "0" && Number.isFinite(a) && Number.isFinite(b) && (a > b ? h >= a || h < b : h >= a && h < b);
+    document.body.classList.toggle("tv-night", night);
+    const k = Math.floor(Date.now() / 600000) % 4, frame = document.querySelector(".floor-frame");
+    if (frame) frame.style.translate = prefs.motion === "reduced" ? "" : `${[0, 1, 0, -1][k]}px ${[0, 0, 1, 0][k]}px`;
+  }
+  setInterval(tvAmbient, 60000);
+
   // TV mode hides the top bar, so its strip carries the gifts waiting and the happy hour.
   function tvExtra() {
     const el = document.querySelector(".tv-hud .tv-extra"), g = app.gifts;
@@ -72,8 +162,12 @@ export function makeFloor(ctx) {
     const snap = app.snap();
     const el = document.querySelector(".tv-ticker .tk-in");
     if (!el || !snap) return;
-    const ICON = { report: "✓", levelup: "★", achievement: "🏆", limit: "⏸", reset: "↻", arrive: "→", leave: "←", lane: "▣", shipped: "⇪" };
-    const items = (snap.events || []).slice(-8).reverse().map(e => `<span class="tk-item ${esc(e.level || "")}"><b>${ICON[e.kind] || "•"}</b>${esc(panels.humanise(e.text))}<em>${esc(relTime(e.ts))}</em></span>`).join("");
+    const ICON = { report: "✓", levelup: "★", achievement: "🏆", limit: "⏸", reset: "↻", arrive: "→", leave: "←", lane: "▣", shipped: "⇪", commit: "✎" };
+    // Share-safe: who, and what kind of news, never what it says (a wall screen is seen by anyone passing).
+    const WORD = { report: "filed a report", levelup: "levelled up", achievement: "won a trophy", limit: "reached a plan limit", reset: "has a fresh plan",
+      arrive: "started a session", leave: "finished a session", lane: "office lane news", shipped: "shipped a PR", commit: "committed work", reply: "replied", ask: "has a question" };
+    const said = (e) => { if (!prefs.privacy) return panels.humanise(e.text); const s = e.seat && snap.seats.find(x => x.id === e.seat); return `${s ? panels.persona(s).name : "The office"} ${WORD[e.kind] || "has news"}`; };
+    const items = (snap.events || []).slice(-8).reverse().map(e => `<span class="tk-item ${esc(e.level || "")}"><b>${ICON[e.kind] || "•"}</b>${esc(said(e))}<em>${esc(relTime(e.ts))}</em></span>`).join("");
     const html = items || `<span class="tk-item">Quiet in the office.</span>`;
     if (el.dataset.html !== html) { el.innerHTML = html + html; el.dataset.html = html; el.style.setProperty("--tk-dur", Math.max(30, (snap.events || []).slice(-8).length * 9) + "s"); }
   }
@@ -92,11 +186,15 @@ export function makeFloor(ctx) {
       hud.querySelector("[data-tv-exit]").addEventListener("click", () => setTv(false));
       document.body.classList.add("tv");
       if (!DEMO) badge(award("big_screen"));
-      tvAt = -1; clearInterval(tvTimer); tvTimer = setInterval(tvTour, 9000); setTimeout(tvTour, 600);
+      tvAt = -1; tvStep = 0; slideAt = -1; bootVersion = snap ? snap.office.version : null;
+      clearInterval(tvTimer); tvTimer = setInterval(tvTour, tvEvery()); setTimeout(tvTour, 600);
+      keepAwake(true); tvAmbient();
       try { if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); } catch { /* not allowed */ }
     } else {
-      document.body.classList.remove("tv");
-      clearInterval(tvTimer); office.spotlight(null); peekCard(null);
+      document.body.classList.remove("tv", "tv-idle", "tv-night");
+      clearInterval(tvTimer); office.spotlight(null); peekCard(null); keepAwake(false);
+      const sl = document.querySelector(".tv-slide"); if (sl) sl.remove();
+      const fr = document.querySelector(".floor-frame"); if (fr) fr.style.translate = "";
       const hud = document.querySelector(".tv-hud"); if (hud) hud.remove();
       const tk = document.querySelector(".tv-ticker"); if (tk) tk.remove();
       if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});

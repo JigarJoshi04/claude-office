@@ -884,7 +884,7 @@ const WHATS_NEW = [
   ["gift", "Gifts and a sticker album", "Reports and finished lanes sometimes leave a gift box on the floor, and a delivery waits every morning. Open them for 24 stickers in four rarities."],
   ["star", "The office levels up", "Everyone's XP adds up to an office level that unlocks palms, a vacuum, a dog, fireworks and more. Click the gold ring."],
   ["rewind", "Replay the day", "Press R and the floor plays back the last hours."],
-  ["tv", "TV mode", "Press V for the floor alone, full screen, with a news ticker."],
+  ["tv", "TV mode", "Press V for the floor alone, full screen: room tours, big slides and a news ticker, and the screen stays awake."],
   ["flame", "Goals, combos and a weekly challenge", "Three new goals every day, combos for reports in a row, and a challenge to beat last week."],
   ["calendar", "Last 7 days", "Today now charts the last seven days."],
   ["sparkles", "Gear, seasons and banter", "Team caps and shades come with levels, Halloween is on the floor, and characters chat."],
