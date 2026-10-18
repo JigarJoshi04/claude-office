@@ -118,11 +118,15 @@ export function makePanels(app) {
       .filter(([n]) => n > 0).map(([n, one, many]) => `${n} ${say(n, one, many)}`);
     const rank = (m) => (m.level === "bad" ? 0 : m.level === "warn" ? 1 : { report: 2, levelup: 3, achievement: 4, lane: 5 }[m.kind] ?? 6);
     const top = [...it].sort((x, y) => rank(x) - rank(y) || y.ts - x.ts).slice(0, 6);
+    const br = !app.privacy() && a.brief;           // written by the analyst (askabout.away); share-safe keeps to the counts
     return `<div class="away${awayOpen ? " open" : ""}">
       <div class="away-top">${icon("sparkles", 18)}<div class="grow"><div class="eyebrow">While you were away · ${hrs}</div>
-        <b>${it.length ? esc(chips.slice(0, 3).join(", ") || `${it.length} updates`) : "Quiet: nothing changed."}</b></div>
+        <b>${br && br.headline ? esc(br.headline) : it.length ? esc(chips.slice(0, 3).join(", ") || `${it.length} updates`) : "Quiet: nothing changed."}</b></div>
         ${it.length ? `<button class="btn sm ghost" data-away-toggle aria-expanded="${awayOpen}">${awayOpen ? "Hide" : "What happened"}${icon(awayOpen ? "chevronDown" : "chevronRight", 14)}</button>` : ""}
         <button class="btn sm ghost icon" data-dismiss-away aria-label="Dismiss" title="Dismiss">${icon("x", 16)}</button></div>
+      ${br ? `<div class="away-brief">${br.needs_you.length ? `<div class="ab-k bad-k">Needs you</div><ul>${br.needs_you.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+        ${br.done.length ? `<div class="ab-k">Done</div><ul>${br.done.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+        <div class="hint">${esc(chips.join(", "))}${br.fyi_count ? ` · ${br.fyi_count} routine item${br.fyi_count === 1 ? "" : "s"} folded away` : ""} · written by the analyst${br.demo ? " (demo)" : ""}</div></div>` : ""}
       ${awayOpen ? `<div class="away-list">${top.map(m => `<div class="act ${tone(m.level)} ${m.seat ? "click" : ""}" ${m.seat ? `data-seat="${esc(m.seat)}"` : ""}>${icon(EVENT_ICON[m.kind] || "dot", 16)}<span>${esc(humanise(m.text))}</span><span class="when">${relTime(m.ts)}</span></div>`).join("")}</div>` : ""}</div>`;
   }
   // The day's rhythm: a morning card recaps yesterday and names today's goals; an evening card wraps the day up and

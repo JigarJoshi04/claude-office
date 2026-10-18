@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.104.0"
+    server_version = "ClaudeOffice/3.105.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -401,6 +401,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, dict(settings.view(self.office.cfg, self.office.get().get("seats", [])), ok=True))
             if path == "/api/ai/ask":                     # a question about a session, answered by the analyst (askabout.py)
                 return self._json(200, askabout.ask(self.office, body, self.demo))
+            if path == "/api/ai/away":                    # the away card, written by the analyst (askabout.away)
+                return self._json(200, askabout.away(self.office, body, self.demo))
             if path == "/api/ask":                        # an agent's question for the CEO (python3 -m office ask)
                 return self._json(200, ask_question(self.office, body))
             if path in ("/api/ask/answer", "/api/ask/dismiss"):

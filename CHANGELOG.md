@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.105.0] - 2026-10-19
+
+### Added
+- "While you were away", written for you. With the office analyst on, the away card leads with a headline, what
+  needs your decision now (at most three lines) and what got done (at most four), with the routine news (sessions
+  coming and going, usage readings, commits) folded into a count. The counts and the full list stay under "What
+  happened"; share-safe shows only the counts. Off, the card is as before.
+
 ## [3.104.0] - 2026-10-19
 
 ### Added

@@ -61,6 +61,11 @@ async function checkAway(from) {
     const d = await r.json();
     away = { since: Math.max(since, d.from || since), items: (d.markers || []).filter(m => m.ts > since) };
     renderPanel(true);
+    // With the analyst on, it writes the card: a headline, what needs a decision, what got done (askabout.away).
+    if (snap.office.ai && snap.office.ai.enabled && away.items.length) {
+      const mine = away;
+      app.post("/api/ai/away", { since: mine.since }).then(b => { if (away === mine) { mine.brief = b; renderPanel(true); } }).catch(() => {});
+    }
   } catch { /* the briefing works without it */ }
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden) markSeen(); else checkAway().then(markSeen); });

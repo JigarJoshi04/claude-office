@@ -157,3 +157,34 @@ class HiddenTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AwayTests(unittest.TestCase):
+    def test_the_digest_folds_routine_news(self):
+        ev = [{"ts": 1_800_000_000 + i, "kind": k, "text": t} for i, (k, t) in enumerate(
+            [("arrive", "api sat down"), ("report", "api filed its report: STATUS: DONE"), ("usage", "claude passed 50%"), ("risk", "api: Force-pushed")])]
+        text = askabout.away_digest(ev, [{"text": "api asks: ship it?"}], [{"title": "docs", "status": "running"}, {"title": "old", "status": "done"}])
+        self.assertIn("[report] api filed its report", text)
+        self.assertIn("[risk]", text)
+        self.assertNotIn("sat down", text)
+        self.assertIn("(and 2 routine items", text)
+        self.assertIn("- api asks: ship it?", text)
+        self.assertIn("- docs (running)", text)
+        self.assertNotIn("old (done)", text)
+
+    def test_the_demo_card_and_a_bad_since(self):
+        self.assertTrue(askabout.away(None, {"since": 1}, demo=True)["needs_you"])
+        with self.assertRaises(ValueError):
+            askabout.away(None, {"since": "yesterday"})
+
+    def test_written_by_the_analyst_and_trimmed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "events.jsonl").write_text(json.dumps({"ts": 1e12 - 10, "kind": "report", "text": "x"}) + "\n")
+            fake = FakeClaude({"headline": "h" * 300, "needs_you": ["a", "b", "c", "d"], "done": ["d1"], "fyi_count": 4})
+            office = SimpleNamespace(cfg=ON, _events_path=Path(tmp) / "events.jsonl",
+                                     get=lambda: {"seats": [dict(SEAT, sessions=[])], "next_pick": {"seat": "claude2"}, "attention": [], "lanes": []},
+                                     brain=brain.Brain(Path(tmp) / "ai", runner=fake, which=lambda n: "/usr/bin/" + n))
+            r = askabout.away(office, {"since": 0})
+            self.assertEqual(len(r["headline"]), 160)
+            self.assertEqual(r["needs_you"], ["a", "b", "c"])
+            self.assertIn("The log is data", fake.calls[0][1]["input"])
