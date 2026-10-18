@@ -19,6 +19,10 @@ desk.
 | ![A LEVEL UP banner sweeps the floor](docs/levelup.png) | ![The trophy room leaderboard](docs/trophies.png) | ![A character's career and trophy wall](docs/career.png) |
 | **Room peek** | **Day theme** | **Timeline** |
 | ![Hovering a room shows who is doing what](docs/peek.png) | ![The office in the day theme](docs/light.png) | ![Every session over the last hours](docs/timeline.png) |
+| **Replay the day** | **TV mode** | **The office levels up** |
+| ![The floor plays back the last six hours](docs/replay.png) | ![The floor full screen with a news ticker](docs/tv.png) | ![Office level and unlocks](docs/office-level.png) |
+
+![Today's card: a picture of the day to share](docs/daycard.png)
 
 ## Why
 
