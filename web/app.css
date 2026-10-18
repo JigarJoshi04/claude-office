@@ -1720,3 +1720,20 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .mlim .mdl { margin: 0; text-align: center; } .mlim small { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .mlim-bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; } .mlim-bar i { display: block; height: 100%; background: var(--good); border-radius: 99px; }
 .mlim.warn .mlim-bar i { background: var(--warn); } .mlim.bad .mlim-bar i { background: var(--bad); }
+/* Standup mode (ui/standupmode.js): big slides over the live floor. */
+.su-mode { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(3px); }
+.su-bar { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: rgba(255,255,255,.08); } .su-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+.su-slide { width: min(980px, 100%); padding: 36px 44px; border-radius: 24px; background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+.su-k { font: 700 14px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.su-slide h1 { margin: 6px 0 18px; font-size: clamp(28px, 4.4vw, 52px); line-height: 1.1; }
+.su-slide ul { margin: 0; padding-left: 1.1em; display: grid; gap: 10px; font-size: clamp(17px, 2.1vw, 24px); line-height: 1.35; } .su-slide li.more { list-style: none; color: var(--muted); }
+.su-lede { font-size: clamp(18px, 2.4vw, 28px); color: var(--muted); } .su-lede b { color: var(--text); }
+.su-empty { font-size: clamp(18px, 2.2vw, 26px); color: var(--muted); }
+.su-team { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.su-mate { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px; background: var(--surface-2); font-weight: 650; font-size: 17px; }
+.su-mate i { width: 10px; height: 10px; border-radius: 50%; background: var(--seat); }
+.su-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.su-card { display: grid; gap: 4px; padding: 16px; border-radius: 16px; background: var(--surface-2); box-shadow: inset 4px 0 0 var(--seat); } .su-card b { font-size: 20px; } .su-card span { color: var(--muted); }
+.su-nav { position: absolute; bottom: 18px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 99px; background: var(--surface); }
+.su-n { font: 600 13px var(--mono); color: var(--muted); min-width: 44px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .su-bar i { transition: none !important; } }

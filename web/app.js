@@ -3,6 +3,7 @@ import { createOffice } from "./office.js";
 import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss, setToastGate, clock } from "./ui/util.js";
 import { configureGoals, goals, localDay } from "./ui/goals.js";
 import * as scrapbook from "./ui/scrapbook.js";
+import { openStandupMode } from "./ui/standupmode.js";
 import { openPoster } from "./ui/poster.js";
 import { makeDirector } from "./ui/director.js";
 import { makePanels } from "./ui/panels.js";
@@ -971,6 +972,13 @@ function goodnight() {
 
 // This morning's standup (office/standup.py): Yesterday, Today and Blockers from the office's own records, with the
 // characters' names, in a dialog to copy into Slack. Share-safe blurs it on screen; copying still gives the words.
+// Standup mode (ui/standupmode.js): the standup as five big slides over the live floor, for a screen share.
+async function presentStandup(d) {
+  if (!d) { try { const r = await fetch("/api/standup"); d = r.ok ? await r.json() : null; } catch { d = null; } }
+  if (!d || !snap) { toast("Could not write the standup.", "bad"); return; }
+  setView("floor");
+  openStandupMode({ data: d, snap, persona: (s) => panels.persona(s), humanise: panels.humanise, privacy: prefs.privacy });
+}
 async function openStandup() {
   let d;
   try { const r = await fetch("/api/standup"); d = r.ok ? await r.json() : null; } catch { d = null; }
@@ -979,10 +987,11 @@ async function openStandup() {
   $("dialogBody").innerHTML = `<div class="dh"><b>This morning's standup</b><button class="btn sm ghost" id="suClose" aria-label="Close">${icon("x", 16)}</button></div>
     <div class="db"><pre class="standup ${prefs.privacy ? "private" : ""}">${esc(text)}</pre>
     <p class="hint">Written from the office's own records: yesterday's reports, merges and commits, what runs today, and what Needs you holds. Bold and bullets as Slack writes them.</p>
-    <div class="row" style="margin-top:10px;gap:8px"><button class="btn primary" id="suCopy">${icon("copy", 15)}Copy for Slack</button></div></div>`;
+    <div class="row" style="margin-top:10px;gap:8px"><button class="btn primary" id="suCopy">${icon("copy", 15)}Copy for Slack</button><button class="btn" id="suPresent">${icon("tv", 15)}Present (2 min)</button></div></div>`;
   $("dialog").showModal();
   $("suClose").addEventListener("click", () => $("dialog").close());
   $("suCopy").addEventListener("click", () => navigator.clipboard.writeText(text).then(() => toast("The standup is on the clipboard.", "good"), () => toast("Could not copy.", "warn")));
+  $("suPresent").addEventListener("click", () => { $("dialog").close(); presentStandup(d); });
   $("suCopy").focus();
 }
 
@@ -1300,6 +1309,7 @@ function paletteItems() {
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("star", 16), label: "Scrapbook", keywords: "photos moments memories album pictures", run: () => go({ kind: "scrapbook" }) },
+    { icon: icon("tv", 16), label: "Standup mode", hint: "2 min", keywords: "standup present screen share meeting slides morning", run: () => presentStandup() },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
     { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
     { icon: icon("news", 16), label: "This morning's standup", keywords: "standup slack yesterday today blockers daily", run: openStandup },

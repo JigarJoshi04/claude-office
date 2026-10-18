@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.114.0] - 2026-10-19
+
+### Added
+- Standup mode: the morning's standup as a two-minute story for a screen share. Five big slides over the live floor
+  (the day and the team, yesterday, today, what needs a decision, who carried it), twenty seconds each with a
+  progress bar; space or the arrows move, P pauses, Esc ends it. From the standup dialog (Present) or Ctrl+K
+  (Standup mode). Share-safe shows counts only.
+
 ## [3.113.0] - 2026-10-19
 
 ### Fixed
