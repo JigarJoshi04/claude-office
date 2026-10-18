@@ -3,6 +3,22 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.21.0] - 2026-10-18
+
+### Added
+- A Tokens tab (K): today, 7, 30 or 90 days or all time, and all tokens, fresh or output. It has the total against
+  the period before, a leaderboard that shows who moved up or down, a drill-in for one character, the days in the
+  range, a 26-week calendar, a weekday-by-hour heatmap, records (the biggest day, the hungriest session, the longest
+  run of days, the busiest hour), and the hungriest sessions, projects and models. Sessions export as CSV (project
+  names left out in share-safe mode).
+- A live burn meter by the Live badge: the tokens the sessions at work processed in the last hour.
+- `GET /api/tokens?range=today|7|30|90|all&seat=<id>&sessions=all`.
+
+### Changed
+- The token ledger (version 2) keeps each session's days split by measure and its hours of the week. A version 1
+  ledger is rebuilt from the transcripts on disk on first start; sessions whose transcripts are gone keep their totals.
+- The demo's token history runs through the real ledger view.
+
 ## [3.20.1] - 2026-10-18
 
 ### Fixed

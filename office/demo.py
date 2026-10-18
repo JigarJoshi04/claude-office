@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import threading
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import time
 from collections import deque
 
@@ -13,6 +13,7 @@ from . import config, divider
 from .career import CATALOGUE, Career, new_seat, xp_for
 from .snapshot import Office
 from .history import DayLedger, HistoryStore
+from .tokens import TokenLedger
 from .live import LiveOffice, public
 
 ACTIVITY = {
@@ -93,58 +94,47 @@ def _demo_ledger():
     return led
 
 
-def _demo_tokens(seats: list[dict]) -> dict:
-    """Made-up all-time token use, shaped like TokenLedger.view(): about four months of a busy office."""
+def _demo_token_ledger() -> TokenLedger:
+    """Made-up token history for the demo, in the real ledger's own shape, so the demo shows exactly what the view does:
+    about four months of a busy office, five seats, eight projects, four models, working hours and weekends."""
     import hashlib
     rnd = lambda *k: int(hashlib.sha256("|".join(map(str, k)).encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
     today = date.today()
-    weight = {"claude": 0.8, "claude2": 1.6, "claude3": 1.1, "claude4": 0.7}
-    ids = [s["id"] for s in seats]
-    days, per_seat = [], {i: {"all": 0, "fresh": 0, "output": 0, "messages": 0, "sessions": 0, "today": 0} for i in ids}
+    weight = {"claude": 0.8, "claude2": 1.6, "claude3": 1.1, "claude4": 0.7, "astra": 0.45}
+    projects = {"claude": ["infra-terraform", "api-gateway"], "claude2": ["api-gateway", "mobile-app", "auth-service"],
+                "claude3": ["billing-service", "data-pipeline"], "claude4": ["docs-site"], "astra": ["design-system"]}
+    model = {"claude": "claude-opus-5-5", "claude2": "claude-opus-5-5", "claude3": "claude-sonnet-5-5", "claude4": "claude-haiku-5-5", "astra": "codex"}
+    led = TokenLedger(None, [])
+    sessions, days, models = {}, {}, {}
     for back in range(120, -1, -1):
         d = today - timedelta(days=back)
-        ramp = 0.35 + 0.65 * (120 - back) / 120 * (0.55 if d.weekday() >= 5 else 1.0)
-        day_all = 0
-        for sid in ids:
-            w = weight.get(sid, 0.5) * ramp * (0.4 + rnd("t", d, sid))
-            a = int(w * 420e6)
-            st = per_seat[sid]
-            st["all"] += a; st["fresh"] += a // 42; st["output"] += a // 410; st["messages"] += int(w * 1300); st["sessions"] += 1 + int(w * 3)
-            if back == 0:
-                st["today"] = a
-            day_all += a
-        days.append({"day": d.isoformat(), "all": day_all, "fresh": day_all // 42, "output": day_all // 410})
-    total = sum(d["all"] for d in days)
-    models = [("claude-opus-5-5", 0.71), ("claude-sonnet-5-5", 0.14), ("claude-haiku-5-5", 0.06), ("codex", 0.09)]
-    projects = [("api-gateway", "claude2"), ("billing-service", "claude3"), ("docs-site", "claude4"), ("mobile-app", "claude2"),
-                ("infra-terraform", "claude"), ("data-pipeline", "claude3"), ("design-system", "astra"), ("auth-service", "claude2")]
-    pshare = [0.24, 0.18, 0.13, 0.12, 0.1, 0.09, 0.08, 0.06]
-    months = {}
-    for d in days:
-        m = months.setdefault(d["day"][:7], {"month": d["day"][:7], "all": 0, "fresh": 0, "output": 0})
-        for k in ("all", "fresh", "output"):
-            m[k] += d[k]
-    seats_out = sorted(({"seat": k, **v, "top_model": "codex" if k == "astra" else "claude-opus-5-5"} for k, v in per_seat.items()), key=lambda x: -x["all"])
-    now = time.time()
-    return {
-        "scanning": False, "scanned_at": now, "since": days[0]["day"],
-        "total": {"all": total, "fresh": total // 42, "cache": total - total // 42, "output": total // 410,
-                  "messages": sum(v["messages"] for v in per_seat.values()), "sessions": sum(v["sessions"] for v in per_seat.values())},
-        "today": days[-1]["all"], "seats": seats_out, "days": days[-60:], "months": list(months.values()),
-        "models": [{"model": m, "all": int(total * f), "fresh": int(total * f) // 42, "output": int(total * f) // 410} for m, f in models],
-        "projects": [{"project": p, "all": int(total * f), "sessions": 20 + int(rnd("p", p) * 90), "top_seat": s if s in ids else None}
-                     for (p, s), f in zip(projects, pshare)],
-        "sessions": [{"id": f"{int(rnd('s', i) * 0xFFFFFFFF):08x}", "project": projects[i % len(projects)][0], "seat": projects[i % len(projects)][1] if projects[i % len(projects)][1] in ids else None,
-                      "all": int(total * (0.031 - i * 0.002)), "fresh": int(total * (0.031 - i * 0.002)) // 42, "output": int(total * (0.031 - i * 0.002)) // 410,
-                      "messages": 900 - i * 50, "first": now - (i * 5 + 3) * 86400, "last": now - (i * 5 + 1) * 86400} for i in range(10)],
-    }
+        weekend = d.weekday() >= 5
+        for seat, w in weight.items():
+            for k in range(1 + int(rnd("n", d, seat) * 3)):
+                if weekend and rnd("we", d, seat, k) < 0.6:
+                    continue
+                size = w * (0.35 + 0.65 * (120 - back) / 120) * (0.3 + rnd("s", d, seat, k)) * 140e6
+                c = int(size); f = c // 40; o = c // 400; mo = model[seat]
+                sid = f"demo-{seat}-{d}-{k}"
+                proj = projects[seat][int(rnd("p", d, seat, k) * len(projects[seat]))]
+                start = datetime(d.year, d.month, d.day, 9 + int(rnd("h", d, seat, k) * 11)).timestamp()
+                hours = {f"{d.weekday()}-{h}": (f + c) // 2 for h in (int(9 + rnd("h", d, seat, k) * 11), int(9 + rnd("h", d, seat, k) * 11) + 1) if h < 24}
+                sessions[sid] = {"p": proj, "s": "@codex" if seat == "astra" else seat, "fi": start, "l": start + 5400, "m": {mo: f + c},
+                                 "d": {d.isoformat(): [f, c, o]}, "h": hours, "f": f, "c": c, "o": o, "n": int(size / 1e5)}
+                r = days.setdefault(d.isoformat(), {"f": 0, "c": 0, "o": 0, "n": 0}); r["f"] += f; r["c"] += c; r["o"] += o; r["n"] += int(size / 1e5)
+                m = models.setdefault(mo, {"f": 0, "c": 0, "o": 0, "n": 0}); m["f"] += f; m["c"] += c; m["o"] += o
+    led.data = {"v": 2, "files": {}, "codex": {}, "sessions": sessions, "days": days, "models": models}
+    led.scanned_at = time.time()
+    return led
 
 
 class DemoOffice(LiveOffice):
     is_demo = True
 
-    def tokens_view(self) -> dict:
-        return _demo_tokens(self.get().get("seats", []))
+    def tokens_view(self, rng: str = "all", seat: str | None = None, all_sessions: bool = False) -> dict:
+        if not hasattr(self, "_tokens"):
+            self._tokens = _demo_token_ledger()
+        return self._tokens.view(self.get().get("seats", []), rng=rng, seat=seat, all_sessions=all_sessions)
 
     def demo_lane_detail(self, lane_id):
         """Made-up lane pages: the demo never reads the real lanes folder."""
@@ -272,6 +262,7 @@ class DemoOffice(LiveOffice):
             s["desks"] = sum(1 for x in s["sessions"] if x["kind"] == "desk")
             s["resting_until"] = None
             s["tokens_1h"] = sum(x["tokens_1h"]["fresh"] for x in s["sessions"])
+            s["tokens_1h_all"] = s["tokens_1h"] + sum(x["tokens_1h"]["cached"] for x in s["sessions"])
             s["status"] = Office._seat_status(s, sc, s["sessions"])
             for x in s["sessions"]:
                 x["talk"] = "none" if s["kind"] == "codex" else ("direct" if x["kind"] == "lane" else "review")
@@ -313,7 +304,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.20.1", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.21.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

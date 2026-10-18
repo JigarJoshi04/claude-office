@@ -8,6 +8,10 @@ the transcript alone cannot say), or to the seat the office saw it live in. Code
 
 Tokens are counted three ways: fresh (input + cache writes + output), cache reads, and output alone. "All" is fresh
 plus cache reads: every token the model processed. Only counts and project folder names are kept, never content.
+
+Version 2 keeps each session's days split by measure ([fresh, cache, output]) and its tokens by weekday and hour, for
+ranges, leaderboards that move, a calendar and a heatmap. A version 1 file is rebuilt from the transcripts still on
+disk; a session whose transcript Claude Code has since deleted keeps its version 1 totals, spread over its days.
 """
 from __future__ import annotations
 
@@ -15,20 +19,23 @@ import json
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
-VERSION = 1
+VERSION = 2
+RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 MAX_SESSIONS = 20000          # far beyond a busy year; the oldest drop off first
 
 
-def _day(ts: str | None) -> str | None:
+def _when(ts: str | None) -> tuple[str | None, str | None]:
+    """(local day, "weekday-hour" with Monday 0) for a transcript timestamp."""
     if not ts:
-        return None
+        return None, None
     try:
-        return datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone().date().isoformat()
+        t = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone()
     except ValueError:
-        return None
+        return None, None
+    return t.date().isoformat(), f"{t.weekday()}-{t.hour}"
 
 
 def _epoch(ts: str | None) -> float | None:
@@ -55,6 +62,7 @@ class TokenLedger:
         self.lock = threading.Lock()
         self.scanning = False
         self.scanned_at = 0.0
+        self._legacy = None                     # a version 1 ledger, merged after the first rebuild
         self.data = self._load()
 
     # -- state ----------------------------------------------------------------------------------------------------
@@ -64,11 +72,14 @@ class TokenLedger:
     def _load(self) -> dict:
         try:
             d = json.loads(self.path.read_text())
+            if d.get("v") == 1:                    # rebuilt from the transcripts on the first scan; see _merge_legacy
+                self._legacy = d
+                return self._empty()
             if d.get("v") == VERSION:
                 for k, v in self._empty().items():
                     d.setdefault(k, v)
                 return d
-        except (OSError, ValueError):
+        except (OSError, ValueError, AttributeError):   # no file yet (or no path: the demo's in-memory ledger)
             pass
         return self._empty()
 
@@ -137,6 +148,8 @@ class TokenLedger:
                     old = sorted(self.data["sessions"].items(), key=lambda kv: kv[1].get("l", 0))[:len(self.data["sessions"]) - MAX_SESSIONS]
                     for sid, _ in old:
                         del self.data["sessions"][sid]
+            if self._legacy is not None:
+                self._merge_legacy(); changed = True
             if changed:
                 self._save()
         finally:
@@ -144,6 +157,24 @@ class TokenLedger:
                 self.scanning = False
                 self.scanned_at = time.time()
         return changed
+
+    def _merge_legacy(self) -> None:
+        """Sessions the version 1 ledger counted whose transcripts are gone: keep their totals, spread over their days."""
+        old, self._legacy = self._legacy, None
+        with self.lock:
+            for sid, r in (old.get("sessions") or {}).items():
+                if sid in self.data["sessions"]:
+                    continue
+                days = r.get("d") or {}
+                whole = sum(days.values()) or 1
+                f, c, o = r.get("f", 0), r.get("c", 0), r.get("o", 0)
+                split = {day: [round(f * v / whole), round(c * v / whole), round(o * v / whole)] for day, v in days.items()}
+                self.data["sessions"][sid] = {**r, "d": split, "h": {}, "legacy": True}
+                for day, (df, dc, do) in split.items():
+                    _add(self.data["days"].setdefault(day, {}), df, dc, do, 0)
+                for m, v in (r.get("m") or {}).items():
+                    share = v / max(1, f + c)
+                    _add(self.data["models"].setdefault(m, {}), round(f * share), round(c * share), round(o * share), 0)
 
     def _session_of(self, root: Path, path: Path) -> tuple[str, str]:
         rel = path.relative_to(root).parts                 # (project, session.jsonl) or (project, session, subagents, ...)
@@ -205,9 +236,9 @@ class TokenLedger:
         n = lambda k: int(u.get(k) or 0)
         f = n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens")
         c, o = n("cache_read_input_tokens"), n("output_tokens")
-        day, at = _day(d.get("timestamp")), _epoch(d.get("timestamp"))
+        (day, wh), at = _when(d.get("timestamp")), _epoch(d.get("timestamp"))
         with self.lock:
-            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": at, "l": at, "m": {}, "d": {}})
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": at, "l": at, "m": {}, "d": {}, "h": {}})
             if not s.get("p") and d.get("cwd"):
                 s["p"] = os.path.basename(d["cwd"].rstrip("/")) or d["cwd"]
             if at:
@@ -215,8 +246,10 @@ class TokenLedger:
             _add(s, f, c, o)
             s["m"][model] = s["m"].get(model, 0) + f + c
             if day:
-                s["d"][day] = s["d"].get(day, 0) + f + c
+                v = s["d"].setdefault(day, [0, 0, 0]); v[0] += f; v[1] += c; v[2] += o
                 _add(self.data["days"].setdefault(day, {}), f, c, o)
+            if wh:
+                h = s.setdefault("h", {}); h[wh] = h.get(wh, 0) + f + c
             _add(self.data["models"].setdefault(model, {}), f, c, o)
         return True
 
@@ -256,16 +289,18 @@ class TokenLedger:
                 dc, dout = max(0, cached - c0), max(0, out - o0)
                 dfresh = max(0, (t - t0) - dc)                      # Codex counts cached input inside its input
                 t0, c0, o0 = t, cached, out
-                day, at = _day(d.get("timestamp")), _epoch(d.get("timestamp"))
+                (day, wh), at = _when(d.get("timestamp")), _epoch(d.get("timestamp"))
                 with self.lock:
-                    s = self.data["sessions"].setdefault(sid, {"p": None, "s": "@codex", "fi": at, "l": at, "m": {}, "d": {}})
+                    s = self.data["sessions"].setdefault(sid, {"p": None, "s": "@codex", "fi": at, "l": at, "m": {}, "d": {}, "h": {}})
                     if at:
                         s["fi"] = min(s.get("fi") or at, at); s["l"] = max(s.get("l") or at, at)
                     _add(s, dfresh, dc, dout)
                     s["m"]["codex"] = s["m"].get("codex", 0) + dfresh + dc
                     if day:
-                        s["d"][day] = s["d"].get(day, 0) + dfresh + dc
+                        v = s["d"].setdefault(day, [0, 0, 0]); v[0] += dfresh; v[1] += dc; v[2] += dout
                         _add(self.data["days"].setdefault(day, {}), dfresh, dc, dout)
+                    if wh:
+                        h = s.setdefault("h", {}); h[wh] = h.get(wh, 0) + dfresh + dc
                     _add(self.data["models"].setdefault("codex", {}), dfresh, dc, dout)
                 changed = True
         if pos == offset:
@@ -283,53 +318,134 @@ class TokenLedger:
             stop.wait(every)
 
     # -- the view -------------------------------------------------------------------------------------------------
-    def view(self, seats: list[dict], today: str | None = None, days: int = 60) -> dict:
+    def view(self, seats: list[dict], today: str | None = None, days: int = 60, rng: str = "all", seat: str | None = None,
+             all_sessions: bool = False) -> dict:
+        """The tokens page: totals, leaderboard (with the rank each seat had the period before), days, calendar,
+        weekday-by-hour heat, models, projects, sessions and records, for a range (today, 7, 30, 90, all) and
+        optionally one seat."""
         today = today or datetime.now().date().isoformat()
-        codex = next((s["id"] for s in seats if s.get("kind") == "codex"), None)
-        known = {s["id"] for s in seats}
+        rng = rng if rng in RANGES else "all"
+        n = RANGES[rng]
+        t = datetime.fromisoformat(today)
+        span = lambda back, length: {(t.date() - timedelta(days=back + i)).isoformat() for i in range(length)}
+        cur = span(0, n) if n else None
+        prev = span(n, n) if n else None
+        codex = next((x["id"] for x in seats if x.get("kind") == "codex"), None)
+        known = {x["id"] for x in seats}
         with self.lock:
             sessions = {k: dict(v) for k, v in self.data["sessions"].items()}
-            day_rows = dict(self.data["days"])
-            models = dict(self.data["models"])
+            day_rows = {k: dict(v) for k, v in self.data["days"].items()}
+            models_all = {k: dict(v) for k, v in self.data["models"].items()}
             scanning, scanned_at = self.scanning, self.scanned_at
-        allt = lambda r: r.get("f", 0) + r.get("c", 0)
         seat_of = lambda r: codex if r.get("s") == "@codex" else (r.get("s") if r.get("s") in known else None)
-        per_seat: dict = {}
-        projects: dict = {}
+        trip = lambda v: v if isinstance(v, list) else [0, v, 0]           # [fresh, cache, output]
+        def sums(r, keep):                                                # a session's [f, c, o] over a set of days
+            tot = [0, 0, 0]
+            for d, v in (r.get("d") or {}).items():
+                if keep is None or d in keep:
+                    v = trip(v); tot[0] += v[0]; tot[1] += v[1]; tot[2] += v[2]
+            return tot
+        mine = {sid: r for sid, r in sessions.items() if seat is None or seat_of(r) == seat}
+        per_seat, prev_seat, projects, models, heat = {}, {}, {}, {}, {}
+        listed = []
         for sid, r in sessions.items():
-            st = per_seat.setdefault(seat_of(r), {"f": 0, "c": 0, "o": 0, "n": 0, "sessions": 0, "today": 0, "m": {}})
-            _add(st, r.get("f", 0), r.get("c", 0), r.get("o", 0), r.get("n", 0))
-            st["sessions"] += 1
-            st["today"] += (r.get("d") or {}).get(today, 0)
-            for m, v in (r.get("m") or {}).items():
-                st["m"][m] = st["m"].get(m, 0) + v
+            k = seat_of(r)
+            f, c, o = sums(r, cur)
+            if prev is not None:
+                pf, pc, po = sums(r, prev)
+                ps = prev_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0})
+                ps["all"] += pf + pc; ps["fresh"] += pf; ps["output"] += po
+            if f + c:
+                st = per_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0, "sessions": 0, "today": 0, "m": {}})
+                st["all"] += f + c; st["fresh"] += f; st["output"] += o; st["sessions"] += 1
+                st["today"] += sum(trip((r.get("d") or {}).get(today, [0, 0, 0]))[:2])
+                for m, v in (r.get("m") or {}).items():
+                    st["m"][m] = st["m"].get(m, 0) + v
+            if sid not in mine or not f + c:
+                continue
+            whole = max(1, r.get("f", 0) + r.get("c", 0))
+            for m, v in (r.get("m") or {}).items():                       # a session's range, split by its models
+                share = v / whole
+                mm = models.setdefault(m, {"all": 0, "fresh": 0, "output": 0})
+                mm["all"] += round((f + c) * share); mm["fresh"] += round(f * share); mm["output"] += round(o * share)
             if r.get("p") and r.get("s") != "@codex":
-                pr = projects.setdefault(r["p"], {"all": 0, "sessions": 0, "seats": {}})
-                pr["all"] += allt(r); pr["sessions"] += 1
-                if seat_of(r):
-                    pr["seats"][seat_of(r)] = pr["seats"].get(seat_of(r), 0) + allt(r)
-        tot = {"f": 0, "c": 0, "o": 0, "n": 0}
-        for r in day_rows.values():
-            _add(tot, r.get("f", 0), r.get("c", 0), r.get("o", 0), r.get("n", 0))
-        first = min(day_rows) if day_rows else None
-        out_seats = sorted(({"seat": k, "all": allt(v), "fresh": v["f"], "output": v["o"], "messages": v["n"], "sessions": v["sessions"],
-                             "today": v["today"], "top_model": max(v["m"], key=v["m"].get) if v["m"] else None}
-                            for k, v in per_seat.items()), key=lambda x: -x["all"])
-        top_sessions = sorted(sessions.items(), key=lambda kv: -allt(kv[1]))[:12]
+                pr = projects.setdefault(r["p"], {"all": 0, "fresh": 0, "output": 0, "sessions": 0, "seats": {}})
+                pr["all"] += f + c; pr["fresh"] += f; pr["output"] += o; pr["sessions"] += 1
+                if k:
+                    pr["seats"][k] = pr["seats"].get(k, 0) + f + c
+            if cur is None:                                               # the heatmap follows the range when it can
+                for wh, v in (r.get("h") or {}).items():
+                    heat[wh] = heat.get(wh, 0) + v
+            listed.append((sid, r, f, c, o, k))
+        if cur is not None:                                               # hours are not kept per day: use the sessions active in range
+            for sid, r, f, c, o, k in listed:
+                whole = max(1, r.get("f", 0) + r.get("c", 0))
+                for wh, v in (r.get("h") or {}).items():
+                    heat[wh] = heat.get(wh, 0) + v * (f + c) / whole
+        # days: the office's, or this seat's from its sessions
+        if seat is None:
+            series = {d: [r.get("f", 0), r.get("c", 0), r.get("o", 0)] for d, r in day_rows.items()}
+        else:
+            series = {}
+            for r in mine.values():
+                for d, v in (r.get("d") or {}).items():
+                    v = trip(v); x = series.setdefault(d, [0, 0, 0]); x[0] += v[0]; x[1] += v[1]; x[2] += v[2]
+        row = lambda d, v: {"day": d, "all": v[0] + v[1], "fresh": v[0], "output": v[2]}
+        in_range = {d: v for d, v in series.items() if cur is None or d in cur}
+        tot = [sum(v[i] for v in in_range.values()) for i in range(3)]
         months: dict = {}
-        for d, r in day_rows.items():
-            _add(months.setdefault(d[:7], {}), r.get("f", 0), r.get("c", 0), r.get("o", 0), r.get("n", 0))
-        recent = sorted(day_rows)[-days:]
+        for d, v in series.items():
+            m = months.setdefault(d[:7], [0, 0, 0]); m[0] += v[0]; m[1] += v[1]; m[2] += v[2]
+        board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")},
+                         "top_model": max(v["m"], key=v["m"].get) if v["m"] else None} for k, v in per_seat.items()), key=lambda x: -x["all"])
+        if prev is not None:
+            order = [k for k, v in sorted(prev_seat.items(), key=lambda kv: -kv[1]["all"]) if v["all"] > 0]
+            for b in board:
+                b["prev_rank"] = order.index(b["seat"]) + 1 if b["seat"] in order else None
+                b["prev_all"] = prev_seat.get(b["seat"], {}).get("all", 0)
+        top = sorted(listed, key=lambda x: -(x[2] + x[3]))
+        # records, all time: the biggest day, the hungriest session, the longest run of days with tokens
+        records = {}
+        if series:
+            bd = max(series.items(), key=lambda kv: kv[1][0] + kv[1][1])
+            records["biggest_day"] = {"day": bd[0], "all": bd[1][0] + bd[1][1]}
+            run = best = 0; best_end = None; prev_day = None
+            for d in sorted(series):
+                if series[d][0] + series[d][1] <= 0:
+                    continue
+                run = run + 1 if prev_day and (datetime.fromisoformat(d) - datetime.fromisoformat(prev_day)).days == 1 else 1
+                prev_day = d
+                if run > best:
+                    best, best_end = run, d
+            records["longest_run"] = {"days": best, "until": best_end}
+        if mine:
+            hs = max(mine.items(), key=lambda kv: kv[1].get("f", 0) + kv[1].get("c", 0))
+            records["hungriest_session"] = {"id": hs[0].split(":")[-1][:8], "project": hs[1].get("p"), "seat": seat_of(hs[1]),
+                                            "all": hs[1].get("f", 0) + hs[1].get("c", 0)}
+        if heat:
+            wh = max(heat, key=heat.get)
+            records["busiest_hour"] = {"weekday": int(wh.split("-")[0]), "hour": int(wh.split("-")[1])}
+        cal_from = (t.date() - timedelta(days=7 * 26 - 1 + t.date().weekday())).isoformat()
         return {
-            "scanning": scanning or not scanned_at, "scanned_at": scanned_at or None, "since": first,
-            "total": {"all": allt(tot), "fresh": tot["f"], "cache": tot["c"], "output": tot["o"], "messages": tot["n"], "sessions": len(sessions)},
-            "today": allt(day_rows.get(today, {})),
-            "seats": out_seats,
-            "days": [{"day": d, "all": allt(day_rows[d]), "fresh": day_rows[d].get("f", 0), "output": day_rows[d].get("o", 0)} for d in recent],
-            "months": [{"month": m, "all": allt(v), "fresh": v["f"], "output": v["o"]} for m, v in sorted(months.items())],
-            "models": sorted(({"model": m, "all": allt(v), "fresh": v.get("f", 0), "output": v.get("o", 0)} for m, v in models.items()), key=lambda x: -x["all"]),
-            "projects": sorted(({"project": p, "all": v["all"], "sessions": v["sessions"], "top_seat": max(v["seats"], key=v["seats"].get) if v["seats"] else None}
+            "scanning": scanning or not scanned_at, "scanned_at": scanned_at or None,
+            "since": min(day_rows) if day_rows else None, "range": rng, "seat": seat,
+            "total": {"all": tot[0] + tot[1], "fresh": tot[0], "cache": tot[1], "output": tot[2],
+                      "messages": sum((r.get("n", 0) for r in mine.values())) if cur is None else None,
+                      "sessions": len(listed)},
+            "prev_total": ({"all": sum(sum(series.get(d, [0, 0, 0])[:2]) for d in prev)} if prev is not None else None),
+            "today": sum(series.get(today, [0, 0, 0])[:2]),
+            "seats": board,
+            "days": [row(d, series[d]) for d in sorted(series)[-days:]] if cur is None else
+                    [row(d, series.get(d, [0, 0, 0])) for d in sorted(span(0, max(n, 7)))][-max(n, 7):],
+            "calendar": [row(d, v) for d, v in sorted(series.items()) if d >= cal_from],
+            "heat": {k: round(v) for k, v in heat.items()},
+            "months": [{"month": m, "all": v[0] + v[1], "fresh": v[0], "output": v[2]} for m, v in sorted(months.items())],
+            "models": sorted(({"model": m, **v} for m, v in models.items() if v["all"] > 0), key=lambda x: -x["all"]),
+            "projects": sorted(({"project": p, "all": v["all"], "fresh": v["fresh"], "output": v["output"], "sessions": v["sessions"],
+                                 "top_seat": max(v["seats"], key=v["seats"].get) if v["seats"] else None}
                                 for p, v in projects.items()), key=lambda x: -x["all"])[:12],
-            "sessions": [{"id": sid.split(":")[-1][:8], "project": r.get("p"), "seat": seat_of(r), "all": allt(r), "fresh": r.get("f", 0),
-                          "output": r.get("o", 0), "messages": r.get("n", 0), "first": r.get("fi"), "last": r.get("l")} for sid, r in top_sessions],
+            "sessions": [{"id": sid.split(":")[-1][:8], "project": r.get("p"), "seat": k, "all": f + c, "fresh": f, "cache": c, "output": o,
+                          "messages": r.get("n", 0), "first": r.get("fi"), "last": r.get("l")}
+                         for sid, r, f, c, o, k in (top if all_sessions else top[:12])],
+            "records": records,
         }

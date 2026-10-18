@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import checkpoint, config, divider, lanes, messaging, sessions, talk, settings
+from . import checkpoint, config, divider, lanes, messaging, sessions, talk, settings, tokens
 
 MAX_BODY = 256 * 1024
 
@@ -34,7 +34,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.20.1"
+    server_version = "ClaudeOffice/3.21.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -109,7 +109,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self.office.samples.stats(self.office.get(), q.get("day"),
                                                                list(self.office.events)))
             if url.path == "/api/tokens":
-                return self._json(200, self.office.tokens_view())
+                rng, seat = q.get("range", "all"), q.get("seat") or None
+                if rng not in tokens.RANGES:
+                    raise ValueError("range must be today, 7, 30, 90 or all")
+                return self._json(200, self.office.tokens_view(rng, seat, q.get("sessions") == "all"))
             if url.path == "/api/week":
                 days = _number(q.get("days", "7"), "days must be an integer from 1 to 90")
                 return self._json(200, {"days": self.office.samples.week(self.office.get(), days, list(self.office.events))})

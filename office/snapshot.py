@@ -344,6 +344,7 @@ class Office(LiveOffice):
             s["resting_until"] = limits.get(s["id"])
             t1 = sum((x.get("tokens_1h") or {}).get("fresh", 0) for x in live)
             s["tokens_1h"] = t1
+            s["tokens_1h_all"] = t1 + sum((x.get("tokens_1h") or {}).get("cached", 0) for x in live)   # the live burn meter
             s["status"] = self._seat_status(s, sc, live)
             # A pace measured while lanes ran says nothing once the seat stops working: don't raise an alarm on it.
             for fc in (s.get("forecast") or {}).values():
@@ -385,7 +386,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.20.1", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.21.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -518,9 +519,9 @@ class Office(LiveOffice):
             return {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
         self.tokens.run(self.stop, live)
 
-    def tokens_view(self) -> dict:
+    def tokens_view(self, rng: str = "all", seat: str | None = None, all_sessions: bool = False) -> dict:
         snap = self.get() or {}
-        return self.tokens.view(snap.get("seats", []))
+        return self.tokens.view(snap.get("seats", []), rng=rng, seat=seat, all_sessions=all_sessions)
 
     def get(self) -> dict:
         with self._lock:

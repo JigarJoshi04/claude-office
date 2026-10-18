@@ -1,7 +1,7 @@
 // All-time tokens, in the Today view: the office's total since its transcripts begin, who burns the most (characters,
 // sessions, projects), the models, and the last 60 days. One measure at a time: everything the model processed, fresh
 // tokens (input, cache writes and output) or output alone. Data from /api/tokens (office/tokens.py).
-import { esc, fmtTok, relTime } from "./util.js";
+import { esc, fmtTok, relTime, hydratePortraits } from "./util.js";
 import { icon } from "./icons.js";
 import { personaFor } from "./personas.js";
 
@@ -55,7 +55,7 @@ export function tokensCard(app) {
     <small>${p.sessions} session${p.sessions === 1 ? "" : "s"}${p.top_seat ? ` · mostly ${esc(who(p.top_seat))}` : ""}</small></span><em>${big(p.all)}</em></li>`).join("");
   const mmax = Math.max(1, ...(t.models || []).map(val));
   const models = (t.models || []).filter(m => val(m) > 0).slice(0, 6).map(m => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${big(val(m))}</em></li>`).join("");
-  return `<div class="view-card tok" id="tokens"><div class="section-h"><h4>All-time tokens</h4>
+  return `<div class="view-card tok" id="tokens"><div class="section-h"><h4>All-time tokens</h4><button class="btn sm ghost" data-tok-open title="Ranges, rank movement, a calendar and the hours of the week (K)">${icon("flame", 13)}Open Tokens</button><span class="grow"></span>
       <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(TOKEN_METRICS).map(([k, [l, d]]) => `<button data-tok-metric="${k}" class="${k === key ? "on" : ""}" title="${esc(d)}">${l}</button>`).join("")}</div></div>
     <div class="tok-hero"><b>${big(total)}</b><span>${label.toLowerCase()}${since ? ` since ${esc(since)}` : ""}</span>${t.today && key === "all" ? `<em>${big(t.today)} today</em>` : ""}</div>
     <div class="tok-parts"><span title="Tokens read back from the prompt cache: cheap, and most of the volume">${icon("refresh", 13)}${big(t.total.cache)} cache reads</span>
@@ -69,10 +69,136 @@ export function tokensCard(app) {
 }
 
 export function bindTokens(el, app, rerender) {
+  el.querySelectorAll("[data-tok-open]").forEach(b => b.addEventListener("click", () => app.setView("tokens")));
   el.querySelectorAll("[data-tok-metric]").forEach(b => b.addEventListener("click", () => { app.setPref("tokenMetric", b.dataset.tokMetric); rerender(); }));
   el.querySelectorAll(".tb-row[data-seat-go]").forEach(r => {
     const open = () => app.go({ kind: "seat", seat: r.dataset.seatGo });
     r.addEventListener("click", open);
     r.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
   });
+}
+
+// ------------------------------------------------------------------------------------------------ the Tokens tab
+// The whole story for a range (today, 7, 30 or 90 days, all time) and optionally one character: the total against
+// the period before, the live burn, a leaderboard that shows who moved, the days, a calendar, the hours of the week,
+// the hungriest sessions, projects and models, and the office's records. Sessions export as CSV.
+const RANGES = [["today", "Today"], ["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["all", "All time"]];
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const rangeWord = { today: "today", 7: "in the last 7 days", 30: "in the last 30 days", 90: "in the last 90 days", all: "all time" };
+const prevWord = { today: "yesterday", 7: "the 7 days before", 30: "the 30 days before", 90: "the 90 days before" };
+
+export function renderTokens(el, app) {
+  const p = app.prefs(), rng = p.tokRange || "30", seat = p.tokSeat || null;
+  const t = app.tokensCache(rng, seat), key = app.tokenMetric(), [label] = TOKEN_METRICS[key] || TOKEN_METRICS.all;
+  const snap = app.snap(), priv = app.privacy();
+  const seatOf = (id) => snap.seats.find(s => s.id === id);
+  const who = (id) => { const s = seatOf(id); return s ? personaFor(s, snap.seats.findIndex(x => x.id === id)).name : "Unknown seat"; };
+  const val = (r) => (r ? r[key] || 0 : 0);
+  const head = `<div class="tp-head"><div class="grow"><h3>Tokens${seat ? ` · ${esc(who(seat))}` : ""}</h3><p>${seat ? `Everything ${esc(who(seat))} burned` : "Who burns the most, and when"}, counted from the transcripts on this machine.</p></div>
+    <div class="seg-ctl" role="group" aria-label="Range">${RANGES.map(([k, l]) => `<button data-tp-range="${k}" class="${k === rng ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(TOKEN_METRICS).map(([k, [l, d]]) => `<button data-tok-metric="${k}" class="${k === key ? "on" : ""}" title="${esc(d)}">${l}</button>`).join("")}</div>
+    ${seat ? `<button class="btn sm" data-tp-seat="">${icon("x", 14)}All characters</button>` : ""}<button class="btn sm" data-tp-csv>${icon("download", 14)}CSV</button></div>`;
+  if (!t) { el.innerHTML = `<div class="view-card">${head}<div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`; bind(); return; }
+  const total = val(t.total), prev = t.prev_total ? t.prev_total.all : null;
+  const delta = key === "all" && prev ? Math.round((total - prev) / prev * 100) : null;
+  const liveNow = snap.seats.filter(s => !seat || s.id === seat).reduce((a, s) => a + (s.tokens_1h_all || 0), 0);
+  // the leaderboard, with how each character moved since the period before
+  const board = (t.seats || []).filter(s => val(s) > 0), max = Math.max(1, ...board.map(val)), sum = board.reduce((a, s) => a + val(s), 0);
+  const rows = board.map((s, i) => {
+    const st = seatOf(s.seat), color = st ? st.color : "#82889f", mv = s.prev_rank == null ? null : s.prev_rank - (i + 1);
+    const move = s.prev_rank == null ? (rng === "all" ? "" : `<em class="mv new" title="Not on the board ${esc(prevWord[rng] || "")}">new</em>`)
+      : mv > 0 ? `<em class="mv up" title="Up from #${s.prev_rank}">▲${mv}</em>` : mv < 0 ? `<em class="mv down" title="Down from #${s.prev_rank}">▼${-mv}</em>` : `<em class="mv same" title="Same place as ${esc(prevWord[rng] || "")}">=</em>`;
+    return `<div class="tb-row ${i === 0 ? "top" : ""} ${s.seat === seat ? "sel" : ""}" style="--seat:${esc(color)}" ${st ? `data-tp-seat="${esc(s.seat)}" role="button" tabindex="0" aria-label="${esc(who(s.seat))}: ${big(val(s))}, show only ${esc(who(s.seat))}"` : ""}>
+      <span class="rk">${i + 1}</span>${st ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(color)}|"></i>` : `<span class="tb-unk">?</span>`}
+      <span class="grow"><span class="tb-name"><b>${esc(who(s.seat))}</b>${move}${i === 0 ? `<em class="tb-flame">${icon("flame", 13)}${rng === "all" ? "Top burner" : "Burning hottest"}</em>` : ""}</span>
+        <span class="tb-bar"><i style="width:${(val(s) / max * 100).toFixed(1)}%"></i></span></span>
+      <span class="tb-v"><b>${big(val(s))}</b><small>${sum ? Math.round(val(s) / sum * 100) : 0}% · ${s.sessions} session${s.sessions === 1 ? "" : "s"}</small></span></div>`;
+  }).join("") || `<div class="muted">No tokens ${esc(rangeWord[rng])}.</div>`;
+  // days in the range, as bars
+  const days = t.days || [], dmax = Math.max(1, ...days.map(val));
+  const bars = days.map((d, i) => { const h = val(d) > 0 ? Math.max(2, Math.round(val(d) / dmax * 100)) : 0, w = 100 / days.length;
+    return `<rect x="${(i * w + w * 0.12).toFixed(2)}" y="${100 - h}" width="${(w * 0.76).toFixed(2)}" height="${h}" class="${i === days.length - 1 ? "on" : ""}"><title>${esc(new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${val(d).toLocaleString()}</title></rect>`; }).join("");
+  const firstDay = days[0] && new Date(days[0].day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" });
+  // the calendar: 26 weeks, Monday at the top, five shades of one hue
+  const cal = t.calendar || [], cmax = Math.max(1, ...cal.map(val)), byDay = Object.fromEntries(cal.map(d => [d.day, d]));
+  const end = new Date(), start = new Date(end); start.setDate(end.getDate() - (7 * 26 - 1) - ((end.getDay() + 6) % 7));
+  let cells = "";
+  for (let i = 0, d = new Date(start); d <= end; i++, d.setDate(d.getDate() + 1)) {
+    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`, v = val(byDay[k]);
+    const lvl = v <= 0 ? 0 : Math.min(4, 1 + Math.floor(v / cmax * 4));
+    cells += `<i class="l${lvl}" style="grid-row:${((d.getDay() + 6) % 7) + 1};grid-column:${Math.floor(i / 7) + 1}" title="${esc(d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${v ? big(v) : "nothing"}"></i>`;
+  }
+  // the week's hours: Monday to Sunday down, midnight to 11 PM across
+  const heat = t.heat || {}, hmax = Math.max(1, ...Object.values(heat));
+  let hcells = "";
+  for (let wd = 0; wd < 7; wd++) for (let h = 0; h < 24; h++) {
+    const v = heat[`${wd}-${h}`] || 0, lvl = v <= 0 ? 0 : Math.min(4, 1 + Math.floor(v / hmax * 4));
+    hcells += `<i class="l${lvl}" style="grid-row:${wd + 1};grid-column:${h + 2}" title="${DAYS[wd]} ${h}:00–${h + 1}:00: ${v ? big(v) : "nothing"}"></i>`;
+  }
+  const hlabels = DAYS.map((d, i) => `<b style="grid-row:${i + 1};grid-column:1">${d}</b>`).join("") + [0, 6, 12, 18].map(h => `<b class="hx" style="grid-row:8;grid-column:${h + 2}">${h}</b>`).join("");
+  const rec = t.records || {};
+  const records = [
+    rec.biggest_day && [icon("calendar", 16), "Biggest day", `${big(rec.biggest_day.all)}`, new Date(rec.biggest_day.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })],
+    rec.hungriest_session && [icon("flame", 16), "Hungriest session", big(rec.hungriest_session.all), `${priv ? "a project" : esc(rec.hungriest_session.project || "a session")} · ${esc(who(rec.hungriest_session.seat))}`],
+    rec.longest_run && rec.longest_run.days > 1 && [icon("zap", 16), "Longest run", `${rec.longest_run.days} days`, `in a row with tokens, to ${new Date(rec.longest_run.until + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" })}`],
+    rec.busiest_hour && [icon("clock", 16), "Busiest hour", `${DAYS[rec.busiest_hour.weekday]} ${rec.busiest_hour.hour}:00`, "the hour of the week that burns the most"],
+  ].filter(Boolean).map(([ic, k, v, sub]) => `<div class="tp-rec"><span class="ic-w">${ic}</span><span><small>${k}</small><b>${v}</b><span>${sub}</span></span></div>`).join("");
+  const list = (items, fn) => items.length ? `<ol>${items.map(fn).join("")}</ol>` : `<p class="muted">Nothing ${esc(rangeWord[rng])}.</p>`;
+  const sessions = list((t.sessions || []).slice(0, 8), (s, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(s.project || "a session")}</b>
+    <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""}</small></span><em>${big(val(s))}</em></li>`);
+  const projects = list((t.projects || []).slice(0, 8), (p, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(p.project)}</b>
+    <small>${p.sessions} session${p.sessions === 1 ? "" : "s"}${p.top_seat && !seat ? ` · mostly ${esc(who(p.top_seat))}` : ""}</small></span><em>${big(val(p))}</em></li>`);
+  const mmax = Math.max(1, ...(t.models || []).map(val));
+  const models = list((t.models || []).filter(m => val(m) > 0).slice(0, 8), (m) => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${big(val(m))}</em></li>`);
+  el.innerHTML = `<div class="tokpage">
+    <div class="view-card">${head}
+      <div class="tp-hero"><div><b>${big(total)}</b><span>${esc(label.toLowerCase())} ${esc(rangeWord[rng])}</span></div>
+        ${delta != null ? `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% on ${esc(prevWord[rng])}</em>` : ""}
+        <em class="live" title="Tokens the sessions at work processed in the last hour">${icon("flame", 13)}${big(liveNow)} in the last hour</em>
+        ${rng !== "today" && t.today ? `<em>${big(t.today)} today</em>` : ""}</div>
+      <div class="tok-parts"><span>${icon("refresh", 13)}${big(t.total.cache)} cache reads</span><span>${icon("zap", 13)}${big(t.total.fresh)} fresh</span><span>${icon("send", 13)}${big(t.total.output)} output</span><span>${icon("chat", 13)}${(t.total.sessions || 0).toLocaleString()} sessions</span></div></div>
+    <div class="tp-grid"><div class="view-card"><h5>${seat ? "Where it ranks" : "Who burns the most"} · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tb-list">${rows}</div>
+        ${!seat && board.length ? `<p class="hint">Click a character to see only theirs.${rng === "all" ? "" : " Arrows: places moved since " + esc(prevWord[rng]) + "."}</p>` : ""}</div>
+      <div class="view-card"><h5>Per day${firstDay ? ` · from ${esc(firstDay)}` : ""}</h5><svg class="tp-bars" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${esc(label)} per day">${bars}</svg>
+        <div class="tok-months">${(t.months || []).slice(-4).map(m => `<span><b>${big(val(m))}</b>${esc(new Date(m.month + "-15T12:00:00").toLocaleDateString([], { month: "long" }))}</span>`).join("")}</div></div></div>
+    <div class="tp-grid"><div class="view-card"><h5>Calendar · 26 weeks</h5><div class="tp-cal" role="img" aria-label="Tokens per day over 26 weeks">${cells}</div>
+        <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div>
+      <div class="view-card"><h5>The week's hours${rng === "all" ? "" : " · " + esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tp-heat" role="img" aria-label="Tokens by weekday and hour">${hlabels}${hcells}</div>
+        <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div></div>
+    ${records ? `<div class="view-card"><h5>Records${seat ? ` · ${esc(who(seat))}` : ""}</h5><div class="tp-recs">${records}</div></div>` : ""}
+    <div class="view-card tok"><div class="tok-lists"><div><h5>Hungriest sessions</h5>${sessions}</div><div><h5>Projects</h5>${projects}</div><div><h5>Models</h5><ul class="tok-models">${models.replace(/^<ol>|<\/ol>$/g, "")}</ul></div></div>
+      <p class="hint">Since ${t.since ? esc(new Date(t.since + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "long" })) : "the first transcript"}. Claude Code keeps about a month of transcripts; the office keeps its totals from then on. Fresh: input, cache writes and output. Cache reads are tokens read back from the prompt cache.</p></div>
+  </div>`;
+  hydratePortraits(el, 4);
+  bind();
+
+  function bind() {
+    const rerender = () => renderTokens(el, app);
+    el.querySelectorAll("[data-tp-range]").forEach(b => b.addEventListener("click", () => { app.setPref("tokRange", b.dataset.tpRange); rerender(); }));
+    el.querySelectorAll("[data-tok-metric]").forEach(b => b.addEventListener("click", () => { app.setPref("tokenMetric", b.dataset.tokMetric); rerender(); }));
+    el.querySelectorAll("[data-tp-seat]").forEach(b => {
+      const go = () => { const v = b.dataset.tpSeat || null; app.setPref("tokSeat", v === seat ? null : v); rerender(); };
+      b.addEventListener("click", go);
+      b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
+    const csv = el.querySelector("[data-tp-csv]");
+    if (csv) csv.addEventListener("click", () => downloadCsv(app, rng, seat, who));
+  }
+}
+
+// Every session in the range as CSV: seat, project (left out in share-safe mode), dates and the four counts.
+async function downloadCsv(app, rng, seat, who) {
+  try {
+    const r = await fetch(`/api/tokens?range=${encodeURIComponent(rng)}${seat ? "&seat=" + encodeURIComponent(seat) : ""}&sessions=all`);
+    const t = await r.json(), priv = app.privacy();
+    const q = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+    const iso = (s) => (s ? new Date(s * 1000).toISOString() : "");
+    const lines = [["character", "seat", "project", "session", "first", "last", "all_tokens", "fresh", "cache_reads", "output", "responses"].join(","),
+      ...t.sessions.map(s => [q(who(s.seat)), q(s.seat || ""), q(priv ? "" : s.project), q(s.id), q(iso(s.first)), q(iso(s.last)), s.all, s.fresh, s.cache, s.output, s.messages].join(","))];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
+    a.download = `tokens-${rng}${seat ? "-" + seat : ""}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch { /* the toast belongs to the app; a failed export just does nothing */ }
 }

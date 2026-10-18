@@ -71,3 +71,37 @@ class TokenLedgerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TokenViewTests(unittest.TestCase):
+    def test_ranges_seats_previous_ranks_and_v1_migration(self):
+        from office.demo import _demo_token_ledger
+        led = _demo_token_ledger()
+        seats = [{"id": i, "kind": "codex" if i == "astra" else "claude"} for i in ("claude", "claude2", "claude3", "claude4", "astra")]
+        all_time, month, week = (led.view(seats, rng=r) for r in ("all", "30", "7"))
+        self.assertGreater(all_time["total"]["all"], month["total"]["all"])
+        self.assertGreater(month["total"]["all"], week["total"]["all"])
+        self.assertEqual(len(week["days"]), 7)
+        self.assertTrue(all(b.get("prev_rank") is not None for b in month["seats"]))
+        self.assertNotIn("prev_rank", all_time["seats"][0])
+        self.assertEqual(sum(b["all"] for b in month["seats"]), month["total"]["all"])
+        mine = led.view(seats, rng="30", seat="claude3")
+        self.assertTrue(all(s["seat"] == "claude3" for s in mine["sessions"]))
+        self.assertEqual(mine["total"]["all"], next(b["all"] for b in month["seats"] if b["seat"] == "claude3"))
+        self.assertEqual(len(led.view(seats, rng="all", all_sessions=True)["sessions"]), len(led.data["sessions"]))
+        self.assertTrue(set(all_time["heat"]) <= {f"{d}-{h}" for d in range(7) for h in range(24)})
+        self.assertIn("biggest_day", all_time["records"])
+
+    def test_v1_sessions_without_transcripts_keep_their_totals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "tokens.json"
+            p.write_text(json.dumps({"v": 1, "files": {}, "codex": {}, "days": {"2026-10-01": {"f": 30, "c": 70, "o": 3, "n": 2}},
+                                     "models": {}, "sessions": {"gone": {"p": "old", "s": "claude", "f": 30, "c": 70, "o": 3, "n": 2,
+                                     "m": {"claude-opus-5": 100}, "d": {"2026-10-01": 60, "2026-10-02": 40}}}}))
+            led = TokenLedger(p, [])
+            led.scan()
+            v = led.view([{"id": "claude", "kind": "claude"}])
+            self.assertEqual(v["total"]["all"], 100)
+            self.assertEqual(v["seats"][0]["all"], 100)
+            self.assertEqual(json.loads(p.read_text())["v"], 2)
+            self.assertTrue(json.loads(p.read_text())["sessions"]["gone"]["legacy"])

@@ -85,9 +85,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   and a delivery waits at the CEO desk every morning. Open them for 24 pixel-art stickers in four rarities; five
   spares swap for a rare-or-better gift. Only one sticker is Legendary. Finishing all goals, a big combo or a level
   up always brings a gift, a daily happy hour doubles the odds, and each finished rarity puts something on the floor.
-- **All-time tokens**: every token since the oldest transcript on the machine, who burns the most (characters,
-  sessions, projects, models), and the last 60 days, counted from the transcripts and attributed to the seat that ran
-  each session.
+- **Tokens** (K): every token since the oldest transcript on the machine, by range (today to all time) and per
+  character: who burns the most and who moved, a calendar, the hours of the week, records, the hungriest sessions,
+  projects and models, CSV export, and a live burn meter. Counted from the transcripts and attributed to the seat that
+  ran each session.
 - **Character cards**: each character as a collectible card, framed Bronze to Holo by level, to save or post.
 - **Your week in review**: on Mondays (or from the menu) the last seven days play as a short story, ending in a
   picture to post: reports against the week before, agent hours, the star of the week and what you collected.

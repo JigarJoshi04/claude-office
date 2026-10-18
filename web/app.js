@@ -1,6 +1,6 @@
 // Claude Office: the controller. Live data in; floor, inspector and views out.
 import { createOffice } from "./office.js";
-import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL } from "./ui/util.js";
+import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok } from "./ui/util.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
@@ -18,7 +18,7 @@ import { makeWeekReview } from "./ui/weekreview.js";
 import { makeArcade } from "./ui/arcade.js";
 import { makeRadio } from "./ui/radio.js";
 import { makeCards } from "./ui/charcard.js";
-import { topBurner } from "./ui/tokens.js";
+import { topBurner, renderTokens } from "./ui/tokens.js";
 import { hydrateStickers } from "./engine/stickers.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
@@ -29,7 +29,7 @@ const prefs = Object.assign({ theme: "dark", motion: matchMedia("(prefers-reduce
   sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true, seasonal: true }, store.get("prefs", {}));
 let snap = null, view = { kind: "ceo" }, liveMode = "connecting";
 const details = new Map(), histCache = new Map(), statsCache = new Map(), inflight = new Set();
-let tokens = null;
+const tokens = new Map();   // "range|seat" -> {data, at}
 let week = null;
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
 const seenNews = new Set();
@@ -65,6 +65,7 @@ const app = {
   privacy: () => prefs.privacy,
   liveMode: () => liveMode,
   go,
+  setView: (v) => setView(v),
   rerender: (force) => renderPanel(force),
   refresh: () => pollOnce(),
   async post(path, body) {
@@ -85,18 +86,20 @@ const app = {
     return week ? week.data : null;
   },
   weekMetric: () => prefs.weekMetric || "reports",
-  tokensCache: () => {   // all-time tokens (/api/tokens): every 2 minutes, every 5 s while the first read runs
-    const stale = !tokens || Date.now() - tokens.at > (tokens.data && tokens.data.scanning ? 5000 : 120000);
-    if (stale && !inflight.has("tokens")) {
-      inflight.add("tokens");
-      fetch("/api/tokens").then(r => r.ok ? r.json() : null).then(d => {
-        tokens = { data: d, at: Date.now() }; inflight.delete("tokens");
-        office.setTopBurner(topBurner(d));
-        if (prefs.view === "stats") renderMain();
-        if (view.kind === "seat") renderPanel(true);
-      }).catch(() => { tokens = { data: null, at: Date.now() }; inflight.delete("tokens"); });
+  // Tokens (/api/tokens), per range and seat: refreshed every 2 minutes, every 5 s while the first read runs.
+  tokensCache: (rng = "all", seat = null) => {
+    const k = rng + "|" + (seat || ""), c = tokens.get(k);
+    const stale = !c || Date.now() - c.at > (c.data && c.data.scanning ? 5000 : 120000);
+    if (stale && !inflight.has("t" + k)) {
+      inflight.add("t" + k);
+      fetch(`/api/tokens?range=${encodeURIComponent(rng)}${seat ? "&seat=" + encodeURIComponent(seat) : ""}`).then(r => r.ok ? r.json() : null).then(d => {
+        tokens.set(k, { data: d, at: Date.now() }); inflight.delete("t" + k);
+        if (k === "all|") office.setTopBurner(topBurner(d));
+        if (prefs.view === "stats" || prefs.view === "tokens") renderMain();
+        if (k === "all|" && view.kind === "seat") renderPanel(true);
+      }).catch(() => { tokens.set(k, { data: null, at: Date.now() }); inflight.delete("t" + k); });
     }
-    return tokens ? tokens.data : null;
+    return c ? c.data : null;
   },
   tokenMetric: () => prefs.tokenMetric || "all",
   statsCache: (day) => { const k = day || "today"; const c = statsCache.get(k); if (!c || Date.now() - c.at > 60000) loadStats(day); return c ? c.data : null; },
@@ -544,7 +547,21 @@ function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
 $("officeLvl").addEventListener("click", () => go({ kind: "office" }));
 
 let badgeN = -1;
+// The live burn meter: tokens the sessions at work processed in the last hour, by the Live badge; a click opens Tokens.
+function renderBurn() {
+  const b = $("burn"), n = snap.seats.reduce((a, s) => a + (s.tokens_1h_all || 0), 0);
+  b.hidden = !n;
+  if (!n) return;
+  const top = [...snap.seats].sort((x, y) => (y.tokens_1h_all || 0) - (x.tokens_1h_all || 0))[0];
+  const html = `${icon("flame", 13)}${fmtTok(n)}<small>/h</small>`;
+  if (b.dataset.html !== html) { b.innerHTML = html; b.dataset.html = html; }
+  b.title = `${n.toLocaleString()} tokens in the last hour${top && top.tokens_1h_all ? `, most by ${panels.persona(top).name}` : ""}. Click for the Tokens tab.`;
+  b.setAttribute("aria-label", b.title);
+  b.classList.toggle("hot", n >= 50e6);
+}
+$("burn").addEventListener("click", () => setView("tokens"));
 function renderTop() {
+  renderBurn();
   $("officeName").textContent = snap.office.name || "Claude Office";
   const bad = snap.attention.some(a => a.level === "bad"), warn = snap.attention.length > 0;
   document.title = (bad ? "● " : "") + (snap.office.name || "Claude Office");
@@ -718,7 +735,7 @@ function whatsNew() {
 }
 
 function shortcuts() {
-  const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S", "Floor, Timeline, Team, Today"],
+  const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S K", "Floor, Timeline, Team, Today, Tokens"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
     ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["M", "Office radio: lo-fi on or off"], ["\\", "Hide or show the inspector"],
     ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
@@ -791,13 +808,13 @@ async function installApp() {
 
 // ------------------------------------------------------------------------------------------------ views
 function setView(v) {
-  if (!["floor", "timeline", "board", "stats"].includes(v)) v = "floor";
+  if (!["floor", "timeline", "board", "stats", "tokens"].includes(v)) v = "floor";
   if (v !== "floor" && document.body.classList.contains("tv")) floor.setTv(false);   // TV mode is the floor alone
   if (v !== "floor" && typeof replay !== "undefined" && replay.active()) replay.close();   // replay lives on the floor
   mainDrawn.delete(v);
   setPref("view", v);
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.view === v));
-  for (const [k, id] of [["floor", "viewFloor"], ["timeline", "viewTimeline"], ["board", "viewBoard"], ["stats", "viewStats"]]) $(id).hidden = k !== v;
+  for (const [k, id] of [["floor", "viewFloor"], ["timeline", "viewTimeline"], ["board", "viewBoard"], ["stats", "viewStats"], ["tokens", "viewTokens"]]) $(id).hidden = k !== v;
   if (v === "timeline") loadHistory(prefs.tlHours);
   if (v === "stats") loadStats(prefs.statsDay);
   renderMain();
@@ -810,11 +827,12 @@ function renderMain(fromSnap) {
   if (v === "floor") return;
   if (fromSnap && !mainDrawn.has(v)) fromSnap = false;
   mainDrawn.add(v);
-  const el = $({ timeline: "viewTimeline", board: "viewBoard", stats: "viewStats" }[v]);
+  const el = $({ timeline: "viewTimeline", board: "viewBoard", stats: "viewStats", tokens: "viewTokens" }[v]);
   if (v === "board") { const sig = JSON.stringify(snap.seats.map(s => [s.status, s.usage && [s.usage.five_hour, s.usage.weekly], live(s).map(x => [x.id, x.state, x.activity])])) + prefs.privacy; if (fromSnap && sig === mainSig) return; mainSig = sig; renderBoard(el, app); }
   // Timeline and Today come from their own endpoints: refresh them on a clock (they redraw when the data lands),
   // keeping the old picture on screen meanwhile.
   else if (v === "timeline") { if (fromSnap) { const c = histCache.get(prefs.tlHours); if (!c || Date.now() - c.at > 60000) loadHistory(prefs.tlHours); return; } renderTimeline(el, app); }
+  else if (v === "tokens") { if (fromSnap) { app.tokensCache(prefs.tokRange || "30", prefs.tokSeat || null); return; } renderTokens(el, app); }
   else if (v === "stats") { if (fromSnap) { const c = statsCache.get(prefs.statsDay || "today"); if (!prefs.statsDay && (!c || Date.now() - c.at > 120000)) loadStats(null); return; } renderStats(el, app); }
 }
 
@@ -977,7 +995,7 @@ $("btnPalette").innerHTML = `${icon("search", 17)}<span class="lbl">Search</span
 $("btnHire").innerHTML = `${icon("plus", 17)}<span>Hire</span>`;
 $("btnMenu").innerHTML = icon("menu", 19);
 document.querySelectorAll(".tab").forEach(t => {
-  const [ic, label] = { floor: ["floor", "Floor"], timeline: ["timeline", "Timeline"], board: ["users", "Team"], stats: ["trophy", "Today"] }[t.dataset.view];
+  const [ic, label] = { floor: ["floor", "Floor"], timeline: ["timeline", "Timeline"], board: ["users", "Team"], stats: ["trophy", "Today"], tokens: ["flame", "Tokens"] }[t.dataset.view];
   t.innerHTML = `${icon(ic, 17)}${label}`;
   t.addEventListener("click", () => { sound.play("click"); setView(t.dataset.view); });
 });
@@ -1027,6 +1045,7 @@ document.addEventListener("keydown", (e) => {
   else if (k === "t") setView("timeline");
   else if (k === "b") setView("board");
   else if (k === "s") setView("stats");
+  else if (k === "k") setView("tokens");
   else if (k === "p") setPref("privacy", !prefs.privacy);
   else if (k === ",") go({ kind: "settings" });
   else if (k === "?") shortcuts();
