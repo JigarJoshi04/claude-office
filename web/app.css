@@ -1293,3 +1293,5 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .ccv-nav .btn { color: #fff; }
 .ccv-act { display: flex; justify-content: center; gap: 8px; }
 :root[data-motion="reduced"] .ccv-card { transition: none; }
+.linkish { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; font-weight: 650; color: #ff8fb8; cursor: pointer; }
+.linkish:hover { text-decoration: underline; } :root[data-theme="light"] .linkish { color: #b0215a; }

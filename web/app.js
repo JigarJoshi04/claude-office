@@ -839,6 +839,7 @@ function bindCommon(p) {
   p.querySelectorAll("[data-view-go]").forEach(b => b.addEventListener("click", () => setView(b.dataset.viewGo)));
   p.querySelectorAll("[data-seat-go]").forEach(b => b.addEventListener("click", () => go({ kind: "seat", seat: b.dataset.seatGo })));
   p.querySelectorAll("[data-card]").forEach(b => b.addEventListener("click", () => cards.open(b.dataset.card)));
+  p.querySelectorAll("[data-gift-seek]").forEach(b => b.addEventListener("click", () => giftBox.seek()));
   p.querySelectorAll("button[data-lane], .need[data-lane]").forEach(b => b.addEventListener("click", () => go({ kind: "lane", id: b.dataset.lane })));
   p.querySelectorAll(".member[data-seat], .act.click[data-seat]").forEach(r => r.addEventListener("click", () => go({ kind: "seat", seat: r.dataset.seat })));
   p.querySelectorAll(".sess").forEach(r => r.addEventListener("click", () => go({ kind: "session", seat: r.dataset.seat, id: r.dataset.id })));
