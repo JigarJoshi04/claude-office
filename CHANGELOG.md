@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.111.0] - 2026-10-19
+
+### Added
+- The same-repo collision alarm. When two live sessions have written files in the same git working tree in the last
+  15 minutes, Needs you says so ("api-rate-limits and checkout-tests are both editing apollo right now"), as bad news
+  when they wrote the same file, with a news line once an hour. Lanes in their own worktrees never collide; files
+  outside a repository are left out, and no file path reaches the page (files are compared by a short hash).
+
 ## [3.110.0] - 2026-10-19
 
 ### Added

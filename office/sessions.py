@@ -7,6 +7,8 @@ which is parsed incrementally: only bytes appended since the last look are read.
 from __future__ import annotations
 
 import bisect
+import functools
+import hashlib
 import json
 import os
 import re
@@ -291,6 +293,47 @@ def _trust(report_status, tr):
     return trust_of(report_status, tr.test_ok, tr.test_at, tr.edit_at)
 
 
+@functools.lru_cache(maxsize=4096)
+def work_root(folder: str) -> str | None:
+    """The git working tree a folder is in (the nearest parent with a real .git: a repository's HEAD, or a worktree's
+    "gitdir:" file; a stray empty .git folder does not count), or None."""
+    d = folder
+    for _ in range(40):
+        g = os.path.join(d, ".git")
+        if os.path.exists(os.path.join(g, "HEAD")) or (os.path.isfile(g) and _gitdir_file(g)):
+            return d
+        up = os.path.dirname(d)
+        if up == d:
+            return None
+        d = up
+    return None
+
+
+def _gitdir_file(path: str) -> bool:
+    try:
+        with open(path) as fh:
+            return fh.read(8) == "gitdir: "
+    except OSError:
+        return False
+
+
+TOUCH_S = 15 * 60
+
+
+def touch_of(edits: dict, now: float) -> dict | None:
+    """What a session wrote in the last 15 minutes, for the collision alarm: its working trees ({root: last}) and its
+    files by a short hash ({id: last}), so no file path reaches the page."""
+    roots, files = {}, {}
+    for path, ts in edits.items():
+        if now - ts > TOUCH_S:
+            continue
+        root = work_root(os.path.dirname(path))
+        if root:
+            roots[root] = max(roots.get(root, 0), ts)
+        files[hashlib.sha1(path.encode()).hexdigest()[:12]] = ts
+    return {"roots": roots, "files": files} if roots else None
+
+
 def phase_of(steps: list[str], test_ok) -> str | None:
     """Where a session is in its work, from its last steps: exploring, building, testing, debugging or wrapping up."""
     if not steps:
@@ -350,7 +393,7 @@ class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
                  "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context",
-                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at", "risks", "steps", "edit_at")
+                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at", "risks", "steps", "edit_at", "edits")
 
     def __init__(self, path: Path):
         self.path = path
@@ -389,6 +432,7 @@ class TranscriptState:
         self.risks: list[dict] = []    # risky tool calls (risk.py): {"id", "ts", "rule", "text"}, the last 20
         self.steps: list[str] = []     # the last main-chain tool calls by kind (step_kind), for its phase
         self.edit_at = None            # its last code change (a main-chain edit), for trust.py
+        self.edits: dict = {}          # file path -> when it last wrote it (the last 30), for the collision alarm
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -507,6 +551,13 @@ class TranscriptState:
                         del self.steps[:-10]
                     if sk == "edit":
                         self.edit_at = ts or self.edit_at
+                        inp = c.get("input") if isinstance(c.get("input"), dict) else {}
+                        fp = str(inp.get("file_path") or inp.get("notebook_path") or "")
+                        if fp.startswith("/") and ts:
+                            self.edits.pop(fp, None)
+                            self.edits[fp] = ts
+                            while len(self.edits) > 30:
+                                self.edits.pop(next(iter(self.edits)))
                 self._push(ts, text, kind)
             elif c.get("type") == "text" and isinstance(c.get("text"), str) and c["text"].strip() and not d.get("isSidechain"):
                 self.last_text = _short(c["text"], 400)
@@ -798,6 +849,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "risks": list(tr.risks[-5:]) if tr else [],
             "phase": phase_of(tr.steps, tr.test_ok) if tr and state in ("working", "waiting") else None,
             "trust": _trust(report_status, tr) if tr and report_status else None,
+            "touch": touch_of(tr.edits, now) if tr and tr.edits else None,
             "loop": {"text": redact(tr.repeat[2]), "count": tr.repeat[1], "since": tr.repeat[3]} if tr and tr.repeat and tr.repeat[1] >= 5 else None,
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,

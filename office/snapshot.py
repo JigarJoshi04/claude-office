@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import os
 from datetime import datetime
 import re
 import shutil
@@ -35,6 +36,27 @@ THRESHOLDS = (50, 80, 95)
 FORECAST_WINDOWS = {"five_hour": 3600, "weekly": 6 * 3600}   # how far back the burn rate looks
 
 
+def collisions(snap: dict) -> list[dict]:
+    """Live sessions that wrote in the same working tree in the last 15 minutes: [{root, who: [{id, name, seat}],
+    same_file}], same_file when two of them wrote the same file (sessions.touch_of)."""
+    by_root: dict = {}
+    for s in snap.get("seats", []):
+        for x in s.get("sessions", []):
+            t = x.get("touch")
+            if not t or not x.get("live", True):
+                continue
+            for root in t.get("roots") or {}:
+                by_root.setdefault(root, []).append((x, s["id"]))
+    out = []
+    for root, xs in sorted(by_root.items()):
+        if len(xs) < 2:
+            continue
+        files = [set((x.get("touch") or {}).get("files") or {}) for x, _ in xs]
+        same = any(files[i] & files[j] for i in range(len(files)) for j in range(i + 1, len(files)))
+        out.append({"root": root, "same_file": same, "who": [{"id": x["id"], "name": x.get("name") or "a session", "seat": sid} for x, sid in xs]})
+    return out
+
+
 def _iso_ts(v) -> float | None:
     """An ISO time from GitHub ("2026-10-19T08:00:00Z") as epoch seconds, or None."""
     try:
@@ -49,6 +71,8 @@ def attention_key(a: dict) -> str:
         return "ask:" + a["ask"]
     if a.get("interrupted"):
         return "interrupted:"
+    if a.get("collision"):
+        return f"collision:{a['collision']}"
     if a.get("trust"):                                    # a claim its transcript contradicts (before its lane's own items)
         return f"trust:{a['trust']}"
     if a.get("lane"):                                     # waiting for a seat and failed are two things to snooze
@@ -305,6 +329,7 @@ class Office(LiveOffice):
         self.risk_seen = risk.Seen(config.STATE_DIR / "risks-seen.json")
         self.brain = brain.Brain(config.STATE_DIR / "ai")                 # the opt-in analyst (brain.py)
         self.trust = trust.Store(config.STATE_DIR / "trust.json")         # reports' claims against their transcripts
+        self._collide_said: dict = {}
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -505,7 +530,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.110.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.111.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -548,6 +573,12 @@ class Office(LiveOffice):
         snap["asks"] = self.asks.view(30)
         snap["contradicted"] = [dict(v, session=k) for k, v in self.trust.recent(now - 12 * 3600) if v.get("level") == "contradicted"]
         snap["attention"] = self._attention(snap)
+        for c in collisions(snap):                           # said once an hour per working tree and set of sessions
+            k = c["root"] + "|" + ",".join(sorted(w["id"] for w in c["who"]))
+            if now - self._collide_said.get(k, 0) > 3600:
+                self._collide_said[k] = now
+                self.emit("collision", f"{' and '.join(w['name'] for w in c['who'][:3])} are both editing {os.path.basename(c['root'])}"
+                          + (", the same file" if c["same_file"] else ""), c["who"][0]["seat"], "bad" if c["same_file"] else "warn")
         quiet = self.quiet.get()                          # snoozed items wait; do not disturb is on every screen
         snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > now)
         snap["ceo"] = self.presence.get()                  # at the computer or away (presence.py)
@@ -611,6 +642,11 @@ class Office(LiveOffice):
             items.append({"level": "warn", "seat": v.get("seat"), "session": v["session"] if v["session"] in live_ids else None,
                           "lane": None if v["session"] in live_ids else v.get("lane"), "trust": v["session"],
                           "text": f"{v.get('name') or 'A session'}{' on ' + labels[v['seat']] if v.get('seat') in labels else ''} says it is done, but {v['why']}"})
+        for c in collisions(snap):                           # two agents writing in the same working tree at once
+            names = " and ".join(f"{x['name']} on {labels.get(x['seat'], x['seat'])}" for x in c["who"][:3])
+            items.append({"level": "bad" if c["same_file"] else "warn", "seat": c["who"][0]["seat"], "session": c["who"][0]["id"],
+                          "collision": c["root"], "text": f"{names} are both editing {os.path.basename(c['root'])}"
+                                                           + (", the same file" if c["same_file"] else " right now")})
         reviewed = set()                                     # one review item per PR, however many desks share its branch
         for s in snap["seats"]:
             label = s["label"]

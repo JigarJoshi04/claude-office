@@ -482,3 +482,44 @@ class HeredocTests(unittest.TestCase):
             self.assertIsNone(_TEST_FAILED.search(ok), ok)
         for bad in ("=== 1 failed, 40 passed in 3s", "1 failed in 0.1s", "3 failing", "FAILED (failures=2)"):
             self.assertIsNotNone(_TEST_FAILED.search(bad), bad)
+
+
+class CollisionTests(unittest.TestCase):
+    """The same-repo collision alarm: two live sessions writing in one working tree within 15 minutes."""
+
+    def test_work_roots_and_touch(self):
+        import tempfile, os as _os
+        from unittest.mock import patch as _patch
+        from office import sessions as _s
+        from office.sessions import work_root, touch_of
+        real = _os.path.exists
+        with tempfile.TemporaryDirectory() as tmp, _patch.object(_s.os.path, "exists", lambda q: q.startswith(tmp) and real(q)):   # nothing above tmp counts
+            repo = _os.path.join(tmp, "repo"); _os.makedirs(_os.path.join(repo, ".git")); _os.makedirs(_os.path.join(repo, "src", "deep"))
+            Path(repo, ".git", "HEAD").write_text("ref: refs/heads/main\n")
+            wt = _os.path.join(tmp, "wt"); _os.makedirs(wt); Path(wt, ".git").write_text("gitdir: /x/.git/worktrees/wt\n")
+            stray = _os.path.join(tmp, "stray"); _os.makedirs(_os.path.join(stray, ".git", "empty"))
+            work_root.cache_clear()
+            self.assertEqual(work_root(_os.path.join(repo, "src", "deep")), repo)
+            self.assertIsNone(work_root(tmp))
+            self.assertEqual(work_root(wt), wt)                                              # a worktree's .git file
+            self.assertIsNone(work_root(_os.path.join(stray, ".git", "empty")))               # an empty .git folder is not a repo
+            t = touch_of({_os.path.join(repo, "src", "a.py"): 1000.0, _os.path.join(tmp, "loose.txt"): 1000.0, _os.path.join(repo, "old.py"): 1.0}, 1100.0)
+            self.assertEqual(t["roots"], {repo: 1000.0})
+            self.assertEqual(len(t["files"]), 2)                                              # hashed, never paths
+            self.assertTrue(all("/" not in k for k in t["files"]))
+        work_root.cache_clear()
+
+    def test_two_sessions_in_one_tree_need_you(self):
+        from office.snapshot import Office, attention_key, collisions
+        sess = lambda sid, files: {"id": sid, "name": sid, "state": "working", "kind": "lane", "live": True,
+                                   "touch": {"roots": {"/w/apollo": 100.0}, "files": {f: 100.0 for f in files}}}
+        snap = {"now": 200.0, "asks": [], "lanes": [], "units": [], "office": {},
+                "seats": [{"id": "c", "label": "claude", "kind": "claude", "status": "ok", "usage": {}, "sessions": [sess("a", ["f1"]), sess("b", ["f2"])]}]}
+        items = [x for x in Office._attention(snap) if x.get("collision")]
+        self.assertEqual((items[0]["level"], items[0]["text"]), ("warn", "a on claude and b on claude are both editing apollo right now"))
+        self.assertEqual(attention_key(items[0]), "collision:/w/apollo")
+        snap["seats"][0]["sessions"][1] = sess("b", ["f1"])
+        self.assertTrue(collisions(snap)[0]["same_file"])
+        self.assertEqual([x for x in Office._attention(snap) if x.get("collision")][0]["level"], "bad")
+        snap["seats"][0]["sessions"][1]["live"] = False
+        self.assertEqual(collisions(snap), [])

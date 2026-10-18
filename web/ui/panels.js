@@ -25,7 +25,7 @@ const TEMPLATES = [
 ];
 const KIND_ICON = { type: "terminal", read: "search", think: "sparkles", talk: "chat", delegate: "bot", wait: "clock" };
 const EVENT_ICON = { levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert",
-  stuck: "clock", lane: "briefcase", divider: "sliders", checkpoint: "pin", message: "send", reply: "chat", error: "alert", par: "flag" };
+  stuck: "clock", lane: "briefcase", divider: "sliders", checkpoint: "pin", message: "send", reply: "chat", error: "alert", par: "flag", risk: "alert", collision: "branch", reminder: "bell" };
 
 export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
@@ -81,7 +81,7 @@ export function makePanels(app) {
   // only who and what kind, as the toasts do.
   const PRIVATE_ROW = { reminder: "A reminder you set", report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news",
     external: "has news", reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer",
-    ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you", risk: "did something risky" };
+    ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you", risk: "did something risky", collision: "has two sessions in one working tree" };
   function actRow(e) {
     const s = e.seat && seatById(e.seat), said = app.privacy() && PRIVATE_ROW[e.kind]
       ? (e.kind === "reminder" ? PRIVATE_ROW.reminder : !s && e.kind === "lane" ? "Office lane news" : `${s ? P(s).name : "The office"} ${PRIVATE_ROW[e.kind]}`) : humanise(e.text);
@@ -316,7 +316,7 @@ export function makePanels(app) {
   function needs(snap) {
     const out = [], spent = new Map(), nearly = new Map();
     for (const a of snap.attention || []) {
-      if (a.ask || a.ci || a.review || a.risk || a.trust || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
+      if (a.ask || a.ci || a.review || a.risk || a.trust || a.collision || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
       const st = a.seat && seatById(a.seat);
       const planItem = /usage at \d+%|stopped by the usage limit|runs out of its/i.test(a.text);
       // A seat close to its limit says so once: "Orion has 1% of its 5-hour window left, out in ~2 min".

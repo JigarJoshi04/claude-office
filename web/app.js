@@ -573,7 +573,7 @@ setInterval(() => {
 // In share-safe mode, news whose words could name a session, a project or a report says only who and what kind.
 const PRIVATE_NEWS = { report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news", external: "has news",
   reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer", risk: "did something risky",
-  ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you" };
+  ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you", collision: "has two sessions in one working tree" };
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {}, plane() {}, mail() {}, ringBell() {} };
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
 // A page error says so once, quietly, and reports itself to the office (the doctor lists it). Errors from browser

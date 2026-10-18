@@ -11,7 +11,7 @@ from . import config
 from .career import XP_MINUTE, XP_REPORT, XP_SESSION, XP_TOOL
 from .live import public
 
-MARKER_KINDS = {"limit", "report", "reset", "hire", "login", "lane", "usage", "levelup", "achievement", "shipped", "external", "ghost", "risk"}
+MARKER_KINDS = {"limit", "report", "reset", "hire", "login", "lane", "usage", "levelup", "achievement", "shipped", "external", "ghost", "risk", "collision"}
 STATES = {"working", "waiting", "idle", "limited", "stuck"}
 RETENTION = 24 * 3600
 ROTATE_BYTES = 3_000_000
