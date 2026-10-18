@@ -49,3 +49,16 @@ export function streak(days, today) {
   while (have.has(d)) { n++; d = step(d, -1); }
   return n;
 }
+
+// The weekly challenge: beat last week. The target is 10% above last week's reports (at least 5), so it follows the
+// office's own pace. `days` is /api/week's list (oldest first, at least 14 days, ending today).
+export function weekly(days) {
+  if (!Array.isArray(days) || days.length < 14) return null;
+  const today = new Date(days[days.length - 1].day + "T12:00:00"), dow = (today.getDay() + 6) % 7;   // Monday = 0
+  const thisWeek = days.slice(days.length - 1 - dow), lastWeek = days.slice(days.length - 8 - dow, days.length - 1 - dow);
+  const sum = (xs) => xs.reduce((a, d) => a + (d.reports || 0), 0);
+  const last = sum(lastWeek), have = sum(thisWeek), target = Math.max(5, Math.ceil(last * 1.1));
+  const known = lastWeek.filter(d => d.sessions || d.reports || d.active_min).length;
+  if (known < 3) return { calibrating: true, week: thisWeek[0].day, known };   // too little of last week on record to beat
+  return { week: thisWeek[0].day, have, target, last, f: Math.min(1, have / target), done: have >= target, daysLeft: 6 - dow };
+}

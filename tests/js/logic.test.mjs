@@ -129,3 +129,20 @@ test("banter is two filled-in lines that fit the moment", async () => {
     if (!o.napping) assert.ok(!/napping|out of plan/i.test(x), "never says someone is napping when nobody is");
   }
 });
+
+test("the weekly challenge beats last week by 10%, Monday to Sunday", async () => {
+  const { weekly } = await import("../../web/ui/goals.js");
+  const mk = (end, n, reports) => Array.from({ length: n }, (_, i) => { const d = new Date(end + "T12:00:00"); d.setDate(d.getDate() - (n - 1 - i)); return { day: d.toISOString().slice(0, 10), reports: reports(d), sessions: 1 }; });
+  assert.equal(weekly(mk("2026-10-18", 7, () => 1)), null);
+  const w = weekly(mk("2026-10-14", 14, (d) => d.getDate() <= 11 ? 4 : 10));   // Wednesday 14 Oct; last week Mon 5 – Sun 11
+  assert.equal(w.week, "2026-10-12");
+  assert.equal(w.last, 28);
+  assert.equal(w.target, 31);
+  assert.equal(w.have, 30);
+  assert.equal(w.daysLeft, 4);
+  assert.equal(w.done, false);
+  assert.equal(weekly(mk("2026-10-12", 14, () => 0)).target, 5);                 // a quiet week still has a goal
+  const fresh = mk("2026-10-18", 14, () => 0).map((d, i) => i < 12 ? { ...d, sessions: 0 } : d);
+  assert.equal(weekly(fresh).calibrating, true);                                   // no record of last week: nothing to beat yet
+  assert.ok(weekly(mk("2026-10-18", 14, (d) => d.getDate() >= 12 ? 9 : 1)).done);
+});

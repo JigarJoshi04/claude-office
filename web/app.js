@@ -7,7 +7,7 @@ import { openPalette } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
 import { pulse, line, reaction, voice, binding, leftOf, banter } from "./ui/personas.js";
-import { goals, streak } from "./ui/goals.js";
+import { goals, streak, weekly } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
 import { dayCard } from "./ui/daycard.js";
 import { award, bump } from "./ui/badges.js";
@@ -469,7 +469,7 @@ function apply(next) {
   snap = next; setNow(snap.now);
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
-  if (!DEMO) checkBadges();   // the demo office never hands out badges
+  if (!DEMO) { checkBadges(); cheerWeekly(); }   // the demo office never hands out badges
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) onNews(e);
@@ -565,6 +565,19 @@ function badge(b) {
 }
 app.badge = (id) => badge(award(id));
 app.bump = (key, n, id) => badge(bump(key, n, id));
+// The weekly challenge finishing: one celebration per week (per browser), never in the demo.
+function cheerWeekly() {
+  const w = weekly(app.weekCache());
+  if (!w || w.calibrating || !w.done || DEMO) return;
+  const seen = store.get("weeklyDone", "");
+  if (seen === w.week) return;
+  store.set("weeklyDone", w.week);
+  if (prefs.view === "floor") office.banner("Record week!", `${w.have} reports: you beat last week's ${w.last}`, "#ff7a45");
+  sound.play("levelup");
+  toast(`Record week: ${w.have} reports, beating last week's ${w.last}.`, "good", { ic: "flame", ms: 7000 });
+  badge(award("record_week"));
+}
+
 function checkBadges() {
   const h = new Date().getHours();
   badge(award("welcome"));

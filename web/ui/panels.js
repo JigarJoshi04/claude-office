@@ -5,7 +5,7 @@ import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary, PERSONALITIES } from "./personas.js";
 import { sound } from "./sound.js";
-import { goals, goalsFor, streak } from "./goals.js";
+import { goals, goalsFor, streak, weekly } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned } from "./badges.js";
 
@@ -126,6 +126,17 @@ export function makePanels(app) {
     }
     return "";
   }
+  // The weekly challenge (goals.js weekly): beat last week's reports.
+  function weeklyHtml() {
+    const w = weekly(app.weekCache());
+    if (!w) return "";
+    if (w.calibrating) return `<div class="weekly calib"><span class="wk-ic">${icon("flame", 18)}</span><div class="grow"><div class="wk-t"><b>Weekly challenge</b></div>
+      <div class="hint">Starts once the office has a week on record: then the goal is to beat last week.</div></div></div>`;
+    return `<div class="weekly ${w.done ? "done" : ""}"><span class="wk-ic">${icon(w.done ? "trophy" : "flame", 18)}</span>
+      <div class="grow"><div class="wk-t"><b>${w.done ? "Record week!" : "Beat last week"}</b><span>${w.have} of ${w.target} reports${w.done ? "" : ` · ${w.daysLeft === 0 ? "last day" : w.daysLeft + " day" + (w.daysLeft === 1 ? "" : "s") + " left"}`}</span></div>
+      <div class="wk-bar"><i style="width:${Math.round(w.f * 100)}%"></i></div>
+      <div class="hint">${w.done ? `Beat last week's ${w.last}. Keep going.` : `Last week: ${w.last} reports. The target is 10% more.`}</div></div></div>`;
+  }
   // Today's goals as three small rings (web/ui/goals.js); a finished day folds into one gold line.
   function goalsHtml() {
     const st = app.statsCache(null), gl = goals(st);
@@ -221,6 +232,7 @@ export function makePanels(app) {
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
       ${goalsHtml()}
+      ${weeklyHtml()}
       ${snap.seats.length ? `<section class="b-sec"><h3 class="b-h">Team<span class="count">${snap.seats.length}</span></h3>
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
