@@ -1079,3 +1079,6 @@ body.tv .floor-frame.replaying .cam { bottom: calc(170px * var(--ui-zoom, 1)); }
 .minimap[hidden] { display: none; }
 @media (max-width: 760px) { .minimap { display: none; } }
 body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
+.news-h { margin: 14px 0 2px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.news-h:first-child { margin-top: 0; }
+.news-h + .act { border-top: 0; }

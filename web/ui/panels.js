@@ -584,11 +584,23 @@ export function makePanels(app) {
     return { html: `${crumbs("Lounge")}<h2>Lounge</h2><p class="lede">Seats with nobody at their desks take a break here. Out-of-plan seats nap on the couch; benched seats wear sunglasses.</p>
       ${section(`On a break · ${resting.length}`, resting.map(memberRow).join("") || `<div class="muted">Everyone is at their desk.</div>`)}` };
   }
+  // News under time headings: the last 15 minutes, earlier today, yesterday, then by date.
+  function newsGroups(ev) {
+    const now = S().now, today = new Date(now * 1000).toDateString(), y = new Date(now * 1000); y.setDate(y.getDate() - 1);
+    const label = (e) => {
+      if (now - e.ts < 900) return "Just now";
+      const d = new Date(e.ts * 1000).toDateString();
+      return d === today ? "Earlier today" : d === y.toDateString() ? "Yesterday" : new Date(e.ts * 1000).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" });
+    };
+    let last = null, html = "";
+    for (const e of ev) { const l = label(e); if (l !== last) { html += `<div class="news-h">${esc(l)}</div>`; last = l; } html += actRow(e); }
+    return html;
+  }
   function news() {
     const ev = (S().events || []).slice().reverse().filter(e => newsFilter === "all" || e.level === newsFilter);
     return { html: `${crumbs("News")}<h2>Office news</h2><p class="lede">Arrivals, departures, reports, limits, resets, messages and your own changes.</p>
       <div class="seg-ctl" style="margin-top:16px">${[["all", "All"], ["good", "Good"], ["warn", "Heads-up"], ["bad", "Problems"]].map(([f, l]) => `<button data-news="${f}" class="${newsFilter === f ? "on" : ""}">${l}</button>`).join("")}</div>
-      <div style="margin-top:12px">${ev.map(actRow).join("") || `<div class="muted">Nothing yet.</div>`}</div>`,
+      <div style="margin-top:12px">${ev.length ? newsGroups(ev) : `<div class="muted">Nothing yet.</div>`}</div>`,
       bind(root) { root.querySelectorAll("[data-news]").forEach(b => b.addEventListener("click", () => { newsFilter = b.dataset.news; app.rerender(true); })); } };
   }
 
