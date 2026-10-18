@@ -924,7 +924,8 @@ export function createOffice(stage, handlers) {
       if (moving) { clearTimeout(reresTimer); reresTimer = setTimeout(() => reres(false), 160); }
       stepAgents(dt); stepParticles(dt); stepPet(cat, dt, t); if (has("dog")) stepPet(dog, dt, t);
       // Full speed while something moves (walkers, confetti, the camera, the cat); a calm floor needs ~15 frames a second.
-      const lively = moving || particles.length || pops.length || leavers.length || cat.mode === "walk" || (has("dog") && dog.mode === "walk") || spot || walkingNow() || has("roomba") || droneUp(t);
+      // Full speed for the camera, people walking and confetti; pets, the vacuum and the drone look fine at the calm rate.
+      const lively = moving || particles.length || pops.length || leavers.length || walkingNow();
       const every = reduced ? 250 : lively ? (RES <= 2 ? 33 : RES <= 4 ? 50 : 66) : (RES <= 2 ? 66 : 90);
       if (t - lastDraw >= every && onScreen) { drawFrame(t); lastDraw = t; }   // nothing to paint while the floor is hidden
       moveDynamicDom();
