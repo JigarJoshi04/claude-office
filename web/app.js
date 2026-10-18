@@ -363,7 +363,7 @@ function viewFromHash() {
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
-  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office", "loose", "prs", "inbox", "cabinet"].includes(k) ? { kind: k } : { kind: "ceo" };
+  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office", "loose", "prs", "inbox", "cabinet", "doctor"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 let revealT = 0;
@@ -1111,6 +1111,7 @@ function paletteItems() {
     { icon: icon("settings", 16), label: "Settings", run: () => go({ kind: "settings" }) },
     { icon: icon("sliders", 16), label: "Keyboard shortcuts", hint: "?", keywords: "keys help hotkeys", run: shortcuts },
     { icon: icon("server", 16), label: "Server room", run: () => go({ kind: "services" }) },
+    { icon: icon("heart", 16), label: "Office doctor: health checks", keywords: "health check problems fix diagnose", run: () => go({ kind: "doctor" }) },
     { icon: icon("stop", 16), label: "Stop every office lane", keywords: "panic stop all lanes halt", run: () => panels.stopAllLanes() },
     { icon: icon("files", 16), label: "Filing cabinet: past sessions", keywords: "history search old sessions resume archive", run: () => go({ kind: "cabinet" }) },
     { icon: icon("bell", 16), label: "Inbox: agents' questions", keywords: "ask questions answer decisions", run: () => go({ kind: "inbox" }) },

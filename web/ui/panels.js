@@ -273,7 +273,7 @@ export function makePanels(app) {
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
         <button data-go="news">${icon("news", 16)}News</button><button data-go="trophies">${icon("trophy", 16)}Trophies</button>
-        <button data-go="services">${icon("server", 16)}Services</button><button data-go="cabinet">${icon("files", 16)}Filing cabinet</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
+        <button data-go="services">${icon("server", 16)}Services</button><button data-go="cabinet">${icon("files", 16)}Filing cabinet</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="doctor">${icon("heart", 16)}Doctor</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
@@ -665,6 +665,18 @@ export function makePanels(app) {
     return { html: `${crumbs("Server room")}<h2>Server room</h2><p class="lede">Background services that keep lanes running: conductors, supervisors and the lanes themselves.</p>
       ${section(`Services · ${units.length}`, units.length ? units.map(u => `<div class="need ${u.active === "failed" ? "bad" : u.active === "active" ? "good" : "info"}"><span class="ico">${icon(u.active === "active" ? "play" : u.active === "failed" ? "alert" : "stop", 16)}</span>
         <div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(u.unit)}</div><div class="d">${esc(u.description)} · ${esc(u.active)}</div></div></div>`).join("") : `<div class="muted">No watched services. Add patterns to <code>watch_units</code> in the config.</div>`)}` };
+  }
+  // The office doctor (office/doctor.py): health checks, each with what to do about it.
+  let doctorData = null, doctorAt = 0;
+  function doctorPanel() {
+    if (Date.now() - doctorAt > 15000) {
+      doctorAt = Date.now();
+      fetch("/api/doctor").then(r => r.ok ? r.json() : null).then(d => { doctorData = d; app.rerender(true); }).catch(() => {});
+    }
+    const checks = (doctorData && doctorData.checks) || [], bad = checks.filter(c => c.state === "bad").length, warn = checks.filter(c => c.state === "warn").length;
+    const ic = { ok: "check", warn: "alert", bad: "alert", info: "dot" };
+    return { html: `${crumbs("Office doctor")}<h2>Office doctor</h2><p class="lede">${!doctorData ? "Checking…" : bad ? `${bad} problem${bad === 1 ? "" : "s"} to fix${warn ? ` and ${warn} to watch` : ""}.` : warn ? `All working; ${warn} thing${warn === 1 ? "" : "s"} to watch.` : "Everything checks out."}</p>
+      ${checks.map(c => `<div class="need ${c.state === "ok" ? "good" : c.state === "info" ? "info" : c.state}"><span class="ico">${icon(ic[c.state] || "dot", 16)}</span><div class="grow"><div class="t">${esc(humanise(c.name))}</div><div class="d">${esc(humanise(c.detail))}</div>${c.fix ? `<div class="d" style="margin-top:4px"><b>Fix:</b> ${md(c.fix)}</div>` : ""}</div></div>`).join("")}` };
   }
   // The filing cabinet (office/cabinet.py): every past session, searchable, to open or resume.
   let cabQ = "", cabRaw = "", cabSeat = "", cabMore = 0;   // cabRaw is what the box shows (a trailing space survives)
@@ -1306,7 +1318,7 @@ export function makePanels(app) {
   }
   return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
-    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"
       || (k === "inbox" && ([...askDrafts.values()].some(v => v.trim()) || !!(document.activeElement && document.activeElement.matches("[data-ask-draft]")))) };
 }

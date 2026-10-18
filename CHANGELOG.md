@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.57.0] - 2026-10-18
+
+### Added
+- Office doctor: one page of health checks (the config, each seat's login and plan reading, the token ledger, free
+  disk, systemd for lanes, the GitHub CLI, lanes waiting for hours, the version), worst first, each with what to do
+  about it. From the briefing, the palette or `GET /api/doctor`.
+
 ## [3.56.0] - 2026-10-18
 
 ### Added

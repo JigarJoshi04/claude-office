@@ -140,7 +140,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((status, json.loads(body)["found_session"]), (200, False))
         self.assertEqual(self.post(path="/api/ask", body=json.dumps({"text": ""}))[0], 400)
         self.assertEqual(self.post(path="/api/event", body=json.dumps({"text": "Deploy done", "level": "good"}))[0], 200)
-        for path in ("/api/cabinet?q=deploy", "/api/loose", "/api/prs"):
+        for path in ("/api/cabinet?q=deploy", "/api/loose", "/api/prs", "/api/doctor"):
             with self.subTest(path=path):
                 status, _, body = self.request(path=path)
                 self.assertEqual(status, 200)

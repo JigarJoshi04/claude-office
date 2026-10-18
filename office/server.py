@@ -166,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.56.0"
+    server_version = "ClaudeOffice/3.57.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -253,6 +253,9 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Search for at most 200 characters")
                 return self._json(200, self.office.cabinet_view(q_text, q.get("seat") or None,
                                                                 _number(q.get("offset", "0"), "offset must be a whole number")))
+            if url.path == "/api/doctor":
+                from . import doctor
+                return self._json(200, {"checks": doctor.checkup(self.office, self.office.get())})
             if url.path == "/api/prs":
                 return self._json(200, self.office.prs_view())
             if url.path == "/api/loose":
