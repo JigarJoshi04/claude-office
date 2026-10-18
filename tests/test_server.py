@@ -133,6 +133,20 @@ class ServerTests(unittest.TestCase):
             base.update(headers)
         return self.request("POST", path, base, body)
 
+    def test_new_endpoints_answer(self):
+        status, _, body = self.post(path="/api/lanes/stop-all")
+        self.assertEqual((status, json.loads(body)), (200, {"ok": True, "stopped": []}))      # nothing running: nothing stopped
+        status, _, body = self.post(path="/api/ask", body=json.dumps({"text": "Which database?", "pids": [1234567]}))
+        self.assertEqual((status, json.loads(body)["found_session"]), (200, False))
+        self.assertEqual(self.post(path="/api/ask", body=json.dumps({"text": ""}))[0], 400)
+        self.assertEqual(self.post(path="/api/event", body=json.dumps({"text": "Deploy done", "level": "good"}))[0], 200)
+        for path in ("/api/cabinet?q=deploy", "/api/loose", "/api/prs"):
+            with self.subTest(path=path):
+                status, _, body = self.request(path=path)
+                self.assertEqual(status, 200)
+                self.assertIsInstance(json.loads(body), dict)
+        self.assertEqual(self.request(path="/api/cabinet?offset=-1")[0], 400)
+
     def test_non_loopback_host_is_forbidden(self):
         for host in ("attacker.example", f"attacker.example:{self.port}",
                      f"127.0.0.1.attacker.example:{self.port}", "127.0.0.1:1"):

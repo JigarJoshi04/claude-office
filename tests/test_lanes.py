@@ -171,3 +171,4 @@ class ChainTests(unittest.TestCase):
                 blocked = dict(second, status="blocked")
                 lanes._next_stage(blocked, cfg)                       # a blocked stage stops the chain
                 self.assertNotIn("chain_next", lanes.load_lane(second["id"]))
+

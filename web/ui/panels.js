@@ -1141,7 +1141,22 @@ export function makePanels(app) {
         });
       } };
   }
-  function laneListHtml() { return S().lanes.length ? S().lanes.map(laneRow).join("") : `<div class="muted">No office lanes yet.</div>`; }
+  function laneListHtml() {
+    const active = S().lanes.filter(l => ["running", "waiting", "queued"].includes(l.status)).length;
+    return (active > 1 ? `<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn sm danger" data-stop-all>${icon("stop", 14)}Stop all ${active}</button></div>` : "")
+      + (S().lanes.length ? S().lanes.map(laneRow).join("") : `<div class="muted">No office lanes yet.</div>`);
+  }
+  // The panic button: every office lane that is still going stops (your own terminals are never touched).
+  async function stopAllLanes() {
+    const active = S().lanes.filter(l => ["running", "waiting", "queued"].includes(l.status)).length;
+    if (!active) { toast("No office lane is running.", "info"); return; }
+    if (!confirm(`Stop all ${active} office lane${active === 1 ? "" : "s"}? Each one keeps its notes and can be resumed. Sessions in your own terminals are not touched.`)) return;
+    try {
+      const r = await app.post("/api/lanes/stop-all", {});
+      toast(r.demo ? "Demo office: nothing was stopped." : `Stopped ${r.stopped.length} lane${r.stopped.length === 1 ? "" : "s"}.`, r.demo ? "info" : "warn");
+      app.refresh();
+    } catch (e) { toast("Could not stop them: " + e.message, "bad"); }
+  }
 
   // ----------------------------------------------------------------------------------------- settings
   function settings() {
@@ -1227,7 +1242,7 @@ export function makePanels(app) {
   }
   return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
-    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"
       || (k === "inbox" && ([...askDrafts.values()].some(v => v.trim()) || !!(document.activeElement && document.activeElement.matches("[data-ask-draft]")))) };
 }

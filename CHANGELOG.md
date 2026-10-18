@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.48.0] - 2026-10-18
+
+### Added
+- A desktop notification takes you to its subject when clicked: a question opens the Inbox, a report its session, a
+  PR the PR shelf, anything about a seat its character page.
+- Stop every office lane: a panic button over the lane list (with two or more running) and in the palette, after a
+  confirmation. Each lane keeps its notes and can be resumed; sessions in your own terminals are never touched.
+  `POST /api/lanes/stop-all`.
+
 ## [3.47.0] - 2026-10-18
 
 ### Added

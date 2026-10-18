@@ -152,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.47.0"
+    server_version = "ClaudeOffice/3.48.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -405,6 +405,12 @@ class Handler(BaseHTTPRequestHandler):
                                          chain=lanes.chain_from(body.get("chain"), " ".join(str(body.get("title", "")).split())[:60]))
                 self.office.emit("lane", f"CEO hired office lane '{lane['title']}' ({lane['seat_pref']})", level="good")
                 return self._json(200, {"ok": True, "lane": lane})
+            if path == "/api/lanes/stop-all":               # the panic button: every office lane that is not finished
+                stopped = [lanes.stop_lane(l["id"])["id"] for l in lanes.list_lanes() if l.get("status") in ("running", "waiting", "queued")]
+                if stopped:
+                    self.office.emit("lane", f"CEO stopped every office lane ({len(stopped)})", None, "warn")
+                self.office.build()
+                return self._json(200, {"ok": True, "stopped": stopped})
             if path == "/api/lanes/stop":
                 lane = lanes.stop_lane(str(body.get("id", "")))
                 self.office.emit("lane", f"CEO stopped office lane '{lane['title']}'", lane.get("seat"), "warn")

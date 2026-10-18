@@ -307,7 +307,7 @@ if (prefs.radio) {
   addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 }
 const cards = makeCards({ app, panels, prefs });
-const alarms = makeAlarms({ app, prefs, toast, notify, sound, panels, DEMO });
+const alarms = makeAlarms({ app, prefs, toast, notify: (t, b) => { notifyTarget = { kind: "ceo" }; notify(t, b); }, sound, panels, DEMO });
 const burn = makeBurn({ app, office, panels, store, DEMO, prefs, giftBox, toast, sound, replay, alarms });
 app.openCard = (id) => cards.open(id);
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
@@ -519,6 +519,9 @@ function onNews(e) {
   const seat = snap && snap.seats.find(s => s.id === e.seat);
   const who = seat ? panels.persona(seat) : null;
   const text = panels.humanise(e.text);
+  const sid = e.kind === "report" ? findSessionByText(e.text) : null;
+  notifyTarget = e.kind === "ask" ? { kind: "inbox" } : sid && e.seat ? { kind: "session", seat: e.seat, id: sid }
+    : e.kind === "shipped" ? { kind: "prs" } : e.seat ? { kind: "seat", seat: e.seat } : null;
   switch (e.kind) {
     case "arrive": sound.play("arrive"); break;
     case "leave": sound.play("leave"); break;
@@ -594,9 +597,15 @@ function findSessionByText(text) {
   for (const s of snap.seats) for (const x of s.sessions) if (text && text.startsWith(x.name)) return x.id;
   return null;
 }
+// A click on a notification brings the office forward on the thing it is about (set by onNews for its own news).
+let notifyTarget = null;
 function notify(title, body) {
   if (!prefs.notify || !("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
-  try { new Notification(title, { body, tag: title, silent: !prefs.sound }); } catch { /* not supported */ }
+  const target = notifyTarget;
+  try {
+    const n = new Notification(title, { body, tag: title, silent: !prefs.sound });
+    n.onclick = () => { window.focus(); if (target) go(target); n.close(); };
+  } catch { /* not supported */ }
 }
 
 let es = null, pollTimer = null, sseFails = 0;
@@ -976,6 +985,7 @@ function renderPanel(force, keepScroll) {
   else if (ae && !p.contains(document.activeElement)) p.focus({ preventScroll: true });   // its control went away: stay in the inspector
 }
 function bindCommon(p) {
+  p.querySelectorAll("[data-stop-all]").forEach(b => b.addEventListener("click", () => panels.stopAllLanes()));
   p.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => go({ kind: b.dataset.go })));
   p.querySelectorAll("[data-view-go]").forEach(b => b.addEventListener("click", () => { setView(b.dataset.viewGo); if (b.dataset.anchor) setTimeout(() => { const a = document.getElementById(b.dataset.anchor); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }, 120); }));
   p.querySelectorAll("[data-seat-go]").forEach(b => b.addEventListener("click", () => go({ kind: "seat", seat: b.dataset.seatGo })));
@@ -1081,6 +1091,7 @@ function paletteItems() {
     { icon: icon("settings", 16), label: "Settings", run: () => go({ kind: "settings" }) },
     { icon: icon("sliders", 16), label: "Keyboard shortcuts", hint: "?", keywords: "keys help hotkeys", run: shortcuts },
     { icon: icon("server", 16), label: "Server room", run: () => go({ kind: "services" }) },
+    { icon: icon("stop", 16), label: "Stop every office lane", keywords: "panic stop all lanes halt", run: () => panels.stopAllLanes() },
     { icon: icon("files", 16), label: "Filing cabinet: past sessions", keywords: "history search old sessions resume archive", run: () => go({ kind: "cabinet" }) },
     { icon: icon("bell", 16), label: "Inbox: agents' questions", keywords: "ask questions answer decisions", run: () => go({ kind: "inbox" }) },
     { icon: icon("send", 16), label: "Pull requests", keywords: "pr github checks ci reviews", run: () => go({ kind: "prs" }) },
