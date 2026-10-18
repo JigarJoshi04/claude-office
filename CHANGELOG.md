@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.107.0] - 2026-10-19
+
+### Added
+- The night shift. From 9 pm the empty rooms switch their lights off one by one (one every six minutes), a janitor
+  mops the corridors one after another until 6 am, leaving a wet shine, and in the morning the first session to sit
+  down gets a "First one in" banner (once a day, not when game intensity is Off).
+
 ## [3.106.0] - 2026-10-19
 
 ### Added

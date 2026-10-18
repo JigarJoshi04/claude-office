@@ -233,6 +233,18 @@ export function createOffice(stage, handlers) {
     }
   }
   function openElevator() { elevator.until = performance.now() + 1600; }
+  // The night janitor mops the corridors one after another, slowly, leaving a wet shine behind.
+  const JANITOR = S.lookFor("janitor-night", "#3d7a5c");
+  function drawJanitor(t) {
+    const span = W - LOBBY_W - 40, pass = span * 2, sec = t / 1000 * 9;
+    const n = Math.floor(sec / pass) % L.corridors.length, ph = sec % pass, fwd = ph < span;
+    const cy = L.corridors[n], x = LOBBY_W + 18 + (fwd ? ph : pass - ph), y = cy - 2;
+    for (let k = 1; k <= 4; k++) S.rect(ctx, Math.round(x + (fwd ? -k * 9 : k * 9 + 6)), y + 16, 6, 1, `rgba(170,215,255,${0.22 - k * 0.045})`);   // the wet floor fades
+    S.drawWalker(ctx, Math.round(x), y, JANITOR, fwd ? "right" : "left", t, t > 0);
+    const mx = Math.round(x + (fwd ? 10 : -3));
+    S.rect(ctx, mx, y + 5, 1, 11, "#a07a4a"); S.rect(ctx, mx - 2, y + 15, 5, 2, "#d9d4c4");                   // the mop
+    S.rect(ctx, Math.round(x + (fwd ? -7 : 12)), y + 11, 5, 5, "#e0b33c"); S.rect(ctx, Math.round(x + (fwd ? -7 : 12)), y + 11, 5, 1, "#f4d36a");   // the bucket
+  }
 
   let onScreen = true;                 // the floor is visible (another view or a hidden tab skips painting)
   new IntersectionObserver((en) => { onScreen = en[0].isIntersecting; }).observe(stage);
@@ -347,7 +359,9 @@ export function createOffice(stage, handlers) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bg, 0, 0, W, H);
     const now = clockAt ? new Date(clockAt * 1000) : new Date();   // replay shows its own time of day
-    const sky = skyFor(now), env = lightsOut ? { ...sky, dark: Math.max(sky.dark, 0.55), night: true } : sky;   // goodnight: lights out
+    const sky = skyFor(now), env = lightsOut ? { ...sky, dark: Math.max(sky.dark, 0.55), night: true } : { ...sky };   // goodnight: lights out
+    const mins = now.getHours() * 60 + now.getMinutes();
+    env.late = mins >= 21 * 60 ? mins - 21 * 60 : mins < 6 * 60 ? mins + 180 : -1;   // minutes into the night shift (9 pm to 6 am)
     if (env.sky[0] !== skyKey) { skyKey = env.sky[0]; stage.style.setProperty("--sky-a", env.sky[0]); stage.style.setProperty("--sky-b", env.sky[1]); stage.dataset.sky = env.night ? "night" : "day"; }   // the backdrop's sky
     const lights = [];
     drawLobbyWall(t, lights);
@@ -371,6 +385,7 @@ export function createOffice(stage, handlers) {
       S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, !(a.hold && performance.now() < a.hold));   // a held worker stands still
       if (a.phase === "in" || a.carry) { S.rect(ctx, a.x + 2, a.y + 8, 7, 5, a.color); S.rect(ctx, a.x + 5, a.y + 8, 1, 5, "#ffd24a"); S.rect(ctx, a.x + 2, a.y + 8, 7, 1, "#ffffff"); }   // the box in both hands
     }
+    if (env.late >= 0 && L.corridors.length) drawJanitor(reduced ? 0 : t);
     S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
     if (cat.mode === "sleep") S.drawZ(ctx, cat.x + 8, cat.y - 2, t);
     if (has("dog")) { S.drawDog(ctx, Math.round(dog.x), Math.round(dog.y), dog.mode, dog.facing, t); if (dog.mode === "sleep") S.drawZ(ctx, dog.x + 9, dog.y - 2, t); }
@@ -793,7 +808,9 @@ export function createOffice(stage, handlers) {
       f5 && f5.resets_at ? { to: new Date(f5.resets_at * 1000), color: st === "limited" || fc === "runs_out" ? "#e8475a" : s.color } : null);
     if (env.night) lights.push({ x: wr.x + wr.w / 2, y: wr.y + wr.h + 6, r: 24, c: "#9bb8ff", i: 0.2 });
     const live = s.sessions.filter(x => x.live !== false);
-    const dark = st === "offline" ? 0.5 : st === "limited" ? 0.42 : st === "benched" ? 0.3 : !live.length ? 0.2 : 0;
+    // The night shift: from 9 pm the empty rooms switch their lights off, one every six minutes.
+    const off = !live.length && env.late >= 0 && env.late >= L.pods.indexOf(pod) * 6;
+    const dark = off ? 0.6 : st === "offline" ? 0.5 : st === "limited" ? 0.42 : st === "benched" ? 0.3 : !live.length ? 0.2 : 0;
     drawDecorLive(ctx, room, pod.arch, t, dark < 0.25);
     drawPod(pod, t, lights);
     drawEmbers(s, deskFor(pod), t, lights);          // over the people, so they read as rising off the desk

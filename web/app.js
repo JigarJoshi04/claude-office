@@ -1,7 +1,7 @@
 // Claude Office: the controller. Live data in; floor, inspector and views out.
 import { createOffice } from "./office.js";
 import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss, setToastGate, clock } from "./ui/util.js";
-import { configureGoals, goals } from "./ui/goals.js";
+import { configureGoals, goals, localDay } from "./ui/goals.js";
 import { openPoster } from "./ui/poster.js";
 import { makeDirector } from "./ui/director.js";
 import { makePanels } from "./ui/panels.js";
@@ -687,6 +687,11 @@ function onNews(e) {
   }
   if (!replay.active()) director.push({ kind: e.kind, seat: e.seat, session: sid, merged: e.kind === "shipped" && / merged$/.test(e.text) });
   if (!replay.active() && e.seat && (e.kind === "shipped" || e.kind === "report" && e.level === "good") && prefs.game !== "off") office.petsCheer(e.seat);   // the pets come to see
+  if (e.kind === "arrive" && !replay.active() && new Date().getHours() >= 5 && store.get("firstIn", "") !== localDay()) {   // the first one in, each morning
+    store.set("firstIn", localDay());
+    const who = e.seat && snap.seats.find(s => s.id === e.seat);
+    if (who && prefs.game !== "off") { fx.banner("First one in", `${panels.persona(who).name} opened the office`, who.color); toast(`${panels.persona(who).name} is the first one in today.`, "good", { ic: "sun" }); }
+  }
   loadStats(null, true);
 }
 function findSessionByText(text) {
