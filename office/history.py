@@ -7,6 +7,7 @@ import tempfile
 import threading
 import time
 
+from . import config
 from .career import XP_MINUTE, XP_REPORT, XP_SESSION, XP_TOOL
 from .live import public
 
@@ -71,13 +72,9 @@ class DayLedger:
         self.path, self.keep_days = path, keep_days
         self.lock = threading.Lock()
         self.days = {}
-        if path:
-            try:
-                raw = json.loads(path.read_text())
-                if isinstance(raw, dict):
-                    self.days = {k: v for k, v in raw.items() if _is_day(k) and isinstance(v, dict)}
-            except (OSError, ValueError):
-                pass
+        raw = config.read_state(path)                  # a damaged file is set aside, never written over
+        if isinstance(raw, dict):
+            self.days = {k: v for k, v in raw.items() if _is_day(k) and isinstance(v, dict)}
 
     def note(self, stats):
         if not isinstance(stats, dict) or not _is_day(stats.get("day")):

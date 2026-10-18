@@ -15,6 +15,8 @@ import threading
 import time
 from pathlib import Path
 
+from . import config
+
 XP_TOOL, XP_MINUTE, XP_SESSION, XP_REPORT = 1, 2, 10, 100
 XP_SHIP = (25, 5, 50, 150)              # a commit, a push, a PR opened, a PR merged
 TITLES = [(1, "Intern"), (3, "Junior"), (6, "Engineer"), (10, "Senior"), (15, "Staff"), (20, "Principal"),
@@ -112,12 +114,12 @@ class Career:
         self._last = None
         self._saved = 0.0
         self._dirty = False
-        if path:
+        d = config.read_state(path)                    # a damaged file is set aside, never written over
+        if isinstance(d, dict):
             try:
-                d = json.loads(path.read_text())
                 self.seats = {k: dict(new_seat(v.get("since") or clock()), **v) for k, v in d.get("seats", {}).items()}
                 self.sess = d.get("sessions", {})
-            except (OSError, ValueError, AttributeError):
+            except (AttributeError, TypeError):
                 pass
 
     def observe(self, snap: dict) -> list[tuple[str, str, str]]:

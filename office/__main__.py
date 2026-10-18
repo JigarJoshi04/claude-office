@@ -9,6 +9,7 @@
   lanes | stop ID | resume ID [--seat ID]
   checkpoint                       write the office down (resume commands for every session)
   ask QUESTION                     (from inside a session) ask the CEO; the answer comes back as a message
+  backups | restore DAY            the daily backups of the office's state, and putting one back (office stopped)
   post TEXT [--level good|info|warn|bad] [--seat ID] [--source NAME] [--banner]
                                    put a script's news on the floor ("Prod deploy done")
   run-lane ID                      (internal) the lane supervisor that systemd runs
@@ -94,6 +95,42 @@ def _post(path: str, body: dict, port: int | None) -> tuple[int, dict | None]:
     return code, out if isinstance(out, dict) else None
 
 
+def cmd_backups(_args) -> int:
+    root = config.STATE_DIR / "backups"
+    days = sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
+    for d in days:
+        files = sorted(p.name for p in (root / d).iterdir())
+        print(f"{d}  {', '.join(files)}")
+    if not days:
+        print("No backups yet: the office makes one a day while it runs.")
+    return 0
+
+
+def cmd_restore(args) -> int:
+    """Put a day's backup of the state files back, keeping the current ones beside them. The office must be stopped,
+    or it would write its own state over the restored files."""
+    import shutil
+    import socket
+    src = config.STATE_DIR / "backups" / args.day
+    if not src.is_dir():
+        print(f"No backup for {args.day}. Run `python3 -m office backups` to see the days there are.", file=sys.stderr)
+        return 1
+    port = config.load_config().get("port", config.DEFAULT_PORT)
+    with socket.socket() as s:
+        s.settimeout(1)
+        if s.connect_ex(("127.0.0.1", port)) == 0:
+            print(f"The office is running on port {port}: stop it first (systemctl --user stop claude-office), then restore.", file=sys.stderr)
+            return 1
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    for f in sorted(src.iterdir()):
+        cur = config.STATE_DIR / f.name
+        if cur.exists():
+            shutil.copy2(cur, cur.with_name(f"{f.name}.before-restore-{stamp}"))
+        shutil.copy2(f, cur)
+        print(f"restored {f.name}")
+    return 0
+
+
 def cmd_ask(args) -> int:
     """Ask the CEO from inside a session: the office finds the session by this command's parent processes."""
     import os
@@ -155,6 +192,9 @@ def main(argv=None) -> int:
     rs.add_argument("id")
     rs.add_argument("--seat")
     sub.add_parser("checkpoint")
+    sub.add_parser("backups", help="list the daily backups of the office's state")
+    rs2 = sub.add_parser("restore", help="put a day's backup back (stop the office first)")
+    rs2.add_argument("day")
     ak = sub.add_parser("ask", help="ask the CEO a question (run it from inside a session)")
     ak.add_argument("question")
     ak.add_argument("--port", type=int)
@@ -198,6 +238,10 @@ def main(argv=None) -> int:
         return cmd_post(args)
     if args.cmd == "ask":
         return cmd_ask(args)
+    if args.cmd == "backups":
+        return cmd_backups(args)
+    if args.cmd == "restore":
+        return cmd_restore(args)
     if args.cmd == "run-lane":
         return lanes.run_lane(args.id)
     return 2

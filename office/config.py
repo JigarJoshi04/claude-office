@@ -9,6 +9,8 @@ import json
 import os
 import re
 import secrets
+import shutil
+import time
 from pathlib import Path
 
 HOME = Path(os.environ.get("CLAUDE_OFFICE_HOME") or os.path.expanduser("~"))
@@ -132,6 +134,47 @@ def codex_seat_meta(cfg: dict) -> dict | None:
         "look": over.get("look"),                  # the character creator's choice: skin, hair, style, glasses
         "color": over.get("color", ASTRA_COLOR),
     }
+
+
+def read_state(path: Path | None):
+    """A state file's JSON, or None when it is missing. A file that no longer parses is moved aside as
+    "<name>.broken-<when>" first, so a fresh one never writes over what might still be rescued."""
+    if not path:
+        return None
+    try:
+        text = path.read_text()
+    except OSError:
+        return None
+    try:
+        return json.loads(text)
+    except ValueError:
+        try:
+            path.rename(path.with_name(f"{path.name}.broken-{time.strftime('%Y%m%d-%H%M%S')}"))
+        except OSError:
+            pass
+        return None
+
+
+STATE_FILES = ("tokens.json", "career.json", "asks.json", "days.json", "usage-history.json", "loose-roots.json")
+
+
+def backup_state(now: float | None = None, keep: int = 7) -> Path | None:
+    """Copy the office's state files into state/backups/<day>/ once a day, keeping the last `keep` days."""
+    day = time.strftime("%Y-%m-%d", time.localtime(now or time.time()))
+    dest = STATE_DIR / "backups" / day
+    if dest.exists():
+        return None
+    try:
+        dest.mkdir(parents=True, mode=0o700)
+        for name in STATE_FILES:
+            src = STATE_DIR / name
+            if src.exists():
+                shutil.copy2(src, dest / name)
+        for old in sorted(p for p in (STATE_DIR / "backups").iterdir() if p.is_dir())[:-keep]:
+            shutil.rmtree(old, ignore_errors=True)
+    except OSError:
+        return None
+    return dest
 
 
 def api_token() -> str:

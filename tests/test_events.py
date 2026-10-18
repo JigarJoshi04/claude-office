@@ -145,3 +145,27 @@ class AnswerSafetyTests(unittest.TestCase):
         self.assertTrue(all(srv._event_budget(now=100 + i, limit=10, bucket=srv._ASKS) for i in range(10)))
         self.assertFalse(srv._event_budget(now=111, limit=10, bucket=srv._ASKS))
         srv._ASKS.clear()
+
+
+class StateSafetyTests(unittest.TestCase):
+    def test_a_damaged_file_is_set_aside_and_backups_rotate(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from office import config
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "career.json"
+            p.write_text('{"seats": {"a": ')                                     # cut off mid-write
+            self.assertIsNone(config.read_state(p))
+            self.assertFalse(p.exists())
+            self.assertEqual(len(list(Path(tmp).glob("career.json.broken-*"))), 1)  # kept, to rescue by hand
+            p.write_text('{"ok": 1}')
+            self.assertEqual(config.read_state(p), {"ok": 1})
+            self.assertIsNone(config.read_state(Path(tmp) / "missing.json"))
+            with mock.patch.object(config, "STATE_DIR", Path(tmp)):
+                for i in range(9):
+                    config.backup_state(now=1_790_000_000 + i * 86400)
+                days = sorted(x.name for x in (Path(tmp) / "backups").iterdir())
+                self.assertEqual(len(days), 7)                                          # the last week only
+                self.assertTrue((Path(tmp) / "backups" / days[-1] / "career.json").exists())
+                self.assertIsNone(config.backup_state(now=1_790_000_000 + 8 * 86400))    # once a day

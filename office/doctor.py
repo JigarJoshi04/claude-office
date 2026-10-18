@@ -58,6 +58,13 @@ def checkup(office, snap: dict) -> list[dict]:
                           "Free some space: the history and the ledger stop saving when the disk is full." if free < 5e9 else None))
     except OSError:
         pass
+    broken = sorted(p.name for p in config.STATE_DIR.glob("*.broken-*"))
+    if broken:
+        out.append(_check("Damaged files", "warn", f"{len(broken)} state file{'s were' if len(broken) > 1 else ' was'} damaged and set aside: {', '.join(broken[:3])}",
+                          "The office started that file fresh. To go back a day: stop the office, run `python3 -m office restore <day>`, start it again."))
+    days = sorted(p.name for p in (config.STATE_DIR / "backups").glob("*") if p.is_dir()) if (config.STATE_DIR / "backups").is_dir() else []
+    out.append(_check("Backups", "ok" if days else "info", f"{len(days)} daily backup{'s' if len(days) != 1 else ''} of the state files, the latest {days[-1]}" if days
+                      else "No backup yet: the first one is made within a minute of starting", None))
     out.append(_check("Lanes", "ok" if shutil.which("systemd-run") else "warn",
                       "systemd can run office lanes" if shutil.which("systemd-run") else "systemd-run is missing: office lanes cannot start",
                       None if shutil.which("systemd-run") else "Office lanes need a Linux machine with systemd user services."))

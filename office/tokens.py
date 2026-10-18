@@ -27,7 +27,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import prices
+from . import config, prices
 
 VERSION = 4
 SHIP_RULES = 5                # bumped when the rules for shipped work or prices change: every transcript is read again
@@ -191,7 +191,7 @@ class TokenLedger:
 
     def _load(self) -> dict:
         try:
-            d = json.loads(self.path.read_text())
+            d = config.read_state(self.path)            # a damaged file is set aside (and rebuilt from the transcripts)
             if d.get("v") in (1, 2, 3):            # rebuilt from the transcripts on the first scan; see _merge_legacy
                 self._legacy = d
                 self._serve = d if d.get("v") >= 2 else None    # the old numbers show until the rebuild is done

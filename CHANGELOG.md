@@ -3,6 +3,18 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.59.0] - 2026-10-18
+
+### Added
+- Daily backups of the office's state (tokens, careers, questions, the day ledger, usage history, known
+  repositories), the last 7 days kept under `state/backups/`. `python3 -m office backups` lists them and
+  `python3 -m office restore <day>` puts one back (with the office stopped; the current files are kept beside them).
+
+### Fixed
+- A state file that no longer parsed (cut off by a crash or a full disk) was started fresh and then written over:
+  careers, questions or the day ledger could be lost for good. It is now set aside as `<name>.broken-<when>`, and
+  the doctor says so, with how to restore yesterday's.
+
 ## [3.58.0] - 2026-10-18
 
 ### Added

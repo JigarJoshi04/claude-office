@@ -14,6 +14,8 @@ import time
 import uuid
 from pathlib import Path
 
+from . import config
+
 MAX_KEEP = 300
 MAX_TEXT = 1000
 
@@ -23,11 +25,9 @@ class Asks:
         self.path = path
         self.lock = threading.Lock()
         self.items: list[dict] = []
-        try:
-            data = json.loads(path.read_text()) if path else []
+        data = config.read_state(path)                  # a damaged file is set aside, never written over
+        if isinstance(data, list):
             self.items = [x for x in data if isinstance(x, dict) and x.get("id") and x.get("text")][-MAX_KEEP:]
-        except (OSError, ValueError, TypeError):
-            pass
 
     def _save(self) -> None:
         if not self.path:

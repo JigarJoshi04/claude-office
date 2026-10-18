@@ -55,10 +55,8 @@ class UsageHistory:
 
     def __init__(self):
         self.path = config.STATE_DIR / "usage-history.json"
-        try:
-            self.data = json.loads(self.path.read_text())
-        except (OSError, ValueError):
-            self.data = {}
+        data = config.read_state(self.path)
+        self.data = data if isinstance(data, dict) else {}
         self._saved = time.time()
 
     def record(self, seat_id: str, usage: dict | None, now: float) -> None:
@@ -411,7 +409,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.58.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.59.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -590,6 +588,7 @@ class Office(LiveOffice):
         while not self.stop.is_set():
             snap = self.get() or {}
             live = {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
+            config.backup_state()                          # once a day: the state files, the last 7 days kept
             try:
                 self.tokens.scan(live)
                 seats = {s["id"]: s for s in snap.get("seats", [])}
