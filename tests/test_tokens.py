@@ -299,3 +299,14 @@ class MonthRangeTests(unittest.TestCase):
         self.assertEqual(sum(d["all"] for d in v["days"]), v["total"]["all"])
         self.assertIsNotNone(v["prev_total"])
         self.assertEqual(len(led.view(seats, rng="m:2026-02")["days"]), 28)
+
+
+class SpentTests(unittest.TestCase):
+    def test_what_sessions_have_cost(self):
+        from office.demo import _demo_token_ledger
+        led = _demo_token_ledger()
+        sid, r = next(iter(led.data["sessions"].items()))
+        s = led.spent([sid])
+        self.assertEqual(s["tokens"], r["f"] + r["c"])
+        self.assertAlmostEqual(s["usd"], round(sum(r["$"].values()) / 1e6, 2))
+        self.assertIsNone(led.spent(["nobody"]))

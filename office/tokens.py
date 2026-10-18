@@ -614,6 +614,19 @@ class TokenLedger:
                     continue
         return out
 
+    def spent(self, sids) -> dict | None:
+        """What sessions have cost so far: all tokens, output and their list price in USD (helpers included)."""
+        tok = out = usd = 0
+        seen = False
+        with self.lock:
+            src = (self._serve or self.data)["sessions"]
+            for sid in sids:
+                r = src.get(sid)
+                if r:
+                    seen = True
+                    tok += r.get("f", 0) + r.get("c", 0); out += r.get("o", 0); usd += sum((r.get("$") or {}).values())
+        return {"tokens": tok, "output": out, "usd": round(usd / 1e6, 2)} if seen else None
+
     def last_call(self) -> dict:
         """When each seat last made an API call from this machine (epoch seconds), from the transcripts read so far."""
         with self.lock:

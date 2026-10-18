@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.47.0] - 2026-10-18
+
+### Added
+- What it cost so far: each session's page shows its API value so far ("$12.40 so far", its helpers included), and
+  each office lane's row its receipt across all its runs. Sessions and lanes carry `spent` (tokens, output, usd).
+
 ## [3.46.0] - 2026-10-18
 
 ### Added

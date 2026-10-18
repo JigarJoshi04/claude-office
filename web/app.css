@@ -1516,3 +1516,4 @@ ul.prs li a { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; 
 .cab-seats { max-width: 100%; overflow-x: auto; scrollbar-width: none; margin-bottom: 8px; }
 ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cab-act { display: flex; gap: 4px; flex: none; }
+.pill.spent { color: #ffd27a; } :root[data-theme="light"] .pill.spent { color: #8a5a00; }
