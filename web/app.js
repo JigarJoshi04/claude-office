@@ -3,6 +3,7 @@ import { createOffice } from "./office.js";
 import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss, setToastGate, clock } from "./ui/util.js";
 import { configureGoals, goals } from "./ui/goals.js";
 import { openPoster } from "./ui/poster.js";
+import { makeDirector } from "./ui/director.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
@@ -216,10 +217,18 @@ const office = createOffice($("stage"), {
   onMailroom: () => giftBox.openNext(),
   openArcade: () => arcade.open(),
   onRadio: () => setRadio(!radio.on),
+  onDirector: () => setDirector(!prefs.director),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
 const replay = makeReplay(app, office, document.querySelector(".floor-frame"));   // the floor plays back the day (ui/replay.js)
+const director = makeDirector({ office, prefs, replay });   // the camera flies to what just happened (ui/director.js)
+function setDirector(on) {
+  setPref("director", !!on); office.setDirector(!!on);
+  if (!on) director.stop();
+  toast(on ? "Director cam on: the camera follows what happens. Move it yourself and it waits." : "Director cam off.", "info", { ic: "eye" });
+}
+office.setDirector(!!prefs.director);
 app.replay = replay;
 
 // ------------------------------------------------------------------------------------------------ inspector width
@@ -664,6 +673,7 @@ function onNews(e) {
       break;
     default: break;
   }
+  if (!replay.active()) director.push({ kind: e.kind, seat: e.seat, session: sid, merged: e.kind === "shipped" && / merged$/.test(e.text) });
   loadStats(null, true);
 }
 function findSessionByText(text) {
@@ -1222,6 +1232,7 @@ function paletteItems() {
     { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
     { icon: icon("news", 16), label: "This morning's standup", keywords: "standup slack yesterday today blockers daily", run: openStandup },
     { icon: icon("bell", 16), label: "Remind me…", keywords: "reminder remind later timer alarm note", run: () => openRemind() },
+    { icon: icon("eye", 16), label: prefs.director ? "Director cam: off" : "Director cam: on", keywords: "director camera follow auto tour", run: () => setDirector(!prefs.director) },
     { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },
     { icon: icon("volume", 16), label: prefs.sound ? "Mute sound effects" : "Turn on sound effects", run: () => setPref("sound", !prefs.sound) },

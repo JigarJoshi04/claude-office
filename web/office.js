@@ -52,6 +52,7 @@ export function createOffice(stage, handlers) {
       <button type="button" data-cam="in" title="Zoom in (+)" aria-label="Zoom in">+</button>
       <button type="button" data-cam="out" title="Zoom out (−)" aria-label="Zoom out">−</button>
       <button type="button" data-cam="fit" title="Fit the office (0)" aria-label="Fit the office">⤢</button>
+      <button type="button" data-cam="director" title="Director cam: fly to whatever just happened" aria-label="Director cam" aria-pressed="false">🎬</button>
       <button type="button" data-cam="legend" title="What the floor shows" aria-label="What the floor shows" aria-expanded="false">?</button>
     </div>
     <div class="cam-hint">Ctrl + scroll or pinch to zoom · drag to pan · double-click a desk to focus</div>`;
@@ -1220,6 +1221,9 @@ export function createOffice(stage, handlers) {
   function focusSeat(id) { refocus = { at: performance.now(), run: () => focusSeat(id) }; const p = L && L.pods.find(p => p.seat.id === id); if (p) focusRect(p.room.x, p.room.y, p.room.w, p.room.h); }
   function focusSession(id) { refocus = { at: performance.now(), run: () => focusSession(id) }; const a = agents.get(id); if (!a) return; const [x, y] = anchorFor(a); focusRect(x - 44, y - 24, 88, 70); }
   function fit() { refocus = null; cam.tz = 1; cam.tx = 0; cam.ty = 0; clampCam(cam); }
+  // The last time the CEO moved the camera themselves: the director cam (ui/director.js) stands down after it.
+  let userCamAt = -1e9;
+  const userCam = () => { userCamAt = performance.now(); };
   function applyCam(force) {
     const dz = cam.tz - cam.z, dx = cam.tx - cam.x, dy = cam.ty - cam.y;
     if (!force && Math.abs(dz) < 0.001 && Math.abs(dx) < 0.3 && Math.abs(dy) < 0.3) {
@@ -1257,6 +1261,7 @@ export function createOffice(stage, handlers) {
   }
   setInterval(drawMini, 250);
   mini.addEventListener("pointerdown", (e) => {
+    userCam();
     e.preventDefault(); e.stopPropagation();
     const r = mini.getBoundingClientRect(), wx = (e.clientX - r.left) / r.width * W, wy = (e.clientY - r.top) / r.height * H, { sw, sh } = sizes();
     cam.tx = sw / 2 - wx * F * cam.tz; cam.ty = sh / 2 - wy * F * cam.tz; clampCam(cam);
@@ -1270,7 +1275,7 @@ export function createOffice(stage, handlers) {
   window.addEventListener("pointermove", (e) => {
     if (!dragStart) return;
     const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
-    if (!dragMoved && Math.hypot(dx, dy) > 5 && cam.tz > 1.01) { dragMoved = true; stage.classList.add("dragging"); }
+    if (!dragMoved && Math.hypot(dx, dy) > 5 && cam.tz > 1.01) { dragMoved = true; userCam(); stage.classList.add("dragging"); }
     if (dragMoved) { cam.tx = dragStart.tx + dx; cam.ty = dragStart.ty + dy; clampCam(cam); applyCam(true); }
   });
   window.addEventListener("pointerup", () => {
@@ -1281,11 +1286,13 @@ export function createOffice(stage, handlers) {
   stage.addEventListener("wheel", (e) => {
     if (!(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
+    userCam();
     const r = stage.getBoundingClientRect();
     zoomAt(cam.tz * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);
   }, { passive: false });
   stage.addEventListener("dblclick", (e) => {
     if (e.target.closest(".cam")) return;
+    userCam();
     const r = stage.getBoundingClientRect();
     zoomAt(cam.tz < 1.6 ? 2.2 : 1, e.clientX - r.left, e.clientY - r.top);
   });
@@ -1293,6 +1300,8 @@ export function createOffice(stage, handlers) {
     e.stopPropagation();
     const { sw, sh } = sizes();
     if (b.dataset.cam === "legend") { if (handlers.onLegend) handlers.onLegend(b); return; }
+    if (b.dataset.cam === "director") { if (handlers.onDirector) handlers.onDirector(); return; }
+    userCam();
     if (b.dataset.cam === "in") zoomAt(cam.tz * 1.4, sw / 2, sh / 2);
     else if (b.dataset.cam === "out") zoomAt(cam.tz / 1.4, sw / 2, sh / 2);
     else fit();
@@ -1553,7 +1562,10 @@ export function createOffice(stage, handlers) {
         line: plateLine(p.seat, (p.seat.sessions || []).filter(x => x.live !== false)) })) : [],
       labels: L ? [L.lounge && { text: "LOUNGE", x: L.lounge.x + 8, y: L.lounge.y + BACK_LABEL }, L.meet && { text: "MEETING", x: L.meet.x + 8, y: L.meet.y + BACK_LABEL },
         ...L.open.map(o => ({ text: "GARDEN", x: o.x + 8, y: o.y + BACK_LABEL }))].filter(Boolean) : [] }),
-    zoom(dir) { const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
-    pan(dx, dy) { cam.tx += dx; cam.ty += dy; clampCam(cam); },
+    zoom(dir) { userCam(); const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
+    userCamAt: () => userCamAt,
+    focusShipBoard() { if (L) { const b = BOARD(); focusRect(b.x - 6, b.y - 18, 60, 64); } },
+    setDirector(on) { const b = document.querySelector('[data-cam="director"]'); if (b) { b.setAttribute("aria-pressed", String(!!on)); b.classList.toggle("on", !!on); } },
+    pan(dx, dy) { userCam(); cam.tx += dx; cam.ty += dy; clampCam(cam); },
   };
 }

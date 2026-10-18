@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.82.0] - 2026-10-19
+
+### Added
+- The director cam (🎬 by the zoom buttons, or the palette): the camera flies to whatever just happened (a report, a
+  merge at the ship's bell, a level up, a lane done, a limit, a fresh plan, an arrival), holds it for six seconds and
+  shows the whole office again. The biggest moments go first, at most three wait, and it stands down for 20 seconds
+  whenever you move the camera yourself. Off under reduced motion, during a replay and away from the floor.
+
 ## [3.81.0] - 2026-10-19
 
 ### Added

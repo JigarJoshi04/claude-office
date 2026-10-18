@@ -1634,3 +1634,4 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .nextup .nx > button:first-child { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; border-radius: 10px; max-width: 320px; }
 .nextup .nx > button:first-child span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nextup .nx .tpl-x { border: 0; background: none; color: var(--muted); padding: 0 8px; cursor: pointer; border-radius: 10px; }
+.cam button[aria-pressed="true"] { background: rgba(255,122,69,.9); color: #1b0c05; }
