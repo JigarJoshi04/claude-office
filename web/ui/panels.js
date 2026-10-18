@@ -379,6 +379,7 @@ export function makePanels(app) {
           ${S().snoozed ? `<p class="hint">${S().snoozed} snoozed for now.</p>` : ""}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
+      ${reviewQueueHtml(snap.mine)}
       ${setupHtml()}
       ${remindersHtml()}
       ${unusedHtml()}
@@ -411,6 +412,14 @@ export function makePanels(app) {
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
         root.querySelectorAll("[data-forward-review]").forEach(b => b.addEventListener("click", () => forwardReview(b)));
+        root.querySelectorAll("[data-review-lane]").forEach(b => b.addEventListener("click", () => {
+          const [repo, n, title, cwd] = JSON.parse(b.dataset.reviewLane);
+          const mine = (hireDraft.title || "").trim() || (hireDraft.brief || "").trim();
+          if (mine && !confirm(`Replace your draft on the hiring desk with a review of PR #${n}?`)) { app.go({ kind: "hire" }); return; }
+          hireDraft = { ...hireDraft, title: `Review PR #${n}`.slice(0, 80), workdir: cwd || hireDraft.workdir, each: "",
+            brief: `Review pull request #${n} in ${repo}${title ? ` ("${title}")` : ""}.\n\nRead it with \`gh pr view ${n} -R ${repo}\` and \`gh pr diff ${n} -R ${repo}\`. If you need to run it, check the branch out in a new git worktree under this folder and run the tests that cover the change.\n\nWrite your review as your report: what the change does, what is wrong or risky (file and line), what to change, and a verdict (approve, or request changes). Do not post the review, comment, push, merge or close anything on GitHub: the CEO posts it.` };
+          store.set("hireDraft", hireDraft); app.go({ kind: "hire" });
+        }));
         root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
         const rr = root.querySelector("[data-goals-reroll]");
         if (rr) rr.addEventListener("click", () => { if (rerollGoals(app.statsCache(null))) { toast("New goals for today. That was today's one reroll.", "good", { ic: "goal" }); app.rerender(true); } });
@@ -1241,6 +1250,16 @@ export function makePanels(app) {
       pol.memory_max ? `Memory capped at ${pol.memory_max}${/%$/.test(pol.memory_max) ? " of RAM" : ""}` : "",
       pol.tasks_max ? `At most ${pol.tasks_max.toLocaleString()} processes` : ""].filter(Boolean);
     return `<div class="pol" title="The lane policy, set in config.json (lane_policy)">${icon("lock", 13)}${chips.map(c => `<span>${esc(c)}</span>`).join("")}</div>`;
+  }
+  // Your review queue: open PRs that ask for your review (gh search), with a reviewer lane in one click, and a count
+  // of your own open PRs. Share-safe keeps to numbers.
+  function reviewQueueHtml(m) {
+    if (!m || (!m.review.length && !m.authored)) return "";
+    const priv = app.privacy();
+    return `<section class="b-sec"><h3 class="b-h">${icon("users", 16)}Your review queue<span class="count">${m.review.length}</span><span class="grow"></span>${m.authored ? `<button class="btn sm ghost" data-go="prs">${m.authored} of yours open</button>` : ""}</h3>
+      ${m.review.length ? m.review.slice(0, 4).map(p => `<div class="rq"><span class="grow"><b>${priv ? `PR #${p.number}` : esc(p.title || `PR #${p.number}`)}</b><small>${priv ? "a repository" : esc(p.repo)} #${p.number}${p.author && !priv ? " · " + esc(p.author) : ""}${p.updated ? " · " + relTime(Date.parse(p.updated) / 1000) : ""}${p.draft ? " · draft" : ""}</small></span>
+        <a class="btn sm ghost" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${icon("external", 14)}Open</a><button class="btn sm" data-review-lane="${esc(JSON.stringify([p.repo, p.number, p.title || "", p.workdir || ""]))}" title="Fill the hiring desk with a read-only review brief (nothing starts until you hire)">${icon("bot", 14)}Reviewer</button></div>`).join("")
+        : `<p class="hint">Nobody is waiting on your review.</p>`}${m.review.length > 4 ? `<p class="hint">and ${m.review.length - 4} more.</p>` : ""}</section>`;
   }
   // A seat's week against spending it evenly (divider.py pace): plan left per share of the week left.
   const FREE_HOURS = [["", "Never"], ["9-18", "9:00–18:00"], ["10-19", "10:00–19:00"], ["8-20", "8:00–20:00"], ["9-23", "9:00–23:00"], ["0-24", "All day"]];

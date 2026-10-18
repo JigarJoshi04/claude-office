@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.115.0] - 2026-10-19
+
+### Added
+- Your review queue: the briefing lists the open PRs that ask for your review (newest first, from `gh search`, every
+  ten minutes) and how many of your own PRs are open. Each has Open and Reviewer, which fills the hiring desk with a
+  read-only review brief (in a local clone when the office knows one): read the PR, run what covers it in a worktree,
+  and write the review as the report, never posting, pushing or merging. Share-safe shows numbers only.
+
 ## [3.114.0] - 2026-10-19
 
 ### Added

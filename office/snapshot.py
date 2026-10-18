@@ -530,7 +530,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.114.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.115.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -573,6 +573,12 @@ class Office(LiveOffice):
                 if s["ghost"] and now - self._ghost_said.get(s["id"], 0) > 3600:
                     self._ghost_said[s["id"]] = now
                     self.emit("ghost", f"{s['label']}'s 5-hour use rose {s['ghost']['rise']:.0f}% in {s['ghost']['minutes']} min with nothing running on this machine", s["id"], "warn")
+        mine = self.prs.mine_view() if self.prs.available else None     # your review queue (prs.fetch_mine)
+        if mine:
+            self._gh_repos(now)
+            for p in mine["review"]:
+                p["workdir"] = getattr(self, "_gh_local", {}).get(p["repo"])   # a local clone to review it in, when known
+        snap["mine"] = mine
         snap["asks"] = self.asks.view(30)
         snap["contradicted"] = [dict(v, session=k) for k, v in self.trust.recent(now - 12 * 3600) if v.get("level") == "contradicted"]
         snap["attention"] = self._attention(snap)
@@ -823,7 +829,9 @@ class Office(LiveOffice):
         """Repository folder name -> owner/name on GitHub, for the repositories the office knows (a minute's cache)."""
         if now - self._gh_map[0] > 60:
             roots = self.loose.known(self.cfg.get("repos") or [])
-            self._gh_map = (now, {r.name: g for r in roots if (g := prs.github_repo(r))})
+            pairs = [(r, g) for r in roots if (g := prs.github_repo(r))]
+            self._gh_map = (now, {r.name: g for r, g in pairs})
+            self._gh_local = {g: str(r) for r, g in pairs}       # owner/name -> a local clone
         return self._gh_map[1]
 
     def _ci_lamps(self, seats_out: list, now: float) -> None:

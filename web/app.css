@@ -1737,3 +1737,7 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .su-nav { position: absolute; bottom: 18px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 99px; background: var(--surface); }
 .su-n { font: 600 13px var(--mono); color: var(--muted); min-width: 44px; text-align: center; }
 @media (prefers-reduced-motion: reduce) { .su-bar i { transition: none !important; } }
+.rq { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.rq + .rq { margin-top: 6px; } .rq b { display: block; font-size: 14px; } .rq small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.rq .grow { min-width: 0; } .rq b, .rq small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container panel (max-width: 420px) { .rq { flex-wrap: wrap; } .rq .grow { flex-basis: 100%; } .rq b, .rq small { white-space: normal; } .rq .btn { margin-left: auto; } .rq .btn + .btn { margin-left: 0; } }

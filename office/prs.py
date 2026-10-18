@@ -122,6 +122,34 @@ def fetch_reviews(repo: str, number: int) -> list[dict] | None:
     return out
 
 
+MINE_STALE_S = 600
+_MINE_FIELDS = "number,title,repository,url,updatedAt,author,isDraft"
+
+
+def fetch_mine(which: str) -> list[dict] | None:
+    """Open PRs that wait for your review ("review") or that you opened ("authored"), from `gh search`; None on failure."""
+    gh = shutil.which("gh")
+    if not gh:
+        return None
+    flag = "--review-requested=@me" if which == "review" else "--author=@me"
+    try:
+        r = subprocess.run([gh, "search", "prs", flag, "--state=open", "--limit", "50", "--json", _MINE_FIELDS],
+                           capture_output=True, text=True, timeout=30, env={**os.environ, "GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
+        if r.returncode != 0:
+            return None
+        rows = json.loads(r.stdout or "[]")
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    out = []
+    for x in rows if isinstance(rows, list) else []:
+        repo = ((x or {}).get("repository") or {}).get("nameWithOwner")
+        if not repo or not x.get("number"):
+            continue
+        out.append({"repo": repo, "number": x["number"], "title": redact(str(x.get("title") or ""))[:140], "url": x.get("url"),
+                    "updated": x.get("updatedAt"), "author": ((x.get("author") or {}).get("login")), "draft": bool(x.get("isDraft"))})
+    return sorted(out, key=lambda p: p.get("updated") or "", reverse=True)
+
+
 class PullRequests:
     """The last fetch per repository, refreshed in the background when asked for and stale."""
 
@@ -131,6 +159,8 @@ class PullRequests:
         self.running = False
         self.available = shutil.which("gh") is not None
         self.reviews: dict = {}          # (owner/name, number) -> {"at", "threads"}: unresolved review threads
+        self.mine: dict = {"at": 0, "review": None, "authored": None}   # your review queue and your open PRs (gh search)
+        self._mining = False
         self._want: set = set()
         self._reviewing = False
 
@@ -153,6 +183,27 @@ class PullRequests:
         finally:
             with self.lock:
                 self.running = False
+
+    def mine_view(self) -> dict | None:
+        """Your review queue and your open PRs as last read; refreshed in the background every ten minutes."""
+        with self.lock:
+            if self.available and not self._mining and time.time() - self.mine["at"] > MINE_STALE_S:
+                self._mining = True
+                threading.Thread(target=self._read_mine, daemon=True, name="pr-mine").start()
+            m = self.mine
+            if m["review"] is None and m["authored"] is None:
+                return None
+            return {"review": list(m["review"] or [])[:12], "authored": len(m["authored"] or []), "authored_recent": list(m["authored"] or [])[:5], "at": m["at"]}
+
+    def _read_mine(self):
+        try:
+            review, authored = fetch_mine("review"), fetch_mine("authored")
+            with self.lock:                           # a failed read keeps what was known
+                self.mine = {"at": time.time(), "review": review if review is not None else self.mine["review"],
+                             "authored": authored if authored is not None else self.mine["authored"]}
+        finally:
+            with self.lock:
+                self._mining = False
 
     def reviews_for(self, repo: str, number: int) -> list[dict]:
         """A desk's PR's unresolved review threads as last read (refreshed in the background every few minutes)."""

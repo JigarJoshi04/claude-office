@@ -88,3 +88,20 @@ class ReviewAttentionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewQueueTests(unittest.TestCase):
+    def test_your_review_queue_from_gh_search(self):
+        rows = [{"number": 2, "title": "Add the thing with ghp_" + "a" * 36, "repository": {"nameWithOwner": "acme/api"}, "url": "u2",
+                 "updatedAt": "2026-10-19T08:00:00Z", "author": {"login": "bo"}, "isDraft": False},
+                {"number": 9, "title": "Newer", "repository": {"nameWithOwner": "acme/web"}, "url": "u9", "updatedAt": "2026-10-19T09:00:00Z",
+                 "author": {"login": "al"}, "isDraft": True}, {"title": "no repo"}]
+        done = subprocess.CompletedProcess([], 0, stdout=json.dumps(rows), stderr="")
+        with patch.object(prs.shutil, "which", return_value="/usr/bin/gh"), patch.object(prs.subprocess, "run", return_value=done) as run:
+            got = prs.fetch_mine("review")
+        self.assertIn("--review-requested=@me", run.call_args[0][0])
+        self.assertEqual([(p["repo"], p["number"], p["draft"]) for p in got], [("acme/web", 9, True), ("acme/api", 2, False)])   # newest first
+        self.assertNotIn("a" * 36, got[1]["title"])
+        with patch.object(prs.shutil, "which", return_value="/usr/bin/gh"), patch.object(prs.subprocess, "run",
+                                                                                          return_value=subprocess.CompletedProcess([], 1, "", "")):
+            self.assertIsNone(prs.fetch_mine("authored"))
