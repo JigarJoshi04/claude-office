@@ -11,6 +11,32 @@ import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {} };
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
 
+// The visit streak, with freezes: every 7 days in a row earns one (two at most), and a first visit after missed days
+// spends one per missed day to keep the run going. With weekdays-only streaks, Saturdays and Sundays never break it.
+export const MAX_FREEZES = 2;
+export function streakStep(st, now, weekdays = false, demo = false) {
+  const key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  const today = key(now), days = new Set(st.visits || []), frozen = new Set(st.frozen || []);
+  let freezes = Math.min(MAX_FREEZES, st.freezes || 0), used = 0, earned = false;
+  const known = [...days, ...frozen].sort();
+  if (!days.has(today) && known.length) {
+    const last = known[known.length - 1], missed = [], c = new Date(now);
+    c.setDate(c.getDate() - 1);
+    for (let i = 0; i < 60 && key(c) > last; i++, c.setDate(c.getDate() - 1)) {
+      if (weekdays && (c.getDay() === 0 || c.getDay() === 6)) frozen.add(key(c));     // a free weekend
+      else missed.push(key(c));
+    }
+    if (missed.length && missed.length <= freezes && !demo) { missed.forEach(k => frozen.add(k)); freezes -= missed.length; used = missed.length; }
+  }
+  days.add(today);
+  let n = 0, start = today;
+  const c = new Date(now);
+  while (days.has(key(c)) || frozen.has(key(c))) { if (days.has(key(c))) n++; start = key(c); c.setDate(c.getDate() - 1); }
+  if (n && n % 7 === 0 && st.freezeDay !== today && freezes < MAX_FREEZES && !demo) { freezes++; earned = true; }
+  return { visits: [...days].filter(k => k >= start).sort(), frozen: [...frozen].filter(k => k >= start).sort(), freezes,
+           freezeDay: earned ? today : st.freezeDay || null, n, used, earned };
+}
+
 export function makeGame(ctx) {
   const { app, office, panels, replay, store, DEMO, prefs, gifts, view, renderPanel } = ctx;
   const fxNow = () => (replay.active() ? NOFX : office);   // floor effects for live news: none while replaying
@@ -70,16 +96,16 @@ export function makeGame(ctx) {
   // The visit streak: days in a row this browser has opened the office (a flame by the level chip from two days on).
   let visits = 0;
   function visitStreak() {
-    const d = new Date(), key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
-    const days = new Set(store.get("visits", []));
-    days.add(key(d));
-    let n = 0; const c = new Date(d);
-    while (days.has(key(c))) { n++; c.setDate(c.getDate() - 1); }
-    store.set("visits", [...days].sort().slice(-n));   // only the current run matters, however long it gets
+    const r = streakStep({ visits: store.get("visits", []), frozen: store.get("frozenDays", []), freezes: store.get("freezes", 0), freezeDay: store.get("freezeDay", null) },
+      new Date(), !!prefs.streakWeekdays, DEMO);
+    store.set("visits", r.visits); store.set("frozenDays", r.frozen); store.set("freezes", r.freezes); store.set("freezeDay", r.freezeDay);
+    const n = r.n;
+    if (r.used) note(`A streak freeze kept your ${n}-day streak going (you missed ${r.used === 1 ? "a day" : r.used + " days"}).${r.freezes ? ` ${r.freezes} left.` : ""}`, "good", { ic: "flame", ms: 7000 });
+    if (r.earned) note(`${n} days in a row: you earned a streak freeze. A missed day will not break the streak (you can hold ${MAX_FREEZES}).`, "good", { ic: "flame", ms: 7000 });
     const el = $("visits");
     el.hidden = n < 2 || level() === "off";
-    el.innerHTML = `${icon("flame", 14)}${n}`;
-    el.title = `${n} days in a row: you have checked on the office every day.`;
+    el.innerHTML = `${icon("flame", 14)}${n}${r.freezes ? `<small class="frz" aria-hidden="true">❄${r.freezes > 1 ? r.freezes : ""}</small>` : ""}`;
+    el.title = `${n} days in a row: you have checked on the office every ${prefs.streakWeekdays ? "weekday" : "day"}.${r.freezes ? ` ${r.freezes} streak freeze${r.freezes === 1 ? "" : "s"} ready: a missed day uses one.` : " Every 7 days earns a streak freeze."}`;
     el.setAttribute("aria-label", el.title);
     if (n >= 7 && !DEMO) badge(award("regular"));
     visits = n;

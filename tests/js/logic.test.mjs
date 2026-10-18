@@ -374,3 +374,21 @@ test("burn alarms ring once, clear when they cool off, and never in the demo", a
   const off = makeAlarms({ ...ctx, toast: (t) => quiet.push(t), prefs: {} });
   off.check(snap); assert.equal(quiet.length, 0);                 // no rules set: nothing rings
 });
+
+test("streak freezes: earned every 7 days, spent on missed days, weekends free on weekdays-only", async () => {
+  const { streakStep } = await import("../../web/ui/game.js");
+  const at = (s) => new Date(s + "T12:00:00");
+  let st = { visits: [], frozen: [], freezes: 0, freezeDay: null };
+  for (let d = 1; d <= 7; d++) st = { ...st, ...streakStep(st, at(`2026-10-0${d}`)) };
+  assert.equal(st.n, 7); assert.equal(st.freezes, 1); assert.equal(st.earned, true);
+  const again = streakStep(st, at("2026-10-07"));                    // a second look the same day earns nothing more
+  assert.equal(again.freezes, 1); assert.equal(again.earned, false);
+  const saved = streakStep(st, at("2026-10-09"));                    // missed the 8th: the freeze keeps the run
+  assert.equal(saved.used, 1); assert.equal(saved.freezes, 0); assert.equal(saved.n, 8);
+  const broken = streakStep({ ...saved }, at("2026-10-12"));          // two days missed, no freeze: back to 1
+  assert.equal(broken.n, 1); assert.equal(broken.used, 0);
+  const fri = streakStep({ visits: ["2026-10-15", "2026-10-16"], frozen: [], freezes: 0 }, at("2026-10-19"), true);   // Thu, Fri, then Monday
+  assert.equal(fri.n, 3); assert.equal(fri.used, 0);
+  const demo = streakStep({ visits: ["2026-10-01"], frozen: [], freezes: 2 }, at("2026-10-03"), false, true);
+  assert.equal(demo.used, 0); assert.equal(demo.n, 1);
+});

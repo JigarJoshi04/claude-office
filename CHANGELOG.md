@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.49.0] - 2026-10-18
+
+### Added
+- Streak freezes: every 7 days in a row earns one (you can hold two, shown as ❄ by the streak), and the first visit after
+  a missed day spends one per missed day to keep the streak going, with a toast saying so. A weekdays-only streak (in
+  Settings) never breaks over a weekend.
+
 ## [3.48.0] - 2026-10-18
 
 ### Added

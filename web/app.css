@@ -1517,3 +1517,4 @@ ul.prs li a { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; 
 ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cab-act { display: flex; gap: 4px; flex: none; }
 .pill.spent { color: #ffd27a; } :root[data-theme="light"] .pill.spent { color: #8a5a00; }
+.visits .frz { margin-left: 3px; font-size: 10px; color: #9fd6ff; }
