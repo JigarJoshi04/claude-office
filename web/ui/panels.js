@@ -7,6 +7,7 @@ import { personaFor, binding, leftOf, voice, diary } from "./personas.js";
 import { sound } from "./sound.js";
 import { goals, streak } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
+import { BADGES, earned } from "./badges.js";
 
 const TEMPLATES = [
   { name: "Fix a failing test", ic: "check", title: "Fix failing test: ", brief: "Goal: make the failing test pass without weakening it.\nWhere: <test file or CI job>\nContext: <what changed recently>\nDone when: the test passes locally and the full suite is green.\nVerify: run the suite and paste the summary in the report." },
@@ -509,6 +510,10 @@ export function makePanels(app) {
       ${nxt ? `<div class="ol-next">${icon(nxt.icon, 18)}<div class="grow"><b>Next: ${esc(nxt.name)}</b><span>${esc(nxt.desc)}</span></div><em>Level ${nxt.level}</em></div>` : `<div class="ol-next done">${icon("trophy", 18)}<div class="grow"><b>Everything is unlocked.</b><span>The office is complete. Keep the streak going.</span></div></div>`}
       ${section(`Unlocks · ${ol.unlocked.size} of ${UNLOCKS.length}`, `<div class="ol-grid">${UNLOCKS.map(u => { const on = ol.unlocked.has(u.id);
         return `<div class="ol-card ${on ? "on" : ""}"><span class="ol-ic">${icon(on ? u.icon : "lock", 18)}</span><b>${esc(u.name)}</b><span>${esc(on ? u.desc : `Unlocks at office level ${u.level}`)}</span></div>`; }).join("")}</div>`)}
+      ${(() => { const have = earned(), n = BADGES.filter(b => have[b.id]).length;
+        return section(`Your badges · ${n} of ${BADGES.length}`, `<div class="ol-grid">${BADGES.map(b => { const at = have[b.id];
+          return `<div class="ol-card ${at ? "on" : ""}"><span class="ol-ic">${icon(at ? b.icon : "lock", 18)}</span><b>${esc(b.name)}</b><span>${esc(b.desc)}${at ? ` · ${esc(dayTime(at))}` : ""}</span></div>`; }).join("")}</div>
+          <div class="hint" style="margin-top:8px">${app.demo ? "The demo office never awards badges. " : ""}Badges are kept in this browser.</div>`); })()}
       ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color)}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}` };
   }
   function trophies() {
@@ -757,7 +762,7 @@ export function makePanels(app) {
           try {
             const r = await app.post("/api/lanes", hireDraft);
             if (r.demo) toast("Demo office: no lane was started.");
-            else { sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true }; store.set("hireDraft", hireDraft); }
+            else { sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true }; store.set("hireDraft", hireDraft); }
             app.refresh(); app.rerender(true);
           } catch (e) { toast("Could not hire: " + e.message, "bad"); q("hGo").disabled = false; }
         });

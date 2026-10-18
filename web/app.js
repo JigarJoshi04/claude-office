@@ -7,9 +7,10 @@ import { openPalette } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
 import { pulse, line, reaction, voice, binding, leftOf } from "./ui/personas.js";
-import { goals } from "./ui/goals.js";
+import { goals, streak } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
 import { dayCard } from "./ui/daycard.js";
+import { award, bump } from "./ui/badges.js";
 import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
 
@@ -71,6 +72,7 @@ const app = {
   loadStats: (d, force) => loadStats(d, force),
   chatFor: (seat, id) => { const k = seat + "/" + id; const c = chats.get(k); if (!c || Date.now() - c.at > 4000) loadChat(seat, id); return c ? c.data : null; },
   chatSent(seat, id, text, r) {
+    if (!DEMO) app.bump("messages", 10, "talker");
     const k = seat + "/" + id;
     if (!pending.has(k)) pending.set(k, []);
     pending.get(k).push({ ts: Date.now() / 1000, text, delivery: r.delivery });
@@ -241,6 +243,7 @@ function setTv(on) {
     document.querySelector(".floor-frame").appendChild(hud);
     hud.querySelector("[data-tv-exit]").addEventListener("click", () => setTv(false));
     document.body.classList.add("tv");
+    if (!DEMO) badge(award("big_screen"));
     tvAt = -1; clearInterval(tvTimer); tvTimer = setInterval(tvTour, 9000); setTimeout(tvTour, 600);
     try { if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); } catch { /* not allowed */ }
   } else {
@@ -417,6 +420,7 @@ function cheerGoals(st) {
     if (!days.includes(day)) store.set("goalDays", [...days, day].slice(-90));
   }
   const fresh = gl.filter(g => g.done && !goalsSeen.ids.has(g.id));
+  if (fresh.length && gl.every(x => x.done) && !DEMO) { badge(award("clean_sweep")); if (streak(store.get("goalDays", []), day) >= 3) badge(award("consistent")); }
   if (fresh.length) {   // one celebration per refresh, however many goals finished in it
     fresh.forEach(g => goalsSeen.ids.add(g.id));
     const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
@@ -434,6 +438,7 @@ function apply(next) {
   snap = next; setNow(snap.now);
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
+  if (!DEMO) checkBadges();   // the demo office never hands out badges
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) onNews(e);
@@ -503,6 +508,21 @@ function onNews(e) {
   }
   loadStats(null, true);
 }
+// A CEO badge (ui/badges.js) was earned: a chime and a toast that opens Your office.
+function badge(b) {
+  if (!b) return;
+  setTimeout(() => { sound.play("achievement"); toast(`Badge earned: ${b.name}. ${b.desc}`, "good", { ic: b.icon, ms: 6500 }); if (view.kind === "office") renderPanel(true); }, 900);
+}
+app.badge = (id) => badge(award(id));
+app.bump = (key, n, id) => badge(bump(key, n, id));
+function checkBadges() {
+  const h = new Date().getHours();
+  badge(award("welcome"));
+  if (h < 4) badge(award("night_owl"));
+  if (h >= 5 && h < 7) badge(award("early_bird"));
+  if (snap.seats.length && panels.needsCount() === 0) badge(award("inbox_zero"));
+}
+
 // The combo: reports and finished lanes within 15 minutes of each other chain up (×2, ×3, …). The floor shows the
 // combo with a bar draining toward its end; the day's best combo is kept per browser.
 const COMBO_WINDOW = 15 * 60;
@@ -515,6 +535,7 @@ function comboHit(e) {
   const best = combo.n > combo.best && combo.n >= 2;
   combo.best = Math.max(combo.best, combo.n);
   store.set("combo", combo);
+  if (combo.n >= 3 && !DEMO) badge(award("hot_streak"));
   if (combo.n >= 2) {
     setTimeout(() => sound.play("combo", combo.n), 700);
     const word = combo.n >= 5 ? "Unstoppable!" : combo.n >= 4 ? "On fire!" : combo.n >= 3 ? "Hot streak!" : "Combo!";
@@ -743,6 +764,7 @@ async function shareDay() {
     catch { toast("This browser cannot copy images: use Save instead.", "warn"); }
   }, "image/png"));
   $("dcSave").focus();
+  if (!DEMO) badge(award("show_and_tell"));
 }
 app.shareDay = shareDay;
 

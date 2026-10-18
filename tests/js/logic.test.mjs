@@ -92,3 +92,18 @@ test("a walker's path ends at its seat and never leaves the building", () => {
     }
   }
 });
+
+test("seasons: Halloween, Diwali and the winter holidays", async () => {
+  const { seasonFor } = await import("../../web/engine/season.js");
+  const at = (s) => seasonFor(new Date(s + "T12:00:00"));
+  assert.equal(at("2026-10-18"), "halloween");
+  assert.equal(at("2026-11-01"), "halloween");
+  assert.equal(at("2026-11-06"), "diwali");                // Diwali 2026 is 8 November
+  assert.equal(at("2026-11-11"), "diwali");
+  assert.equal(at("2026-11-20"), null);
+  assert.equal(at("2026-12-24"), "winter");
+  assert.equal(at("2027-01-01"), "winter");
+  assert.equal(at("2027-01-05"), null);
+  assert.equal(at("2027-10-29"), "diwali");                // in 2027 Diwali falls inside the Halloween weeks and wins
+  assert.equal(at("2026-07-01"), null);
+});

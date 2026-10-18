@@ -117,6 +117,7 @@ export function makeReplay(app, office, frame) {
     if (!hist.sessions.length) { hist = null; toast("Nothing to replay yet: the history is empty.", "info"); return; }
     speed = SPEEDS.reduce((a, v) => Math.abs(v - (hist.now - hist.from) / 60) < Math.abs(a - (hist.now - hist.from) / 60) ? v : a, 360);   // about a minute end to end
     t = hist.from; lastT = 0;
+    if (!app.demo && app.badge) app.badge("time_traveller");
     frame.classList.add("replaying");
     buildBar();
     office.reset();                                  // start with everyone already at their desks
