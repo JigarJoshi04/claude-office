@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.84.0] - 2026-10-19
+
+### Added
+- Set up your office: a checklist at the top of the briefing that ticks itself from what the office sees (a seat
+  logged in, a second account, running as a service, desktop notifications, installed as an app, the office and you
+  named, the first lane hired, the first message sent, the tour taken). Each open step has the command to copy or a
+  button. It goes away when everything is done or you hide it, and an office that is nearly set up never sees it.
+
 ## [3.83.0] - 2026-10-19
 
 ### Added

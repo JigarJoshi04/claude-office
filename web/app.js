@@ -86,6 +86,10 @@ const app = {
   liveMode: () => liveMode,
   go,
   openStandup: () => openStandup(),
+  installApp: () => installApp(),
+  canInstall: () => !!installPrompt,
+  tour: () => tour(),
+  setPref: (k, v) => setPref(k, v),
   remind: (when, label, text) => openRemind(when, label, text),
   setView: (v) => setView(v),
   rerender: (force) => renderPanel(force),
@@ -313,7 +317,7 @@ applyPanel();
 function tour() {
   const hadPanel = prefs.panel;                 // the tour shows the inspector, then leaves it as it was
   setView("floor"); if (!hadPanel) setPref("panel", true); go({ kind: "ceo" });
-  setTimeout(() => startTour({ onDone: () => { if (!hadPanel) setPref("panel", false); } }), 300);
+  setTimeout(() => startTour({ onDone: () => { store.set("tourDone", true); if (!hadPanel) setPref("panel", false); } }), 300);
 }
 
 const floor = makeFloor({ app, office, panels, replay, prefs, QS, DEMO, go, setView, badge: (b) => badge(b), award, zoomNow });
@@ -1048,7 +1052,7 @@ function openMenu(focusItem) {
 // Install as an app: the browser offers it when the manifest is valid; the menu shows the item while it does.
 let installPrompt = null;
 addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installPrompt = e; });
-addEventListener("appinstalled", () => { installPrompt = null; toast("Installed. Claude Office opens in its own window now.", "good"); });
+addEventListener("appinstalled", () => { installPrompt = null; store.set("installed", true); toast("Installed. Claude Office opens in its own window now.", "good"); });
 async function installApp() {
   if (!installPrompt) { toast("This browser cannot install it from here: use its menu, \"Install Claude Office\".", "info"); return; }
   installPrompt.prompt();

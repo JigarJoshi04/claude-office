@@ -1635,3 +1635,8 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .nextup .nx > button:first-child span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nextup .nx .tpl-x { border: 0; background: none; color: var(--muted); padding: 0 8px; cursor: pointer; border-radius: 10px; }
 .cam button[aria-pressed="true"] { background: rgba(255,122,69,.9); color: #1b0c05; }
+/* Set up your office (panels.js setupHtml) */
+.setup-bar { height: 6px; border-radius: 99px; background: var(--line-2); overflow: hidden; margin: 2px 0 10px; } .setup-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff7a45, #ffd24a); border-radius: 99px; }
+.setup-step { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); margin-top: 6px; }
+.setup-step .grow { min-width: 0; } .setup-step b { display: block; font-size: 13.5px; } .setup-step small { display: block; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.setup-step .btn { flex: none; }

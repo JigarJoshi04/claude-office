@@ -151,6 +151,36 @@ export function makePanels(app) {
   }
   // A seat about to reset with a lot of its week unused: one quiet card per seat and window, with one-click work for it.
   // It stays out of Needs you (nothing is wrong), and goes once dismissed or once the plan is used.
+  // Set up your office: a checklist that ticks itself from what the office sees, until it is done or dismissed. An
+  // office that is nearly set up the first time it shows never sees it.
+  function setupSteps() {
+    const snap = S(), claude = snap.seats.filter(s => s.kind === "claude"), counts = store.get("counts", {});
+    const cfg = (d) => `CLAUDE_CONFIG_DIR=~/.claude${d} claude`;
+    return [
+      { done: claude.some(s => (s.health || {}).state !== "login"), t: "Log in a seat", d: "Run claude in a terminal and type /login.", copy: "claude" },
+      { done: claude.length >= 2, t: "Add a second account", d: "Another login becomes another seat and another plan.", copy: cfg(2) },
+      { done: (snap.units || []).some(u => /^claude-office/.test(u.unit) && u.active === "active"), t: "Run the office as a service", d: "It keeps counting while the page is closed and starts with your computer.", copy: "bin/install.sh" },
+      { done: !!(app.prefs().notify && "Notification" in window && Notification.permission === "granted"), t: "Turn on desktop notifications", d: "Limits, reports and questions reach you in other windows.", act: "notify", label: "Turn on" },
+      { done: matchMedia("(display-mode: standalone)").matches || store.get("installed", false), t: "Install it as an app", d: "Its own window, and a badge on its icon with what needs you.", act: app.canInstall() ? "install" : null, label: "Install" },
+      { done: !!(snap.office.name && snap.office.name !== "Claude Office") || ((snap.office.ceo || {}).name || "CEO") !== "CEO", t: "Name the office and yourself", d: "Settings → Office: the sign over the lobby and how the characters greet you.", go: "settings", label: "Settings" },
+      { done: (snap.lanes || []).length > 0 || store.get("lanesHired", false), t: "Hire your first lane", d: "A session the office runs in the background until it files a report.", go: "hire", label: "Hiring desk" },
+      { done: (counts.messages || 0) > 0, t: "Message a session", d: "Click anyone at a desk, then Chat: the message reaches the session itself." },
+      { done: store.get("tourDone", false), t: "Take the tour", d: "Two minutes around the floor and the briefing.", act: "tour", label: "Start" },
+    ];
+  }
+  function setupHtml() {
+    if (app.demo || store.get("setupDismissed", false)) return "";
+    const steps = setupSteps(), done = steps.filter(s => s.done).length;
+    if (!store.get("setupSeen", false)) { store.set("setupSeen", true); if (done >= steps.length - 2) { store.set("setupDismissed", true); return ""; } }
+    if (done === steps.length) { store.set("setupDismissed", true); return ""; }
+    if ((S().lanes || []).length) store.set("lanesHired", true);
+    const open = steps.filter(s => !s.done).slice(0, 3);
+    return `<section class="b-sec setup"><h3 class="b-h">${icon("sparkles", 16)}Set up your office<span class="count">${done}/${steps.length}</span><span class="grow"></span>
+        <button class="btn sm ghost icon" data-setup-x title="Hide the checklist" aria-label="Hide the checklist">${icon("x", 14)}</button></h3>
+      <div class="setup-bar"><i style="width:${Math.round(done / steps.length * 100)}%"></i></div>
+      ${open.map(s => `<div class="setup-step"><span class="grow"><b>${esc(s.t)}</b><small>${esc(s.d)}</small></span>${s.copy ? `<button class="btn sm" data-copy="${esc(s.copy)}" data-copy-note="Paste it in a terminal.">${icon("copy", 14)}Copy</button>`
+        : s.act ? `<button class="btn sm" data-setup-act="${esc(s.act)}">${esc(s.label)}</button>` : s.go ? `<button class="btn sm" data-go="${esc(s.go)}">${esc(s.label)}</button>` : ""}</div>`).join("")}</section>`;
+  }
   // Reminders you set (office/reminders.py): what, and when it fires; share-safe keeps the words to yourself.
   function remindersHtml() {
     const rs = S().reminders || [];
@@ -285,6 +315,7 @@ export function makePanels(app) {
           ${S().snoozed ? `<p class="hint">${S().snoozed} snoozed for now.</p>` : ""}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
+      ${setupHtml()}
       ${remindersHtml()}
       ${unusedHtml()}
       ${app.prefs().game === "off" ? "" : goalsHtml() + weeklyHtml() + almostHtml()}
@@ -297,6 +328,12 @@ export function makePanels(app) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
         root.querySelectorAll("[data-standup]").forEach(b => b.addEventListener("click", () => app.openStandup()));
+        const sx = root.querySelector("[data-setup-x]"); if (sx) sx.addEventListener("click", () => { store.set("setupDismissed", true); app.rerender(true); });
+        root.querySelectorAll("[data-setup-act]").forEach(b => b.addEventListener("click", () => {
+          const k = b.dataset.setupAct;
+          if (k === "notify") app.setPref("notify", true); else if (k === "install") app.installApp(); else if (k === "tour") app.tour();
+          setTimeout(() => app.rerender(true), 600);
+        }));
         root.querySelectorAll("[data-rhythm]").forEach(b => b.addEventListener("click", () => { store.set("rhythm", { ...store.get("rhythm", {}), [b.dataset.rhythm]: 1 }); app.rerender(true); }));
         root.querySelectorAll("[data-unused]").forEach(b => b.addEventListener("click", () => { store.set("unusedSeen", { ...store.get("unusedSeen", {}), [b.dataset.unused]: 1 }); app.rerender(true); }));
         root.querySelectorAll("[data-hire-for]").forEach(b => b.addEventListener("click", () => { hireDraft = { ...hireDraft, seat: b.dataset.hireFor }; store.set("hireDraft", hireDraft); app.go({ kind: "hire" }); }));
