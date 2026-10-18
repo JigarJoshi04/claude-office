@@ -142,6 +142,14 @@ export function drawStatic(c, L) {
   const sv = L.server;
   for (let y = sv.y; y < H; y += 8) for (let x = 0; x < LOBBY_W - 26; x += 8) { S.rect(c, x, y, 8, 8, ((x + y) / 8) % 2 ? S.P.tile : S.P.tileB); S.rect(c, x, y, 8, 1, S.P.tileLine); }
   S.rect(c, 0, sv.y - 3, LOBBY_W - 26, 3, "#141722");
+  // office-level unlocks in the lobby: palms either side of the elevator, and at the top the founder's statue
+  if (L.unlocked && L.unlocked.has("palms")) { S.drawPalm(c, 68, WALL - 2); S.drawPalm(c, 113, WALL - 2); }
+  if (L.unlocked && L.unlocked.has("statue")) {
+    const sx = 148, sy = L.hire.y - 4;
+    S.rect(c, sx, sy + 28, 22, 10, "#6b6f80"); S.rect(c, sx, sy + 28, 22, 2, "#8a8fa2"); S.rect(c, sx + 2, sy + 38, 18, 2, "rgba(0,0,0,0.3)");
+    S.rect(c, sx + 7, sy + 4, 8, 7, "#e0b84a"); S.rect(c, sx + 6, sy + 11, 10, 12, "#d4a83a"); S.rect(c, sx + 7, sy + 23, 3, 5, "#c49a30"); S.rect(c, sx + 12, sy + 23, 3, 5, "#c49a30");
+    S.rect(c, sx + 15, sy + 9, 3, 2, "#d4a83a"); S.rect(c, sx + 17, sy + 4, 2, 6, "#d4a83a"); S.rect(c, sx + 8, sy + 5, 2, 2, "#fff0a8");   // one arm raised
+  }
   // the wall between the lobby and the rooms, open where each corridor meets the lobby walkway
   let wy = 0;
   for (const cy of L.corridors) { S.rect(c, LOBBY_W - 2, wy, 2, cy - 3 - wy, "#141722"); wy = cy + CORR; }
@@ -149,7 +157,7 @@ export function drawStatic(c, L) {
   // character rooms
   for (const p of L.pods) {
     drawRoomShell(c, p.room, p.seat.color, p.arch);
-    drawDecorStatic(c, p.room, p.arch);
+    drawDecorStatic(c, p.room, p.arch, !!(L.unlocked && L.unlocked.has("flowers")));
   }
   // the lounge, the meeting room and any open space
   if (L.lounge) drawCommonRoom(c, L.lounge, "#2f5658", "#2a4d4f");

@@ -69,6 +69,12 @@ a { color: var(--info); text-decoration: none; } a:hover { text-decoration: unde
 .top { display: flex; align-items: center; gap: 18px; height: 62px; padding: 0 22px; position: sticky; top: 0; z-index: 40;
   background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 11px; flex: none; }
+.olvl { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 4px; border: 0; border-radius: 99px; cursor: pointer;
+  background: color-mix(in srgb, #ffd24a 14%, var(--surface-2)); color: var(--text); font: 700 12.5px var(--mono); box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffd24a 35%, transparent); }
+.olvl:hover { background: color-mix(in srgb, #ffd24a 24%, var(--surface-2)); }
+.olvl svg { width: 22px; height: 22px; transform: rotate(-90deg); }
+.olvl circle { fill: none; stroke-width: 3; } .olvl .trk { stroke: var(--line-2); } .olvl .val { stroke: #ffd24a; stroke-linecap: round; }
+:root[data-theme="light"] .olvl .val { stroke: #c99a10; }
 .logo { width: 30px; height: 30px; border-radius: 8px; image-rendering: pixelated; box-shadow: 0 0 0 1px var(--line-2), 0 6px 18px rgba(255,122,69,.25); }
 .wordmark { font-family: var(--pixel); font-size: 14px; letter-spacing: .5px; white-space: nowrap; }
 .pulse { flex: 1; min-width: 0; color: var(--text-2); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 10px; }
@@ -142,6 +148,11 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 .k.working { background: var(--st-working); } .k.waiting { background: var(--st-waiting); } .k.idle { background: var(--st-idle); } .k.limited { background: var(--st-limited); } .k.stuck { background: var(--st-stuck); }
 
 /* floor overlay (scales with the camera through --f) */
+/* office-level flourishes on the floor overlay (engine/unlocks.js) */
+.neon.show { animation: neonshow 9s linear infinite; }
+@keyframes neonshow { to { filter: hue-rotate(360deg); } }
+.overlay.gold-plates .plate { box-shadow: 0 0 0 calc(.7px * var(--f)) #e0b84a, 0 calc(2px * var(--f)) calc(6px * var(--f)) rgba(0,0,0,.35); }
+.overlay.gold-plates .plate .pl-line b { color: #ffe9a8; }
 .hot { position: absolute; background: transparent; border: 0; padding: 0; cursor: pointer; border-radius: calc(4px * var(--f)); }
 .hot.room:hover, .hot.pod:hover, .hot.hire:hover { background: rgba(255,255,255,.035); }
 .hot.worker:hover, .hot.worker.sel { box-shadow: 0 0 0 calc(.7px * var(--f)) #fff, 0 0 calc(7px * var(--f)) rgba(255,255,255,.55); }
@@ -746,6 +757,35 @@ dialog .db { padding: 16px 20px; max-height: 70vh; overflow: auto; }
 }
 .hot.cat { border-radius: 50%; } .hot.cat:hover { box-shadow: 0 0 0 calc(.6px * var(--f)) #ffd59a; }
 .bubble.cat-says { background: #fff4e0; z-index: 7; }
+
+/* ---- the office page: level, unlocks, who built it ---- */
+.ol-hero { position: relative; display: grid; grid-template-columns: 76px 1fr; gap: 16px; align-items: center; padding: 18px; border-radius: 20px;
+  background: radial-gradient(120% 90% at 0% 0%, rgba(255,210,74,.18), transparent 60%), var(--surface-2); box-shadow: inset 0 0 0 1px rgba(255,210,74,.25); }
+.ol-ring { grid-row: 1; grid-column: 1; width: 76px; height: 76px; transform: rotate(-90deg); }
+.ol-ring circle { fill: none; stroke-width: 6; } .ol-ring .trk { stroke: var(--line-2); } .ol-ring .val { stroke: #ffd24a; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(255,210,74,.6)); }
+.ol-num { grid-row: 1; grid-column: 1; display: grid; justify-items: center; line-height: 1; }
+.ol-num small { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ol-num b { font: 800 26px/1.1 Inter, sans-serif; }
+.ol-sub { margin-top: 2px; font: 600 13px var(--mono); color: var(--muted); }
+.ol-bar { height: 8px; margin: 8px 0 2px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
+.ol-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #e0a92a, #ffd24a); box-shadow: 0 0 10px rgba(255,210,74,.5); }
+.ol-hero .lede { margin-top: 8px; font-size: 13.5px; }
+.ol-next { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
+.ol-next > .ic { color: #ffd24a; flex: none; }
+.ol-next b { display: block; font-size: 14.5px; } .ol-next span { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.ol-next em { font: 700 12px var(--mono); font-style: normal; padding: 4px 8px; border-radius: 99px; background: rgba(255,210,74,.14); color: #ffd479; white-space: nowrap; }
+:root[data-theme="light"] .ol-next em { color: #8a6400; }
+.ol-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ol-card { display: grid; gap: 4px; align-content: start; padding: 12px; border-radius: 14px; background: var(--surface-2); color: var(--faint); }
+.ol-card .ol-ic { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--surface-3); margin-bottom: 4px; }
+.ol-card b { font-size: 13.5px; color: var(--muted); } .ol-card span { font-size: 12.5px; line-height: 1.4; }
+.ol-card.on { color: var(--text-2); background: linear-gradient(150deg, rgba(255,210,74,.12), var(--surface-2) 60%); box-shadow: inset 0 0 0 1px rgba(255,210,74,.25); }
+.ol-card.on b { color: var(--text); } .ol-card.on .ol-ic { color: #1d1606; background: #ffd24a; box-shadow: 0 0 12px rgba(255,210,74,.4); }
+.ol-who { display: grid; grid-template-columns: 34px 90px 1fr auto; gap: 10px; align-items: center; padding: 6px 4px; border-radius: 10px; cursor: pointer; }
+.ol-who:hover, .ol-who.hl { background: var(--surface-2); }
+.ol-who .av { width: 34px; height: 34px; border-radius: 10px; } .ol-who .av canvas { width: 21px; height: 27px; margin-top: 7px; }
+.ol-who b { font-size: 14px; } .ol-who em { font: 600 12.5px var(--mono); font-style: normal; color: var(--muted); }
+.ol-wbar { height: 6px; border-radius: 99px; background: var(--line-2); overflow: hidden; } .ol-wbar i { display: block; height: 100%; border-radius: 99px; background: var(--seat); }
 
 /* ---- floor cards: the room peek and the legend ---- */
 .peek { position: fixed; z-index: 70; width: 300px; padding: 14px 14px 10px; border-radius: 16px; pointer-events: none; zoom: var(--ui-zoom, 1);

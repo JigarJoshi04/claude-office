@@ -6,6 +6,7 @@ import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary } from "./personas.js";
 import { sound } from "./sound.js";
 import { goals, streak } from "./goals.js";
+import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 
 const TEMPLATES = [
   { name: "Fix a failing test", ic: "check", title: "Fix failing test: ", brief: "Goal: make the failing test pass without weakening it.\nWhere: <test file or CI job>\nContext: <what changed recently>\nDone when: the test passes locally and the full suite is green.\nVerify: run the suite and paste the summary in the report." },
@@ -491,6 +492,24 @@ export function makePanels(app) {
     return { html: `${crumbs("Meeting room")}<h2>Programmes</h2><p class="lede">Live work grouped by programme. Names and links come from your config.</p>
       ${section("On the whiteboard", (S().programmes || []).map(progCard).join("") || `<div class="muted">No running work belongs to a programme.</div>`)}` };
   }
+  // The office's own level: everyone's XP adds up, and each level unlocks something on the floor.
+  function office() {
+    const snap = S(), ol = officeLevel(snap.seats), r = 30, len = 2 * Math.PI * r;
+    const byXp = [...snap.seats].filter(s => s.career).sort((a, b) => b.career.xp - a.career.xp), top = Math.max(1, ...byXp.map(s => s.career.xp));
+    const nxt = ol.upcoming;
+    return { html: `${crumbs("Your office")}
+      <div class="ol-hero">
+        <svg class="ol-ring" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="${r}" class="trk"/><circle cx="36" cy="36" r="${r}" class="val" stroke-dasharray="${(len * ol.progress).toFixed(1)} ${len.toFixed(1)}"/></svg>
+        <div class="ol-num"><small>Level</small><b>${ol.level}</b></div>
+        <div class="grow"><h2>${esc(snap.office.name || "Claude Office")}</h2>
+          <div class="ol-sub">${ol.xp.toLocaleString()} XP · ${(ol.next - ol.xp).toLocaleString()} to level ${ol.level + 1}</div>
+          <div class="ol-bar"><i style="width:${Math.round(ol.progress * 100)}%"></i></div>
+          <p class="lede">Everyone's work adds up. Every office level unlocks something new on the floor.</p></div></div>
+      ${nxt ? `<div class="ol-next">${icon(nxt.icon, 18)}<div class="grow"><b>Next: ${esc(nxt.name)}</b><span>${esc(nxt.desc)}</span></div><em>Level ${nxt.level}</em></div>` : `<div class="ol-next done">${icon("trophy", 18)}<div class="grow"><b>Everything is unlocked.</b><span>The office is complete. Keep the streak going.</span></div></div>`}
+      ${section(`Unlocks · ${ol.unlocked.size} of ${UNLOCKS.length}`, `<div class="ol-grid">${UNLOCKS.map(u => { const on = ol.unlocked.has(u.id);
+        return `<div class="ol-card ${on ? "on" : ""}"><span class="ol-ic">${icon(on ? u.icon : "lock", 18)}</span><b>${esc(u.name)}</b><span>${esc(on ? u.desc : `Unlocks at office level ${u.level}`)}</span></div>`; }).join("")}</div>`)}
+      ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color)}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}` };
+  }
   function trophies() {
     const seats = S().seats.filter(s => s.career), cat = S().achievements || [];
     const byId = Object.fromEntries(cat.map(a => [a.id, a]));
@@ -802,7 +821,7 @@ export function makePanels(app) {
       } };
   }
 
-  return { needsCount: () => needs(S()).length,
+  return { office, needsCount: () => needs(S()).length,
     needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings" };
 }

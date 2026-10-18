@@ -9,6 +9,8 @@ import { icon } from "./ui/icons.js";
 import { pulse, line, reaction, voice, binding, leftOf } from "./ui/personas.js";
 import { goals } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
+import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
+const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
 const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
@@ -316,7 +318,7 @@ function viewFromHash() {
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
-  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies"].includes(k) ? { kind: k } : { kind: "ceo" };
+  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 let revealT = 0;
@@ -429,7 +431,7 @@ function apply(next) {
   const first = !snap;
   snap = next; setNow(snap.now);
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
-  renderTop(); renderLatest(); renderRightNow(); renderMain(true);
+  renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) onNews(e);
@@ -542,6 +544,27 @@ function startPolling() { if (pollTimer) return; pollOnce(); pollTimer = setInte
 function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
 
 // ------------------------------------------------------------------------------------------------ header & latest
+// The office level chip in the header, and a celebration when the office levels up (never on a reload).
+let olSeen = store.get("officeLevel", 0);
+function renderOfficeLevel() {
+  const ol = officeLevel(snap.seats), b = $("officeLvl");
+  if (!snap.seats.some(s => s.career)) { b.hidden = true; return; }
+  b.hidden = false;
+  const r = 9, len = 2 * Math.PI * r;
+  const html = `<svg viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="${r}" class="trk"/><circle cx="11" cy="11" r="${r}" class="val" stroke-dasharray="${(len * ol.progress).toFixed(1)} ${len.toFixed(1)}"/></svg><span>Lv ${ol.level}</span>`;
+  if (b.dataset.html !== html) { b.innerHTML = html; b.dataset.html = html; }
+  b.title = `Office level ${ol.level}: ${(ol.next - ol.xp).toLocaleString()} XP to level ${ol.level + 1}${ol.upcoming ? ` · next unlock: ${ol.upcoming.name} at level ${ol.upcoming.level}` : ""}`;
+  b.setAttribute("aria-label", b.title);
+  if (olSeen && ol.level > olSeen) {
+    const got = UNLOCKS_BY_LEVEL(olSeen, ol.level);
+    if (prefs.view === "floor") office.banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
+    sound.play("levelup");
+    toast(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
+  }
+  if (ol.level !== olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }
+}
+$("officeLvl").addEventListener("click", () => go({ kind: "office" }));
+
 function renderTop() {
   $("officeName").textContent = snap.office.name || "Claude Office";
   const bad = snap.attention.some(a => a.level === "bad"), warn = snap.attention.length > 0;
@@ -853,6 +876,7 @@ function paletteItems() {
     { icon: icon("plus", 16), label: "Hire a lane", hint: "H", keywords: "new lane dispatch task", run: () => go({ kind: "hire" }) },
     { icon: icon("sliders", 16), label: "Load divider", hint: "D", keywords: "split weights bench", run: () => go({ kind: "divider" }) },
     { icon: icon("floor", 16), label: "Floor", hint: "F", run: () => setView("floor") },
+    { icon: icon("star", 16), label: "Your office: level and unlocks", keywords: "office level unlocks xp progress", run: () => go({ kind: "office" }) },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => setTv(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },
     { icon: icon("rewind", 16), label: "Replay the last 24 hours", keywords: "history playback rewind day yesterday", run: () => { setView("floor"); replay.open(24); } },

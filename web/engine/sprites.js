@@ -416,7 +416,7 @@ export function drawBookshelf(ctx, x, y, w) {
 }
 
 // weather: "clear", "cloudy" (a seat's plan is running low) or "rain" (it is out of plan): each room's own mood sky.
-export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear") {
+export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear", extras = null) {
   rect(ctx, x - 2, y - 2, w + 4, h + 4, P.trim);
   const g = ctx.createLinearGradient(0, y, 0, y + h);
   const grey = weather === "rain" ? 0.7 : weather === "cloudy" ? 0.45 : 0;
@@ -455,6 +455,12 @@ export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear") {
       rect(ctx, x + w - 10, y + 3, 5, 5, "#fff2a8");
     }
     for (let i = 0; i < w; i += 6) { const bh = 4 + (hashOf("b" + (x + i)) % 8); rect(ctx, x + i, y + h - bh, 6, bh, "rgba(60,80,115,0.55)"); }
+  }
+  if (extras && weather === "clear") {
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    if (night && extras.fireworks) { drawFirework(ctx, x + 8 + (hashOf("fw" + x) % (w - 16)), y + 6, t, hashOf("fs" + x)); drawFirework(ctx, x + 6 + (hashOf("fv" + x) % (w - 12)), y + 9, t + 700, hashOf("ft" + x)); }
+    if (!night && extras.balloon) { const bx = x + ((t / 380 + hashOf("bl" + x) % 97) % (w + 16)) - 8; drawBalloon(ctx, Math.round(bx), y + 4 + Math.round(Math.sin(t / 900) * 1.5)); }
+    ctx.restore();
   }
   rect(ctx, x + Math.floor(w / 2), y, 1, h, P.trim);
   rect(ctx, x, y + Math.floor(h / 2), w, 1, alpha("#5a6290", 0.6));
@@ -498,15 +504,16 @@ export function drawPoster(ctx, x, y, kind) {
   }
 }
 
-export function drawElevator(ctx, x, y, open, floorText, t) {
+export function drawElevator(ctx, x, y, open, floorText, t, gold = false) {
   rect(ctx, x - 3, y - 6, 32, 46, "#4a5070"); rect(ctx, x - 2, y - 5, 30, 1, "#6a7298");
   rect(ctx, x + 8, y - 4, 10, 4, "#0d0f15");
   rect(ctx, x + 10, y - 3, 6, 2, Math.floor(t / 800) % 2 ? "#ff8f3d" : "#a85a25");
   rect(ctx, x, y, 26, 40, "#151824");
   const gap = Math.round(open * 12);
-  rect(ctx, x, y, 13 - gap, 40, "#9aa3b5"); rect(ctx, x + 13 + gap, y, 13 - gap, 40, "#9aa3b5");
-  rect(ctx, x + 12 - gap, y, 1, 40, "#6b7488"); rect(ctx, x + 13 + gap, y, 1, 40, "#6b7488");
-  rect(ctx, x + 1, y + 1, 11 - gap, 1, "#c4cad6"); rect(ctx, x + 14 + gap, y + 1, 11 - gap, 1, "#c4cad6");
+  const door = gold ? "#d9b54a" : "#9aa3b5", seam = gold ? "#a8862c" : "#6b7488", shine = gold ? "#fff0a8" : "#c4cad6";
+  rect(ctx, x, y, 13 - gap, 40, door); rect(ctx, x + 13 + gap, y, 13 - gap, 40, door);
+  rect(ctx, x + 12 - gap, y, 1, 40, seam); rect(ctx, x + 13 + gap, y, 1, 40, seam);
+  rect(ctx, x + 1, y + 1, 11 - gap, 1, shine); rect(ctx, x + 14 + gap, y + 1, 11 - gap, 1, shine);
   rect(ctx, x + 29, y + 16, 3, 6, "#2b2f3a"); rect(ctx, x + 30, y + 17, 1, 1, "#7ee787"); rect(ctx, x + 30, y + 20, 1, 1, "#ff6b6b");
 }
 
@@ -626,4 +633,43 @@ export function drawCat(ctx, x, y, mode, facing, t) {
   px(0, 1 + tail, 1, 2, dark);                                               // tail
   if (mode === "sit") { px(2, 5, 1, 1, fur); px(5, 5, 1, 1, fur); }
   else { px(1 + step, 5, 1, 1, dark); px(4 - step, 5, 1, 1, dark); px(6 + step, 5, 1, 1, dark); }
+}
+
+// ------------------------------------------------------------------------------------------- unlocks
+// Office-level unlocks (web/engine/unlocks.js): a palm, a robot vacuum, a dog, a hot-air balloon and fireworks.
+export function drawPalm(ctx, x, y) {                 // x, y: the pot's top-left; about 16 wide, 30 tall above it
+  rect(ctx, x + 2, y + 18, 12, 8, "#a0522d"); rect(ctx, x + 2, y + 18, 12, 2, "#c06a3a"); rect(ctx, x + 4, y + 26, 8, 2, "#7a3d22");
+  rect(ctx, x + 7, y + 4, 2, 14, "#8a6a46"); rect(ctx, x + 7, y + 8, 2, 1, "#6d5136"); rect(ctx, x + 7, y + 13, 2, 1, "#6d5136");
+  const leaf = (lx, ly, w, c) => { rect(ctx, x + lx, y + ly, w, 2, c); };
+  leaf(0, 3, 7, P.plant); leaf(9, 3, 7, P.plant); leaf(2, 1, 5, P.plantHi); leaf(9, 1, 5, P.plantHi);
+  leaf(-1, 5, 4, P.plantDark); leaf(13, 5, 4, P.plantDark); rect(ctx, x + 6, y, 4, 3, P.plantHi);
+}
+export function drawRoomba(ctx, x, y, t, facing) {
+  rect(ctx, x + 1, y + 5, 9, 1, "rgba(0,0,0,0.3)");
+  rect(ctx, x + 1, y, 9, 5, "#2a2d38"); rect(ctx, x, y + 1, 11, 3, "#2a2d38"); rect(ctx, x + 2, y + 1, 7, 1, "#4a5068");
+  rect(ctx, x + (facing > 0 ? 8 : 2), y + 2, 1, 1, Math.floor(t / 300) % 2 ? "#38e07b" : "#1f7a45");
+}
+export function drawDog(ctx, x, y, mode, facing, t) {
+  const fur = "#8a5a34", dark = "#5e3a1f", light = "#e8c9a0";
+  const X = (dx) => (facing > 0 ? x + dx : x + 11 - dx);
+  const px = (dx, dy, w, h, c) => { for (let i = 0; i < w; i++) rect(ctx, X(dx + i), y + dy, 1, h, c); };
+  rect(ctx, x + 1, y + 8, 10, 1, "rgba(0,0,0,0.25)");
+  if (mode === "sleep") { px(1, 4, 9, 4, fur); px(8, 2, 3, 3, fur); px(10, 4, 1, 1, "#1a1210"); px(2, 7, 7, 1, dark); return; }
+  const step = mode === "walk" ? Math.floor(t / 130) % 2 : 0, wag = Math.floor(t / 160) % 2;
+  px(1, 3, 7, 3, fur); px(3, 3, 3, 1, light);                       // body with a pale back
+  px(7, 0, 4, 4, fur); px(7, 0, 1, 2, dark); px(10, 2, 2, 1, "#1a1210"); px(9, 1, 1, 1, "#1a1210");   // head, ear, nose, eye
+  px(0, 2 - wag, 1, 2, fur);                                          // the tail wags
+  if (mode === "sit") { px(2, 6, 1, 2, dark); px(6, 6, 1, 2, dark); }
+  else { px(1 + step, 6, 1, 2, dark); px(4 - step, 6, 1, 2, dark); px(6 + step, 6, 1, 2, dark); }
+}
+export function drawBalloon(ctx, x, y) {
+  rect(ctx, x + 1, y, 6, 1, "#e0364a"); rect(ctx, x, y + 1, 8, 5, "#e0364a"); rect(ctx, x + 2, y + 1, 1, 5, "#ffd24a"); rect(ctx, x + 5, y + 1, 1, 5, "#ffd24a");
+  rect(ctx, x + 1, y + 6, 6, 1, "#b02a3a"); rect(ctx, x + 3, y + 7, 2, 1, "#6b7488"); rect(ctx, x + 3, y + 8, 2, 2, "#8a6a46");
+}
+export function drawFirework(ctx, x, y, t, seed) {
+  const cycle = (t / 1600 + (seed % 10) / 10) % 1, c = ["#ff6b6b", "#ffd24a", "#7ee787", "#7aa8ff", "#ff7bd8"][seed % 5];
+  if (cycle < 0.25) { rect(ctx, x, y + Math.round((0.25 - cycle) * 24), 1, 2, "#fff2a8"); return; }   // the rocket climbs
+  const r = Math.round((cycle - 0.25) * 10);
+  if (cycle > 0.85) return;
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; rect(ctx, x + Math.round(Math.cos(a) * r), y + Math.round(Math.sin(a) * r), 1, 1, c); }
 }

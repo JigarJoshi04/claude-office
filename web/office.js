@@ -3,6 +3,7 @@
 import * as S from "./engine/sprites.js";
 import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, drawStatic, capFor, deskFor } from "./engine/scene.js";
 import { windowRect, drawDecorLive } from "./engine/decor.js";
+import { officeLevel } from "./engine/unlocks.js";
 
 const SPEED = 46;                 // logical px per second
 const MAX_SLOTS = 6;
@@ -69,7 +70,10 @@ export function createOffice(stage, handlers) {
   const elevator = { open: 0, until: 0 };
   const cam = { z: 1, x: 0, y: 0, tz: 1, tx: 0, ty: 0 };
   let first = true, lastT = performance.now(), ceoPace = 0;
-  const cat = { x: 140, y: 60, tx: 140, ty: 60, path: [], mode: "sit", until: 0, facing: 1, el: null };
+  const cat = { x: 140, y: 60, tx: 140, ty: 60, path: [], mode: "sit", until: 0, facing: 1, el: null, speed: 26, name: "Pixel the office cat", says: "Mrrp! " };
+  const dog = { x: 40, y: 60, tx: 40, ty: 60, path: [], mode: "sit", until: 0, facing: -1, el: null, speed: 36, name: "Biscuit the office dog", says: "Woof! " };
+  let ol = officeLevel([]);                    // the office level and what it has unlocked (engine/unlocks.js)
+  const has = (id) => ol.unlocked.has(id);
   const TIPS = ["Ctrl + K jumps to any seat, session or action.", "Double-click a desk to fly the camera to it.",
     "Click a person, then Chat, to message them.", "The load divider decides who gets the next lane.",
     "Take a checkpoint before you restart the laptop.", "Share-safe mode blurs topics before a screen share.",
@@ -136,25 +140,27 @@ export function createOffice(stage, handlers) {
     if (inLounge(x, y)) { const lo = L.lounge, dx = lo.x + lo.w / 2, cy = lo.y + lo.h + 5; return [[dx, y], [dx, cy], [SPX, cy]]; }
     return [[SPX, y]];
   }
-  function stepCat(dt, t) {
+  function stepPet(p, dt, t) {
     if (!L || reduced) return;
-    if (cat.mode === "walk") {
-      const dx = cat.tx - cat.x, dy = cat.ty - cat.y, d = Math.hypot(dx, dy), v = 26 * dt;
-      if (Math.abs(dx) > 0.5) cat.facing = dx > 0 ? 1 : -1;
-      if (d <= v && cat.path.length) { cat.x = cat.tx; cat.y = cat.ty; [cat.tx, cat.ty] = cat.path.shift(); }
-      else if (d <= v) { cat.x = cat.tx; cat.y = cat.ty; cat.mode = inLounge(cat.x, cat.y) && Math.random() < 0.6 ? "sleep" : "sit"; cat.until = t + (cat.mode === "sleep" ? 25000 : 4000 + Math.random() * 7000); }
-      else { cat.x += dx / d * v; cat.y += dy / d * v; }
-    } else if (t > cat.until) {
+    if (p.mode === "walk") {
+      const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy), v = p.speed * dt;
+      if (Math.abs(dx) > 0.5) p.facing = dx > 0 ? 1 : -1;
+      if (d <= v && p.path.length) { p.x = p.tx; p.y = p.ty; [p.tx, p.ty] = p.path.shift(); }
+      else if (d <= v) { p.x = p.tx; p.y = p.ty; p.mode = inLounge(p.x, p.y) && Math.random() < 0.6 ? "sleep" : "sit"; p.until = t + (p.mode === "sleep" ? 25000 : 4000 + Math.random() * 7000); }
+      else { p.x += dx / d * v; p.y += dy / d * v; }
+    } else if (t > p.until) {
       const spots = catSpots(), [nx, ny] = spots[Math.floor(Math.random() * spots.length)];
-      const out = catLegs(cat.x, cat.y), back = catLegs(nx, ny).reverse();
-      cat.path = [...out, [SPX, back[0][1]], ...back.slice(1), [nx, ny]];
-      [cat.tx, cat.ty] = cat.path.shift(); cat.mode = "walk";
+      const out = catLegs(p.x, p.y), back = catLegs(nx, ny).reverse();
+      p.path = [...out, [SPX, back[0][1]], ...back.slice(1), [nx, ny]];
+      [p.tx, p.ty] = p.path.shift(); p.mode = "walk";
     }
   }
   function openElevator() { elevator.until = performance.now() + 1600; }
 
   let onScreen = true;                 // the floor is visible (another view or a hidden tab skips painting)
   new IntersectionObserver((en) => { onScreen = en[0].isIntersecting; }).observe(stage);
+  const DRONE_EVERY = 48000, DRONE_FLIGHT = 9000;
+  const droneUp = (t) => has("drone") && !reduced && t % DRONE_EVERY > DRONE_EVERY - DRONE_FLIGHT;
   function walkingNow() {
     for (const a of agents.values()) if (a.mode === "walking" || a.shift) return true;
     return !!L && L.pods.some(p => p.targetY != null && p.y !== p.targetY);
@@ -220,6 +226,16 @@ export function createOffice(stage, handlers) {
     for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
     S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
     if (cat.mode === "sleep") S.drawZ(ctx, cat.x + 8, cat.y - 2, t);
+    if (has("dog")) { S.drawDog(ctx, Math.round(dog.x), Math.round(dog.y), dog.mode, dog.facing, t); if (dog.mode === "sleep") S.drawZ(ctx, dog.x + 9, dog.y - 2, t); }
+    if (has("roomba") && L.corridors.length) {      // a robot vacuum sweeps the first corridor back and forth
+      const span = W - LOBBY_W - 30, ph = (t / 1000 * 16) % (span * 2), fwd = ph < span;
+      S.drawRoomba(ctx, Math.round(LOBBY_W + 10 + (fwd ? ph : span * 2 - ph)), L.corridors[0] + 5, t, fwd ? 1 : -1);
+    }
+    if (droneUp(t)) {                               // now and then a delivery drone crosses over the building
+      const k = ((t % DRONE_EVERY) - DRONE_EVERY + DRONE_FLIGHT) / DRONE_FLIGHT, dx = -20 + k * (W + 40), dy = 4 + Math.round(Math.sin(k * 9) * 2);
+      S.rect(ctx, dx + 2, dy + 8, 4, 4, "#c9a26b"); S.rect(ctx, dx + 2, dy + 8, 4, 1, "#e0bd84");
+      S.drawDrone(ctx, Math.round(dx), dy, "#38e07b", t);
+    }
     drawParticles();
     if (spot) { const p = L.pods.find(p => p.seat.id === spot); if (p) lights.push({ x: p.room.x + p.room.w / 2, y: p.room.y + p.room.h / 2, r: 110, c: p.seat.color, i: 0.5 }); }
     if (env.dark > 0) drawLighting(env, lights);
@@ -242,7 +258,7 @@ export function createOffice(stage, handlers) {
     lights.push({ x: 41, y: 19, r: 40, c: "#ff4fd8", i: 0.55 });
     const open = performance.now() < elevator.until ? 1 : 0;
     elevator.open += (open - elevator.open) * 0.12;
-    S.drawElevator(ctx, ELEVATOR.x, ELEVATOR.y, elevator.open, "", t);
+    S.drawElevator(ctx, ELEVATOR.x, ELEVATOR.y, elevator.open, "", t, has("goldlift"));
     lights.push({ x: ELEVATOR.x + 13, y: ELEVATOR.y - 2, r: 12, c: "#ff8f3d", i: 0.5 });
     const cups = trophies();
     S.drawCabinet(ctx, 116, 8, cups, t);
@@ -416,7 +432,7 @@ export function createOffice(stage, handlers) {
   // seat naps, is on holiday or is logged out, and dark-ish when nobody is in.
   function drawRoom(pod, t, lights, env) {
     const s = pod.seat, room = pod.room, wr = windowRect(room), st = s.status;
-    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night, weatherOf(s));
+    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night, weatherOf(s), windowExtras());
     if (env.night) lights.push({ x: wr.x + wr.w / 2, y: wr.y + wr.h + 6, r: 24, c: "#9bb8ff", i: 0.2 });
     const live = s.sessions.filter(x => x.live !== false);
     const dark = st === "offline" ? 0.5 : st === "limited" ? 0.42 : st === "benched" ? 0.3 : !live.length ? 0.2 : 0;
@@ -436,6 +452,7 @@ export function createOffice(stage, handlers) {
     }
   }
 
+  function windowExtras() { return has("balloon") || has("fireworks") ? { balloon: has("balloon"), fireworks: has("fireworks") } : null; }
   // A room's mood weather in its window: rain while the seat is out of plan, clouds while its plan runs low.
   function weatherOf(s) {
     if (s.status === "limited") return "rain";
@@ -612,7 +629,8 @@ export function createOffice(stage, handlers) {
     if (L.meet) div("room-label", "MEETING", L.meet.x + 8, L.meet.y + BACK_LABEL);
     for (const o of L.open) div("room-label", "GARDEN", o.x + 8, o.y + BACK_LABEL);
 
-    const neon = div("neon", snap.office.name || "Claude Office", 6, 8); place(neon, 6, 8, 70, 22);
+    const neon = div("neon" + (has("neon") ? " show" : ""), snap.office.name || "Claude Office", 6, 8); place(neon, 6, 8, 70, 22);
+    overlay.classList.toggle("gold-plates", has("goldplates"));
     if (mvp) place(div("mvp-tag", "MVP", 172, 36), 172, 36, 24, null);
     const closet = closetUnits();
     closet.shown.forEach((un, i) => { const [x, y] = rackPos(i); hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices()); });
@@ -739,22 +757,23 @@ export function createOffice(stage, handlers) {
     overlay.querySelectorAll(".bubble[data-sid]").forEach(b => { if (!want.has(b.dataset.sid)) b.remove(); });
   }
 
-  function catHot() {
-    if (cat.el && cat.el.isConnected) return cat.el;
-    cat.el = document.createElement("button");
-    cat.el.className = "hot cat"; cat.el.type = "button"; cat.el.setAttribute("aria-label", "Pixel the office cat");
-    cat.el.addEventListener("click", (e) => {
+  function petHot(p) {
+    if (p.el && p.el.isConnected) return p.el;
+    p.el = document.createElement("button");
+    p.el.className = "hot cat"; p.el.type = "button"; p.el.setAttribute("aria-label", p.name);
+    p.el.addEventListener("click", (e) => {
       e.stopPropagation();
       const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
-      if (cat.mode === "sleep") { cat.mode = "sit"; cat.until = performance.now() + 5000; }
-      pops.push({ el: div("bubble cat-says", "Mrrp! " + tip, cat.x + 5, cat.y - 2), until: performance.now() + 5200 });
+      if (p.mode === "sleep") { p.mode = "sit"; p.until = performance.now() + 5000; }
+      pops.push({ el: div("bubble cat-says", p.says + tip, p.x + 5, p.y - 2), until: performance.now() + 5200 });
       if (handlers.onCat) handlers.onCat(tip);
     });
-    overlay.appendChild(cat.el);
-    return cat.el;
+    overlay.appendChild(p.el);
+    return p.el;
   }
   function moveDynamicDom() {
-    place(catHot(), cat.x - 2, cat.y - 3, 15, 12);
+    place(petHot(cat), cat.x - 2, cat.y - 3, 15, 12);
+    if (has("dog")) place(petHot(dog), dog.x - 2, dog.y - 3, 16, 12); else if (dog.el) { dog.el.remove(); dog.el = null; }
     for (const a of agents.values()) {
       if (a.mode !== "walking") continue;
       if (a.tagEl) place(a.tagEl, a.x + 5, a.y + 19);
@@ -851,11 +870,12 @@ export function createOffice(stage, handlers) {
   const fills = () => getComputedStyle(stage).getPropertyValue("--fit").trim() === "contain";
   function relayout() {
     const arch = (s) => (persona ? persona(s).archetype : null);
-    L = computeLayout(snap.seats, arch, plan); W = L.W; H = L.H;
+    L = computeLayout(snap.seats, arch, plan); W = L.W; H = L.H; L.unlocked = ol.unlocked;
     L.pods.forEach(p => { p.y = null; });
     for (const a of agents.values()) if (a.mode === "walking") { a.mode = "seated"; a.path = []; }   // walkers on the old plan sit down
     leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; });
     cat.x = cat.tx = 140; cat.y = cat.ty = WALK_Y + 10; cat.path = []; cat.mode = "sit"; cat.until = 0;
+    dog.x = dog.tx = 40; dog.y = dog.ty = WALK_Y + 10; dog.path = []; dog.mode = "sit"; dog.until = 0;
     assign();
   }
   function resize() {
@@ -895,9 +915,9 @@ export function createOffice(stage, handlers) {
     if (snap && L) {
       const moving = applyCam(false);
       if (moving) { clearTimeout(reresTimer); reresTimer = setTimeout(() => reres(false), 160); }
-      stepAgents(dt); stepParticles(dt); stepCat(dt, t);
+      stepAgents(dt); stepParticles(dt); stepPet(cat, dt, t); if (has("dog")) stepPet(dog, dt, t);
       // Full speed while something moves (walkers, confetti, the camera, the cat); a calm floor needs ~15 frames a second.
-      const lively = moving || particles.length || pops.length || leavers.length || cat.mode === "walk" || spot || walkingNow();
+      const lively = moving || particles.length || pops.length || leavers.length || cat.mode === "walk" || (has("dog") && dog.mode === "walk") || spot || walkingNow() || has("roomba") || droneUp(t);
       const every = reduced ? 250 : lively ? (RES <= 2 ? 33 : RES <= 4 ? 50 : 66) : (RES <= 2 ? 66 : 90);
       if (t - lastDraw >= every && onScreen) { drawFrame(t); lastDraw = t; }   // nothing to paint while the floor is hidden
       moveDynamicDom();
@@ -920,10 +940,12 @@ export function createOffice(stage, handlers) {
     const prev = snap;
     snap = next;
     const arch = (s) => (persona ? persona(s).archetype : null);
-    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color, arch(s)])) + "|" + (snap.units || []).length;
+    ol = officeLevel(snap.seats);
+    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color, arch(s)])) + "|" + (snap.units || []).length + "|" + ["palms", "flowers", "statue"].filter(has).join();
     const relayout = key !== staticKey;
     if (relayout) { L = computeLayout(snap.seats, arch, plan); W = L.W; H = L.H; staticKey = key; L.pods.forEach(p => { p.y = null; }); }
     else L.pods.forEach((p, i) => { p.seat = snap.seats[i]; });
+    L.unlocked = ol.unlocked;
     assign();
     const t = performance.now();
     const prevAct = new Map();
@@ -995,6 +1017,7 @@ export function createOffice(stage, handlers) {
       if (a) { said.set(a.id, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); }
     },
     focusSeat, focusSession, fit, celebrate, alarm, banner,
+    officeLevel: () => ol,
     spotlight(id) { spot = id || null; },
     setWalkBoost(k) { walkBoost = Math.max(1, Math.min(8, k || 1)); },
     // The next update seats everyone where they belong at once (no walking in or out): for jumps in time (replay).

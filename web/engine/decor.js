@@ -191,10 +191,12 @@ const CORNER = {
   },
 };
 
-export function drawDecorStatic(c, room, arch) {
+export function drawDecorStatic(c, room, arch, bloom = false) {
   (STATIC[arch] || STATIC["The Orchestrator"])(c, room.x, room.y);
   (CORNER[arch] || CORNER["The Orchestrator"])(c, room.x + room.w - 28, room.y + 48);
-  S.drawPlant(c, room.x + room.w - 24, room.y + room.h - 46, (room.x + room.y) % 3);
+  const px = room.x + room.w - 24, py = room.y + room.h - 46;
+  S.drawPlant(c, px, py, (room.x + room.y) % 3);
+  if (bloom) for (const [fx, fy, col] of [[1, 2, "#ff7bd8"], [7, 1, "#ffd24a"], [4, -1, "#ff6b6b"], [8, 5, "#ffffff"]]) { r(c, px + fx, py + fy, 2, 2, col); r(c, px + fx, py + fy, 1, 1, "#fff6d0"); }   // office level: in bloom
 }
 
 // Live touches, drawn every frame. `on` is false when the room is dark (napping, on holiday, logged out).
