@@ -470,6 +470,7 @@ function apply(next) {
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   if (!DEMO) { checkBadges(); cheerWeekly(); }   // the demo office never hands out badges
+  if (first) visitStreak();
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) onNews(e);
@@ -578,6 +579,22 @@ function cheerWeekly() {
   badge(award("record_week"));
 }
 
+// The visit streak: days in a row this browser has opened the office (a flame by the level chip from two days on).
+function visitStreak() {
+  const d = new Date(), key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  const days = new Set(store.get("visits", []));
+  days.add(key(d));
+  store.set("visits", [...days].sort().slice(-60));
+  let n = 0; const c = new Date(d);
+  while (days.has(key(c))) { n++; c.setDate(c.getDate() - 1); }
+  const el = $("visits");
+  el.hidden = n < 2;
+  el.innerHTML = `${icon("flame", 14)}${n}`;
+  el.title = `${n} days in a row: you have checked on the office every day.`;
+  el.setAttribute("aria-label", el.title);
+  if (n >= 7 && !DEMO) badge(award("regular"));
+}
+
 function checkBadges() {
   const h = new Date().getHours();
   badge(award("welcome"));
@@ -681,6 +698,7 @@ function renderOfficeLevel() {
   b.setAttribute("aria-label", b.title);
   if (olSeen && ol.level > olSeen) {
     const got = UNLOCKS_BY_LEVEL(olSeen, ol.level);
+    for (const s of snap.seats) office.celebrate(s.id, null, "Level up!");     // confetti in every room
     if (prefs.view === "floor") office.banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
     sound.play("levelup");
     toast(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
