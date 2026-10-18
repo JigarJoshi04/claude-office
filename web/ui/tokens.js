@@ -5,11 +5,11 @@ import { esc, fmtTok, relTime, hydratePortraits, portrait } from "./util.js";
 import { icon } from "./icons.js";
 import { personaFor } from "./personas.js";
 
-export const TOKEN_METRICS = {
-  all: ["All tokens", "everything the models processed, cache reads included"],
-  fresh: ["Fresh", "input, cache writes and output: what was new to the model"],
-  output: ["Output", "what the models wrote"],
-  usd: ["API value", "what the same tokens would cost at API list prices (the plans pay far less)"],
+export const TOKEN_METRICS = {   // [button label, what it means, how a sentence says it]
+  all: ["All tokens", "everything the models processed, cache reads included", "all tokens"],
+  fresh: ["Fresh", "input, cache writes and output: what was new to the model", "fresh tokens"],
+  output: ["Output", "what the models wrote", "output tokens"],
+  usd: ["API value", "what the same tokens would cost at API list prices (the plans pay far less)", "API value"],
 };
 // Dollars, short: $0.42, $12.30, $1,234, $12.3k, $1.2M.
 export const money = (n) => (n >= 1e6 ? "$" + (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? "$" + (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + "k"
@@ -78,7 +78,7 @@ export function tokensCard(app) {
   const models = (t.models || []).filter(m => val(m) > 0).slice(0, 6).map(m => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${fmt(val(m))}</em></li>`).join("");
   return `<div class="view-card tok" id="tokens"><div class="section-h"><h4>All-time tokens</h4><button class="btn sm ghost" data-tok-open title="Ranges, rank movement, a calendar and the hours of the week (K)">${icon("flame", 13)}Open Tokens</button><span class="grow"></span>
       <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(TOKEN_METRICS).map(([k, [l, d]]) => `<button data-tok-metric="${k}" class="${k === key ? "on" : ""}" title="${esc(d)}">${l}</button>`).join("")}</div></div>
-    <div class="tok-hero"><b>${fmt(total)}</b><span>${label.toLowerCase()}${since ? ` since ${esc(since)}` : ""}</span>${todayOf(t) ? `<em>${fmt(todayOf(t))} today</em>` : ""}</div>
+    <div class="tok-hero"><b>${fmt(total)}</b><span>${esc((TOKEN_METRICS[key] || TOKEN_METRICS.all)[2])}${since ? ` since ${esc(since)}` : ""}</span>${todayOf(t) ? `<em>${fmt(todayOf(t))} today</em>` : ""}</div>
     <div class="tok-parts"><span title="Tokens read back from the prompt cache: cheap, and most of the volume">${icon("refresh", 13)}${big(t.total.cache)} cache reads</span>
       <span title="Input, cache writes and output">${icon("zap", 13)}${big(t.total.fresh)} fresh</span><span title="What the models wrote">${icon("send", 13)}${big(t.total.output)} output</span>
       <span>${icon("chat", 13)}${(t.total.messages || 0).toLocaleString()} responses · ${(t.total.sessions || 0).toLocaleString()} sessions</span>
@@ -118,15 +118,22 @@ export function focusKey(el) {
   return k ? [k, a.getAttribute(k)] : null;
 }
 export function refocus(el, f) {
-  if (!f) return;
+  if (!f) return false;
   const b = el.querySelector(`[${f[0]}="${CSS.escape(f[1])}"]`);
   if (b) b.focus({ preventScroll: true });
+  return !!b;
 }
 
+let pendingFocus = null;   // a control focused before a redraw that had no data yet: found again when the data comes
 export function renderTokens(el, app) {
-  const f = focusKey(el);
+  const f = focusKey(el) || pendingFocus;
   renderTokensInner(el, app);
-  refocus(el, f);
+  pendingFocus = f && !refocus(el, f) ? f : null;
+  if (pendingFocus && el.querySelector(".tp-hero")) {           // the data is here and the control is gone: a neighbour
+    pendingFocus = null;
+    const b = el.querySelector("[data-tp-seat]") || el.querySelector("[data-tp-range].on");
+    if (b) b.focus({ preventScroll: true });
+  }
 }
 
 function renderTokensInner(el, app) {
@@ -148,11 +155,12 @@ function renderTokensInner(el, app) {
   const delta = (key === "all" || key === "usd") && prev && !t.prev_partial ? Math.round((total - prev) / prev * 100) : null;
   const liveNow = snap.seats.filter(s => !seat || s.id === seat).reduce((a, s) => a + (s.tokens_1h_all || 0), 0);
   // the leaderboard, with how each character moved since the period before
-  const board = (t.seats || []).filter(s => val(s) > 0), max = Math.max(1, ...board.map(val)), sum = board.reduce((a, s) => a + val(s), 0);
+  const board = (t.seats || []).filter(s => val(s) > 0).sort((a, b) => val(b) - val(a)), max = Math.max(1, ...board.map(val)), sum = board.reduce((a, s) => a + val(s), 0);
+  const prevRank = (s) => (s.prev_rank_by ? s.prev_rank_by[key] : key === "all" ? s.prev_rank : null) ?? null;   // its place before, in this measure
   const rows = board.map((s, i) => {
-    const st = seatOf(s.seat), color = st ? st.color : "#82889f", mv = s.prev_rank == null ? null : s.prev_rank - (i + 1);
-    const move = s.prev_rank == null ? (rng === "all" ? "" : `<em class="mv new" title="Not on the board ${esc(prevWord[rng] || "")}">new</em>`)
-      : mv > 0 ? `<em class="mv up" title="Up from #${s.prev_rank}">▲${mv}</em>` : mv < 0 ? `<em class="mv down" title="Down from #${s.prev_rank}">▼${-mv}</em>` : `<em class="mv same" title="Same place as ${esc(prevWord[rng] || "")}">=</em>`;
+    const st = seatOf(s.seat), color = st ? st.color : "#82889f", mv = prevRank(s) == null ? null : prevRank(s) - (i + 1);
+    const move = prevRank(s) == null ? (rng === "all" ? "" : `<em class="mv new" title="Not on the board ${esc(prevWord[rng] || "")}">new</em>`)
+      : mv > 0 ? `<em class="mv up" title="Up from #${prevRank(s)}">▲${mv}</em>` : mv < 0 ? `<em class="mv down" title="Down from #${prevRank(s)}">▼${-mv}</em>` : `<em class="mv same" title="Same place as ${esc(prevWord[rng] || "")}">=</em>`;
     return `<div class="tb-row ${i === 0 ? "first" : ""} ${s.seat === seat ? "sel" : ""}" style="--seat:${esc(color)}" ${st ? `data-tp-seat="${esc(s.seat)}" role="button" tabindex="0" aria-label="${esc(who(s.seat))}: ${fmt(val(s))}, show only ${esc(who(s.seat))}"` : ""}>
       <span class="rk">${i + 1}</span>${st ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(color)}|"></i>` : `<span class="tb-unk">?</span>`}
       <span class="grow"><span class="tb-name"><b>${esc(who(s.seat))}</b>${move}${i === 0 ? `<em class="tb-flame">${icon("flame", 13)}${rng === "all" ? "Top burner" : "Burning hottest"}</em>` : ""}</span>
@@ -228,11 +236,12 @@ function renderTokensInner(el, app) {
   const models = list((t.models || []).filter(m => val(m) > 0).slice(0, 8), (m) => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${fmt(val(m))}</em></li>`);
   el.innerHTML = `<div class="tokpage">
     <div class="view-card">${head}
-      <div class="tp-hero"><div><b>${fmt(total)}</b><span>${esc(label.toLowerCase())} ${esc(rangeWord[rng])}</span></div>
+      <div class="tp-hero"><div><b>${fmt(total)}</b><span>${esc((TOKEN_METRICS[key] || TOKEN_METRICS.all)[2])} ${esc(rangeWord[rng])}</span></div>
         ${delta != null ? `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% on ${esc(prevWord[rng])}</em>`
           : t.prev_partial && prevWord[rng] ? `<em class="same" title="The transcripts on this machine start ${esc(t.since || "")}">${esc(prevWord[rng][0].toUpperCase() + prevWord[rng].slice(1))}: not all on record</em>` : ""}
         <em class="live" title="All tokens the sessions at work processed in the last hour, cache reads included">${icon("flame", 13)}${big(liveNow)} in the last hour</em>
         ${rng !== "today" && todayOf(t) ? `<em>${fmt(todayOf(t))} today</em>` : ""}</div>
+      ${t.rebuilding ? `<p class="hint">${icon("refresh", 13)} Counting again from the transcripts after an update: these are the numbers from before, until it is done.</p>` : ""}
       <div class="tok-parts"><span>${icon("refresh", 13)}${big(t.total.cache)} cache reads</span><span>${icon("zap", 13)}${big(t.total.fresh)} fresh</span><span>${icon("send", 13)}${big(t.total.output)} output</span><span>${icon("chat", 13)}${(t.total.sessions || 0).toLocaleString()} sessions</span></div></div>
     <div class="tp-grid"><div class="view-card"><h5>${seat ? "Where it ranks" : "Who burns the most"} · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tb-list">${rows}</div>
         ${(() => { const b = beltHolders(t.weeks); return b.holder && !gameOff ? `<p class="tp-belt">${icon("belt", 15)}<span><b>Burner Belt: ${esc(who(b.holder))}</b>, the most tokens last week${b.leader && b.leader !== b.holder ? ` · ${esc(who(b.leader))} leads this week` : b.leader ? " and leads this week too" : ""}.</span></p>` : ""; })()}

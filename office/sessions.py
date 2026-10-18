@@ -398,6 +398,30 @@ class TranscriptState:
         return {"fresh": fresh, "cached": cached, "turns": sum(1 for e in self.ledger if e[0] >= since)}
 
 
+TASK_NEEDLES = (b'"TaskCreate"', b'"TaskUpdate"', b'"TodoWrite"', b" created successfully")
+
+
+def task_lines(f, start: int, end: int) -> list[bytes]:
+    """The lines between two offsets that touch the session's task list, found by a byte search: the middle of a big
+    transcript is otherwise skipped, and its task list with it."""
+    import mmap
+    try:
+        mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+    except (ValueError, OSError):
+        return []
+    found = {}
+    with mm:
+        for needle in TASK_NEEDLES:
+            i = mm.find(needle, start, end)
+            while i != -1 and len(found) < 2000:
+                a = mm.rfind(b"\n", start, i) + 1 or start
+                b = mm.find(b"\n", i, end)
+                b = end if b == -1 else b
+                found.setdefault(a, mm[a:b])
+                i = mm.find(needle, b, end)
+    return [found[k] for k in sorted(found)]
+
+
 class TranscriptCache:
     def __init__(self):
         self._states: dict[str, TranscriptState] = {}
@@ -423,6 +447,8 @@ class TranscriptCache:
                 # First look at a big transcript: the head has the task, the tail has the present.
                 head = f.read(HEAD_BYTES)
                 for line in head.split(b"\n")[:-1]:
+                    st.feed_line(line)
+                for line in task_lines(f, HEAD_BYTES, stat.st_size - TAIL_BYTES):   # the task list, from the middle too
                     st.feed_line(line)
                 st.recent.clear()
                 st.ledger.clear()

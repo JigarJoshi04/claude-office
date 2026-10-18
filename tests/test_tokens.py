@@ -76,13 +76,13 @@ if __name__ == "__main__":
 class ShippingTests(unittest.TestCase):
     def test_commands_and_results(self):
         from office.tokens import ship_kinds, shipped
-        self.assertEqual(ship_kinds("git add -A && git commit -q -m x && git push -q origin main"), {"commit", "push"})
+        self.assertEqual(ship_kinds("git add -A && git commit -q -m x && git push -q origin main"), {"commit", "commit_q", "push", "push_q"})
         self.assertEqual(ship_kinds("cd /r && git -C /repo commit -m y"), {"commit"})
         self.assertEqual(ship_kinds("echo git commit; grep 'git push' log"), set())
         self.assertEqual(ship_kinds("gh pr create --fill && gh pr merge 3 --squash"), {"pr_open", "pr_merge"})
         self.assertEqual(shipped({"commit"}, "[main abc1234] msg\n 3 files changed, 20 insertions(+), 4 deletions(-)"), [1, 0, 0, 0, 20, 4])
         self.assertEqual(shipped({"commit"}, "nothing to commit, working tree clean"), [0] * 6)
-        self.assertEqual(shipped({"commit", "push"}, ""), [1, 1, 0, 0, 0, 0])             # -q prints nothing
+        self.assertEqual(shipped({"commit", "commit_q", "push", "push_q"}, ""), [1, 1, 0, 0, 0, 0])             # -q prints nothing
         self.assertEqual(shipped({"push"}, "Everything up-to-date"), [0] * 6)
         self.assertEqual(shipped({"pr_open"}, "https://github.com/a/b/pull/42"), [0, 0, 1, 0, 0, 0])
 
@@ -106,7 +106,7 @@ class ShippingTests(unittest.TestCase):
         self.assertEqual(shipped({"push"}, " ! [rejected]        main -> main (fetch first)")[1], 0)
         self.assertEqual(shipped({"commit"}, "[main abc1234] say nothing to commit when clean\n 1 file changed, 2 insertions(+)")[0], 1)
         self.assertEqual(shipped({"commit"}, "On branch main\nnothing added to commit but untracked files present")[0], 0)
-        self.assertEqual(shipped({"commit"}, "Ran 3556 tests\nerror: script \"test\" exited with code 1")[0], 1)    # a later command's error
+        self.assertEqual(shipped({"commit", "commit_q"}, "Ran 3556 tests\nerror: script \"test\" exited with code 1")[0], 1)    # a later command's error
         self.assertEqual(pr_number(merge, "gh pr merge 1710 --squash --admin", ""), 1710)
         self.assertEqual(pr_number(merge, "gh pr merge --squash", "✓ Squashed and merged pull request o/r#43 (x)"), 43)
         self.assertEqual(pr_number({"pr_open"}, "gh pr create --fill", "https://github.com/a/b/pull/42"), 42)
@@ -136,34 +136,85 @@ class ShippingTests(unittest.TestCase):
             self.assertEqual([(e["kind"], e["pr"]) for e in ev], [("pr_merged", 1710)])
             self.assertLess(abs(ev[0]["at"] - time.time()), 60)
 
-    def test_new_rules_recount_shipped_work(self):
+    def test_new_rules_recount_shipped_work_and_keep_what_is_gone(self):
+        from office.tokens import VERSION
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "tokens.json"
-            p.write_text(json.dumps({"v": 2, "files": {"/x.jsonl": [10, None]}, "files_out": {"/x.jsonl": 10}, "codex": {}, "days": {}, "models": {},
-                                     "sessions": {"s": {"p": "a", "s": "claude", "d": {}, "g": {"2026-10-01": [9, 0, 0, 0, 0, 0]}}}}))
+            p.write_text(json.dumps({"v": VERSION, "sr": 0, "files": {"/x.jsonl": [10, None]}, "files_out": {"/x.jsonl": 10}, "codex": {},
+                                     "days": {"2026-10-01": {"f": 1, "c": 1, "o": 1}}, "models": {},
+                                     "sessions": {"s": {"p": "a", "s": "claude", "d": {"2026-10-01": [1, 1, 1]}, "g": {"2026-10-01": [9, 0, 0, 0, 0, 0]}, "$": {"2026-10-01": 5}}}}))
             led = TokenLedger(p, [])
             self.assertEqual(led.data["files_out"], {})
-            self.assertNotIn("g", led.data["sessions"]["s"])
+            self.assertNotIn("g", led.data["sessions"]["s"])                                  # to be counted again…
+            self.assertEqual(led.view([{"id": "claude", "kind": "claude"}])["shipped"]["commits"], 9)   # …while the old shows
+            self.assertTrue(led.view([{"id": "claude", "kind": "claude"}])["rebuilding"])
+            led.scan()                                                                        # its transcript is gone: it keeps them
+            self.assertEqual(led.data["sessions"]["s"]["g"], {"2026-10-01": [9, 0, 0, 0, 0, 0]})
+            self.assertFalse(led.view([{"id": "claude", "kind": "claude"}])["rebuilding"])
             self.assertEqual(led.data["files"], {"/x.jsonl": [10, None]})                     # token counts are kept
 
-    def test_scan_counts_successful_commands_once(self):
+
+class MultiLineResponseTests(unittest.TestCase):
+    def test_a_response_counts_by_its_final_usage_and_a_fork_counts_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             proj = root / ".claude" / "projects" / "-w"
-            proj.mkdir(parents=True)
+            (proj / "s1" / "subagents").mkdir(parents=True)
             (root / ".claude" / "session-env" / "s1").mkdir(parents=True)
-            use = lambda i, cmd: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": "m" + i, "content": [
-                {"type": "tool_use", "id": "t" + i, "name": "Bash", "input": {"command": cmd}}]}}) + "\n"
-            res = lambda i, out, err=False: json.dumps({"type": "user", "message": {"content": [
-                {"type": "tool_result", "tool_use_id": "t" + i, "content": out, "is_error": err}]}}) + "\n"
-            (proj / "s1.jsonl").write_text(use("1", "git commit -m a") + res("1", "[main 1234567] a\n 1 file changed, 5 insertions(+)")
-                                           + use("2", "git push") + res("2", "fatal: rejected", True)
-                                           + use("3", "gh pr create --fill") + res("3", "https://github.com/x/y/pull/7"))
+            u = lambda out: {"input_tokens": 2, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 50_000, "output_tokens": out,
+                             "cache_creation": {"ephemeral_5m_input_tokens": 1000, "ephemeral_1h_input_tokens": 0}}
+            ln = lambda mid, out: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z",
+                                              "message": {"id": mid, "model": "claude-opus-5-5", "usage": u(out), "content": []}}, separators=(",", ":")) + "\n"
+            (proj / "s1.jsonl").write_text(ln("m1", 8) + ln("m1", 300) + ln("m1", 519))          # one response, three lines
             led = TokenLedger(root / "tokens.json", [("claude", root / ".claude")])
-            led.scan(); led.scan()
-            v = led.view([{"id": "claude", "kind": "claude"}], today="2026-10-18")
-            self.assertEqual(v["shipped"], {"commits": 1, "pushes": 0, "prs_opened": 1, "prs_merged": 0, "insertions": 5, "deletions": 0})
-            self.assertEqual(led.take_events(), [])                                       # the first read never makes news
+            led.scan()
+            seats = [{"id": "claude", "kind": "claude"}]
+            v = led.view(seats, today="2026-10-18")
+            self.assertEqual((v["total"]["output"], v["total"]["fresh"], v["total"]["cache"]), (519, 1521, 50_000))
+            self.assertEqual(v["total"]["messages"], 1)
+            from office import prices
+            cost = lambda: sum(sum(r.get("$", {}).values()) for r in led.data["sessions"].values())     # micro-dollars
+            self.assertEqual(cost(), prices.response_cost("claude-opus-5-5", u(519)))
+            with open(proj / "s1.jsonl", "a") as fh:                                              # the next line, in a later scan
+                fh.write(ln("m1", 600))
+            led.scan()
+            self.assertEqual(led.view(seats, today="2026-10-18")["total"]["output"], 600)
+            (proj / "s1" / "subagents" / "agent-fork.jsonl").write_text(ln("m1", 600) + ln("m2", 40))   # a fork copies its parent
+            led.scan()
+            v = led.view(seats, today="2026-10-18")
+            self.assertEqual((v["total"]["output"], v["total"]["messages"]), (640, 2))
+            self.assertEqual(cost(), prices.response_cost("claude-opus-5-5", u(600)) + prices.response_cost("claude-opus-5-5", u(40)))
+
+    def test_a_version_2_file_is_rebuilt_and_keeps_sessions_without_transcripts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "tokens.json"
+            p.write_text(json.dumps({"v": 2, "sr": 4, "files": {}, "files_out": {}, "codex": {}, "days": {"2026-10-01": {"f": 30, "c": 70, "o": 3, "n": 2}}, "models": {},
+                                     "sessions": {"gone": {"p": "old", "s": "claude", "f": 30, "c": 70, "o": 3, "n": 2, "m": {"claude-opus-5": 100},
+                                                           "d": {"2026-10-01": [30, 70, 3]}, "h": {}, "g": {"2026-10-01": [2, 1, 0, 0, 5, 1]}, "$": {"2026-10-01": 7_700_000}}}}))
+            led = TokenLedger(p, [])
+            seats = [{"id": "claude", "kind": "claude"}]
+            self.assertEqual(led.view(seats)["total"]["all"], 100)                           # the old numbers show meanwhile
+            led.scan()
+            v = led.view(seats)
+            self.assertEqual((v["total"]["all"], v["shipped"]["commits"]), (100, 2))
+            self.assertAlmostEqual(v["total"]["usd"], 7.7)
+            self.assertTrue(led.data["sessions"]["gone"]["legacy"])
+
+
+class ShippingRuleTests(unittest.TestCase):
+    def test_heredocs_backgrounds_forced_pushes_and_hooks(self):
+        from office.tokens import ship_kinds, shipped
+        script = "cat > merge.sh <<'EOF'\ngit commit -qam wip\ngh pr merge \"$1\" --squash --admin\nEOF\nchmod +x merge.sh"
+        self.assertEqual(ship_kinds(script), set())                                         # writing a script is not running it
+        self.assertEqual(ship_kinds("cat > x <<EOF\nhi\nEOF\ngit push -q"), {"push", "push_q"})
+        self.assertEqual(shipped({"commit", "commit_q"}, "Command did not complete within its 120s timeout and was moved to the background (ID: x)"), [0] * 6)
+        self.assertEqual(shipped({"push"}, "To github.com:a/b.git\n + a88016eab...ca062163a b -> b (forced update)")[1], 1)
+        self.assertEqual(shipped({"push", "push_q"}, "(Bash completed with no output)")[1], 1)
+        self.assertEqual(shipped({"push", "push_q"}, "https://github.com/a/b/pull/9")[1], 1)                 # quiet push, then gh
+        self.assertEqual(shipped({"push", "push_q"}, " ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs")[1], 0)
+        self.assertEqual(shipped({"commit"}, "black....................................................................Failed\n- hook id: black")[0], 0)
+        self.assertEqual(shipped({"commit", "commit_q"}, "black.......Failed\n- hook id: black\n- exit code: 1")[0], 0)
+        self.assertEqual(shipped({"commit"}, "(Bash completed with no output)")[0], 0)                  # not quiet: it would have said
 
 
 class TokenViewTests(unittest.TestCase):
@@ -233,7 +284,7 @@ class TokenViewTests(unittest.TestCase):
             v = led.view([{"id": "claude", "kind": "claude"}])
             self.assertEqual(v["total"]["all"], 100)
             self.assertEqual(v["seats"][0]["all"], 100)
-            self.assertEqual(json.loads(p.read_text())["v"], 2)
+            self.assertEqual(json.loads(p.read_text())["v"], 3)
             self.assertTrue(json.loads(p.read_text())["sessions"]["gone"]["legacy"])
 
 

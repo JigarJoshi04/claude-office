@@ -10,8 +10,10 @@ Tokens are counted three ways: fresh (input + cache writes + output), cache read
 plus cache reads: every token the model processed. Only counts and project folder names are kept, never content.
 
 Version 2 keeps each session's days split by measure ([fresh, cache, output]) and its tokens by weekday and hour, for
-ranges, leaderboards that move, a calendar and a heatmap. A version 1 file is rebuilt from the transcripts still on
-disk; a session whose transcript Claude Code has since deleted keeps its version 1 totals, spread over its days.
+ranges, leaderboards that move, a calendar and a heatmap. Version 3 counts a response that Claude Code writes as several
+lines (its output grows line by line) by its final usage, and a response copied into a forked subagent's file once.
+An older file is rebuilt from the transcripts still on disk while the old numbers keep showing; a session whose
+transcript Claude Code has since deleted keeps what the old file had.
 """
 from __future__ import annotations
 
@@ -25,13 +27,19 @@ from pathlib import Path
 
 from . import prices
 
-VERSION = 2
-SHIP_RULES = 4                # bumped when the rules for shipped work or prices change: every transcript is read again
+VERSION = 3
+SHIP_RULES = 5                # bumped when the rules for shipped work or prices change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
 _STAT = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?")
-_PUSHED = re.compile(r"\b[0-9a-f]{7,40}\.\.[0-9a-f]{7,40}\s+\S+ -> \S+|\* \[new branch\]")
+_PUSHED = re.compile(r"\b[0-9a-f]{7,40}\.{2,3}[0-9a-f]{7,40}\s+\S+ -> \S+|\* \[new branch\]")   # "..." is a forced update
+_PUSH_FAIL = re.compile(r"! \[(?:remote )?rejected\]|error: failed to push|^fatal:", re.M)
+_HOOK_FAIL = re.compile(r"\.{3,}\s*failed\b|- hook id:|^fatal:", re.M)              # pre-commit's "black....Failed"
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2[ \t]*(?=\n|$)", re.S)
+_NO_OUTPUT = "(bash completed with no output)"                           # Claude Code's words for an empty result
+_BACKGROUNDED = re.compile(r"moved to the background|running in the background with id", re.I)
+_QUIET = r"(?:\s-[a-zA-Z]*q[a-zA-Z]*\b|\s--quiet\b|>\s*/dev/null)"                 # -q, -qm, -qam, --quiet, >/dev/null
 _PR_URL = re.compile(r"/pull/(\d+)")
 _CWD = re.compile(rb'"cwd":\s*"([^"]{1,1024})"')
 _START = r"(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*"                 # a command's start, after any VAR=value
@@ -45,13 +53,22 @@ _COMMIT_LINE = re.compile(r"^\[[^\]\n]+ [0-9a-f]{7,40}\]", re.M)
 _COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|aborting commit")   # not "error:": later commands print those
 
 
+def strip_heredocs(cmd: str) -> str:
+    """A command without its heredoc bodies: a script written to a file is not a script that ran."""
+    return _HEREDOC.sub("", cmd)
+
+
 def ship_kinds(cmd: str) -> set:
-    """What a shell command would ship if it succeeds: commit, push, pr_open, pr_merge (pr_auto: an auto-merge)."""
+    """What a shell command would ship if it succeeds: commit, push, pr_open, pr_merge (pr_auto: an auto-merge;
+    commit_q and push_q: quiet ones, which print nothing when they work)."""
+    cmd = strip_heredocs(cmd)
     out = set()
-    if re.search(_GIT + r"commit\b", cmd):
-        out.add("commit")
-    if re.search(_GIT + r"push\b", cmd):
-        out.add("push")
+    for verb in ("commit", "push"):
+        m = re.search(_GIT + verb + r"(?![-\w])([^;&|\n]*)", cmd)          # not commit-tree: plumbing
+        if m:
+            out.add(verb)
+            if re.search(_QUIET, " " + m.group(1)):
+                out.add(verb + "_q")
     if re.search(_GH + r"create\b", cmd):
         out.add("pr_open")
     m = _MERGE_ARGS.search(cmd)
@@ -65,15 +82,20 @@ def ship_kinds(cmd: str) -> set:
 def shipped(kinds: set, text: str) -> list:
     """[commits, pushes, prs_opened, prs_merged, insertions, deletions] that a successful command's output shows."""
     v = [0, 0, 0, 0, 0, 0]
+    if text.strip().lower() == _NO_OUTPUT:
+        text = ""
+    if _BACKGROUNDED.search(text):                         # still running when the result came back: nothing known yet
+        return v
     low = text.lower()
     if "commit" in kinds:
         lines = len(_COMMIT_LINE.findall(text))
-        if lines or not _COMMIT_NO.search(low):                # `git commit -q` prints nothing
+        # a commit prints "[branch abc1234] subject"; a quiet one prints nothing, unless a hook or git itself failed
+        if lines or ("commit_q" in kinds and not _COMMIT_NO.search(low) and not _HOOK_FAIL.search(low)):
             v[0] = max(1, lines)
             for m in _STAT.finditer(text):
                 v[4] += int(m.group(2) or 0)
                 v[5] += int(m.group(3) or 0)
-    if "push" in kinds and (_PUSHED.search(text) or not text.strip()):
+    if "push" in kinds and not _PUSH_FAIL.search(text) and (_PUSHED.search(text) or not text.strip() or "push_q" in kinds):
         v[1] = 1
     if "pr_open" in kinds and _PR_URL.search(text):
         v[2] = 1
@@ -151,6 +173,13 @@ class TokenLedger:
         self.events: list = []                  # newly shipped PRs, for the office's news (see take_events)
         self.scans = 0
         self.cwds: set = set()                  # folders the sessions worked in, seen while reading (for loose.py; not saved)
+        self._serve = None                      # while a rebuild runs, the old numbers keep showing (view reads this)
+        self._old_extras = None                 # shipped work and prices kept across a rules change, for sessions not read again
+        self._seen_ids: dict = {}               # registry name -> {session -> {hash of response or tool id}}: forks copy lines
+        self._seen_total = 0
+        self._read_sids: set = set()            # sessions whose files this scan read
+        self._counted = None                    # what the response being read (self._last) has been counted at so far
+        self._xusd = 0                          # the same, for its price
         self.data = self._load()
 
     # -- state ----------------------------------------------------------------------------------------------------
@@ -160,14 +189,19 @@ class TokenLedger:
     def _load(self) -> dict:
         try:
             d = json.loads(self.path.read_text())
-            if d.get("v") == 1:                    # rebuilt from the transcripts on the first scan; see _merge_legacy
+            if d.get("v") in (1, 2):               # rebuilt from the transcripts on the first scan; see _merge_legacy
                 self._legacy = d
+                self._serve = d if d.get("v") == 2 else None    # the old numbers show until the rebuild is done
                 return self._empty()
             if d.get("v") == VERSION:
                 if d.get("sr") != SHIP_RULES:          # recount shipped work and costs from the transcripts still on disk
+                    self._serve = json.loads(json.dumps(d))
                     d["files_out"] = {}
-                    for r in (d.get("sessions") or {}).values():
-                        r.pop("g", None); r.pop("$", None); r.pop("$m", None)
+                    self._old_extras = {}
+                    for sid, r in (d.get("sessions") or {}).items():
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m") if k in r}
+                        if kept:
+                            self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
                 for k, v in self._empty().items():
                     d.setdefault(k, v)
@@ -243,6 +277,13 @@ class TokenLedger:
                         del self.data["sessions"][sid]
             if self._legacy is not None:
                 self._merge_legacy(); changed = True
+            if self._old_extras is not None:               # sessions whose transcripts are gone keep what they had
+                with self.lock:
+                    for sid, kept in self._old_extras.items():
+                        if sid not in self._read_sids and sid in self.data["sessions"]:
+                            self.data["sessions"][sid].update(kept)
+                self._old_extras = None; changed = True
+            self._serve = None
             self.scans += 1
             if changed:
                 self._save()
@@ -258,6 +299,15 @@ class TokenLedger:
         with self.lock:
             for sid, r in (old.get("sessions") or {}).items():
                 if sid in self.data["sessions"]:
+                    continue
+                if any(isinstance(v, list) for v in (r.get("d") or {}).values()):     # version 2: already split by measure
+                    self.data["sessions"][sid] = {**r, "legacy": True}
+                    for day, (df, dc, do) in r["d"].items():
+                        _add(self.data["days"].setdefault(day, {}), df, dc, do, 0)
+                    whole = max(1, r.get("f", 0) + r.get("c", 0))
+                    for m, v in (r.get("m") or {}).items():
+                        sh = v / whole
+                        _add(self.data["models"].setdefault(m, {}), round(r.get("f", 0) * sh), round(r.get("c", 0) * sh), round(r.get("o", 0) * sh), 0)
                     continue
                 days = r.get("d") or {}
                 whole = sum(days.values()) or 1
@@ -282,16 +332,19 @@ class TokenLedger:
         except OSError:
             return False
         rec = self.data["files"].get(key) or [0, None]
-        offset, last_id = rec
+        offset, last_id = rec[0], rec[1]
+        self._counted = rec[2] if len(rec) > 2 else None
         if size < offset:                                  # rewritten from scratch: start over from here on
             offset = size
         out = self.data.setdefault("files_out", {}).get(key, 0)          # shipped work and costs have their own offset
-        out_off, self._xlast = (out if isinstance(out, list) else [out, None])
+        out = out if isinstance(out, list) else [out, None]
+        out_off, self._xlast, self._xusd = out[0], out[1], (out[2] if len(out) > 2 else 0)
         out_off = min(out_off, size)
         start = min(offset, out_off)
         if size == start:
             return False
         project_dir, sid = self._session_of(root, path)
+        self._read_sids.add(sid)
         changed = False
         pos = start
         self._ts = None
@@ -309,15 +362,35 @@ class TokenLedger:
                     last_id = self._last
                 if at >= out_off:
                     changed |= self._ship(raw, sid)
-        self.data["files_out"][key] = [pos, self._xlast]
+        self.data["files_out"][key] = [pos, self._xlast, self._xusd]
         if pos <= offset:
             return changed
         if not self.data["sessions"].get(sid, {}).get("p"):
             with self.lock:
                 if sid in self.data["sessions"]:
                     self.data["sessions"][sid]["p"] = project_dir.rsplit("-", 1)[-1] or project_dir
-        self.data["files"][key] = [pos, last_id]
+        self.data["files"][key] = [pos, last_id, self._counted]
         return changed
+
+    def _seen(self, registry: str, sid: str, key) -> bool:
+        """True when this response or tool call was already counted in another file of the session (a forked
+        subagent's file starts with a copy of its parent's lines); otherwise remember it. Bounded: the oldest
+        sessions are forgotten first."""
+        if not key:
+            return False
+        reg = self._seen_ids.setdefault(registry, {})
+        ids = reg.pop(sid, None)
+        if ids is None:
+            ids = set()
+        reg[sid] = ids                                    # most recent session last
+        h = hash(key)
+        if h in ids:
+            return True
+        ids.add(h); self._seen_total += 1
+        while self._seen_total > 400_000 and len(reg) > 1:
+            old = next(iter(reg))
+            self._seen_total -= len(reg.pop(old))
+        return False
 
     def _ship(self, raw: bytes, sid: str) -> bool:
         """Bash calls that commit, push, or open or merge a PR, counted when their result comes back without an error;
@@ -336,7 +409,7 @@ class TokenLedger:
                 if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Bash":
                     cmd = str((c.get("input") or {}).get("command") or "")
                     kinds = ship_kinds(cmd)
-                    if kinds:
+                    if kinds and not self._seen("tool", sid, c.get("id")):
                         self._pending[c.get("id")] = (kinds, cmd)
                         if len(self._pending) > 500:
                             self._pending.pop(next(iter(self._pending)))
@@ -384,11 +457,18 @@ class TokenLedger:
         if d.get("type") != "assistant" or not isinstance(u, dict):
             return False
         mid = m.get("id")
-        if mid and mid == self._xlast:                      # one response, several lines: priced once
-            return False
-        self._xlast = mid
         model = m.get("model") or "?"
-        usd = prices.response_cost(model, u)
+        usd = prices.response_cost(model, u) or 0
+        if mid and mid == self._xlast:                      # one response, several lines as its output grows
+            if self._xusd is None or usd <= self._xusd:
+                return False
+            usd, self._xusd = usd - self._xusd, usd           # price only what this line adds
+        else:
+            self._xlast = mid
+            if mid and self._seen("cost", sid, mid):          # priced in another file of this session
+                self._xusd = None
+                return False
+            self._xusd = usd
         if not usd:
             return False
         day, _ = _when(d.get("timestamp"))
@@ -419,15 +499,28 @@ class TokenLedger:
         if d.get("type") != "assistant" or not isinstance(u, dict):
             return False
         mid = m.get("id")
-        if mid and mid == last_id:                     # one response is written as several lines
-            return False
-        self._last = mid
         model = m.get("model") or "?"
         if model.startswith("<"):                      # <synthetic> lines are not API calls
             return False
         n = lambda k: int(u.get(k) or 0)
         f = n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens")
         c, o = n("cache_read_input_tokens"), n("output_tokens")
+        new = 1
+        if mid and mid == last_id:                     # one response written as several lines, its output growing
+            was = self._counted
+            if was is None:
+                return False
+            df, dc, do = max(0, f - was[0]), max(0, c - was[1]), max(0, o - was[2])
+            if not (df or dc or do):
+                return False
+            self._counted = [max(f, was[0]), max(c, was[1]), max(o, was[2])]
+            f, c, o, new = df, dc, do, 0                # count only what this line adds
+        else:
+            self._last = mid
+            if mid and self._seen("take", sid, mid):   # a forked subagent's copy of its parent's line
+                self._counted = None
+                return False
+            self._counted = [f, c, o]
         (day, wh), at = _when(d.get("timestamp")), _epoch(d.get("timestamp"))
         with self.lock:
             s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": at, "l": at, "m": {}, "d": {}, "h": {}})
@@ -435,14 +528,14 @@ class TokenLedger:
                 s["p"] = os.path.basename(d["cwd"].rstrip("/")) or d["cwd"]
             if at:
                 s["fi"] = min(s.get("fi") or at, at); s["l"] = max(s.get("l") or at, at)
-            _add(s, f, c, o)
+            _add(s, f, c, o, new)
             s["m"][model] = s["m"].get(model, 0) + f + c
             if day:
                 v = s["d"].setdefault(day, [0, 0, 0]); v[0] += f; v[1] += c; v[2] += o
-                _add(self.data["days"].setdefault(day, {}), f, c, o)
+                _add(self.data["days"].setdefault(day, {}), f, c, o, new)
             if wh:
                 h = s.setdefault("h", {}); h[wh] = h.get(wh, 0) + f + c
-            _add(self.data["models"].setdefault(model, {}), f, c, o)
+            _add(self.data["models"].setdefault(model, {}), f, c, o, new)
         return True
 
     def _scan_codex(self, path: Path) -> bool:
@@ -527,7 +620,7 @@ class TokenLedger:
             if getattr(self, "_last_call", None) and self._last_call[0] == self.scanned_at:
                 return self._last_call[1]
             out: dict = {}
-            for r in self.data["sessions"].values():
+            for r in (self._serve or self.data)["sessions"].values():
                 k, at = r.get("s"), r.get("l")
                 if k and at and at > out.get(k, 0):
                     out[k] = at
@@ -538,7 +631,7 @@ class TokenLedger:
         """All-time (commits, PRs merged) per seat, for the shipping achievements."""
         out: dict = {}
         with self.lock:
-            for r in self.data["sessions"].values():
+            for r in (self._serve or self.data)["sessions"].values():
                 k = codex if r.get("s") == "@codex" else r.get("s")
                 if k not in known or not r.get("g"):
                     continue
@@ -582,9 +675,10 @@ class TokenLedger:
         codex = next((x["id"] for x in seats if x.get("kind") == "codex"), None)
         known = {x["id"] for x in seats}
         with self.lock:
-            sessions = {k: dict(v) for k, v in self.data["sessions"].items()}
-            day_rows = {k: dict(v) for k, v in self.data["days"].items()}
-            models_all = {k: dict(v) for k, v in self.data["models"].items()}
+            src = self._serve or self.data                  # the old numbers while a rebuild runs
+            sessions = {k: dict(v) for k, v in src["sessions"].items()}
+            day_rows = {k: dict(v) for k, v in src["days"].items()}
+            models_all = {k: dict(v) for k, v in src["models"].items()}
             scanning, scanned_at = self.scanning, self.scanned_at
         seat_of = lambda r: codex if r.get("s") == "@codex" else (r.get("s") if r.get("s") in known else None)
         trip = lambda v: v if isinstance(v, list) else [0, v, 0]           # [fresh, cache, output]
@@ -702,10 +796,11 @@ class TokenLedger:
                          "today_by": by(v["today_by"], v["today_usd"]),
                          "top_model": max(v["m"], key=v["m"].get) if v["m"] else None,
                          **dict(zip(SHIP, shipped_by.get(k, [0] * len(SHIP))))} for k, v in per_seat.items()), key=lambda x: -x["all"])
-        if prev is not None:
-            order = [k for k, v in sorted(prev_seat.items(), key=lambda kv: -kv[1]["all"]) if v["all"] > 0]
+        if prev is not None:                                              # the place each seat had, in every measure
+            orders = {m: [k for k, v in sorted(prev_seat.items(), key=lambda kv: -kv[1][m]) if v[m] > 0] for m in ("all", "fresh", "output", "usd")}
             for b in board:
-                b["prev_rank"] = order.index(b["seat"]) + 1 if b["seat"] in order else None
+                b["prev_rank_by"] = {m: (o.index(b["seat"]) + 1 if b["seat"] in o else None) for m, o in orders.items()}
+                b["prev_rank"] = b["prev_rank_by"]["all"]
                 b["prev_all"] = prev_seat.get(b["seat"], {}).get("all", 0)
         top = sorted(listed, key=lambda x: -(x[2] + x[3]))
         # records, all time: the biggest day, the hungriest session, the longest run of days with tokens
@@ -765,7 +860,7 @@ class TokenLedger:
             "value": {"usd": round(tot_usd, 2), "estimated": round(min(estimated, tot_usd), 2), "plans": plans, "days": plan_days,
                       "plan_usd": round(plan_cost, 2), "covered_usd": round(covered, 2),
                       "multiple": round(covered / plan_cost, 1) if plan_cost else None},
-            "scanning": scanning or not scanned_at, "scanned_at": scanned_at or None,
+            "scanning": scanning or not scanned_at, "scanned_at": scanned_at or None, "rebuilding": src is not self.data,
             "since": min(day_rows) if day_rows else None, "range": rng, "seat": seat,
             "shipped": dict(zip(SHIP, [sum(v[i] for k, v in shipped_by.items() if seat is None or k == seat) for i in range(len(SHIP))])),
             "total": {"all": tot[0] + tot[1], "fresh": tot[0], "cache": tot[1], "output": tot[2], "usd": round(tot_usd, 2),

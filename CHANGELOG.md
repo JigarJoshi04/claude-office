@@ -3,6 +3,24 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.40.0] - 2026-10-18
+
+### Fixed
+- Token counts and API value took a response at its first line: Claude Code writes one response as several lines while
+  its output grows, so output was a third too low and the API value about 5 to 8% low. Each response now counts by
+  its final usage (ledger version 3), and a forked subagent's copy of its parent's lines counts once. The ledger
+  rebuilds itself from the transcripts once, showing the old numbers until it is done; sessions whose transcripts are
+  gone keep what they had, shipped work included (and a later change to the shipping rules keeps theirs too).
+- Shipped work: a script written in a heredoc no longer counts as running its `git commit` or `gh pr merge`, a command
+  moved to the background counts nothing yet, forced pushes and quiet pushes count (most pushes were missed), "(Bash
+  completed with no output)" reads as empty, and a commit without git's "[branch abc1234]" line counts only when it
+  was quiet (`-q`, `-qm`, `>/dev/null`) and no pre-commit hook failed; `git commit-tree` is plumbing, not a commit.
+- The Tokens tab's leaderboard, ranks and arrows follow the measure shown (API value, fresh, output), not all tokens.
+- Keyboard focus stays on the leaderboard when drilling into a character and back.
+- A session's task list counts updates made in the middle of a long transcript.
+- "API value" keeps its capitals in sentences; Wrapped says what the plans paid only when a plan is known;
+  `office post` reports an error from something that is not the office on that port instead of crashing.
+
 ## [3.39.0] - 2026-10-18
 
 ### Added

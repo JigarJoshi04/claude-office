@@ -332,3 +332,25 @@ class TaskListTests(unittest.TestCase):
         st.feed_line(use("w1", "TodoWrite", {"todos": [{"content": "Old style", "status": "completed", "activeForm": "Old"}, {"content": "Next", "status": "pending"}]}))
         v = sessions.task_view(st)
         self.assertEqual((v["done"], v["total"], v["now"]), (1, 2, None))
+
+
+class BigTranscriptTaskTests(unittest.TestCase):
+    def test_task_updates_in_the_skipped_middle_still_count(self):
+        import json
+        import tempfile
+        use = lambda tid, name, inp: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z",
+                                                 "message": {"id": "m" + tid, "content": [{"type": "tool_use", "id": tid, "name": name, "input": inp}]}}) + "\n"
+        res = lambda tid, text: json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": text}]}}) + "\n"
+        filler = json.dumps({"type": "user", "message": {"content": "x" * 2000}}) + "\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "big.jsonl"
+            with open(p, "w") as fh:
+                for i in (1, 2, 3):
+                    fh.write(use(f"c{i}", "TaskCreate", {"subject": f"Step {i}"}) + res(f"c{i}", f"Task #{i} created successfully: Step {i}"))
+                fh.write(filler * 200)                                              # past the head
+                for i in (1, 2, 3):
+                    fh.write(use(f"u{i}", "TaskUpdate", {"taskId": str(i), "status": "completed"}))
+                fh.write(filler * (sessions.TAIL_BYTES // 2000 + 50))             # and well before the tail
+            st = sessions.TranscriptCache().read(p)
+            v = sessions.task_view(st)
+            self.assertEqual((v["done"], v["total"]), (3, 3))

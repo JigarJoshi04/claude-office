@@ -99,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.39.0"
+    server_version = "ClaudeOffice/3.40.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass

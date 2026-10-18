@@ -36,7 +36,7 @@ export function makeWrapped(ctx) {
     const v = t.value;
     if (v && v.usd) slides.push(`<div class="wr-eyebrow">What the plans bought</div><div class="wr-big">${esc(money(v.usd))}</div>
       <p class="wr-sub">at API list prices${v.multiple ? `: <b class="up">${v.multiple >= 10 ? Math.round(v.multiple) : v.multiple}×</b> what the plans cost for the month` : ""}.</p>
-      <p class="wr-hint">Every response priced as if it had gone through the API. The plans paid ${esc(money(v.plan_usd))}.</p>`);
+      <p class="wr-hint">Every response priced as if it had gone through the API.${v.plan_usd > 0 ? ` The plans paid ${esc(money(v.plan_usd))}.` : ""}</p>`);
     if (top3.length) {
       const order = top3.length === 3 ? [top3[1], top3[0], top3[2]] : top3.length === 2 ? [top3[1], top3[0]] : [top3[0]];
       slides.push(`<div class="wr-eyebrow">The podium</div><div class="wr-podium">${order.map(s => { const st = seatOf(s.seat), place = top3.indexOf(s) + 1;

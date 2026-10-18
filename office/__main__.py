@@ -88,7 +88,11 @@ def cmd_post(args) -> int:
             r.read()
         return 0
     except urllib.error.HTTPError as e:
-        print(json.loads(e.read() or b"{}").get("error") or f"HTTP {e.code}", file=sys.stderr)
+        try:
+            err = json.loads(e.read() or b"{}")
+        except ValueError:                             # not the office on that port
+            err = None
+        print((err.get("error") if isinstance(err, dict) else None) or f"HTTP {e.code}", file=sys.stderr)
         return 1
     except OSError as e:
         print(f"The office is not running on port {port}: {e}", file=sys.stderr)
