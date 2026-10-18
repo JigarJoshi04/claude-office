@@ -149,7 +149,8 @@ const app = {
   chatJustOpened: (id) => { if (opened.has(id)) return false; opened.add(id); return true; },
 };
 const panels = makePanels(app);
-app.humanise = (t) => panels.humanise(t);   // news in plain words, character names for seat ids (views use it too)
+app.humanise = (t) => panels.humanise(t);
+app.plane = (seat, id) => office.plane(seat, id);   // a paper plane from the CEO's desk (answers in the Inbox)   // news in plain words, character names for seat ids (views use it too)
 const office = createOffice($("stage"), {
   openCEO: () => go({ kind: "ceo" }),
   openSeat: (seat) => go({ kind: "seat", seat }, false, { floor: true }),
@@ -492,7 +493,7 @@ setInterval(() => {
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
 }, 45000);
 
-const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {} };
+const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {}, plane() {} };
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
 function safeNews(e) { try { onNews(e); } catch (err) { console.error("office news:", err); } }
 function onNews(e) {
@@ -1020,7 +1021,7 @@ function broadcast() {
     send.disabled = true;
     let ok = 0, held = 0, failed = 0, demo = false;
     for (const [seat, id] of picked) {
-      try { const r = await app.post("/api/message", { seat, id, text }); if (r.demo) demo = true; else if (r.delivery === "review") held++; else ok++; if (!r.demo) app.chatSent(seat, id, text, r); }
+      try { const r = await app.post("/api/message", { seat, id, text }); if (r.demo) demo = true; else if (r.delivery === "review") held++; else ok++; office.plane(seat, id); if (!r.demo) app.chatSent(seat, id, text, r); }
       catch { failed++; }
       $("bStatus").textContent = `${ok + held + failed} of ${picked.length} sent…`;
     }

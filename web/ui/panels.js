@@ -533,6 +533,7 @@ export function makePanels(app) {
               const r = await app.post("/api/message", { seat: v.seat, id: v.id, text, followup: talk === "followup" });
               app.setDraft(v.id, ""); ta.value = "";
               sound.play("hire");
+              if (r.delivery !== "followup") app.plane(v.seat, v.id);    // a paper plane carries it (the demo flies one too)
               if (r.demo) toast("Demo office: nothing was sent.");
               else if (r.delivery === "followup") toast("Follow-up started as a new lane. It will resume this conversation.", "good");
               else if (r.delivery === "review") toast("Sent. It is waiting for approval in that session's terminal.", "info");
@@ -674,6 +675,8 @@ export function makePanels(app) {
           try {
             const r = await app.post("/api/ask/answer", { id, text });
             askDrafts.delete(id);
+            const q = (S().asks || []).find(x => x.id === id);
+            if (q && q.seat && r.delivery) app.plane(q.seat, q.session);
             toast(r.demo ? "Demo office: nothing was sent." : r.note ? `Answered. ${r.note}` : r.delivery === "review" ? "Sent. It waits for approval in that session's terminal." : "Sent to the session.", r.note ? "info" : "good");
             app.refresh(); app.rerender(true);
           } catch (e) { b.disabled = false; toast("Could not send: " + e.message, "bad"); }

@@ -229,6 +229,22 @@ export function createOffice(stage, handlers) {
   }
 
   // ------------------------------------------------------------------------------------- particles
+  // Paper planes: a message from the CEO flies from the desk to the session it is for, in an arc, and lands with a spark.
+  const planes = [];
+  function drawPlanes() {
+    const now = performance.now();
+    for (let i = planes.length - 1; i >= 0; i--) {
+      const p = planes[i], k = (now - p.start) / p.dur;
+      if (k >= 1) { planes.splice(i, 1); burst(p.to[0], p.to[1], 8, "spark"); continue; }
+      const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const x = Math.round(p.from[0] + (p.to[0] - p.from[0]) * e), y = Math.round(p.from[1] + (p.to[1] - p.from[1]) * e - Math.sin(k * Math.PI) * p.arc);
+      const d = p.to[0] >= p.from[0] ? 1 : -1, at = (dx, w) => (d > 0 ? x + dx : x + 9 - dx - w);   // mirrored when it flies left
+      S.rect(ctx, at(0, 9), y - 1, 9, 1, "#2a2f40");                                     // a dark edge, so it reads on any floor
+      S.rect(ctx, at(0, 9), y, 9, 1, "#ffffff"); S.rect(ctx, at(1, 7), y + 1, 7, 1, "#e6ebf6"); S.rect(ctx, at(3, 4), y + 2, 4, 1, "#b9c3da");
+      S.rect(ctx, at(4, 2), y + 3, 2, 1, "#8f9bb8");
+      for (let j = 1; j <= 3; j++) S.rect(ctx, d > 0 ? x - j * 4 : x + 9 + j * 4, y + 1, 2, 1, `rgba(255,255,255,${0.45 - j * 0.12})`);
+    }
+  }
   function burst(x, y, n, kind) {
     const cols = ["#ff5d73", "#ffd24a", "#38e07b", "#5b8def", "#c678dd", "#ff9f43", "#56b6c2"];
     for (let i = 0; i < n; i++) {
@@ -298,6 +314,7 @@ export function createOffice(stage, handlers) {
       S.drawUfo(ctx, Math.round(ux), uy, t, Math.floor(t / 900) % 5 === 0);
     }
     drawParticles();
+    drawPlanes();
     if (spot) { const p = L.pods.find(p => p.seat.id === spot); if (p) lights.push({ x: p.room.x + p.room.w / 2, y: p.room.y + p.room.h / 2, r: 110, c: p.seat.color, i: 0.5 }); }
     if (env.dark > 0) drawLighting(env, lights);
     else drawSun(t);
@@ -1209,7 +1226,7 @@ export function createOffice(stage, handlers) {
       stepAgents(dt); stepParticles(dt); stepPet(cat, dt, t); if (has("dog")) stepPet(dog, dt, t);
       // Full speed while something moves (walkers, confetti, the camera, the cat); a calm floor needs ~15 frames a second.
       // Full speed for the camera, people walking and confetti; pets, the vacuum and the drone look fine at the calm rate.
-      const lively = moving || particles.length || pops.length || leavers.length || walkingNow();
+      const lively = moving || particles.length || pops.length || leavers.length || planes.length || walkingNow();
       const every = reduced ? 250 : lively ? (RES <= 2 ? 33 : RES <= 4 ? 50 : 66) : (RES <= 2 ? 66 : 90);
       if (t - lastDraw >= every && onScreen) { drawFrame(t); lastDraw = t; }   // nothing to paint while the floor is hidden
       moveDynamicDom();
@@ -1352,6 +1369,14 @@ export function createOffice(stage, handlers) {
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },
     // Confetti where a gift was, as it opens.
+    plane(seatId, sessionId) {
+      if (!L || reduced || game !== "full") return;
+      const a = sessionId && agents.get(sessionId), p = L.pods.find(x => x.seat.id === seatId);
+      const to = a ? anchorFor(a) : p ? [p.x + POD_W / 2, p.y + 40] : null;
+      if (!to) return;
+      const from = [96 + 34, L.ceo.y + 52], dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
+      planes.push({ from, to, start: performance.now(), dur: Math.min(2600, 700 + dist * 3), arc: Math.min(60, 14 + dist / 8) });
+    },
     // "+3 commits" rises from a seat's desk: shipped work, quieter than a celebration (commits come often).
     shipPop(seatId, text) {
       if (!L || reduced || game !== "full") return;

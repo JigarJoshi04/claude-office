@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.43.0] - 2026-10-18
+
+### Added
+- Paper planes: a message you send a session, and an answer from the Inbox, flies from the CEO's desk to its desk in
+  an arc and lands with a spark (Full game intensity, full motion).
+
 ## [3.42.0] - 2026-10-18
 
 ### Added
