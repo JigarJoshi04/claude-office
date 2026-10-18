@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.15.0] - 2026-10-18
+
+### Added
+- Badge progress: counted badges (messages, pets, stickers, visit streak, Bug Squash score) show how far along they
+  are on "Your office", and the briefing names the one closest to done ("Almost there: Open door 7/10").
+
 ## [3.14.0] - 2026-10-18
 
 ### Added

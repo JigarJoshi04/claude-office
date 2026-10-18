@@ -33,6 +33,21 @@ export function award(id) {
   return b;
 }
 
+// How far along the counted badges are, as id -> [have, need]. Counters live in this browser; the rest is passed in.
+export function progress({ visits = 0, stickers = 0, best = 0 } = {}) {
+  const c = store.get("counts", {});
+  return { talker: [c.messages || 0, 10], cat_person: [c.pets || 0, 10], collector: [stickers, 12], regular: [visits, 7], exterminator: [best, 40] };
+}
+// The unearned badge closest to done (at least a third of the way), for a nudge in the briefing.
+export function nextBadge(prog, have = earned()) {
+  let best = null;
+  for (const [id, [n, need]] of Object.entries(prog)) {
+    if (have[id] || n >= need || n / need < 1 / 3) continue;
+    if (!best || n / need > best.n / best.need) best = { badge: BADGES.find(b => b.id === id), n, need };
+  }
+  return best && best.badge ? best : null;
+}
+
 // A counter-backed badge: award it once the count reaches n.
 export function bump(key, n, id) {
   const c = (store.get("counts", {})[key] || 0) + 1;

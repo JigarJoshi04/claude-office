@@ -7,7 +7,7 @@ import { personaFor, binding, leftOf, voice, diary, PERSONALITIES } from "./pers
 import { sound } from "./sound.js";
 import { goals, goalsFor, streak, weekly, localDay } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
-import { BADGES, earned } from "./badges.js";
+import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
 import { SETS, setsDone, happyHourFor } from "./gifts.js";
 import { md } from "./md.js";
@@ -142,6 +142,14 @@ export function makePanels(app) {
       <div class="wkc-bar"><i style="width:${Math.round(w.f * 100)}%"></i></div>
       <div class="hint">${w.done ? `Beat last week's ${w.last}. Keep going.` : `Last week: ${w.last} report${w.last === 1 ? "" : "s"}. ${w.target > Math.ceil(w.last * 1.1) ? `Every week aims for at least ${w.target}.` : "The target is 10% more."}`}</div></div></div>`;
   }
+  // The unearned badge closest to done, as one slim line under the challenges (never in the demo: it awards none).
+  function almostHtml() {
+    if (app.demo || !app.badgeProgress) return "";
+    const nb = nextBadge(app.badgeProgress());
+    if (!nb) return "";
+    return `<button class="almost" data-go="office" title="${esc(nb.badge.desc)}"><span class="al-ic">${icon(nb.badge.icon, 15)}</span><span class="grow"><b>Almost there: ${esc(nb.badge.name)}</b>
+      <span class="al-bar"><i style="width:${Math.round(nb.n / nb.need * 100)}%"></i></span></span><em>${nb.n}/${nb.need}</em></button>`;
+  }
   // Today's goals as three small rings (web/ui/goals.js); a finished day folds into one gold line.
   function goalsHtml() {
     const st = app.statsCache(null), gl = goals(st);
@@ -238,6 +246,7 @@ export function makePanels(app) {
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
       ${goalsHtml()}
       ${weeklyHtml()}
+      ${almostHtml()}
       ${snap.seats.length ? `<section class="b-sec"><h3 class="b-h">Team<span class="count">${snap.seats.length}</span></h3>
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
@@ -596,8 +605,10 @@ export function makePanels(app) {
       ${section(`Unlocks · ${ol.unlocked.size} of ${UNLOCKS.length}`, `<div class="ol-grid">${UNLOCKS.map(u => { const on = ol.unlocked.has(u.id);
         return `<div class="ol-card ${on ? "on" : ""}"><span class="ol-ic">${icon(on ? u.icon : "lock", 18)}</span><b>${esc(u.name)}</b><span>${esc(on ? u.desc : `Unlocks at office level ${u.level}`)}</span></div>`; }).join("")}</div>`)}
       ${(() => { const have = earned(), n = BADGES.filter(b => have[b.id]).length;
-        return section(`Your badges · ${n} of ${BADGES.length}`, `<div class="ol-grid">${BADGES.map(b => { const at = have[b.id];
-          return `<div class="ol-card ${at ? "on" : ""}"><span class="ol-ic">${icon(at ? b.icon : "lock", 18)}</span><b>${esc(b.name)}</b><span>${esc(b.desc)}${at ? ` · ${esc(dayTime(at))}` : ""}</span></div>`; }).join("")}</div>
+        const prog = !app.demo && app.badgeProgress ? app.badgeProgress() : {};
+        return section(`Your badges · ${n} of ${BADGES.length}`, `<div class="ol-grid">${BADGES.map(b => { const at = have[b.id], p = !at && prog[b.id];
+          return `<div class="ol-card ${at ? "on" : ""}"><span class="ol-ic">${icon(at ? b.icon : "lock", 18)}</span><b>${esc(b.name)}</b><span>${esc(b.desc)}${at ? ` · ${esc(dayTime(at))}` : ""}</span>
+            ${p && p[0] > 0 ? `<span class="ol-prog"><i style="width:${Math.min(100, Math.round(p[0] / p[1] * 100))}%"></i></span><em class="ol-pn">${Math.min(p[0], p[1])} of ${p[1]}</em>` : ""}</div>`; }).join("")}</div>
           <div class="hint" style="margin-top:8px">${app.demo ? "The demo office never awards badges. " : ""}Badges are kept in this browser.</div>`); })()}
       ${album()}
       ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, "lv" + (s.career ? s.career.level : 0))}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}`,

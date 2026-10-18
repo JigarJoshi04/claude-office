@@ -10,7 +10,7 @@ import { pulse, line, reaction, voice, binding, leftOf, banter } from "./ui/pers
 import { goals, streak, weekly } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
 import { dayCard } from "./ui/daycard.js";
-import { award, bump, earned } from "./ui/badges.js";
+import { award, bump, earned, progress } from "./ui/badges.js";
 import { startTour } from "./ui/tour.js";
 import { makeFloor } from "./ui/floor.js";
 import { makeGiftBox } from "./ui/giftbox.js";
@@ -221,6 +221,7 @@ const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView,
 app.gifts = giftBox;
 const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });
 app.playWeek = () => weekReview.play();
+app.badgeProgress = () => progress({ visits, stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });
 // The office radio (ui/radio.js): remembered across visits, but browsers only start audio after a click or a key.
 const radio = makeRadio();
 radio.onChange((on) => office.setRadio(on));

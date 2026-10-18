@@ -285,3 +285,11 @@ test("the morning delivery gets better with a visit streak", async () => {
   assert.equal(g.daily("2026-10-05", 14).min, "epic");
   assert.equal(g.open(g.waiting()[0].id).sticker.rarity, "epic");
 });
+
+test("the next badge is the unearned one closest to done, from a third of the way", async () => {
+  const { nextBadge } = await import("../../web/ui/badges.js");
+  assert.equal(nextBadge({ talker: [2, 10], collector: [3, 12] }, {}), null);              // nothing a third of the way yet
+  assert.equal(nextBadge({ talker: [7, 10], collector: [11, 12] }, {}).badge.id, "collector");
+  assert.equal(nextBadge({ talker: [7, 10], collector: [11, 12] }, { collector: 1 }).badge.id, "talker");
+  assert.equal(nextBadge({ talker: [10, 10] }, {}), null);                                  // done, waiting to be awarded
+});
