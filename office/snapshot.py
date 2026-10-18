@@ -15,7 +15,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, config, divider, lanes, loose, prs, seats as seatmod, sessions
+from . import asks, cabinet, config, divider, lanes, loose, prs, seats as seatmod, sessions
 from .career import CATALOGUE, Career
 from .history import DayLedger, HistoryStore
 from .tokens import TokenLedger
@@ -231,6 +231,7 @@ class Office(LiveOffice):
         self.loose = loose.LooseEnds(config.STATE_DIR / "loose-roots.json")
         self.prs = prs.PullRequests()
         self.asks = asks.Asks(config.STATE_DIR / "asks.json")
+        self.cabinet = cabinet.Cabinet()
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -410,7 +411,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.43.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.44.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -623,6 +624,13 @@ class Office(LiveOffice):
                 p = open_prs.get((gh.get(g.get("repo")), g.get("branch"))) if g.get("branch") else None
                 if p:
                     x["ci"] = {"checks": p["checks"], "number": p["number"], "url": p["url"], "state": p["state"], "review": p["review"]}
+
+    def cabinet_view(self, q: str = "", seat: str | None = None, offset: int = 0) -> dict:
+        """The filing cabinet: past sessions matching q, most recent first (cabinet.py)."""
+        building = self.cabinet.refresh(self.tokens._projects_dirs())
+        with self.tokens.lock:
+            sessions = dict((self.tokens._serve or self.tokens.data)["sessions"])
+        return dict(self.cabinet.search(sessions, (self.get() or {}).get("seats", []), q, seat, 50, offset), building=building)
 
     def prs_view(self) -> dict:
         """The PR shelf: every repository's recent PRs, with the session working on each branch."""

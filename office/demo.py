@@ -176,6 +176,22 @@ def _demo_token_ledger() -> TokenLedger:
 class DemoOffice(LiveOffice):
     is_demo = True
 
+    def cabinet_view(self, q: str = "", seat: str | None = None, offset: int = 0) -> dict:
+        """The filing cabinet over the demo's made-up sessions, with made-up titles (the demo reads no transcripts)."""
+        from .cabinet import Cabinet
+        if not hasattr(self, "_tokens"):
+            self._tokens = _demo_token_ledger()
+        c = Cabinet()
+        titles = {"api-gateway": ["Rate limits per API key", "Retry the flaky upstream", "Gateway timeouts after deploy"],
+                  "billing-service": ["Move invoices to the new schema", "Refunds for negative balances"], "mobile-app": ["Offline mode for the cart"],
+                  "auth-service": ["Shorter session cookies"], "data-pipeline": ["Nightly export to the warehouse"], "docs-site": ["Getting started, rewritten"],
+                  "infra-terraform": ["Staging database upgrade"], "design-system": ["Dark mode tokens"]}
+        for i, (sid, r) in enumerate(self._tokens.data["sessions"].items()):
+            pool = titles.get(r.get("p"), ["A session"])
+            c.index[sid] = {"title": pool[i % len(pool)], "prompt": None, "cwd": f"/home/you/work/{r.get('p')}", "path": None, "mtime": 0}
+        c.built_at = time.time()
+        return dict(c.search(self._tokens.data["sessions"], self.get().get("seats", []), q, seat, 50, offset), building=False)
+
     def prs_view(self) -> dict:
         """A made-up PR shelf: the demo never calls GitHub."""
         now = time.time()
@@ -400,7 +416,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.43.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.44.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

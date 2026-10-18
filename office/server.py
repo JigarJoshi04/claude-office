@@ -152,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.43.0"
+    server_version = "ClaudeOffice/3.44.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -233,6 +233,12 @@ class Handler(BaseHTTPRequestHandler):
                 if rng not in tokens.RANGES and not re.fullmatch(r"m:\d{4}-(0[1-9]|1[0-2])", rng):
                     raise ValueError("range must be today, 7, 30, 90, all or m:YYYY-MM")
                 return self._json(200, self.office.tokens_view(rng, seat, q.get("sessions") == "all"))
+            if url.path == "/api/cabinet":
+                q_text = q.get("q", "")
+                if len(q_text) > 200:
+                    raise ValueError("Search for at most 200 characters")
+                return self._json(200, self.office.cabinet_view(q_text, q.get("seat") or None,
+                                                                _number(q.get("offset", "0"), "offset must be a whole number")))
             if url.path == "/api/prs":
                 return self._json(200, self.office.prs_view())
             if url.path == "/api/loose":

@@ -271,7 +271,7 @@ export function makePanels(app) {
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
         <button data-go="news">${icon("news", 16)}News</button><button data-go="trophies">${icon("trophy", 16)}Trophies</button>
-        <button data-go="services">${icon("server", 16)}Services</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
+        <button data-go="services">${icon("server", 16)}Services</button><button data-go="cabinet">${icon("files", 16)}Filing cabinet</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
@@ -648,6 +648,35 @@ export function makePanels(app) {
     return { html: `${crumbs("Server room")}<h2>Server room</h2><p class="lede">Background services that keep lanes running: conductors, supervisors and the lanes themselves.</p>
       ${section(`Services · ${units.length}`, units.length ? units.map(u => `<div class="need ${u.active === "failed" ? "bad" : u.active === "active" ? "good" : "info"}"><span class="ico">${icon(u.active === "active" ? "play" : u.active === "failed" ? "alert" : "stop", 16)}</span>
         <div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(u.unit)}</div><div class="d">${esc(u.description)} · ${esc(u.active)}</div></div></div>`).join("") : `<div class="muted">No watched services. Add patterns to <code>watch_units</code> in the config.</div>`)}` };
+  }
+  // The filing cabinet (office/cabinet.py): every past session, searchable, to open or resume.
+  let cabQ = "", cabRaw = "", cabSeat = "", cabMore = 0;   // cabRaw is what the box shows (a trailing space survives)
+  function cabinetPanel() {
+    const pages = [...Array(cabMore + 1).keys()].map(i => app.cabinetCache(cabQ, cabSeat, i * 50));
+    const d = pages[0], rows = pages.filter(Boolean).flatMap(p => p.rows), pv = app.privacy();
+    const big = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + " B" : n >= 1e6 ? (n / 1e6).toFixed(1) + " M" : fmtTok(n));
+    const row = (r) => { const st = r.seat && seatById(r.seat), title = r.title || r.prompt || r.project || "A session";
+      return `<li class="cab"><span class="grow"><b class="${pv ? "private" : ""}">${esc(title)}</b>
+        <small>${r.project ? `<span class="${pv ? "private" : ""}">${esc(r.project)}</span> · ` : ""}${st ? esc(P(st).name) + " · " : ""}${r.last ? esc(relTime(r.last)) : ""} · ${big(r.tokens)} tokens${r.usd ? " · " + esc(money(r.usd)) : ""}</small></span>
+        <span class="cab-act">${r.has_transcript && st ? `<button class="btn sm ghost" data-open-session="${esc(r.seat)}|${esc(r.id)}">${icon("chat", 14)}Open</button>` : ""}
+          ${r.resume ? `<button class="btn sm ghost icon" data-copy="${esc(r.resume)}" data-copy-note="Paste it in a terminal: the session picks up where it left off." title="Copy the command that resumes it" aria-label="Copy the resume command">${icon("copy", 14)}</button>` : ""}</span></li>`; };
+    const chips = [["", "Everyone"], ...S().seats.map(s => [s.id, P(s).name])].map(([id, l]) => `<button data-cab-seat="${esc(id)}" class="${cabSeat === id ? "on" : ""}" aria-pressed="${cabSeat === id}">${esc(l)}</button>`).join("");
+    return { html: `${crumbs("Filing cabinet")}<h2>Filing cabinet</h2><p class="lede">Every session on this machine, newest first: search its title, its first instruction or its project, open its conversation, or copy the command that resumes it.</p>
+      <div class="cab-search">${icon("search", 16)}<input type="search" id="cabQ" placeholder="Search past sessions" aria-label="Search past sessions" value="${esc(cabRaw)}" maxlength="200" autocomplete="off"></div>
+      <div class="seg-ctl cab-seats" role="group" aria-label="Character">${chips}</div>
+      ${!d ? `<div class="skeleton"></div><div class="skeleton" style="width:70%"></div>`
+        : `<p class="hint">${d.building ? "Reading the transcripts' first lines… " : ""}${d.total.toLocaleString()} session${d.total === 1 ? "" : "s"}${cabQ ? ` matching “${esc(cabQ)}”` : ""}.</p>
+           <ul class="loose cabs">${rows.map(row).join("") || `<li class="muted">Nothing matches.</li>`}</ul>
+           ${rows.length < d.total ? `<button class="btn sm" data-cab-more>${icon("chevronDown", 14)}Show more</button>` : ""}`}`,
+      bind(root) {
+        const qi = root.querySelector("#cabQ");
+        const run = debounce(() => { if (cabRaw.trim() === cabQ) return; cabQ = cabRaw.trim(); cabMore = 0; app.rerender(true); }, 250);
+        qi.addEventListener("input", () => { cabRaw = qi.value; run(); });
+        qi.addEventListener("keydown", (e) => { if (e.key === "Escape" && qi.value) { e.stopPropagation(); qi.value = cabRaw = ""; run(); } });
+        root.querySelectorAll("[data-cab-seat]").forEach(b => b.addEventListener("click", () => { cabSeat = b.dataset.cabSeat; cabMore = 0; app.rerender(true); }));
+        const more = root.querySelector("[data-cab-more]"); if (more) more.addEventListener("click", () => { cabMore++; app.rerender(true); });
+        root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
+      } };
   }
   // The Inbox (office/asks.py): questions agents asked with `python3 -m office ask`, and the CEO's answers, which go
   // back to the asking session as a message. A half-written answer survives redraws.
@@ -1190,7 +1219,7 @@ export function makePanels(app) {
   }
   return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
-    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"
       || (k === "inbox" && ([...askDrafts.values()].some(v => v.trim()) || !!(document.activeElement && document.activeElement.matches("[data-ask-draft]")))) };
 }

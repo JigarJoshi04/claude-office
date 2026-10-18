@@ -95,6 +95,7 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   branch, and a lamp on every desk whose PR's checks pass, run or fail (with the GitHub CLI, when it is signed in).
 - **Burn alarms**: your own number rules (tokens an hour, minutes to run-out, milestones, the top burner changing)
   ring as a toast, a chime and a desktop notification.
+- **Filing cabinet**: every past session, searchable, to open or resume.
 - **Loose ends**: work the agents left in git (uncommitted files, commits on no remote) and worktrees that are safe to
   remove, with the remove commands to copy. The office only reads.
 - **Ghost use**: a ghost floats in a room when its plan use climbs with nothing running on this machine (claude.ai,

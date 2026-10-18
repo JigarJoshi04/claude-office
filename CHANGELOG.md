@@ -3,6 +3,18 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.44.0] - 2026-10-18
+
+### Added
+- Filing cabinet: every session on this machine, newest first, searchable by its title, its first instruction, its
+  project or its folder and filtered by character, with its dates, tokens and API value; open its conversation or copy
+  the command that resumes it in its folder on its seat. Titles and first instructions are read from the start of each
+  transcript into memory only (the token ledger still keeps no content). From the briefing, the palette or
+  `GET /api/cabinet?q=`.
+
+### Fixed
+- A text field keeps its caret when the inspector redraws under it, not only the chat box.
+
 ## [3.43.0] - 2026-10-18
 
 ### Added

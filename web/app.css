@@ -1509,3 +1509,10 @@ ul.prs li a { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; 
 .ask-ans { display: flex; gap: 8px; margin: 8px 0 0; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--good) 10%, transparent); font-size: 13.5px; color: var(--text-2); }
 .ask-ans > .ic { color: var(--good); flex: none; margin-top: 2px; }
 .pill.ctx.warn { color: var(--warn); } .pill.ctx.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+/* the filing cabinet (3.44) */
+.cab-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 40px; border-radius: 12px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-2); margin: 4px 0 10px; }
+.cab-search > .ic { color: var(--muted); flex: none; } .cab-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 14px; outline: none; }
+.cab-search:focus-within { box-shadow: inset 0 0 0 2px var(--accent-2); }
+.cab-seats { max-width: 100%; overflow-x: auto; scrollbar-width: none; margin-bottom: 8px; }
+ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cab-act { display: flex; gap: 4px; flex: none; }
