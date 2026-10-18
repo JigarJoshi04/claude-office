@@ -151,48 +151,49 @@ const STATIC = {
   },
 };
 
-// A furniture corner on the right of each room (x + w - 34 … x + w - 6, from y + 48 down), so no room is a bare floor.
+// A furniture corner on the right of each room (x + w - 28 … x + w - 6, from y + 48 down), so no room is a bare floor.
+// It stays 22 px wide: the aisle to the desk's far end runs just left of it.
 const CORNER = {
   "The Orchestrator"(c, x, y) {                                     // a shelf of binders and a sticky-note column
-    S.drawBookshelf(c, x, y + 4, 26);
-    for (let i = 0; i < 4; i++) r(c, x + 4 + (i % 2) * 10, y + 38 + ((i / 2) | 0) * 9, 8, 7, ["#ffe066", "#8fd3ff", "#ffb3c7", "#b8f5c9"][i]);
+    S.drawBookshelf(c, x, y + 4, 22);
+    for (let i = 0; i < 4; i++) r(c, x + 2 + (i % 2) * 10, y + 38 + ((i / 2) | 0) * 9, 8, 7, ["#ffe066", "#8fd3ff", "#ffb3c7", "#b8f5c9"][i]);
   },
   "The Builder"(c, x, y) {                                          // a 3D printer on a stand, mid-print
-    r(c, x + 1, y + 30, 24, 3, "#5a4030"); r(c, x + 3, y + 33, 2, 14, "#4a3020"); r(c, x + 21, y + 33, 2, 14, "#4a3020");
-    r(c, x + 2, y + 4, 22, 26, "#2a2d38"); r(c, x + 4, y + 6, 18, 20, "#14161e"); r(c, x + 4, y + 6, 18, 1, "#3d4459");
-    r(c, x + 8, y + 20, 10, 5, "#ff8f3d"); r(c, x + 9, y + 18, 8, 2, "#ffb36b"); r(c, x + 12, y + 9, 2, 8, "#9aa3b5");
-    r(c, x + 23, y + 8, 3, 6, "#3fb68b");
+    r(c, x, y + 30, 22, 3, "#5a4030"); r(c, x + 2, y + 33, 2, 14, "#4a3020"); r(c, x + 18, y + 33, 2, 14, "#4a3020");
+    r(c, x + 1, y + 4, 20, 26, "#2a2d38"); r(c, x + 3, y + 6, 16, 20, "#14161e"); r(c, x + 3, y + 6, 16, 1, "#3d4459");
+    r(c, x + 6, y + 20, 10, 5, "#ff8f3d"); r(c, x + 7, y + 18, 8, 2, "#ffb36b"); r(c, x + 10, y + 9, 2, 8, "#9aa3b5");
+    r(c, x + 19, y + 8, 3, 6, "#3fb68b");
   },
   "The Investigator"(c, x, y) {                                     // a leather armchair under a floor lamp
-    r(c, x + 21, y + 2, 1, 34, "#39404f"); r(c, x + 16, y, 10, 4, "#2f6f3f"); r(c, x + 17, y + 4, 8, 1, "#ffe8a3");
-    r(c, x + 1, y + 26, 22, 18, "#6b3b2a"); r(c, x + 3, y + 22, 18, 8, "#7d4632"); r(c, x + 1, y + 30, 4, 12, "#5a3022"); r(c, x + 19, y + 30, 4, 12, "#5a3022");
-    r(c, x + 4, y + 23, 16, 1, "#94573f"); r(c, x + 6, y + 44, 12, 2, "rgba(0,0,0,0.25)");
+    r(c, x + 18, y + 2, 1, 34, "#39404f"); r(c, x + 13, y, 9, 4, "#2f6f3f"); r(c, x + 14, y + 4, 7, 1, "#ffe8a3");
+    r(c, x + 1, y + 26, 20, 18, "#6b3b2a"); r(c, x + 3, y + 22, 16, 8, "#7d4632"); r(c, x + 1, y + 30, 4, 12, "#5a3022"); r(c, x + 17, y + 30, 4, 12, "#5a3022");
+    r(c, x + 4, y + 23, 14, 1, "#94573f"); r(c, x + 5, y + 44, 12, 2, "rgba(0,0,0,0.25)");
   },
   "The Perfectionist"(c, x, y) {                                    // a raked sand garden with three stones
-    r(c, x, y + 20, 26, 22, "#8a8f9e"); r(c, x + 1, y + 21, 24, 20, "#e6dcc3");
-    for (let i = 0; i < 5; i++) r(c, x + 3, y + 24 + i * 4, 20, 1, "#d2c6a8");
-    r(c, x + 6, y + 27, 5, 4, "#6b7080"); r(c, x + 15, y + 32, 6, 5, "#7d8292"); r(c, x + 12, y + 24, 3, 3, "#5a5f6e");
+    r(c, x, y + 20, 22, 22, "#8a8f9e"); r(c, x + 1, y + 21, 20, 20, "#e6dcc3");
+    for (let i = 0; i < 5; i++) r(c, x + 3, y + 24 + i * 4, 16, 1, "#d2c6a8");
+    r(c, x + 5, y + 27, 5, 4, "#6b7080"); r(c, x + 13, y + 32, 6, 5, "#7d8292"); r(c, x + 11, y + 24, 3, 3, "#5a5f6e");
   },
   "The Night Owl"(c, x, y) {                                        // a bean bag and a lava lamp
-    S.drawBeanBag(c, x + 2, y + 30, "#6a4fc4");
-    r(c, x + 20, y + 14, 4, 2, "#9aa3b5"); r(c, x + 19, y + 16, 6, 14, "#2a2440"); r(c, x + 20, y + 17, 4, 12, "#ff5fa2");
-    r(c, x + 21, y + 19, 2, 3, "#ffd0e4"); r(c, x + 21, y + 25, 2, 2, "#ffd0e4"); r(c, x + 19, y + 30, 6, 3, "#9aa3b5");
+    S.drawBeanBag(c, x, y + 30, "#6a4fc4");
+    r(c, x + 18, y + 14, 4, 2, "#9aa3b5"); r(c, x + 17, y + 16, 5, 14, "#2a2440"); r(c, x + 18, y + 17, 3, 12, "#ff5fa2");
+    r(c, x + 19, y + 19, 1, 3, "#ffd0e4"); r(c, x + 19, y + 25, 1, 2, "#ffd0e4"); r(c, x + 17, y + 30, 5, 3, "#9aa3b5");
   },
   "The Speedrunner"(c, x, y) {                                      // a treadmill desk's walking belt
-    r(c, x, y + 30, 26, 10, "#2a2d38"); r(c, x + 2, y + 32, 22, 6, "#3d4459");
-    for (let i = 0; i < 5; i++) r(c, x + 4 + i * 4, y + 34, 2, 2, "#4f5873");
-    r(c, x + 21, y + 10, 2, 22, "#9aa3b5"); r(c, x + 16, y + 9, 10, 3, "#c4cad6"); r(c, x + 18, y + 6, 6, 3, "#38e07b");
+    r(c, x, y + 30, 22, 10, "#2a2d38"); r(c, x + 2, y + 32, 18, 6, "#3d4459");
+    for (let i = 0; i < 4; i++) r(c, x + 4 + i * 4, y + 34, 2, 2, "#4f5873");
+    r(c, x + 17, y + 10, 2, 22, "#9aa3b5"); r(c, x + 12, y + 9, 10, 3, "#c4cad6"); r(c, x + 14, y + 6, 6, 3, "#38e07b");
   },
   "The Contractor"(c, x, y) {                                       // a coat rack and an umbrella stand
-    r(c, x + 10, y + 2, 2, 40, "#5a4030"); r(c, x + 6, y + 41, 10, 2, "#5a4030"); r(c, x + 5, y + 4, 12, 2, "#5a4030");
-    r(c, x + 3, y + 6, 8, 16, "#3d4f6e"); r(c, x + 4, y + 6, 6, 2, "#4f6389");                                   // a coat
-    r(c, x + 18, y + 30, 7, 12, "#4a5070"); r(c, x + 19, y + 22, 1, 9, "#c94f4f"); r(c, x + 22, y + 24, 1, 7, "#2b3045");
+    r(c, x + 8, y + 2, 2, 40, "#5a4030"); r(c, x + 4, y + 41, 10, 2, "#5a4030"); r(c, x + 3, y + 4, 12, 2, "#5a4030");
+    r(c, x + 1, y + 6, 8, 16, "#3d4f6e"); r(c, x + 2, y + 6, 6, 2, "#4f6389");                                   // a coat
+    r(c, x + 15, y + 30, 7, 12, "#4a5070"); r(c, x + 16, y + 22, 1, 9, "#c94f4f"); r(c, x + 19, y + 24, 1, 7, "#2b3045");
   },
 };
 
 export function drawDecorStatic(c, room, arch) {
   (STATIC[arch] || STATIC["The Orchestrator"])(c, room.x, room.y);
-  (CORNER[arch] || CORNER["The Orchestrator"])(c, room.x + room.w - 34, room.y + 48);
+  (CORNER[arch] || CORNER["The Orchestrator"])(c, room.x + room.w - 28, room.y + 48);
   S.drawPlant(c, room.x + room.w - 24, room.y + room.h - 46, (room.x + room.y) % 3);
 }
 

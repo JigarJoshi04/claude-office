@@ -97,6 +97,7 @@ const office = createOffice($("stage"), {
   onCat: () => sound.play("arrive"),
   onDouble: () => { clearTimeout(panelScroll); clearTimeout(revealT); },
   onPeek: (id, r) => peekCard(id, r),
+  needsFor: (id) => panels.needsBySeat()[id] || 0,
   onLegend: (btn) => legend(btn),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
 });
@@ -205,10 +206,11 @@ function peekCard(id, r) {
     <div class="pk-foot">Click to open · double-click to zoom in</div>`;
   hydratePortraits(peekEl, 3);
   peekEl.hidden = false;
-  const w = peekEl.offsetWidth, h = peekEl.offsetHeight, gap = 10;
+  // The card is zoomed with the text size: measure it on screen, then give left/top in its own (zoomed) pixels.
+  const z = zoomNow(), box = peekEl.getBoundingClientRect(), w = box.width, h = box.height, gap = 10;
   let left = r.right + gap; if (left + w > innerWidth - 8) left = r.left - w - gap; if (left < 8) left = Math.min(innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2));
-  const top = Math.max(70, Math.min(innerHeight - h - 10, r.top + r.height / 2 - h / 2));
-  peekEl.style.left = left + "px"; peekEl.style.top = top + "px";
+  const top = Math.max(8, Math.min(innerHeight - h - 10, r.top + r.height / 2 - h / 2));
+  peekEl.style.left = Math.max(8, left) / z + "px"; peekEl.style.top = top / z + "px";
 }
 addEventListener("scroll", () => { peekEl.hidden = true; }, { passive: true, capture: true });
 
@@ -909,6 +911,7 @@ document.addEventListener("keydown", (e) => {
     if (k === "ArrowLeft" || k === "ArrowRight") { e.preventDefault(); replay.step(k === "ArrowLeft" ? -5 : 5); return; }
   }
   if (k === "r" && prefs.view === "floor" && !replay.active()) { replay.open(6); return; }
+  if (k === "Escape" && document.querySelector(".legend")) { legend(document.querySelector('[data-cam="legend"]')); return; }
   if (document.body.classList.contains("tv") && k === "Escape") { setTv(false); return; }
   if (k === "v") { setTv(!document.body.classList.contains("tv")); return; }
   if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else { const back = $("panel").contains(document.activeElement); go({ kind: "ceo" }); if (back) $("panel").focus({ preventScroll: true }); } }

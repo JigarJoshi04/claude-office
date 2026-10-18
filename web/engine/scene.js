@@ -93,8 +93,9 @@ export function pathTo(layout, pod, slot) {
   const corrY = pod.corr - 2, doorX = pod.door.x - 5;
   const aisleY = room.y + room.h - 44;                          // inside the room, below the bottom chairs, above the door sign
   const pts = [[ex, ey], [ex, WALK_Y], [SPINE_X, WALK_Y], [SPINE_X, corrY], [doorX, corrY], [doorX, aisleY]];
-  if (sp.top) {
-    const side = sp.cx < pod.x + POD_W / 2 ? room.x + 26 : room.x + room.w - 34;
+  if (sp.top) {   // round the end of the desk, keeping clear of the decor in the side margins
+    const d = deskFor(pod);
+    const side = sp.cx < d.x + d.w / 2 ? Math.max(room.x + 26, d.x - 13) : Math.min(room.x + room.w - 40, d.x + d.w + 3);
     pts.push([side, aisleY], [side, sp.standY], [sp.cx, sp.standY]);
   } else {
     pts.push([sp.cx, aisleY], [sp.cx, sp.standY]);

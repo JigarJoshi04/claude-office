@@ -78,10 +78,14 @@ export function createOffice(stage, handlers) {
   // ---------------------------------------------------------------------------------------- agents
   function assign() {
     const seen = new Set();
+    // Where everyone sits right now, before desks resize: people then slide to their new seats, and anyone leaving
+    // starts from the chair they were really in.
+    for (const a of agents.values()) a.was = a.mode === "seated" && a.pod ? { ...seatSpot(a.pod, a.slot), shown: a.shift || 0 } : null;
     for (const pod of L.pods) {
       const want = pod.seat.sessions.filter(x => x.live !== false).slice(0, MAX_SLOTS);
       pod.cap = capFor(want.length);                 // the desk grows and shrinks with the people at it
-      pod.y = pod.baseY + (pod.cap <= 3 ? 12 : 0);   // one row of seats sits lower, centred in the room
+      pod.targetY = pod.baseY + (pod.cap <= 3 ? 12 : 0);   // one row of seats sits lower, centred in the room
+      if (first || pod.y == null || reduced) pod.y = pod.targetY;
       const taken = new Set();
       const keep = new Set();
       for (const x of want) {
@@ -106,13 +110,14 @@ export function createOffice(stage, handlers) {
         } else { Object.assign(a, { slot, pod, seatId: pod.seat.id, sess: x, look, mode: "seated", path: [] }); }
       }
     }
+    for (const a of agents.values()) if (a.mode === "seated" && a.was) a.shift = a.was.cx + (a.was.shown || 0) - seatSpot(a.pod, a.slot).cx;   // slide, don't jump
     for (const [id, a] of agents) {
       if (seen.has(id)) continue;
       agents.delete(id);
-      if (a.mode === "seated" && !reduced) {      // walk out to the elevator
+      if (a.mode === "seated" && !reduced) {      // walk out to the elevator, from the chair they were in
         const p = pathTo(L, a.pod, a.slot).reverse();
-        const sp = seatSpot(a.pod, a.slot);
-        leavers.push({ ...a, mode: "leaving", x: sp.cx, y: sp.standY, path: p.slice(1), gone: false, tagEl: null });
+        const sp = a.was || seatSpot(a.pod, a.slot);
+        leavers.push({ ...a, mode: "leaving", x: sp.cx + (sp.shown || 0), y: sp.standY, path: p.slice(1), gone: false, tagEl: null });
       }
     }
   }
@@ -150,8 +155,14 @@ export function createOffice(stage, handlers) {
 
   let onScreen = true;                 // the floor is visible (another view or a hidden tab skips painting)
   new IntersectionObserver((en) => { onScreen = en[0].isIntersecting; }).observe(stage);
-  function walkingNow() { for (const a of agents.values()) if (a.mode === "walking") return true; return false; }
+  function walkingNow() {
+    for (const a of agents.values()) if (a.mode === "walking" || a.shift) return true;
+    return !!L && L.pods.some(p => p.targetY != null && p.y !== p.targetY);
+  }
   function stepAgents(dt) {
+    const k = 1 - Math.exp(-dt * 9);                 // people slide along a resized desk; the desk glides up or down
+    for (const a of agents.values()) if (a.shift) { a.shift -= a.shift * k; if (Math.abs(a.shift) < 0.3) a.shift = 0; }
+    if (L) for (const p of L.pods) if (p.targetY != null && p.y !== p.targetY) { p.y += (p.targetY - p.y) * k; if (Math.abs(p.targetY - p.y) < 0.3) p.y = p.targetY; }
     const move = (a) => {
       if (!a.path.length) return true;
       const [tx, ty] = a.path[0];
@@ -447,7 +458,7 @@ export function createOffice(stage, handlers) {
     if (lv >= 3) S.drawDeskPerks(ctx, desk, lv, s.color, t);
     if (lv >= 15) lights.push({ x: mid, y: desk.y + desk.h, r: 40, c: s.color, i: 0.3 });
     for (let slot = 0; slot < pod.cap; slot++) {
-      const sp = seatSpot(pod, slot), a = bySlot.get(slot), x = sp.cx;
+      const sp = seatSpot(pod, slot), a = bySlot.get(slot), x = sp.cx + (a ? Math.round(a.shift || 0) : 0);
       const pose = a ? poseFor(a.sess, status) : null;
       if (sp.top) {
         S.drawChairFront(ctx, x - 2, pod.y + 16);
@@ -561,7 +572,7 @@ export function createOffice(stage, handlers) {
     b.className = "hot " + cls; b.type = "button"; b.setAttribute("aria-label", label); b.title = label;
     b.dataset.k = cls.split(" ")[0] + ":" + label;          // a stable key, so keyboard focus survives a rebuild
     place(b, x, y, w, h);
-    b.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); onDouble ? onDouble() : zoomToEvent(e); return; } onClick(); });
+    b.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; peek(null); if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); onDouble ? onDouble() : zoomToEvent(e); return; } onClick(); });
     b.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(b);
     return b;
@@ -626,13 +637,13 @@ export function createOffice(stage, handlers) {
     place(plate, pod.room.x + 12, pod.room.y + pod.room.h - 31, pod.room.w - 24, null);
     const line = plateLine(s, live);
     const lv = s.career ? `<em class="lv" title="Level ${s.career.level} ${esc(s.career.title)}">${s.career.level}</em>` : "";
-    const need = (snap.attention || []).filter(a => a.seat === s.id).length;   // things about this seat in Needs you
+    const need = handlers.needsFor ? handlers.needsFor(s.id) : (snap.attention || []).filter(a => a.seat === s.id).length;   // as Needs you groups them
     if (need) plate.classList.add("needs");
     plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span class="pl-chip ${line.tone}">${esc(line.main)}</span></span>` +
       `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : line.left != null && line.left < 35 ? "mid" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>` +
       (need ? `<span class="pl-need" title="${need} thing${need === 1 ? "" : "s"} in Needs you">${need}</span>` : "");
     plate.setAttribute("aria-label", `${who.name}${s.career ? `, level ${s.career.level}` : ""}: ${line.main}, ${line.side}`);
-    plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); focusSeat(s.id); return; } handlers.openSeat(s.id); });
+    plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; peek(null); if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); focusSeat(s.id); return; } handlers.openSeat(s.id); });
     plate.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(plate);
     const podHot = hot("pod", `${who.name}'s desks`, pod.room.x + 2, pod.room.y + 2, pod.room.w - 4, pod.room.h - 30, () => handlers.openSeat(s.id), () => focusSeat(s.id));
@@ -841,6 +852,7 @@ export function createOffice(stage, handlers) {
   function relayout() {
     const arch = (s) => (persona ? persona(s).archetype : null);
     L = computeLayout(snap.seats, arch, plan); W = L.W; H = L.H;
+    L.pods.forEach(p => { p.y = null; });
     for (const a of agents.values()) if (a.mode === "walking") { a.mode = "seated"; a.path = []; }   // walkers on the old plan sit down
     leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; });
     cat.x = cat.tx = 140; cat.y = cat.ty = WALK_Y + 10; cat.path = []; cat.mode = "sit"; cat.until = 0;
@@ -910,7 +922,7 @@ export function createOffice(stage, handlers) {
     const arch = (s) => (persona ? persona(s).archetype : null);
     const key = JSON.stringify(snap.seats.map(s => [s.id, s.color, arch(s)])) + "|" + (snap.units || []).length;
     const relayout = key !== staticKey;
-    if (relayout) { L = computeLayout(snap.seats, arch, plan); W = L.W; H = L.H; staticKey = key; }
+    if (relayout) { L = computeLayout(snap.seats, arch, plan); W = L.W; H = L.H; staticKey = key; L.pods.forEach(p => { p.y = null; }); }
     else L.pods.forEach((p, i) => { p.seat = snap.seats[i]; });
     assign();
     const t = performance.now();

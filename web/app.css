@@ -457,7 +457,7 @@ body.resizing .stage, body.resizing .panel { pointer-events: none; }
 .b-links button:hover { background: var(--surface-2); color: var(--text); }
 /* first visit: one hint on the floor itself */
 .floor-hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 28px);
-  padding: 7px 7px 7px 14px; border-radius: 99px; font-size: 13.5px; color: var(--text); animation: fadein .4s ease;
+  width: max-content; padding: 7px 7px 7px 14px; border-radius: 16px; font-size: 13.5px; color: var(--text); animation: fadein .4s ease;
   background: color-mix(in srgb, var(--surface) 90%, transparent); backdrop-filter: blur(8px); box-shadow: var(--shadow), inset 0 0 0 1px var(--line-2); }
 .floor-hint > .ic { color: var(--accent); flex: none; }
 .floor-hint[hidden] { display: none; }
@@ -772,7 +772,7 @@ dialog .db { padding: 16px 20px; max-height: 70vh; overflow: auto; }
 .pk-row span { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pk-more { font-size: 12.5px; color: var(--faint); padding: 2px 0 0 17px; }
 .pk-foot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
-.legend { position: absolute; right: 56px; bottom: 12px; z-index: 8; width: 400px; max-height: calc(100% - 24px); overflow: auto; padding: 14px 16px 12px; border-radius: 16px; line-height: 1.35;
+.legend { position: absolute; right: 56px; bottom: 12px; z-index: 8; width: min(400px, calc((100vw - 90px) / var(--ui-zoom, 1))); max-height: calc(100% - 24px); overflow: auto; padding: 14px 16px 12px; border-radius: 16px; line-height: 1.35;
   zoom: var(--ui-zoom, 1); background: color-mix(in srgb, var(--surface) 95%, transparent); backdrop-filter: blur(10px); box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 1px var(--line-2); font-size: 13px; color: var(--text-2); }
 .lg-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; } .lg-h b { font-size: 15px; color: var(--text); }
 .lg-sec { margin: 12px 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
@@ -783,6 +783,7 @@ dialog .db { padding: 16px 20px; max-height: 70vh; overflow: auto; }
 .lg-badge { justify-self: start; min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 99px; font: 800 11px Inter, sans-serif; color: #1d1203; background: #ffc24b; }
 .lg-bar { justify-self: stretch; height: 6px; border-radius: 99px; background: var(--line-2); overflow: hidden; } .lg-bar i { display: block; width: 62%; height: 100%; background: var(--info); }
 .lg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+@media (max-width: 760px) { .legend { right: 8px; left: 8px; width: auto; } .lg-row { grid-template-columns: 1fr; gap: 2px; } .lg-grid { grid-template-columns: 1fr; } }
 .lg-foot { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
 .cam button[aria-expanded="true"] { background: rgba(255,122,69,.9); color: #1b0c05; }
 
