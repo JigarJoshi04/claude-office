@@ -18,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import config
+from . import config, egress
 from .sessions import redact
 
 DEFAULTS = {"enabled": False, "model": "haiku", "daily_tokens": 300_000, "allow_transcripts": False}
@@ -165,6 +165,7 @@ class Brain:
                 raise Unavailable("The analyst took too long to answer.") from None
             except OSError as e:
                 raise Unavailable(f"The analyst could not start: {e}") from None
+            egress.note("analyst", r.returncode == 0)
             try:
                 d = json.loads(r.stdout or "{}")
             except ValueError:

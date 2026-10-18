@@ -3,6 +3,18 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.121.0] - 2026-10-19
+
+### Changed
+- The page fetches nothing from elsewhere: its three fonts (Inter, JetBrains Mono, Silkscreen; SIL Open Font License,
+  in `web/fonts/` with their licences) are served by the office, and the Content-Security-Policy now allows fonts
+  and styles from the office only. Opening the office no longer contacts Google.
+
+### Added
+- What leaves this machine: Settings lists the office's own outbound calls of the last day, by kind, with counts,
+  failures and when the last one was: plan usage readings (Anthropic), pull requests, checks and review comments
+  (GitHub through gh), and the analyst's questions when it is on. `GET /api/egress`.
+
 ## [3.120.0] - 2026-10-19
 
 ### Added

@@ -1,0 +1,5 @@
+/* The page's three fonts, served by the office itself (no request leaves the machine). Latin subsets; SIL OFL 1.1,
+   see OFL.txt beside this file. */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("Inter-var.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 600; font-display: swap; src: url("JetBrainsMono-400-600.woff2") format("woff2"); }
+@font-face { font-family: "Silkscreen"; font-style: normal; font-weight: 400; font-display: swap; src: url("Silkscreen-400.woff2") format("woff2"); }

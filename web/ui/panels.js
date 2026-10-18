@@ -31,7 +31,7 @@ const EVENT_ICON = { levelup: "star", achievement: "trophy", arrive: "play", lea
 export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
   let hireDraft = store.get("hireDraft", { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true });
-  let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null;
+  let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null, egressData = null;
   let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
   const sessTab = new Map();
   const chatFind = new Map();     // session id -> the text being searched for in its chat
@@ -1622,6 +1622,7 @@ export function makePanels(app) {
     if (!settingsData && !settingsLoading) {
       settingsLoading = true;
       fetch("/api/ai").then(r => r.ok ? r.json() : null).then(j => { aiSpend = j && j.spent; }).catch(() => {});
+      fetch("/api/egress").then(r => r.ok ? r.json() : null).then(j => { egressData = j; }).catch(() => {});
       fetch("/api/settings").then(r => r.ok ? r.json() : null).then(j => { settingsData = j || { unavailable: true }; settingsLoading = false; app.rerender(true); })
         .catch(() => { settingsData = { unavailable: true }; settingsLoading = false; app.rerender(true); });
     }
@@ -1677,6 +1678,8 @@ export function makePanels(app) {
         <div class="row wrap" style="gap:6px;margin:10px 0">${Object.entries(sd.risk_watch.rules || {}).map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-rwatch="${esc(k)}" ${(sd.risk_watch.mute || []).includes(k) ? "" : "checked"}> ${esc(l)}</label>`).join("")}</div>`) : ""}
       <div class="row" style="margin-top:8px"><button class="btn primary" id="setSave">Save office settings</button></div>`}
       ${section("Keyboard", `<dl class="facts">${[["Ctrl/⌘ K", "Search and commands"], ["Esc", "Back to the briefing"], ["F  T  B  S", "Floor, Timeline, Team, Today"], ["H", "Hire a lane"], ["D", "Load divider"], ["P", "Share-safe"], ["1 … 9", "Open a character"], ["\\", "Hide or show the inspector"], ["+  −  0", "Zoom in, out, fit"], ["Arrows", "Pan when zoomed in"]].map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join("")}</dl>`)}
+      ${egressData ? section("What leaves this machine", `<p class="hint" style="margin-top:0">The office's own outbound calls in the last day. The page fetches nothing from elsewhere: its fonts and code come from the office. Your agents' traffic is theirs.</p>
+        ${egressData.calls.length ? `<dl class="facts">${egressData.calls.map(c => `<dt>${esc(c.host)}</dt><dd>${esc(c.why)} · ${c.calls.toLocaleString()} call${c.calls === 1 ? "" : "s"}${c.failed ? ` (${c.failed} failed)` : ""}${c.last_at ? `, the last ${relTime(c.last_at)}` : ""}</dd>`).join("")}</dl>` : `<p class="hint">None in the last day.</p>`}`) : ""}
       ${section("About", `<div class="hint">Claude Office ${esc(S().office.version || "")} · up ${S().office.started_at ? ago(S().office.started_at).replace(" ago", "") : "–"} · ${esc(app.liveMode())}</div>`)}`,
       bind(root) {
         root.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => { app.setPref("theme", b.dataset.themeSet); app.rerender(true); }));

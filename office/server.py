@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.120.0"
+    server_version = "ClaudeOffice/3.121.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -229,9 +229,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path in ("/", "/index.html"):
                 html = (config.WEB_DIR / "index.html").read_text()
                 html = html.replace("{{TOKEN}}", self.token).replace("{{DEMO}}", "1" if self.demo else "0")
-                csp = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' "
-                       "https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; "
-                       "connect-src 'self'; frame-ancestors 'none'")
+                csp = ("default-src 'self'; img-src 'self' data: blob:; media-src blob:; style-src 'self' 'unsafe-inline'; "
+                       "font-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")   # nothing from elsewhere
                 return self._send(200, html.encode(), "text/html; charset=utf-8", {"Content-Security-Policy": csp})
             if url.path.startswith("/static/"):
                 return self._static(url.path[len("/static/"):])
@@ -277,6 +276,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"days": self.office.samples.week(self.office.get(), days, list(self.office.events))})
             if url.path == "/api/settings":
                 return self._json(200, settings.view(self.office.cfg, self.office.get().get("seats", [])))
+            if url.path == "/api/egress":                   # what the office sends off this machine (egress.py)
+                from . import egress
+                return self._json(200, {"calls": egress.view(), "page": "Nothing: the page's fonts and code are served by the office."})
             if url.path == "/api/ai":                       # the analyst: its settings and today's spend (brain.py)
                 b = getattr(self.office, "brain", None)
                 return self._json(200, {"settings": brain.settings(self.office.cfg), "spent": b.spent() if b else None, "demo": self.demo})
@@ -350,7 +352,7 @@ class Handler(BaseHTTPRequestHandler):
         p = (base / rel).resolve()
         if base not in p.parents or not p.is_file():
             return self._send(404, b"not found", "text/plain")
-        ctype = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+        ctype = mimetypes.guess_type(p.name)[0] or ("font/woff2" if p.suffix == ".woff2" else "application/octet-stream")
         if p.suffix == ".js":
             ctype = "text/javascript"
         return self._send(200, p.read_bytes(), ctype)

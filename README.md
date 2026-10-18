@@ -352,7 +352,9 @@ set -g status-right '#(curl -s 127.0.0.1:7420/api/status.txt?style=plain)'
 
 ## Safety
 
-- **Network:** the server listens on `127.0.0.1` only, and rejects any request whose `Host` is not loopback.
+- **Network:** the server listens on `127.0.0.1` only, and rejects any request whose `Host` is not loopback. The page
+  loads nothing from elsewhere (its fonts are bundled), and Settings → "What leaves this machine" lists the office's
+  own outbound calls of the last day: plan usage readings, GitHub through `gh`, and the analyst when it is on.
 - **Writes:** every write needs the per-install token, which only the office's own page receives.
 - **The page:** a strict Content-Security-Policy is set. Transcript text is escaped, and credential-shaped strings
   are masked before they reach it.

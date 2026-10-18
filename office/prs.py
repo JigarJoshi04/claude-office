@@ -15,6 +15,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import egress
 from .sessions import redact
 
 FIELDS = "number,title,state,isDraft,url,headRefName,updatedAt,mergedAt,reviewDecision,statusCheckRollup,author,isCrossRepository"
@@ -66,6 +67,7 @@ def _list(gh: str, repo: str, state: str, limit: int, search: str | None = None,
                            capture_output=True, text=True, timeout=30, env={**os.environ, "GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
     except (OSError, subprocess.SubprocessError):
         return None
+    egress.note("github", r.returncode == 0)
     if r.returncode != 0:
         return None
     try:
@@ -106,6 +108,7 @@ def fetch_reviews(repo: str, number: int) -> list[dict] | None:
     try:
         r = subprocess.run([gh, "api", "graphql", "-f", f"query={_REVIEW_Q}", "-f", f"o={owner}", "-f", f"n={name}", "-F", f"p={int(number)}"],
                            capture_output=True, text=True, timeout=30, env={**os.environ, "GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
+        egress.note("github", r.returncode == 0)
         if r.returncode != 0:
             return None
         nodes = (((json.loads(r.stdout or "{}").get("data") or {}).get("repository") or {}).get("pullRequest") or {}).get("reviewThreads", {}).get("nodes") or []
@@ -135,6 +138,7 @@ def fetch_mine(which: str) -> list[dict] | None:
     try:
         r = subprocess.run([gh, "search", "prs", flag, "--state=open", "--limit", "50", "--json", _MINE_FIELDS],
                            capture_output=True, text=True, timeout=30, env={**os.environ, "GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
+        egress.note("github", r.returncode == 0)
         if r.returncode != 0:
             return None
         rows = json.loads(r.stdout or "[]")

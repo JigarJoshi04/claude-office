@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import config
+from . import config, egress
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 TIER_NAMES = {
@@ -135,10 +135,14 @@ class UsagePoller:
         })
         try:
             with urllib.request.urlopen(req, timeout=12) as r:
-                return {"data": parse_usage(json.loads(r.read()))}
+                out = {"data": parse_usage(json.loads(r.read()))}
+            egress.note("usage")
+            return out
         except urllib.error.HTTPError as e:
+            egress.note("usage", ok=False)
             return {"error": f"HTTP {e.code}", "status": e.code}
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+            egress.note("usage", ok=False)
             return {"error": type(e).__name__}
 
     def tick(self) -> None:
