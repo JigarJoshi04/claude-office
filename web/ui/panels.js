@@ -87,7 +87,7 @@ export function makePanels(app) {
   function laneRow(l) {
     const tn = { done: "good", finished: "good", running: "info", blocked: "warn", failed: "bad", waiting: "warn" }[l.status] || "info";
     return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop" }[l.status] || "briefcase", 16)}</span>
-      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status)}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
+      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status)}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
   }
 
   // ---------------------------------------------------------------------------------------- briefing
@@ -1117,7 +1117,8 @@ export function makePanels(app) {
         <label class="f">Then, in the same folder<select id="hThen">
           <option value="" ${!d.chain ? "selected" : ""}>Nothing: it reports and stops</option>
           <option value="review" ${d.chain === "review" ? "selected" : ""}>A second lane reviews its work</option>
-          <option value="fix-review" ${d.chain === "fix-review" ? "selected" : ""}>A lane fixes what it found, then another reviews the fix</option></select></label>
+          <option value="fix-review" ${d.chain === "fix-review" ? "selected" : ""}>A lane fixes what it found, then another reviews the fix</option>
+          ${snap.seats.some(s => s.kind === "codex") ? `<option value="second-opinion" ${d.chain === "second-opinion" ? "selected" : ""}>Codex gives a second opinion on its work</option>` : ""}</select></label>
         <div class="hint" style="margin:-6px 0 14px">Each stage starts when the one before reports done, with that report in its brief. A blocked report stops the chain.</div>
         <div class="setrow" style="border-top:0;padding-top:0"><div class="grow">Let me message it while it works<small>Messages from the office reach this lane directly instead of waiting for approval.</small></div>
           <label class="switch"><input type="checkbox" id="hMsg" ${d.allow_messages !== false ? "checked" : ""} ${isCodex ? "disabled" : ""} aria-label="Allow messages"><span></span></label></div>

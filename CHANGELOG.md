@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.60.0] - 2026-10-18
+
+### Added
+- A second opinion: a hire can be followed by "Codex gives a second opinion on its work", a review stage that runs on
+  the Codex seat, so a different model reads the report and the changes. A chain stage can name its own seat.
+- Each office lane's row says what it shipped: commits, and PRs opened or merged, from the token ledger (`shipped`).
+
 ## [3.59.0] - 2026-10-18
 
 ### Added

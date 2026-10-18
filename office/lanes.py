@@ -177,6 +177,10 @@ CHAIN_PRESETS = {
                     "changes (git log and git diff against the main branch). Check correctness, tests and edge cases. Fix "
                     "small problems yourself and list the rest in your report; do not redo the work.")],
 }
+CHAIN_PRESETS["second-opinion"] = [("Second opinion", "You are a second pair of eyes from a different model. Review the previous stage's "
+                                   "work in this folder: read its report below, then the changes (git log and git diff against the main "
+                                   "branch). Say plainly what is wrong, risky or missing, with file and line; fix only what is clearly "
+                                   "broken. Do not redo the work.", "codex")]
 MAX_STAGES = 5
 
 
@@ -187,7 +191,8 @@ def chain_from(body_chain, title: str) -> list[dict]:
     if isinstance(body_chain, str):
         if body_chain not in CHAIN_PRESETS:
             raise ValueError("Unknown chain")
-        return [{"title": f"{name}: {title}"[:80], "brief": brief} for name, brief in CHAIN_PRESETS[body_chain]]
+        return [{"title": f"{st[0]}: {title}"[:80], "brief": st[1], **({"seat_kind": st[2]} if len(st) > 2 else {})}
+                for st in CHAIN_PRESETS[body_chain]]
     if not isinstance(body_chain, list) or len(body_chain) > MAX_STAGES - 1:
         raise ValueError(f"A chain has at most {MAX_STAGES} stages")
     out = []
@@ -330,9 +335,11 @@ def _next_stage(lane: dict, cfg: dict) -> None:
     of = lane.get("chain_of") or {"step": 1, "of": 1 + len(lane["chain"]), "first": lane["id"]}
     brief = (f"{nxt['brief']}\n\n---\nYou are stage {of['step'] + 1} of {of['of']} in a chain. The previous stage, "
              f"\"{lane['title']}\", worked in this same folder and reported:\n\n{report}")
-    seats = [s["id"] for s in config.discover_claude_seats(cfg)] + ([c["id"]] if (c := config.codex_seat_meta(cfg)) else [])
+    codex = config.codex_seat_meta(cfg)
+    seats = [s["id"] for s in config.discover_claude_seats(cfg)] + ([codex["id"]] if codex else [])
+    seat = (codex["id"] if codex else "auto") if nxt.get("seat_kind") == "codex" else lane.get("seat_pref") or "auto"   # a second opinion: another model
     try:
-        new = create_lane(nxt["title"], brief, lane["workdir"], lane.get("seat_pref") or "auto", lane["model"],
+        new = create_lane(nxt["title"], brief, lane["workdir"], seat, lane["model"],
                           lane["permission_mode"], seats, cfg, allow_messages=lane.get("allow_messages", True),
                           chain=rest, chain_of={"step": of["step"] + 1, "of": of["of"], "first": of["first"], "after": lane["id"]})
         lane["chain_next"] = new["id"]

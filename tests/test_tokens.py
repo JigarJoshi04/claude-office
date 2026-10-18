@@ -329,3 +329,13 @@ class WhereTests(unittest.TestCase):
             w = led.view([{"id": "claude", "kind": "claude"}], today="2026-10-18")["where"]
             self.assertEqual((w["helpers"], w["thinking"], w["searches"], w["output"]), (120, 30, 1, 70))
             self.assertEqual(w["main"], 150)
+
+
+class ShippedForTests(unittest.TestCase):
+    def test_what_sessions_shipped(self):
+        from office.demo import _demo_token_ledger
+        led = _demo_token_ledger()
+        sid, r = next((k, v) for k, v in led.data["sessions"].items() if any(g[0] for g in v["g"].values()))
+        out = led.shipped_for([sid])
+        self.assertEqual(out["commits"], sum(g[0] for g in r["g"].values()))
+        self.assertIsNone(led.shipped_for(["nobody"]))

@@ -146,6 +146,7 @@ class ChainTests(unittest.TestCase):
         from office import lanes
         self.assertEqual([x["title"] for x in lanes.chain_from("fix-review", "Flaky export test")], ["Fix: Flaky export test", "Review: Flaky export test"])
         self.assertEqual(lanes.chain_from("", "x"), [])
+        self.assertEqual(lanes.chain_from("second-opinion", "Export")[0]["seat_kind"], "codex")
         for bad in ("nope", [{"title": "a"}], [{"title": "a", "brief": "b"}] * 5, [{"title": " ", "brief": "b"}]):
             with self.assertRaises(ValueError):
                 lanes.chain_from(bad, "x")

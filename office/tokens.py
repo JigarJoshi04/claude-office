@@ -639,6 +639,18 @@ class TokenLedger:
                     tok += r.get("f", 0) + r.get("c", 0); out += r.get("o", 0); usd += sum((r.get("$") or {}).values())
         return {"tokens": tok, "output": out, "usd": round(usd / 1e6, 2)} if seen else None
 
+    def shipped_for(self, sids) -> dict | None:
+        """What sessions shipped: commits, pushes, PRs opened and merged, lines (for a lane's outcome)."""
+        tot, seen = [0] * len(SHIP), False
+        with self.lock:
+            src = (self._serve or self.data)["sessions"]
+            for sid in sids:
+                for v in ((src.get(sid) or {}).get("g") or {}).values():
+                    seen = True
+                    for i, x in enumerate(v):
+                        tot[i] += x
+        return dict(zip(SHIP, tot)) if seen else None
+
     def last_call(self) -> dict:
         """When each seat last made an API call from this machine (epoch seconds), from the transcripts read so far."""
         with self.lock:
