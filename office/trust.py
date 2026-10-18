@@ -14,13 +14,15 @@ from pathlib import Path
 from . import config
 from .sessions import report_blocked
 
-_CLAIM = re.compile(r"\b(?:DONE|READY|COMPLETE[D]?|SUCCESS|FINISHED|SHIPPED|MERGED)\b", re.I)
+# The report's own status word claims it ("STATUS: DONE - …", "READY #12"), not a word further on ("FAILED - could not
+# complete", "NOT DONE", "PARTIAL").
+_CLAIM = re.compile(r"^[\W\d_]*(?:STATUS\W*)?(?:DONE|READY|COMPLETE[D]?|SUCCESS|FINISHED|SHIPPED|MERGED)\b", re.I)
 WORDS = {"verified": "Verified", "unverified": "Unverified", "contradicted": "Contradicted"}
 
 
 def trust_of(report_status: str | None, test_ok, test_at, edit_at) -> dict | None:
     """{"level", "why"} for a report that claims the work is done, or None (no report, a BLOCKED one, no claim)."""
-    if not report_status or report_blocked(report_status) or not _CLAIM.search(report_status):
+    if not report_status or report_blocked(report_status) or not _CLAIM.match(report_status):
         return None
     if test_ok is False:
         return {"level": "contradicted", "why": "its last test run failed"}

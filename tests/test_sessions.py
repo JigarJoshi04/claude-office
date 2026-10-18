@@ -522,19 +522,23 @@ class CollisionTests(unittest.TestCase):
             self.assertIsNone(work_root(_os.path.join(stray, ".git", "empty")))               # an empty .git folder is not a repo
             t = touch_of({_os.path.join(repo, "src", "a.py"): 1000.0, _os.path.join(tmp, "loose.txt"): 1000.0, _os.path.join(repo, "old.py"): 1.0}, 1100.0)
             self.assertEqual(t["roots"], {repo: 1000.0})
-            self.assertEqual(len(t["files"]), 2)                                              # hashed, never paths
-            self.assertTrue(all("/" not in k for k in t["files"]))
+            self.assertEqual(list(t["files"]), [repo])                                       # files outside a repo are left out
+            self.assertTrue(all("/" not in k for k in t["files"][repo]))                     # hashed, never paths
         work_root.cache_clear()
 
     def test_two_sessions_in_one_tree_need_you(self):
         from office.snapshot import Office, attention_key, collisions
-        sess = lambda sid, files: {"id": sid, "name": sid, "state": "working", "kind": "lane", "live": True,
-                                   "touch": {"roots": {"/w/apollo": 100.0}, "files": {f: 100.0 for f in files}}}
+        sess = lambda sid, files, other=(): {"id": sid, "name": sid, "state": "working", "kind": "lane", "live": True,
+                                             "touch": {"roots": {"/w/apollo": 100.0, **({"/w/web": 100.0} if other else {})},
+                                                       "files": {"/w/apollo": {f: 100.0 for f in files}, **({"/w/web": {f: 100.0 for f in other}} if other else {})}}}
         snap = {"now": 200.0, "asks": [], "lanes": [], "units": [], "office": {},
                 "seats": [{"id": "c", "label": "claude", "kind": "claude", "status": "ok", "usage": {}, "sessions": [sess("a", ["f1"]), sess("b", ["f2"])]}]}
         items = [x for x in Office._attention(snap) if x.get("collision")]
         self.assertEqual((items[0]["level"], items[0]["text"]), ("warn", "a on claude and b on claude are both editing apollo right now"))
         self.assertEqual(attention_key(items[0]), "collision:/w/apollo")
+        snap["seats"][0]["sessions"][0] = sess("a", ["f1"], other=["w9"])
+        snap["seats"][0]["sessions"][1] = sess("b", ["f2"], other=["w9"])
+        self.assertEqual({c["root"]: c["same_file"] for c in collisions(snap)}, {"/w/apollo": False, "/w/web": True})   # per tree
         snap["seats"][0]["sessions"][1] = sess("b", ["f1"])
         self.assertTrue(collisions(snap)[0]["same_file"])
         self.assertEqual([x for x in Office._attention(snap) if x.get("collision")][0]["level"], "bad")

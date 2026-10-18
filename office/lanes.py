@@ -562,6 +562,10 @@ def resume_lane(lane_id: str, seat: str | None, seat_ids: list[str]) -> dict:
     refused = policy_refuses(lane)                      # the policy as it is now, not as it was at hire time
     if refused:
         raise ValueError(refused)
+    rep = lane_dir(lane_id) / "REPORT.md"                # stopped by the policy before, allowed now: that report goes
+    if rep.exists() and (_first_line(rep) or "").startswith("STATUS: BLOCKED - the lane policy refused it"):
+        rep.unlink()
+        lane.pop("report_status", None)
     if seat:
         if seat != "auto" and seat not in seat_ids:
             raise ValueError(f"Unknown seat {seat}")
@@ -659,6 +663,10 @@ def _choose_seat(lane: dict, exclude: tuple = ()) -> tuple[str | None, str, floa
             w = (pinned.get("usage") or {}).get(key) or {}
             if (w.get("pct") or 0) >= 100:
                 return None, f"{lane['seat_pref']} has used all of its {key.replace('_', '-')} plan", w.get("resets_at")
+        fam = divider.family(lane.get("model"))           # the model's own week, spent: wait for it (pinned, so no other seat)
+        for m in (pinned.get("usage") or {}).get("scoped") or []:
+            if fam and fam in str(m.get("label") or "").lower() and (m.get("pct") or 0) >= 100:
+                return None, f"{lane['seat_pref']} has used all of its {m['label']} week", m.get("resets_at")
         return lane["seat_pref"], "pinned by the CEO", None
     ev = divider.evaluate(seats, cfg, exclude=exclude, limited_until=read_limits(),
                           kind="claude" if lane.get("resume_session") else None, model=lane.get("model"))

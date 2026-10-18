@@ -20,7 +20,7 @@ export function makeFloor(ctx) {
     const plan = (key, label) => { const left = leftOf(s, key); return left == null ? "" :
       `<div class="pk-plan"><span>${label}</span><span class="pk-bar ${left < 15 ? "low" : left < 35 ? "mid" : ""}"><i style="width:${Math.round(left)}%"></i></span><b>${Math.round(left)}%</b></div>`; };
     const STATE = { working: "working", waiting: "on a long tool", idle: "idle", limited: "out of plan", stuck: "quiet a while" };
-    const fam = (m) => ((m || "").match(/opus|sonnet|haiku|fable|gpt|codex/i) || [""])[0].toLowerCase();   // the lanyard's colour (office.js)
+    const fam = (m) => { const f = ((m || "").match(/opus|sonnet|haiku|fable|gpt|codex|\bo\d/i) || [""])[0].toLowerCase(); return /^o\d/.test(f) ? "gpt" : f; };   // the name tag's colour (office.js)
     const row = (x) => `<div class="pk-row"><i class="sdot ${x.state}"></i><b>${esc(x.name.replace(/^wt-/, ""))}</b>${fam(x.model) ? `<em class="mdl m-${fam(x.model)}">${fam(x.model)}</em>` : ""}<span>${esc(prefs.privacy && x.kind === "desk" ? STATE[x.state] || x.state : x.activity || STATE[x.state] || x.state)}</span></div>`;
     peekEl.style.setProperty("--seat", s.color);
     peekEl.innerHTML = `<div class="pk-top"><span class="av"><i data-portrait="mascot-${esc(s.id)}|${esc(s.color)}|${s.status === "offline" ? "dim" : ""}"></i></span>

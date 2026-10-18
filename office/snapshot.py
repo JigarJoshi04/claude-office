@@ -52,7 +52,7 @@ def collisions(snap: dict) -> list[dict]:
     for root, xs in sorted(by_root.items()):
         if len(xs) < 2:
             continue
-        files = [set((x.get("touch") or {}).get("files") or {}) for x, _ in xs]
+        files = [set(((x.get("touch") or {}).get("files") or {}).get(root) or {}) for x, _ in xs]   # this tree's files only
         same = any(files[i] & files[j] for i in range(len(files)) for j in range(i + 1, len(files)))
         out.append({"root": root, "same_file": same, "who": [{"id": x["id"], "name": x.get("name") or "a session", "seat": sid} for x, sid in xs]})
     return out
@@ -402,16 +402,19 @@ class Office(LiveOffice):
                         self.emit("stuck", f"{x['name']} on {s['label']} has been quiet for 15+ minutes", s["id"], "warn")
                     if x.get("report_status") and not psess[sid].get("report_status") and sid not in self._reported:
                         self._reported.add(sid)
-                        lvl = "warn" if sessions.report_blocked(x["report_status"]) else "good"
-                        v = x.get("trust")                   # its claim against its own last test run (trust.py)
-                        if v:
-                            self.trust.put(sid, dict(v, at=cur["now"], name=x["name"], seat=s["id"], lane=x.get("lane_id")))
-                            if v["level"] == "contradicted":
-                                lvl = "warn"
-                        self.emit("report", f"{x['name']} filed its report: {x['report_status']}"
-                                  + (f" ({trust.WORDS[v['level']]}: {v['why']})" if v else ""), s["id"], lvl)
+                        self._report_news(sid, x, x.get("trust"), s, cur.get("now") or time.time())
+                    elif x.get("trust") and x.get("report_status"):  # a verdict that changed (the tests passed after all)
+                        old = self.trust.get(sid)
+                        if old and old.get("level") != x["trust"]["level"]:
+                            self.trust.put(sid, dict(old, **x["trust"], at=cur.get("now") or time.time()))
             for sid, x in psess.items():
                 if sid not in csess:
+                    rf = x.get("report_file")                # a report written just before it left: how lanes end
+                    if sid not in self._reported and rf and os.path.exists(rf):
+                        status = sessions.first_line(rf)
+                        if status:
+                            self._reported.add(sid)
+                            self._report_news(sid, dict(x, report_status=status), trust.trust_of(status, x.get("test_ok"), x.get("test_at"), x.get("edit_at")), s, cur.get("now") or time.time())
                     self.emit("leave", f"{x['name']} left {s['label']}", s["id"])
             for key, label in (("five_hour", "5-hour window"), ("weekly", "weekly allowance")):
                 a = ((p.get("usage") or {}).get(key) or {}).get("pct")
@@ -534,7 +537,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.124.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.125.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -868,6 +871,16 @@ class Office(LiveOffice):
                     x["ci"] = {"checks": p["checks"], "number": p["number"], "url": p["url"], "state": p["state"], "review": p["review"],
                                "title": p.get("title"), "branch": p.get("branch"), "repo": key[0],
                                "threads": threads[:6], "thread_count": len(threads)}
+
+    def _report_news(self, sid: str, x: dict, v: dict | None, s: dict, now: float) -> None:
+        """A report's news, with its claim against its own last test run (trust.py) kept for the lane's page."""
+        lvl = "warn" if sessions.report_blocked(x["report_status"]) else "good"
+        if v:
+            self.trust.put(sid, dict(v, at=now, name=x["name"], seat=s["id"], lane=x.get("lane_id")))
+            if v["level"] == "contradicted":
+                lvl = "warn"
+        self.emit("report", f"{x['name']} filed its report: {x['report_status']}"
+                  + (f" ({trust.WORDS[v['level']]}: {v['why']})" if v else ""), s["id"], lvl)
 
     def cabinet_view(self, q: str = "", seat: str | None = None, offset: int = 0) -> dict:
         """The filing cabinet: past sessions matching q, most recent first (cabinet.py)."""

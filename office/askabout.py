@@ -6,6 +6,7 @@ session itself. Needs the analyst on, with transcripts allowed, and runs on the 
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
 from pathlib import Path
@@ -170,7 +171,7 @@ def away_digest(events: list[dict], attention: list[dict], lanes: list[dict]) ->
     if quiet:
         lines.append(f"- (and {quiet} routine items: sessions coming and going, usage readings, commits)")
     needs = [f"- {_clip(a.get('text'), 200)}" for a in attention[:12]]
-    out = [f"- {l.get('title')} ({l.get('status')})" for l in lanes if l.get("status") in ("running", "waiting", "scheduled", "interrupted")][:10]
+    out = [f"- {l.get('title')} ({l.get('status')})" for l in lanes if l.get("status") in ("queued", "starting", "running", "waiting", "scheduled", "interrupted")][:10]
     return ("News while away, oldest first:\n" + ("\n".join(lines) or "- nothing") + "\n\nNeeds the CEO right now:\n"
             + ("\n".join(needs) or "- nothing") + "\n\nLanes still out:\n" + ("\n".join(out) or "- none"))
 
@@ -178,7 +179,7 @@ def away_digest(events: list[dict], attention: list[dict], lanes: list[dict]) ->
 def away(office, body: dict, demo: bool = False) -> dict:
     """The away card, written: a headline, what needs a decision, what got done, and how much was noise."""
     since = body.get("since")
-    if isinstance(since, bool) or not isinstance(since, (int, float)):
+    if isinstance(since, bool) or not isinstance(since, (int, float)) or not math.isfinite(since):
         raise ValueError("since must be a time")
     if demo:
         return {"headline": "Two lanes finished and one needs a decision from you.",
@@ -189,9 +190,12 @@ def away(office, body: dict, demo: bool = False) -> dict:
     snap = office.get() or {}
     events = [e for e in standup.events_between(office._events_path, since, now + 1)]
     text = away_digest(events, snap.get("attention") or [], snap.get("lanes") or [])
-    seats = [s for s in snap.get("seats", []) if s.get("kind") == "claude"]
+    # A seat the analyst itself would use (brain.GUARD_5H), the divider's pick first.
+    ok = lambda s: s.get("kind") == "claude" and s.get("status") not in ("limited", "offline", "benched") and \
+        (s.get("health") or {}).get("state") != "login" and (((s.get("usage") or {}).get("five_hour") or {}).get("pct") or 0) < brain.GUARD_5H
+    seats = [s for s in snap.get("seats", []) if ok(s)]
     pick = (snap.get("next_pick") or {}).get("seat")
-    seat = next((s for s in seats if s["id"] == pick), None) or next((s for s in seats if s.get("status") not in ("limited", "offline", "benched")), None)
+    seat = next((s for s in seats if s["id"] == pick), None) or (seats[0] if seats else None)
     hours = (now - since) / 3600
     prompt = ("You write the 'while you were away' note for the person who runs a small office of AI coding agents. "
               f"They were away for {hours:.1f} hours. From the log below, write: a headline of at most 15 words; "

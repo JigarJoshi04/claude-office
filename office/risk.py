@@ -47,6 +47,11 @@ _AWS_VALUE_OPTS = {"--profile", "--region", "--output", "--endpoint-url", "--que
 _K8S_VALUE_OPTS = {"-n", "--namespace", "--context", "--kubeconfig", "--cluster", "--user", "-s", "--server"}
 
 
+def _dequoted(cmd: str) -> str:
+    """The command with heredoc bodies and quoted strings taken out, so a commit message never reads as a command."""
+    return re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", strip_heredocs(cmd))
+
+
 def _parse(cmd: str) -> list[dict]:
     """The simple commands of a shell line: [{"words": [...], "out": [redirect targets]}], split at ; & | ( )."""
     lex = shlex.shlex(strip_heredocs(cmd), posix=True, punctuation_chars=True)
@@ -112,13 +117,41 @@ def _after_opts(words: list[str], value_opts: set) -> list[str]:
     return out
 
 
+_PREFIX = {"env", "time", "nohup", "exec", "command", "builtin", "then", "do", "else", "elif", "{", "!", "xargs", "stdbuf", "ionice"}
+
+
+def _strip(words: list[str]) -> list[str]:
+    """A command's words without what runs it: VAR=x assignments, env, sudo (and its options), time, nohup, exec,
+    timeout N, nice -n N, and the then/do/{ of a compound command."""
+    w = list(words)
+    while w:
+        n = _name(w[0])
+        if re.fullmatch(r"[A-Za-z_]\w*=.*", w[0]) or n in _PREFIX:
+            w = w[1:]
+        elif n == "sudo":
+            w = w[1:]
+            while w and w[0].startswith("-"):
+                w = w[2:] if w[0] in ("-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t") else w[1:]
+        elif n == "timeout":
+            w = w[1:]
+            while w and w[0].startswith("-"):
+                w = w[2:] if w[0] in ("-s", "-k", "--signal", "--kill-after") else w[1:]
+            w = w[1:]                                    # the duration
+        elif n == "nice":
+            w = w[1:]
+            while w and w[0].startswith("-"):
+                w = w[2:] if w[0] == "-n" else w[1:]
+        else:
+            break
+    return w
+
+
 def _word_rules(words: list[str]) -> set[str]:
     """The rules one simple command breaks, from its words."""
+    words = _strip(words)
     if not words:
         return set()
     hit, n = set(), _name(words[0])
-    if n == "sudo" and len(words) > 1:
-        return _word_rules(words[1:])
     if n == "git" and "push" in words:
         args = words[words.index("push") + 1:]
         if any(a == "--force" or a.startswith("--force=") or re.fullmatch(r"-[a-zA-Z]*f[a-zA-Z]*", a) or a.startswith("+") for a in args):
@@ -165,9 +198,10 @@ def _bash(cmd: str, depth: int = 0) -> set[str]:
     for c in parsed:
         words = c["words"]
         hit |= _word_rules(words)
+        words = _strip(words)
         n = _name(words[0]) if words else ""
-        if n in _DB and _DROP_SQL.search(cmd):        # SQL goes to a database client: in -c "…" or a heredoc
-            hit.add("drop_table")
+        if any(_name(x) in _DB for x in words[:6]) and (_DROP_SQL.search(" ".join(words)) or "<<" in cmd and _DROP_SQL.search(cmd)):
+            hit.add("drop_table")                       # SQL sent to a database client (docker exec … psql too): -c "…" or a heredoc
         flag = next((i for i, w in enumerate(words[:-1]) if i and re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", w)), None)
         if depth < 2 and n in _SHELLS and flag:          # bash -c "…" (or -lc): read the script it runs
             hit |= _bash(words[flag + 1], depth + 1)
@@ -177,8 +211,8 @@ def _bash(cmd: str, depth: int = 0) -> set[str]:
                 hit |= _bash(" ".join(rest[1:]), depth + 1)
         for path in _paths_written(c):
             hit |= {rid for rid, _, rx in PATH_RULES if rx.search(path)}
-    if _PIPE_SHELL.search(strip_heredocs(cmd)):
-        hit.add("pipe_shell")
+    if _PIPE_SHELL.search(_dequoted(cmd)) or (depth and re.match(r"\s*\$\(\s*(?:curl|wget)\b", cmd)):
+        hit.add("pipe_shell")                           # not words in a commit message; bash -c "$(curl …)" read from inside
     if TOKEN_RE.search(cmd):
         hit.add("secret_cmd")
     return hit

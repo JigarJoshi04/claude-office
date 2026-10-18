@@ -3,11 +3,13 @@
 from collections import OrderedDict
 from copy import deepcopy
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import re
+import shlex
 import threading
 import time
 
@@ -102,6 +104,17 @@ def _tool_activity(payload):
     return "Using: " + name[:160]
 
 
+_PATCH_FILE = re.compile(r"^\*\*\* (?:Update|Add) File: (.+)$", re.M)
+
+
+def _patch_files(text: str) -> list[str]:
+    """The files a Codex patch writes. Patches can arrive with their newlines escaped (apply_patch("...\\n...")):
+    those are read as lines first, so a file name never runs on into the patch's contents."""
+    if "\n" not in text and "\\n" in text:
+        text = text.replace("\\n", "\n")
+    return [m.strip().strip('"\'')[:300] for m in _PATCH_FILE.findall(text)][:20]
+
+
 def _risks(session, payload):
     """The risky-action watch (risk.py) over a Codex tool call: its shell command, and the files a patch writes."""
     from .risk import RULES, check
@@ -114,14 +127,16 @@ def _risks(session, payload):
     cmd = args.get("cmd", args.get("command"))
     if isinstance(cmd, list) and len(cmd) >= 3 and re.fullmatch(r"-[a-z]*c[a-z]*", str(cmd[1])):   # ["bash", "-lc", "<script>"]
         cmd = cmd[2]
-    command = _command(cmd)
+    command = shlex.join(str(c) for c in cmd) if isinstance(cmd, list) else _command(cmd)      # quoted as the shell would see it
+    patch = args.get("patch", raw if isinstance(raw, str) else "")
+    if command and "*** Begin Patch" in command:      # apply_patch run as a command: a patch, not a shell line
+        patch, command = command, None
     if command:
         hits += check("Bash", {"command": command})
-    patch = args.get("patch", raw if isinstance(raw, str) else "")
     if isinstance(patch, str):
-        for path in re.findall(r"\*\*\* (?:Update|Add) File: ([^\n]+)", patch)[:20]:
-            hits += check("Write", {"file_path": path.strip()})
-    call = str(payload.get("call_id") or payload.get("id") or hash(json.dumps(payload, sort_keys=True, default=str)))
+        for path in _patch_files(patch):
+            hits += check("Write", {"file_path": path})
+    call = str(payload.get("call_id") or payload.get("id") or hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:16])
     have = {(r["rule"], r["text"], r["ts"]) for r in session.get("risks") or []}
     for rule, shown in hits:                         # a call and its exec event are one action
         if (rule, shown, session.get("updated_at")) in have or any(r["id"] == f"codex:{call}:{rule}" for r in session.get("risks") or []):
@@ -180,7 +195,7 @@ def _item(session, payload):
     elif kind in ("exec_command_begin", "CommandExecution"):
         command = _short(_command(payload.get("command", payload.get("cmd"))), 160)
         session["activity"] = "Running: " + (command or "command")
-        _risks(session, {"call_id": payload.get("call_id"), "arguments": {"command": payload.get("command", payload.get("cmd"))}})
+        _risks(session, {"call_id": payload.get("call_id") or payload.get("id"), "arguments": {"command": payload.get("command", payload.get("cmd"))}})
 
 
 def _record(entry, record):

@@ -3,6 +3,39 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.125.0] - 2026-10-19
+
+### Fixed
+- Opening a scrapbook photo broke every other dialog until a reload; the arrow keys worked once; the last photo
+  could not be removed and two photos could share an id; share-safe now hides captions in labels too.
+- Codex risk alerts could show a patch's contents (a private key) and missed most patched files: escaped patches are
+  read line by line, and Codex risks keep their own ids across restarts (no repeat after Seen).
+- The risk rules missed commands with something in front (`AWS_PROFILE=… aws …`, `sudo -E`, `timeout 600`,
+  `then git push -f`, `docker exec db psql …`), flagged "curl … | bash" inside a commit message, and flagged SQL that
+  was not sent to the database client.
+- Trust: a verdict never updated (a report that turned Verified stayed Contradicted in Needs you); a report written
+  just before its session left got no news or verdict (how lanes end); a test run in the background read as passed;
+  shell writes to STATE.md or REPORT.md, and stderr redirects, counted as code changes; "STATUS: FAILED - could not
+  complete" was read as a claim of done; a jest test named "… when 1 failed" read as a failing run.
+- The collision alarm compared files across repositories and outside any repository, and a folder that became a
+  repository was never seen.
+- `claude-office top` spun at 100% CPU after a prompt, crashed on multi-line text in a small terminal, could pick a
+  session it did not show, and printed seat ids instead of names.
+- Credentials: AWS secret keys in JSON and in `aws configure set` were not masked; masking was slow on long text and
+  hid harmless things (`input_tokens: 1234567`, `docker run -u 1000:1000`, `localhost:5173/@vite`).
+- The per-model hint promised a re-route for pinned lanes and used a fixed 90%; a lane pinned to a seat whose model
+  week is spent now waits.
+- "First one in" fired with the office full and before the night shift ended.
+- Standup mode: keys reached the page underneath, a second open stacked a second deck, pause restarted the slide, and
+  the count included summary lines.
+- The away brief gave up when the divider's pick was too busy for the analyst, left out queued lanes, accepted a
+  non-number `since`, and its list showed words in share-safe.
+- A lane blocked by the policy could not be resumed after the policy changed.
+- Smaller: the contradicted report's notification title, collision and bake-off items in share-safe, "100+ of yours
+  open", Codex commands quoted as the shell sees them, `git --no-pager -C x push` read as shipping, pets cutting
+  through walls when called mid-walk, Daily Squash runs across midnight and the cabinet after midnight, o3/o4 named on
+  the hover card.
+
 ## [3.124.0] - 2026-10-19
 
 ### Added

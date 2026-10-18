@@ -194,6 +194,7 @@ export function createOffice(stage, handlers) {
   // stays a while in that pose before it wanders again.
   function petVisit(p, pod, pose, ms, offset = 16) {
     if (!L || reduced || !pod || p.inPod === pod && p.mode !== "walk") return;
+    if (p.mode === "walk") return;                  // mid-walk it finishes where it is going first (no short cut through a wall)
     const w = podWay(pod);
     p.path = [...petLegs(p), [SPX, w.corrY], [w.doorX, w.corrY], [w.doorX, w.aisleY], [w.doorX + offset, w.aisleY]];
     [p.tx, p.ty] = p.path.shift(); p.mode = "walk"; p.after = { pose, ms, pod };

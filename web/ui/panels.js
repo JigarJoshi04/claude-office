@@ -47,6 +47,7 @@ export function makePanels(app) {
   const STATUS_WORD = { READY: "ready for review", DONE: "done", BLOCKED: "blocked", FAILED: "failed", PARTIAL: "partly done", COMPLETE: "done", SUCCESS: "done" };
   // A Needs-you item's words; share-safe keeps out what a session is doing (the question, the call it repeats, its report).
   const needText = (a) => (!app.privacy() ? humanise(a.text) : a.ask ? "An agent asks you a question"
+    : a.collision ? "Two sessions are editing one working tree" : a.bakeoff ? "A bake-off is ready to judge"
     : humanise(a.text.replace(/( in a row| is blocked): [\s\S]*$/, "$1")));
   const humanise = (text) => {
     let t = String(text || "");
@@ -131,7 +132,7 @@ export function makePanels(app) {
       ${br ? `<div class="away-brief">${br.needs_you.length ? `<div class="ab-k bad-k">Needs you</div><ul>${br.needs_you.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
         ${br.done.length ? `<div class="ab-k">Done</div><ul>${br.done.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
         <div class="hint">${esc(chips.join(", "))}${br.fyi_count ? ` · ${br.fyi_count} routine item${br.fyi_count === 1 ? "" : "s"} folded away` : ""} · written by the analyst${br.demo ? " (demo)" : ""}</div></div>` : ""}
-      ${awayOpen ? `<div class="away-list">${top.map(m => `<div class="act ${tone(m.level)} ${m.seat ? "click" : ""}" ${m.seat ? `data-seat="${esc(m.seat)}"` : ""}>${icon(EVENT_ICON[m.kind] || "dot", 16)}<span>${esc(humanise(m.text))}</span><span class="when">${relTime(m.ts)}</span></div>`).join("")}</div>` : ""}</div>`;
+      ${awayOpen ? `<div class="away-list">${top.map(m => actRow(m)).join("")}</div>` : ""}</div>`;   // share-safe words, as the news
   }
   // The day's rhythm: a morning card recaps yesterday and names today's goals; an evening card wraps the day up and
   // offers its picture. Each shows once a day until dismissed (per browser).
@@ -288,7 +289,10 @@ export function makePanels(app) {
     const st = seatById(seatId === "auto" ? (S().next_pick || {}).seat : seatId);
     const lim = st && ((st.usage || {}).scoped || []).find(m => modelFam(m.label) === modelFam(model));
     if (!lim || lim.pct < 60) return "";
-    return `<p class="hint ${lim.pct >= 90 ? "bad-t" : ""}" style="margin:-6px 0 12px">${icon("alert", 13)} ${esc(P(st).name)} has used ${Math.round(lim.pct)}% of its ${esc(lim.label)} week${lim.resets_at ? ` (back ${esc(dayTime(lim.resets_at))})` : ""}.${lim.pct >= 90 ? " The divider sends a lane for it elsewhere." : ""}</p>`;
+    const guard = (S().divider || {}).weekly_guard || 90, over = lim.pct >= guard, pinned = seatId !== "auto";
+    const then = !over ? "" : pinned ? (lim.pct >= 100 ? " A lane pinned here waits until it is back." : ` A lane pinned here still goes; with the divider picking, it goes elsewhere.`)
+      : " The divider sends a lane for it elsewhere.";
+    return `<p class="hint ${over ? "bad-t" : ""}" style="margin:-6px 0 12px">${icon("alert", 13)} ${esc(P(st).name)} has used ${Math.round(lim.pct)}% of its ${esc(lim.label)} week${lim.resets_at ? ` (back ${esc(dayTime(lim.resets_at))})` : ""}.${then}</p>`;
   }
   const seasonNow = () => seasonFor(new Date());
   const modelFam = (m) => ((m || "").match(/opus|sonnet|haiku|fable|gpt|codex/i) || ["other"])[0].toLowerCase();
@@ -1265,7 +1269,7 @@ export function makePanels(app) {
   function reviewQueueHtml(m) {
     if (!m || (!m.review.length && !m.authored)) return "";
     const priv = app.privacy();
-    return `<section class="b-sec"><h3 class="b-h">${icon("users", 16)}Your review queue<span class="count">${m.review.length}</span><span class="grow"></span>${m.authored ? `<button class="btn sm ghost" data-go="prs">${m.authored >= 50 ? "50+" : m.authored} of yours open</button>` : ""}</h3>
+    return `<section class="b-sec"><h3 class="b-h">${icon("users", 16)}Your review queue<span class="count">${m.review.length}</span><span class="grow"></span>${m.authored ? `<button class="btn sm ghost" data-go="prs">${m.authored >= 100 ? "100+" : m.authored} of yours open</button>` : ""}</h3>
       ${m.review.length ? m.review.slice(0, 4).map(p => `<div class="rq"><span class="grow"><b>${priv ? `PR #${p.number}` : esc(p.title || `PR #${p.number}`)}</b><small>${priv ? "a repository" : esc(p.repo)} #${p.number}${p.author && !priv ? " · " + esc(p.author) : ""}${p.updated ? " · " + relTime(Date.parse(p.updated) / 1000) : ""}${p.draft ? " · draft" : ""}</small></span>
         <a class="btn sm ghost" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${icon("external", 14)}Open</a><button class="btn sm" data-review-lane="${esc(JSON.stringify([p.repo, p.number, p.title || "", p.workdir || ""]))}" title="Fill the hiring desk with a read-only review brief (nothing starts until you hire)">${icon("bot", 14)}Reviewer</button></div>`).join("")
         : `<p class="hint">Nobody is waiting on your review.</p>`}${m.review.length > 4 ? `<p class="hint">and ${m.review.length - 4} more.</p>` : ""}</section>`;

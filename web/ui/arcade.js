@@ -73,8 +73,9 @@ export function makeArcade(ctx) {
     const code = Array.from({ length: 14 }, (_, i) => ({ indent: (i * 7) % 4, parts: Array.from({ length: 2 + (i * 5) % 4 }, (_, k) => ({ w: 6 + ((i * 13 + k * 7) % 22), c: ["#c678dd", "#56b6c2", "#e5c07b", "#98c379", "#7f848e"][(i + k) % 5] })) }));
 
     function start(daily) {
+      const day = localDay();                         // a run started before midnight counts for the day it began
       Object.assign(st, { on: true, t: 0, score: 0, bugs: [], splats: [], pops: [], next: 0.4, last: performance.now(), t0: performance.now(),
-                          daily: !!daily, rng: daily ? seeded(daySeed(localDay())) : Math.random, paused: null });   // the Daily run: today's bugs
+                          daily: !!daily, day, rng: daily ? seeded(daySeed(day)) : Math.random, paused: null });   // the Daily run: today's bugs
       over.hidden = true; cv.focus(); pauseBtn.hidden = false;
       cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
     }
@@ -90,8 +91,8 @@ export function makeArcade(ctx) {
       st.on = false; pauseBtn.hidden = true;
       const prev = store.get("squashBest", 0), best = Math.max(prev, st.score);
       store.set("squashBest", best);
-      const dayPrev = today();
-      if (st.daily) { store.set("squashDays", keepDays(store.get("squashDays", {}), localDay(), st.score)); if (onDaily) onDaily(today()); }
+      const dayPrev = (store.get("squashDays", {}) || {})[st.day] ?? null;
+      if (st.daily) { store.set("squashDays", keepDays(store.get("squashDays", {}), st.day, st.score)); if (onDaily) onDaily(today()); }
       d.querySelector(".arc-best").textContent = `Best ${best}${today() != null ? ` · today's Daily ${today()}` : ""}`;
       const fresh = st.score > prev && st.score > 0;
       let gift = false;

@@ -30,11 +30,12 @@ SECRET_RE = re.compile(
     r"(sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}"
     r"|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{16,}"
-    r"|(?i:(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)\w*\s*[=:]\s*)[^\s'\"]{6,})")
+    r"|(?i:(?<![A-Za-z])(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)\w{0,30}[\"']?\s*[=:]\s*[\"']?)(?=[^\s'\",}]*[A-Za-z])[^\s'\",}]{6,}"
+    r"|(?i:aws_secret_access_key|aws_session_token)\s+[^\s'\"]{12,})")   # (bounded, so a long run of "token" never backtracks)
 # Credentials that sit next to something worth keeping: the password in `user:pass@host`, `curl -u user:pass` and
 # `mysql -pSecret` (the user and the host stay readable).
-_URL_PASS = re.compile(r"(\b[a-z][\w+.-]*://[^\s/:@'\"]+:)[^\s@'\"]+(?=@)")
-_USER_PASS = re.compile(r"((?:\s-u|--user)[ =]?[^\s:'\"]+:)[^\s'\"]+")
+_URL_PASS = re.compile(r"(\b[a-z][\w+.-]{0,20}://[^\s/:@'\"]{1,100}:)[^\s@/'\"]{1,200}(?=@)")
+_USER_PASS = re.compile(r"((?:\s-u|--user)[ =]?[A-Za-z][^\s:'\"]{0,100}:)[^\s'\"]+")      # not docker's -u 1000:1000
 _MYSQL_P = re.compile(r"(\b(?:mysql|mysqldump|mariadb|mysqladmin)\b[^\n|;&]*?\s-p)[^\s'\"]{3,}")
 
 
@@ -220,8 +221,10 @@ _TEST_CMD = re.compile(r"^(?:\w+=\S*\s+)*(?:(?:time|nice|timeout\s+\S+|uv run|po
 
 
 # A test run's output that says it failed, whatever the exit code (piped through tail, the exit code is tail's).
-_TEST_FAILED = re.compile(r"\bFAILED\b|(?<!expected )\bfailures=[1-9]|\berrors=[1-9]|\b[1-9]\d* failed(?=\s*(?:[,|(]|in \d|$))|\b[1-9]\d* failing\b|ℹ fail [1-9]|^# fail [1-9]|^not ok\b"
-                          r"|^Tests:.*\b[1-9]\d* failed|^--- FAIL|^FAIL\b", re.M)
+# (A summary line only: a test's own name can say "1 failed", as jest's "✓ retries a chunk when 1 failed" does.)
+_TEST_FAILED = re.compile(r"\bFAILED\b|(?<!expected )\bfailures=[1-9]|\berrors=[1-9]|\b[1-9]\d* failed(?=,| in \d)|\b[1-9]\d* failing\b"
+                          r"|ℹ fail [1-9]|^# fail [1-9]|^not ok\b|^\s*(?:Test Files|Tests:?)\s+[1-9]\d* failed\b|^\s*[1-9]\d* failed\s*$"
+                          r"|^--- FAIL|^FAIL\b", re.M)
 
 
 _HEREDOC_START = re.compile(r"<<-?\s*(['\"]?)(\w+)\1")
@@ -278,8 +281,9 @@ def screen_for(name: str, inp: dict) -> str | None:
 _SHIP = re.compile(r"(?:git\s+(?:commit|push|tag)|gh\s+(?:pr\s+(?:create|merge|ready)|release\s+create))\b")
 _LOOK = re.compile(r"(?:cat|ls|head|tail|grep|rg|find(?!.*\s-(?:delete|exec))|wc|tree|less|jq|git\s+(?:log|show|diff|status|blame|branch|fetch)"
                    r"|gh\s+(?:(?:pr|run|issue)\s+(?:view|list|checks|diff|watch|status)|api))\b")
-_GIT_OPTS = re.compile(r"^git\s+(?:(?:-C|-c)\s+\S+\s+)+")      # git -C <dir> / -c k=v before the verb
-_WRITES = re.compile(r"^(?:cat|tee|printf|echo)\b.*>\s*\S")       # a file written from the shell
+_GIT_OPTS = re.compile(r"^git\s+(?:(?:-C|-c)\s+\S+\s+|--[\w-]+\s+)+")   # git -C <dir> / -c k=v / --no-pager before the verb
+# A file written from the shell (not stderr, /dev/null, or the lane's own STATE and REPORT notes).
+_WRITES = re.compile(r"^(?:cat|tee|printf|echo)\b.*?(?<![\d&>])>{1,2}(?!>)\s*(?!&|/dev/null)(?![^\s]*(?:STATE|REPORT)[^/\s]*\.md\b)\S")
 
 
 def step_kind(name: str, inp, screen: str | None) -> str | None:
@@ -307,8 +311,26 @@ def _trust(report_status, tr):
     return trust_of(report_status, tr.test_ok, tr.test_at, tr.edit_at)
 
 
-@functools.lru_cache(maxsize=4096)
+_ROOTS: dict[str, tuple[float, str | None]] = {}
+
+
 def work_root(folder: str) -> str | None:
+    """The git working tree a folder is in, remembered (a folder outside any repository is looked at again after five
+    minutes, in case it became one)."""
+    hit = _ROOTS.get(folder)
+    if hit and (hit[1] or time.time() - hit[0] < 300):
+        return hit[1]
+    root = _work_root(folder)
+    if len(_ROOTS) > 4096:
+        _ROOTS.clear()
+    _ROOTS[folder] = (time.time(), root)
+    return root
+
+
+work_root.cache_clear = _ROOTS.clear                    # (tests)
+
+
+def _work_root(folder: str) -> str | None:
     """The git working tree a folder is in (the nearest parent with a real .git: a repository's HEAD, or a worktree's
     "gitdir:" file; a stray empty .git folder does not count), or None."""
     d = folder
@@ -342,9 +364,10 @@ def touch_of(edits: dict, now: float) -> dict | None:
         if now - ts > TOUCH_S:
             continue
         root = work_root(os.path.dirname(path))
-        if root:
-            roots[root] = max(roots.get(root, 0), ts)
-        files[hashlib.sha1(path.encode()).hexdigest()[:12]] = ts
+        if not root:                                     # outside any repository: not a collision
+            continue
+        roots[root] = max(roots.get(root, 0), ts)
+        files.setdefault(root, {})[hashlib.sha1(path.encode()).hexdigest()[:12]] = ts   # compared within one tree
     return {"roots": roots, "files": files} if roots else None
 
 
@@ -557,8 +580,8 @@ class TranscriptState:
                     text, kind = f"Helper: {text}", kind
                 else:
                     self.screen = screen_for(str(c.get("name") or ""), c.get("input") or {})
-                    if self.screen == "test":
-                        self.test_id = c.get("id")
+                    if self.screen == "test" and not (c.get("input") or {}).get("run_in_background"):
+                        self.test_id = c.get("id")         # a run in the background reports later: no verdict from "started"
                     sk = step_kind(str(c.get("name") or ""), c.get("input"), self.screen)
                     if sk:
                         self.steps.append(sk)
@@ -860,6 +883,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "helpers_done": tr.helpers_done if tr else 0,
             "screen": tr.screen if tr else None,
             "test_ok": tr.test_ok if tr else None,
+            "test_at": tr.test_at if tr else None, "edit_at": tr.edit_at if tr else None,   # (trust.py, at its exit)
             "risks": list(tr.risks) if tr else [],        # all it keeps (20): each is announced once
             "phase": phase_of(tr.steps, tr.test_ok) if tr and state in ("working", "waiting") else None,
             "trust": _trust(report_status, tr) if tr and report_status else None,

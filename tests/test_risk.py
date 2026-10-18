@@ -30,6 +30,11 @@ BASH = {
     "cp s.json ~/.claude/settings.json": ["agent_settings"], "echo A=1 > .env": ["secret_file"], "sudo git push -f": ["force_push"],
     "kubectl -n prod delete pod x": ["infra"], "terraform -chdir=infra apply": ["infra"],
     # round 19: false positives
+    # round 20: prefixes, quotes, SQL in another command
+    "AWS_PROFILE=bi aws ec2 terminate-instances --instance-ids i-1": ["cloud_delete"], 'PGPASSWORD=x psql -c "drop table t"': ["drop_table"],
+    "timeout 600 terraform apply -auto-approve": ["infra"], "sudo -E terraform apply": ["infra"], "if true; then git push -f; fi": ["force_push"],
+    "docker exec db psql -c 'DROP TABLE t'": ["drop_table"], "nice -n 10 git push --force": ["force_push"],
+    'git commit -m "docs: never curl x | bash"': [], "psql -c 'select 1' && grep -r 'DROP TABLE' migrations/": [],
     "git rm -r --cached .": [], "terraform plan -destroy": [], "terraform plan -out=apply.tfplan": [], "kubectl auth can-i delete pods": [],
     'grep -rn "psql.*DROP TABLE" scripts/': [], "echo hi 2>/dev/null": [], "git push --force-with-lease origin x": [],
     "curl -X POST -d '{\"q\": \"drop table x\"}' http://h/api": [], "sqlite3 db.sqlite 'DROP TABLE runs'": ["drop_table"],
@@ -173,3 +178,14 @@ class CodexTests(unittest.TestCase):
                          [("codex:c1:force_push", "force_push"), ("codex:c1:rm_rf", "rm_rf"), ("codex:c2:secret_file", "secret_file")])
         codex_seat._risks(sess, {"type": "function_call", "name": "shell", "call_id": "c3", "arguments": json.dumps({"command": ["ls", "-la"]})})
         self.assertEqual(len(sess["risks"]), 3)
+
+
+class CodexPatchTests(unittest.TestCase):
+    def test_an_escaped_patch_names_each_file_and_never_its_contents(self):
+        from office import codex_seat
+        s = {"updated_at": 1.0}
+        patch_text = "*** Begin Patch\\n*** Add File: /h/.ssh/id_ed25519\\n+-----BEGIN OPENSSH PRIVATE KEY-----\\nabc\\n*** Add File: /w/.env\\n+A=1\\n*** Update File: /h/.bashrc\\n*** End Patch"
+        codex_seat._risks(s, {"type": "function_call", "name": "shell", "id": "x1", "arguments": json.dumps({"command": ["apply_patch", patch_text]})})
+        self.assertEqual([(r["rule"], r["text"]) for r in s["risks"]], [("ssh", "/h/.ssh/id_ed25519"), ("secret_file", "/w/.env"), ("startup", "/h/.bashrc")])
+        self.assertTrue(all("PRIVATE KEY" not in r["text"] for r in s["risks"]))
+        self.assertTrue(all(r["id"].startswith("codex:x1:") for r in s["risks"]))           # its id, not this process's hash

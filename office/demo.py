@@ -60,7 +60,7 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "tasks": _demo_tasks(sid, now),
         "ci": DEMO_CI.get(sid),
         "phase": DEMO_PHASE.get(sid),
-        "touch": DEMO_TOUCH.get(sid) and {"roots": {DEMO_TOUCH[sid][0]: now - 90}, "files": {DEMO_TOUCH[sid][1]: now - 80}},
+        "touch": DEMO_TOUCH.get(sid) and {"roots": {DEMO_TOUCH[sid][0]: now - 90}, "files": {DEMO_TOUCH[sid][0]: {DEMO_TOUCH[sid][1]: now - 80}}},
         "risks": [dict(r, ts=now - r["ago"]) for r in DEMO_RISKS.get(sid, [])],
         "helpers": [{"desc": d, "since": now - 300 - i * 140} for i, d in enumerate(DEMO_HELPERS.get(sid, []))][: 1 + int(now // 40) % 3],
         "helpers_done": int(now // 40) if sid in DEMO_HELPERS else 0,
@@ -520,7 +520,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.124.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.125.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},

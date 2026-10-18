@@ -368,6 +368,7 @@ app.openCard = (id) => cards.open(id);
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); },
   onDaily: (n) => office.setSquash(n) });
 office.setSquash((store.get("squashDays", {}) || {})[localDay()]);   // today's Daily run on the lounge cabinet
+setInterval(() => office.setSquash((store.get("squashDays", {}) || {})[localDay()]), 60000);   // a new day clears it
 // "Your office", scrolled to the sticker album.
 function openAlbum() { if (floor.tv()) floor.setTv(false); go({ kind: "office" }, false, { anchor: "album" }); }
 
@@ -520,6 +521,7 @@ async function loadStats(day, force) {
 function apply(next) {
   if (!next || !next.seats) return;
   const first = !snap;
+  prevLive = snap ? snap.seats.reduce((n, s) => n + live(s).length, 0) : null;   // who was in before this refresh (First one in)
   snap = next; setNow(snap.now);
   setLooks(Object.fromEntries([...snap.seats.filter(s => s.look).map(s => ["mascot-" + s.id, s.look]),   // the character creator's looks
     ...(snap.office.ceo && snap.office.ceo.look ? [["ceo-" + (snap.office.ceo.name || "CEO"), snap.office.ceo.look]] : [])]));
@@ -575,7 +577,7 @@ async function standupScene(force) {
 }
 // Banter: every couple of minutes two characters at their desks trade a line (ui/personas.js banter). Never during
 // replay or reduced motion, and never over another reaction.
-let lastReport = 0, lastReportSeat = null;
+let lastReport = 0, lastReportSeat = null, prevLive = null;
 const banterSaid = new Set();                          // the last few exchanges, not said again soon
 setInterval(() => {
   if (!snap || replay.active() || prefs.motion === "reduced" || prefs.game !== "full" || document.hidden || prefs.view !== "floor" || Date.now() - lastReaction < 15000) return;
@@ -642,7 +644,7 @@ function onNews(e) {
       const sid = findSessionByText(e.text);
       if (ok) { lastReport = Date.now(); lastReportSeat = e.seat; fx.celebrate(e.seat, sid, "Shipped!"); if (who) fx.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); game.comboHit(e); giftBox.earn(e.seat, "report"); }
       else sound.play("bad");
-      toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
+      toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : /\(Contradicted:/.test(e.text) ? "Report contradicted by its tests" : "Report: blocked", text);
       break;
     }
     case "external": {                                 // a script's news (POST /api/event, python3 -m office post)
@@ -724,7 +726,8 @@ function onNews(e) {
   }
   if (!replay.active()) director.push({ kind: e.kind, seat: e.seat, session: sid, merged: e.kind === "shipped" && / merged$/.test(e.text) });
   if (!replay.active() && e.seat && (e.kind === "shipped" || e.kind === "report" && e.level === "good") && prefs.game !== "off") office.petsCheer(e.seat);   // the pets come to see
-  if (e.kind === "arrive" && !replay.active() && new Date().getHours() >= 5 && store.get("firstIn", "") !== localDay()) {   // the first one in, each morning
+  if (e.kind === "arrive" && !replay.active() && new Date().getHours() >= 6 && store.get("firstIn", "") !== localDay()
+      && prevLive === 0) {                                // the first one in, each morning: into an empty office (the night shift ends at 6)
     store.set("firstIn", localDay());
     const who = e.seat && snap.seats.find(s => s.id === e.seat);
     if (who && prefs.game !== "off") { fx.banner("First one in", `${panels.persona(who).name} opened the office`, who.color); toast(`${panels.persona(who).name} is the first one in today.`, "good", { ic: "sun" }); }

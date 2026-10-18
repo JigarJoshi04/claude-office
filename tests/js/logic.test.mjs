@@ -574,7 +574,7 @@ test("help topics are searchable and each one can be found", async () => {
   const { TOPICS, findTopics } = await import("../../web/ui/help.js");
   assert.ok(TOPICS.length >= 12);
   assert.equal(new Set(TOPICS.map(t => t.id)).size, TOPICS.length);
-  assert.deepEqual(findTopics("divider").map(t => t.id).slice(0, 1), ["lanes"].filter(() => false).concat(findTopics("divider")[0].id));
+  assert.ok(findTopics("divider").some(t => t.id === "divider"));
   assert.ok(findTopics("force-push").some(t => t.id === "risk"));
   assert.equal(findTopics("").length, TOPICS.length);
   assert.deepEqual(findTopics("zzzz"), []);

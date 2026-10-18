@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import curses
 import json
+import re
 import time
 import urllib.error
 import urllib.request
@@ -41,7 +42,7 @@ def working(snap: dict) -> list[tuple[dict, dict]]:
 def lines(snap: dict, width: int, private: bool = False, pick: int = 0) -> list[tuple[str, str]]:
     """The screen as (text, style) rows, styles: head, dim, good, warn, bad, sel or "". Pure, for tests."""
     w = max(40, width)
-    cut = lambda t, n=w: (t if len(t) <= n else t[: n - 1] + "…")
+    cut = lambda t, n=w: (lambda u: u if len(u) <= n else u[: n - 1] + "…")(" ".join(str(t).split()))   # one line each
     o = snap.get("office") or {}
     t = snap.get("totals") or {}
     rows: list[tuple[str, str]] = []
@@ -61,8 +62,10 @@ def lines(snap: dict, width: int, private: bool = False, pick: int = 0) -> list[
         rows.append((cut(f"{name[:15]:<16}{st[:11]:<12}{_pct_left(u.get('five_hour')):>8}{_pct_left(u.get('weekly')):>11}{len(live):>7}"), style))
     rows.append(("", ""))
     rows.append((f"NEEDS YOU ({len(att)})", "dim"))
+    names = {s.get("label") or s["id"]: s.get("nickname") for s in snap.get("seats", []) if s.get("nickname")}
+    named = lambda t: re.sub(r"\b(" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")\b(?![-\w])", lambda m: names[m.group(1)], t) if names else t
     for a in att[:6]:
-        text = ("An agent asks you a question" if a.get("ask") else a.get("text", "").split(":")[0]) if private else a.get("text", "")
+        text = named(("An agent asks you a question" if a.get("ask") else a.get("text", "").split(":")[0]) if private else a.get("text", ""))
         rows.append((cut("  " + text), "bad" if a.get("level") == "bad" else "warn"))
     if not att:
         rows.append(("  All clear.", "good"))
@@ -112,7 +115,7 @@ def _ask(scr, prompt: str) -> str:
     try:
         text = scr.getstr(h - 1, min(len(prompt), w - 2), 400).decode(errors="replace")
     finally:
-        curses.noecho(); curses.curs_set(0); scr.nodelay(True)
+        curses.noecho(); curses.curs_set(0); scr.nodelay(True); scr.timeout(200)   # back to waking five times a second
     return text.strip()
 
 
@@ -136,10 +139,16 @@ def run(scr, port: int, every: float = 2.0) -> None:
         if not snap:
             scr.addstr(0, 0, f"Waiting for the office on port {port}… (q quits)"[: w - 1])
         else:
-            pick = max(0, min(pick, len(working(snap)) - 1))
+            pick = max(0, min(pick, min(14, len(working(snap))) - 1))   # only the sessions shown can be picked
             for y, (text, style) in enumerate(lines(snap, w - 1, private, pick)[: h - 1]):
-                scr.addstr(y, 0, text[: w - 1], styles.get(style, curses.A_NORMAL))
-            scr.addstr(h - 1, 0, (note or ("share-safe · " if private else "") + "q quit · p share-safe · r refresh")[: w - 1], curses.A_DIM)
+                try:
+                    scr.addstr(y, 0, text[: w - 1], styles.get(style, curses.A_NORMAL))
+                except curses.error:                     # a terminal too small for a row: skip it, never crash
+                    pass
+            try:
+                scr.addstr(h - 1, 0, (note or ("share-safe · " if private else "") + "q quit · p share-safe · r refresh")[: w - 1], curses.A_DIM)
+            except curses.error:
+                pass
         scr.refresh()
         k = scr.getch()
         if k in (ord("q"), 27):

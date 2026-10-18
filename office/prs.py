@@ -136,7 +136,7 @@ def fetch_mine(which: str) -> list[dict] | None:
         return None
     flag = "--review-requested=@me" if which == "review" else "--author=@me"
     try:
-        r = subprocess.run([gh, "search", "prs", flag, "--state=open", "--limit", "50", "--json", _MINE_FIELDS],
+        r = subprocess.run([gh, "search", "prs", flag, "--state=open", "--limit", "100", "--json", _MINE_FIELDS],
                            capture_output=True, text=True, timeout=30, env={**os.environ, "GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
         egress.note("github", r.returncode == 0)
         if r.returncode != 0:
