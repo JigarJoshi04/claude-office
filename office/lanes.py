@@ -328,8 +328,17 @@ def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[l
     if resume and seat["kind"] != "claude":
         raise ValueError("Claude follow-ups require a Claude seat")
     if seat["kind"] == "codex":
-        gpt = shutil.which("gpt") or str(config.HOME / ".local" / "bin" / "gpt")
-        cmd = [gpt, "-w", "-C", lane["workdir"], "--add-dir", str(d), prompt]
+        # The gpt wrapper around Codex when it is installed; otherwise the Codex CLI itself, with the same sandbox.
+        local = config.HOME / ".local" / "bin" / "gpt"
+        gpt = shutil.which("gpt") or (str(local) if local.exists() else None)
+        if gpt:
+            cmd = [gpt, "-w", "-C", lane["workdir"], "--add-dir", str(d), prompt]
+        else:
+            codex = shutil.which("codex")
+            if not codex:
+                raise ValueError("The Codex seat needs the codex CLI on PATH to run a lane")
+            cmd = [codex, "exec", "--skip-git-repo-check", "-C", lane["workdir"], "-s", "workspace-write",
+                   "--add-dir", str(d), prompt]
         env = dict(os.environ)
     else:
         ld = cfg["lane_defaults"]

@@ -224,6 +224,27 @@ class FollowUpLaneTests(unittest.TestCase):
                                         lanes.lane_dir(lane["id"]), cfg)
         self.assertNotIn("--settings", cmd)
 
+    def test_codex_lanes_use_gpt_when_installed_and_the_codex_cli_otherwise(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(config, "DATA_DIR", Path(tmp)), mock.patch.object(config, "HOME", Path(tmp)):
+                cfg = config.load_config()
+                lane = lanes.create_lane("Docs", "Fix the docs.", tmp, "auto", "opus", "acceptEdits", ["astra"], cfg, launch=False)
+                seat, d = {"id": "astra", "kind": "codex"}, lanes.lane_dir(lane["id"])
+                which = {"gpt": "/opt/bin/gpt", "codex": "/opt/bin/codex"}
+                with mock.patch("shutil.which", side_effect=which.get):
+                    cmd, _ = lanes._command(lane, seat, "go", d, cfg)
+                self.assertEqual(cmd[:4], ["/opt/bin/gpt", "-w", "-C", tmp])
+                which.pop("gpt")
+                with mock.patch("shutil.which", side_effect=which.get):
+                    cmd, _ = lanes._command(lane, seat, "go", d, cfg)
+                self.assertEqual(cmd[:2], ["/opt/bin/codex", "exec"])
+                self.assertEqual(cmd[cmd.index("-s") + 1], "workspace-write")
+                self.assertEqual(cmd[cmd.index("-C") + 1], tmp)
+                self.assertEqual(cmd[-1], "go")
+                which.pop("codex")
+                with mock.patch("shutil.which", side_effect=which.get), self.assertRaises(ValueError):
+                    lanes._command(lane, seat, "go", d, cfg)
+
 
 if __name__ == "__main__":
     unittest.main()

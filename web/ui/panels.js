@@ -607,7 +607,8 @@ export function makePanels(app) {
       ${(() => { const have = earned(), n = BADGES.filter(b => have[b.id]).length;
         const prog = !app.demo && app.badgeProgress ? app.badgeProgress() : {};
         return section(`Your badges · ${n} of ${BADGES.length}`, `<div class="ol-grid">${BADGES.map(b => { const at = have[b.id], p = !at && prog[b.id];
-          return `<div class="ol-card ${at ? "on" : ""}"><span class="ol-ic">${icon(at ? b.icon : "lock", 18)}</span><b>${esc(b.name)}</b><span>${esc(b.desc)}${at ? ` · ${esc(dayTime(at))}` : ""}</span>
+          const hide = b.secret && !at;                       // a secret badge stays a mystery until it is found
+          return `<div class="ol-card ${at ? "on" : ""}"><span class="ol-ic">${icon(at ? b.icon : "lock", 18)}</span><b>${esc(hide ? "Secret badge" : b.name)}</b><span>${esc(hide ? "Some codes never get old." : b.desc)}${at ? ` · ${esc(dayTime(at))}` : ""}</span>
             ${p && p[0] > 0 ? `<span class="ol-prog"><i style="width:${Math.min(100, Math.round(p[0] / p[1] * 100))}%"></i></span><em class="ol-pn">${Math.min(p[0], p[1])} of ${p[1]}</em>` : ""}</div>`; }).join("")}</div>
           <div class="hint" style="margin-top:8px">${app.demo ? "The demo office never awards badges. " : ""}Badges are kept in this browser.</div>`); })()}
       ${album()}

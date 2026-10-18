@@ -7,19 +7,17 @@ import { openPalette } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
 import { pulse, line, reaction, voice, binding, leftOf, banter } from "./ui/personas.js";
-import { goals, streak, weekly } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
 import { dayCard } from "./ui/daycard.js";
 import { award, bump, earned, progress } from "./ui/badges.js";
 import { startTour } from "./ui/tour.js";
 import { makeFloor } from "./ui/floor.js";
 import { makeGiftBox } from "./ui/giftbox.js";
+import { makeGame } from "./ui/game.js";
 import { makeWeekReview } from "./ui/weekreview.js";
 import { makeArcade } from "./ui/arcade.js";
 import { makeRadio } from "./ui/radio.js";
 import { hydrateStickers } from "./engine/stickers.js";
-import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
-const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
 const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
@@ -217,11 +215,14 @@ function tour() {
 }
 
 const floor = makeFloor({ app, office, panels, replay, prefs, QS, DEMO, go, setView, badge: (b) => badge(b), award, zoomNow });
+// The game layer (ui/game.js): goals, badges, the weekly challenge, streaks, anniversaries, combos, the level chip.
+function badge(b) { game.badge(b); }
 const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView, prefs, forceHappy: QS.has("happy"), fullAlbum: QS.get("stickers") === "all", badge: (b) => badge(b), award, onAlbum: () => openAlbum() });
 app.gifts = giftBox;
+const game = makeGame({ app, office, panels, replay, store, DEMO, prefs, gifts: giftBox, view: () => view, renderPanel });
 const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });
 app.playWeek = () => weekReview.play();
-app.badgeProgress = () => progress({ visits, stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });
+app.badgeProgress = () => progress({ visits: game.visits(), stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });
 // The office radio (ui/radio.js): remembered across visits, but browsers only start audio after a click or a key.
 const radio = makeRadio();
 radio.onChange((on) => office.setRadio(on));
@@ -355,40 +356,11 @@ async function loadStats(day, force) {
     const r = await fetch("/api/stats" + (day ? "?day=" + encodeURIComponent(day) : ""));
     const data = r.ok ? await r.json() : { unavailable: true };
     statsCache.set(k, { data, at: Date.now() });
-    if (!day && data && !data.unavailable) { office.setMvp(data.mvp); cheerGoals(data); }
+    if (!day && data && !data.unavailable) { office.setMvp(data.mvp); game.cheerGoals(data); }
   } catch { statsCache.set(k, { data: { unavailable: true }, at: Date.now() }); }
   inflight.delete("s" + k);
   if (prefs.view === "stats") renderMain();
   if (!day && view.kind === "seat") renderPanel(true);   // the character page's diary
-}
-
-// A daily goal finishing while the office is open gets a banner, a chime and a toast. Goals already done when the page
-// opens are only noted, so a reload never re-celebrates them.
-let goalsSeen = null;
-function cheerGoals(st) {
-  const gl = goals(st);
-  if (!gl) return;
-  const day = st.day || "";
-  if (!goalsSeen || goalsSeen.day !== day) {
-    const kept = store.get("goalsSeen", {});
-    goalsSeen = { day, ids: new Set(kept.day === day ? kept.ids || [] : gl.filter(g => g.done).map(g => g.id)) };
-    store.set("goalsSeen", { day, ids: [...goalsSeen.ids] });
-  }
-  if (gl.every(g => g.done) && day) {   // remember finished days for the streak
-    const days = store.get("goalDays", []);
-    if (!days.includes(day)) store.set("goalDays", [...days, day].slice(-90));
-  }
-  const fresh = gl.filter(g => g.done && !goalsSeen.ids.has(g.id));
-  if (fresh.length && gl.every(x => x.done) && !DEMO) { badge(award("clean_sweep")); if (streak(store.get("goalDays", []), day) >= 3) badge(award("consistent")); }
-  if (fresh.length) {   // one celebration per refresh, however many goals finished in it
-    fresh.forEach(g => goalsSeen.ids.add(g.id));
-    const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
-    if (prefs.view === "floor") fxNow().banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
-    if (all) giftBox.grant(null, "goals", "rare");
-    sound.play(all ? "levelup" : "achievement");
-    toast(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
-  }
-  if (fresh.length) { store.set("goalsSeen", { day, ids: [...goalsSeen.ids] }); if (view.kind === "ceo") renderPanel(true); }
 }
 
 // ------------------------------------------------------------------------------------------------ live
@@ -397,10 +369,10 @@ function apply(next) {
   const first = !snap;
   snap = next; setNow(snap.now);
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
-  renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
-  if (!DEMO) { checkBadges(); cheerWeekly(); anniversaries(); }   // the demo office never hands out badges
-  if (first) { visits = visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
-  if (!replay.active()) giftBox.daily(visits); // the first visit of a day finds a gift at the CEO desk
+  renderTop(); game.renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
+  if (!DEMO) { game.checkBadges(); game.cheerWeekly(); game.anniversaries(); }   // the demo office never hands out badges
+  if (first) { game.visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
+  if (!replay.active()) giftBox.daily(game.visits()); // the first visit of a day finds a gift at the CEO desk
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) safeNews(e);
@@ -444,7 +416,6 @@ setInterval(() => {
 }, 45000);
 
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {} };
-const fxNow = () => (replay.active() ? NOFX : office);   // floor effects for live news: none while replaying
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
 function safeNews(e) { try { onNews(e); } catch (err) { console.error("office news:", err); } }
 function onNews(e) {
@@ -462,7 +433,7 @@ function onNews(e) {
     case "report": {
       const ok = e.level === "good";
       const sid = findSessionByText(e.text);
-      if (ok) { lastReport = Date.now(); lastReportSeat = e.seat; fx.celebrate(e.seat, sid, "Shipped!"); if (who) fx.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); comboHit(e); giftBox.earn(e.seat, "report"); }
+      if (ok) { lastReport = Date.now(); lastReportSeat = e.seat; fx.celebrate(e.seat, sid, "Shipped!"); if (who) fx.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); game.comboHit(e); giftBox.earn(e.seat, "report"); }
       else sound.play("bad");
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
       break;
@@ -495,115 +466,6 @@ function onNews(e) {
   }
   loadStats(null, true);
 }
-// A CEO badge (ui/badges.js) was earned: a chime and a toast that opens Your office.
-function badge(b) {
-  if (!b) return;
-  setTimeout(() => { sound.play("achievement"); toast(`Badge earned: ${b.name}. ${b.desc}`, "good", { ic: b.icon, ms: 6500 }); if (view.kind === "office") renderPanel(true); }, 900);
-}
-app.badge = (id) => badge(award(id));
-app.bump = (key, n, id) => badge(bump(key, n, id));
-// The weekly challenge finishing: one celebration per week (per browser), never in the demo.
-function cheerWeekly() {
-  const w = weekly(app.weekCache());
-  if (!w || w.calibrating || !w.done || DEMO) return;
-  const seen = store.get("weeklyDone", "");
-  if (seen === w.week) return;
-  store.set("weeklyDone", w.week);
-  if (prefs.view === "floor") fxNow().banner("Record week!", `${w.have} reports: you beat last week's ${w.last}`, "#ff7a45");
-  sound.play("levelup");
-  toast(`Record week: ${w.have} reports, beating last week's ${w.last}.`, "good", { ic: "flame", ms: 7000 });
-  badge(award("record_week"));
-  giftBox.grant(null, "week", "epic");
-}
-
-// The visit streak: days in a row this browser has opened the office (a flame by the level chip from two days on).
-let visits = 0;
-function visitStreak() {
-  const d = new Date(), key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
-  const days = new Set(store.get("visits", []));
-  days.add(key(d));
-  let n = 0; const c = new Date(d);
-  while (days.has(key(c))) { n++; c.setDate(c.getDate() - 1); }
-  store.set("visits", [...days].sort().slice(-n));   // only the current run matters, however long it gets
-  const el = $("visits");
-  el.hidden = n < 2;
-  el.innerHTML = `${icon("flame", 14)}${n}`;
-  el.title = `${n} days in a row: you have checked on the office every day.`;
-  el.setAttribute("aria-label", el.title);
-  if (n >= 7 && !DEMO) badge(award("regular"));
-  return n;
-}
-
-// Work anniversaries: a character's first week, month, 100 days and year at the office (from its career's start) get a
-// banner, confetti in its room and a line from it, once each (per browser), never in the demo.
-const ANNIVERSARIES = [[7, "one week"], [30, "one month"], [100, "100 days"], [365, "one year"]];
-function anniversaries() {
-  if (DEMO || replay.active()) return;
-  const seen = store.get("anniversaries", {});
-  for (const s of snap.seats) {
-    const since = s.career && s.career.since;
-    if (!since) continue;
-    const days = Math.floor((snap.now - since) / 86400);
-    const hit = ANNIVERSARIES.filter(([d]) => days >= d && days < d + 2).pop();   // on the day (or the day after)
-    if (!hit || seen[`${s.id}:${hit[0]}`]) continue;
-    seen[`${s.id}:${hit[0]}`] = 1; store.set("anniversaries", seen);
-    const who = panels.persona(s);
-    office.celebrate(s.id, null, "Anniversary!");
-    if (prefs.view === "floor") office.banner("Happy anniversary!", `${who.name}: ${hit[1]} at the office`, s.color);
-    office.sayAtSeat(s.id, `${hit[1][0].toUpperCase() + hit[1].slice(1)} here. Thanks, boss!`, 6000);
-    toast(`${who.name} has been at the office for ${hit[1]}.`, "good", { ic: "calendar", ms: 6000 });
-    break;                                            // one at a time
-  }
-}
-
-function checkBadges() {
-  const h = new Date().getHours();
-  badge(award("welcome"));
-  if (h < 4) badge(award("night_owl"));
-  if (h >= 5 && h < 7) badge(award("early_bird"));
-  if (snap.seats.length && panels.needsCount() === 0) badge(award("inbox_zero"));
-}
-
-// The combo: reports and finished lanes within 15 minutes of each other chain up (×2, ×3, …). The floor shows the
-// combo with a bar draining toward its end; the day's best combo is kept per browser.
-const COMBO_WINDOW = 15 * 60;
-let combo = store.get("combo", { n: 0, until: 0, best: 0, day: "" });
-function comboHit(e) {
-  const now = e.ts || Date.now() / 1000, day = new Date().toDateString();
-  if (combo.day !== day) combo = { n: 0, until: 0, best: 0, day };
-  combo.n = now < combo.until ? combo.n + 1 : 1;
-  combo.until = now + COMBO_WINDOW;
-  const best = combo.n > combo.best && combo.n >= 2;
-  combo.best = Math.max(combo.best, combo.n);
-  store.set("combo", combo);
-  if (combo.n >= 3 && !DEMO) badge(award("hot_streak"));
-  if (combo.n === 3 || combo.n === 5) giftBox.grant(e.seat, "combo");
-  if (combo.n >= 2) {
-    setTimeout(() => sound.play("combo", combo.n), 700);
-    const word = combo.n >= 5 ? "Unstoppable!" : combo.n >= 4 ? "On fire!" : combo.n >= 3 ? "Hot streak!" : "Combo!";
-    if (combo.n >= 3 && prefs.view === "floor") fxNow().banner(`Combo ×${combo.n}`, word + (best ? " A new best today." : ""), "#ff7a45");
-    toast(`Combo ×${combo.n}: ${word}`, "good", { ic: "flame", ms: 4500 });
-  }
-  renderCombo();
-}
-function renderCombo() {
-  let el = document.querySelector(".combo");
-  const now = Date.now() / 1000, live = combo.n >= 2 && now < combo.until;
-  if (!live) { if (el) el.remove(); return; }
-  if (!el) {
-    el = document.createElement("div"); el.className = "combo"; el.setAttribute("role", "status");
-    el.title = "Reports and finished lanes within 15 minutes of each other keep the combo going";
-    document.querySelector(".floor-frame").appendChild(el);
-  }
-  const left = Math.max(0, combo.until - now), f = left / COMBO_WINDOW;
-  const html = `<span class="cb-x">×${combo.n}</span><span class="cb-w"><b>Combo</b><small>${Math.ceil(left / 60)} min left${combo.best > combo.n ? ` · best ×${combo.best}` : ""}</small></span>`;
-  if (el.dataset.html !== html) { el.innerHTML = html + '<i class="cb-bar"><i></i></i>'; el.dataset.html = html; }
-  el.querySelector(".cb-bar i").style.width = (f * 100).toFixed(1) + "%";
-  el.classList.toggle("hot", combo.n >= 3);
-}
-setInterval(renderCombo, 5000);
-setTimeout(renderCombo, 1500);
-
 function findSessionByText(text) {
   for (const s of snap.seats) for (const x of s.sessions) if (text && text.startsWith(x.name)) return x.id;
   return null;
@@ -647,27 +509,6 @@ function startPolling() { if (pollTimer) return; pollOnce(); pollTimer = setInte
 function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
 
 // ------------------------------------------------------------------------------------------------ header & latest
-// The office level chip in the header, and a celebration when the office levels up (never on a reload).
-let olSeen = store.get("officeLevel", 0);
-function renderOfficeLevel() {
-  const ol = officeLevel(snap.seats), b = $("officeLvl");
-  if (!snap.seats.some(s => s.career)) { b.hidden = true; return; }
-  b.hidden = false;
-  const r = 9, len = 2 * Math.PI * r;
-  const html = `<svg viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="${r}" class="trk"/><circle cx="11" cy="11" r="${r}" class="val" stroke-dasharray="${(len * ol.progress).toFixed(1)} ${len.toFixed(1)}"/></svg><span>Lv ${ol.level}</span>`;
-  if (b.dataset.html !== html) { b.innerHTML = html; b.dataset.html = html; }
-  b.title = `Office level ${ol.level}: ${(ol.next - ol.xp).toLocaleString()} XP to level ${ol.level + 1}${ol.upcoming ? ` · next unlock: ${ol.upcoming.name} at level ${ol.upcoming.level}` : ""}`;
-  b.setAttribute("aria-label", b.title);
-  if (olSeen && ol.level > olSeen) {
-    const got = UNLOCKS_BY_LEVEL(olSeen, ol.level);
-    for (const s of snap.seats) fxNow().celebrate(s.id, null, "Level up!");     // confetti in every room
-    if (prefs.view === "floor") fxNow().banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
-    sound.play("levelup");
-    toast(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
-    giftBox.grant(null, "office", "epic");
-  }
-  if (ol.level > olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }   // only rises: a dip never re-celebrates
-}
 $("officeLvl").addEventListener("click", () => go({ kind: "office" }));
 
 let badgeN = -1;
@@ -1110,6 +951,22 @@ const landFocus = (items) => items.map(it => ({ ...it, run: () => { it.run(); se
 $("btnPalette").addEventListener("click", () => snap && openPalette(landFocus(paletteItems())));
 $("btnHire").addEventListener("click", () => go({ kind: "hire" }));
 $("btnMenu").addEventListener("click", (e) => { e.stopPropagation(); openMenu(); });
+// The code everybody knows (↑ ↑ ↓ ↓ ← → ← → B A) throws a party on the floor, and a secret badge for finding it.
+const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
+let konami = 0;
+document.addEventListener("keydown", (e) => {
+  konami = e.key === KONAMI[konami] ? konami + 1 : e.key === KONAMI[0] ? 1 : 0;
+  if (konami < KONAMI.length) return;
+  konami = 0;
+  if (!snap || replay.active()) return;
+  setView("floor");
+  office.setHappy(true);
+  for (const s of snap.seats) office.celebrate(s.id, null, "Party!");
+  office.banner("Old school!", "↑ ↑ ↓ ↓ ← → ← → B A", "#ff4fd8");
+  sound.play("happy");
+  if (!DEMO) badge(award("old_school"));
+  setTimeout(() => office.setHappy(giftBox.happy()), 20000);   // back to normal (or to the real happy hour)
+});
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap) openPalette(landFocus(paletteItems())); return; }
   // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).

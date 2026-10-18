@@ -91,7 +91,7 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   nothing fetched.
 - **Bug Squash**: the lounge's arcade cabinet plays a 30-second game of squashing bugs (not features) on a code
   editor, for a gift when you beat your best.
-- **Badges for you**: eighteen of them, from *Inbox zero* and *Hiring manager* to *Collector* and *Night owl*.
+- **Badges for you**: nineteen of them (one a secret), from *Inbox zero* and *Hiring manager* to *Collector* and *Night owl*.
 - **Seasons**: pumpkins and bats for Halloween, lamps and a rangoli for Diwali, a tree and snow in December.
 - **Combos**: reports and finished lanes within 15 minutes of each other chain into a combo (×2, ×3, …) with a timer
   draining on the floor and rising chimes.
@@ -232,7 +232,7 @@ samples, the news, the message log and each seat's career. Lanes and checkpoints
 | Live sessions | `<seat>/sessions/<pid>.json`. A session counts only if its pid runs and its kernel start time matches. |
 | What a session is doing | Its transcript, read incrementally |
 | History and stats | One sample a minute, kept for 24 hours |
-| Codex seat | `~/.codex/sessions` rollouts and the rate limits Codex records |
+| Codex seat | `~/.codex/sessions` rollouts and the rate limits Codex records. Codex lanes run `codex exec` with a workspace-write sandbox (or a `gpt` wrapper, when one is installed). |
 
 ## Safety
 

@@ -1,0 +1,178 @@
+// The game on top of the office: today's goals and their streak, CEO badges, the weekly challenge, the visit streak,
+// work anniversaries, combos and the office level chip. Celebrations go to the floor (never over a replay), with a
+// chime and a toast; earned-for-sure gifts go to the gift box. The rules live in goals.js, badges.js and unlocks.js.
+import { $, toast } from "./util.js";
+import { icon } from "./icons.js";
+import { sound } from "./sound.js";
+import { goals, streak, weekly } from "./goals.js";
+import { award } from "./badges.js";
+import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
+
+const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {} };
+const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
+
+export function makeGame(ctx) {
+  const { app, office, panels, replay, store, DEMO, prefs, gifts, view, renderPanel } = ctx;
+  const fxNow = () => (replay.active() ? NOFX : office);   // floor effects for live news: none while replaying
+
+  // A daily goal finishing while the office is open gets a banner, a chime and a toast. Goals already done when the page
+  // opens are only noted, so a reload never re-celebrates them.
+  let goalsSeen = null;
+  function cheerGoals(st) {
+    const gl = goals(st);
+    if (!gl) return;
+    const day = st.day || "";
+    if (!goalsSeen || goalsSeen.day !== day) {
+      const kept = store.get("goalsSeen", {});
+      goalsSeen = { day, ids: new Set(kept.day === day ? kept.ids || [] : gl.filter(g => g.done).map(g => g.id)) };
+      store.set("goalsSeen", { day, ids: [...goalsSeen.ids] });
+    }
+    if (gl.every(g => g.done) && day) {   // remember finished days for the streak
+      const days = store.get("goalDays", []);
+      if (!days.includes(day)) store.set("goalDays", [...days, day].slice(-90));
+    }
+    const fresh = gl.filter(g => g.done && !goalsSeen.ids.has(g.id));
+    if (fresh.length && gl.every(x => x.done) && !DEMO) { badge(award("clean_sweep")); if (streak(store.get("goalDays", []), day) >= 3) badge(award("consistent")); }
+    if (fresh.length) {   // one celebration per refresh, however many goals finished in it
+      fresh.forEach(g => goalsSeen.ids.add(g.id));
+      const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
+      if (prefs.view === "floor") fxNow().banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
+      if (all) gifts.grant(null, "goals", "rare");
+      sound.play(all ? "levelup" : "achievement");
+      toast(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
+    }
+    if (fresh.length) { store.set("goalsSeen", { day, ids: [...goalsSeen.ids] }); if (view().kind === "ceo") renderPanel(true); }
+  }
+
+  // A CEO badge (ui/badges.js) was earned: a chime and a toast that opens Your office.
+  function badge(b) {
+    if (!b) return;
+    setTimeout(() => { sound.play("achievement"); toast(`Badge earned: ${b.name}. ${b.desc}`, "good", { ic: b.icon, ms: 6500 }); if (view().kind === "office") renderPanel(true); }, 900);
+  }
+  // The weekly challenge finishing: one celebration per week (per browser), never in the demo.
+  function cheerWeekly() {
+    const w = weekly(app.weekCache());
+    if (!w || w.calibrating || !w.done || DEMO) return;
+    const seen = store.get("weeklyDone", "");
+    if (seen === w.week) return;
+    store.set("weeklyDone", w.week);
+    if (prefs.view === "floor") fxNow().banner("Record week!", `${w.have} reports: you beat last week's ${w.last}`, "#ff7a45");
+    sound.play("levelup");
+    toast(`Record week: ${w.have} reports, beating last week's ${w.last}.`, "good", { ic: "flame", ms: 7000 });
+    badge(award("record_week"));
+    gifts.grant(null, "week", "epic");
+  }
+
+  // The visit streak: days in a row this browser has opened the office (a flame by the level chip from two days on).
+  let visits = 0;
+  function visitStreak() {
+    const d = new Date(), key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+    const days = new Set(store.get("visits", []));
+    days.add(key(d));
+    let n = 0; const c = new Date(d);
+    while (days.has(key(c))) { n++; c.setDate(c.getDate() - 1); }
+    store.set("visits", [...days].sort().slice(-n));   // only the current run matters, however long it gets
+    const el = $("visits");
+    el.hidden = n < 2;
+    el.innerHTML = `${icon("flame", 14)}${n}`;
+    el.title = `${n} days in a row: you have checked on the office every day.`;
+    el.setAttribute("aria-label", el.title);
+    if (n >= 7 && !DEMO) badge(award("regular"));
+    visits = n;
+    return n;
+  }
+
+  // Work anniversaries: a character's first week, month, 100 days and year at the office (from its career's start) get a
+  // banner, confetti in its room and a line from it, once each (per browser), never in the demo.
+  const ANNIVERSARIES = [[7, "one week"], [30, "one month"], [100, "100 days"], [365, "one year"]];
+  function anniversaries() {
+    if (DEMO || replay.active()) return;
+    const seen = store.get("anniversaries", {});
+    for (const s of app.snap().seats) {
+      const since = s.career && s.career.since;
+      if (!since) continue;
+      const days = Math.floor((app.snap().now - since) / 86400);
+      const hit = ANNIVERSARIES.filter(([d]) => days >= d && days < d + 2).pop();   // on the day (or the day after)
+      if (!hit || seen[`${s.id}:${hit[0]}`]) continue;
+      seen[`${s.id}:${hit[0]}`] = 1; store.set("anniversaries", seen);
+      const who = panels.persona(s);
+      office.celebrate(s.id, null, "Anniversary!");
+      if (prefs.view === "floor") office.banner("Happy anniversary!", `${who.name}: ${hit[1]} at the office`, s.color);
+      office.sayAtSeat(s.id, `${hit[1][0].toUpperCase() + hit[1].slice(1)} here. Thanks, boss!`, 6000);
+      toast(`${who.name} has been at the office for ${hit[1]}.`, "good", { ic: "calendar", ms: 6000 });
+      break;                                            // one at a time
+    }
+  }
+
+  function checkBadges() {
+    const h = new Date().getHours();
+    badge(award("welcome"));
+    if (h < 4) badge(award("night_owl"));
+    if (h >= 5 && h < 7) badge(award("early_bird"));
+    if (app.snap().seats.length && panels.needsCount() === 0) badge(award("inbox_zero"));
+  }
+
+  // The combo: reports and finished lanes within 15 minutes of each other chain up (×2, ×3, …). The floor shows the
+  // combo with a bar draining toward its end; the day's best combo is kept per browser.
+  const COMBO_WINDOW = 15 * 60;
+  let combo = store.get("combo", { n: 0, until: 0, best: 0, day: "" });
+  function comboHit(e) {
+    const now = e.ts || Date.now() / 1000, day = new Date().toDateString();
+    if (combo.day !== day) combo = { n: 0, until: 0, best: 0, day };
+    combo.n = now < combo.until ? combo.n + 1 : 1;
+    combo.until = now + COMBO_WINDOW;
+    const best = combo.n > combo.best && combo.n >= 2;
+    combo.best = Math.max(combo.best, combo.n);
+    store.set("combo", combo);
+    if (combo.n >= 3 && !DEMO) badge(award("hot_streak"));
+    if (combo.n === 3 || combo.n === 5) gifts.grant(e.seat, "combo");
+    if (combo.n >= 2) {
+      setTimeout(() => sound.play("combo", combo.n), 700);
+      const word = combo.n >= 5 ? "Unstoppable!" : combo.n >= 4 ? "On fire!" : combo.n >= 3 ? "Hot streak!" : "Combo!";
+      if (combo.n >= 3 && prefs.view === "floor") fxNow().banner(`Combo ×${combo.n}`, word + (best ? " A new best today." : ""), "#ff7a45");
+      toast(`Combo ×${combo.n}: ${word}`, "good", { ic: "flame", ms: 4500 });
+    }
+    renderCombo();
+  }
+  function renderCombo() {
+    let el = document.querySelector(".combo");
+    const now = Date.now() / 1000, live = combo.n >= 2 && now < combo.until;
+    if (!live) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement("div"); el.className = "combo"; el.setAttribute("role", "status");
+      el.title = "Reports and finished lanes within 15 minutes of each other keep the combo going";
+      document.querySelector(".floor-frame").appendChild(el);
+    }
+    const left = Math.max(0, combo.until - now), f = left / COMBO_WINDOW;
+    const html = `<span class="cb-x">×${combo.n}</span><span class="cb-w"><b>Combo</b><small>${Math.ceil(left / 60)} min left${combo.best > combo.n ? ` · best ×${combo.best}` : ""}</small></span>`;
+    if (el.dataset.html !== html) { el.innerHTML = html + '<i class="cb-bar"><i></i></i>'; el.dataset.html = html; }
+    el.querySelector(".cb-bar i").style.width = (f * 100).toFixed(1) + "%";
+    el.classList.toggle("hot", combo.n >= 3);
+  }
+
+  // The office level chip in the header, and a celebration when the office levels up (never on a reload).
+  let olSeen = store.get("officeLevel", 0);
+  function renderOfficeLevel() {
+    const ol = officeLevel(app.snap().seats), b = $("officeLvl");
+    if (!app.snap().seats.some(s => s.career)) { b.hidden = true; return; }
+    b.hidden = false;
+    const r = 9, len = 2 * Math.PI * r;
+    const html = `<svg viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="${r}" class="trk"/><circle cx="11" cy="11" r="${r}" class="val" stroke-dasharray="${(len * ol.progress).toFixed(1)} ${len.toFixed(1)}"/></svg><span>Lv ${ol.level}</span>`;
+    if (b.dataset.html !== html) { b.innerHTML = html; b.dataset.html = html; }
+    b.title = `Office level ${ol.level}: ${(ol.next - ol.xp).toLocaleString()} XP to level ${ol.level + 1}${ol.upcoming ? ` · next unlock: ${ol.upcoming.name} at level ${ol.upcoming.level}` : ""}`;
+    b.setAttribute("aria-label", b.title);
+    if (olSeen && ol.level > olSeen) {
+      const got = UNLOCKS_BY_LEVEL(olSeen, ol.level);
+      for (const s of app.snap().seats) fxNow().celebrate(s.id, null, "Level up!");     // confetti in every room
+      if (prefs.view === "floor") fxNow().banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
+      sound.play("levelup");
+      toast(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
+      gifts.grant(null, "office", "epic");
+    }
+    if (ol.level > olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }   // only rises: a dip never re-celebrates
+  }
+
+  setInterval(renderCombo, 5000);
+  setTimeout(renderCombo, 1500);
+  return { cheerGoals, badge, cheerWeekly, visitStreak, anniversaries, checkBadges, comboHit, renderCombo, renderOfficeLevel, visits: () => visits };
+}

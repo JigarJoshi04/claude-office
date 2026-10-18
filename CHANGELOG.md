@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.16.0] - 2026-10-18
+
+### Added
+- Codex lanes run on any machine with the Codex CLI: `codex exec` with a workspace-write sandbox, or the `gpt` wrapper
+  when one is installed. Before, hiring on the Codex seat needed that wrapper.
+- A secret badge, and a party on the floor for whoever enters the code everybody knows.
+
+### Changed
+- The game layer (goals, badges, the weekly challenge, streaks, anniversaries, combos and the level chip) moved from
+  `web/app.js` into `web/ui/game.js`.
+
 ## [3.15.0] - 2026-10-18
 
 ### Added
