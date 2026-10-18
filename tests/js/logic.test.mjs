@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { officeLevel, xpForOffice, UNLOCKS } from "../../web/engine/unlocks.js";
-import { goals, streak } from "../../web/ui/goals.js";
+import { goals, goalsFor, streak, POOL } from "../../web/ui/goals.js";
 import { capFor, seatsOf, seatSpot, deskFor, planFor, computeLayout, pathTo } from "../../web/engine/scene.js";
 
 const seat = (xp, id = "s" + xp) => ({ id, career: xp == null ? null : { xp } });
@@ -28,13 +28,26 @@ test("unlocks are ordered and unique", () => {
   assert.equal(officeLevel([seat(xpForOffice(99))]).upcoming, null);
 });
 
-test("daily goals read the Today numbers", () => {
+test("each day draws three different goals, the same for everyone", () => {
+  const days = Array.from({ length: 60 }, (_, i) => new Date(Date.UTC(2026, 9, 1 + i)).toISOString().slice(0, 10));
+  const seen = new Set();
+  for (const d of days) {
+    const g = goalsFor(d);
+    assert.equal(g.length, 3);
+    assert.equal(new Set(g.map(x => x.id.split("-")[0])).size, 3, `${d}: three different kinds`);
+    assert.deepEqual(goalsFor(d).map(x => x.id), g.map(x => x.id));
+    g.forEach(x => seen.add(x.id.split("-")[0]));
+  }
+  assert.equal(seen.size, POOL.length, "every kind of goal comes up over two months");
+});
+
+test("goals read the Today numbers", () => {
   assert.equal(goals(null), null);
   assert.equal(goals({ unavailable: true }), null);
-  const g = goals({ office: { reports: 5 }, seats: { a: { tool_calls: 600, active_min: 100 }, b: { tool_calls: 399, active_min: 10 } } });
-  assert.deepEqual(g.map(x => x.done), [true, false, false]);
-  assert.equal(g[1].text, "999 of 1,000");
-  assert.equal(g[2].text, "1 h 50 of 5 h");
+  const st = { day: "2026-10-18", office: { reports: 50, sessions: 50, lanes_hired: 9 }, seats: { a: { tool_calls: 5000, active_min: 900 }, b: { tool_calls: 1, active_min: 5 }, c: { active_min: 1 }, d: { active_min: 1 } } };
+  assert.ok(goals(st).every(g => g.done && g.text === "Done" && g.f === 1));
+  const none = goals({ day: "2026-10-18", office: {}, seats: {} });
+  assert.ok(none.every(g => !g.done && g.f === 0 && / of /.test(g.text)));
 });
 
 test("a goal streak counts consecutive finished days, today or up to yesterday", () => {

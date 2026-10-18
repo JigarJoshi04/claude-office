@@ -477,7 +477,7 @@ function onNews(e) {
     case "limit": office.alarm(e.seat, "Out of plan"); if (who) office.sayAtSeat(e.seat, line(who, "limit"), 8000); teammateReacts(e, "limit"); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;
     case "login": office.alarm(e.seat, "Logged out"); sound.play("bad"); toast(text, "bad"); notify("Seat logged out", text); break;
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
-    case "reset": toast(text, "good"); if (who) office.sayAtSeat(e.seat, line(who, "reset"), 6000); break;
+    case "reset": toast(text, "good"); office.celebrate(e.seat, null, "Fresh plan!"); sound.play("arrive"); if (who) office.sayAtSeat(e.seat, line(who, "reset"), 6000); break;
     case "stuck": if (who) office.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
     case "levelup":
     case "achievement": {

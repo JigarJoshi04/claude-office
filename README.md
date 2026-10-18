@@ -104,7 +104,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - *Needs you*, grouped per seat ("Vega is out of plan: 2 sessions paused"), and each item with a one-click fix: copy
   the login command, open the chat, open the lane.
 - Your team as one row per character: face, level, mood in a word, and a bar for the plan it has left.
-- **Today's goals**: three daily targets (reports filed, tool calls, hours of agent work) as rings. Finishing one
+- **Today's goals**: three new targets every day, drawn from six kinds (reports, tool calls, agent hours, sessions,
+  lanes hired, characters at work) at three difficulties, as rings. Finishing one
   celebrates on the floor; finishing all three every day builds a streak.
 - *While you were away*: after an hour or more away, one line says what happened since you last looked (reports
   filed, level-ups, trophies, lanes finished, limits hit, anything blocked); open it for the items to read first.
