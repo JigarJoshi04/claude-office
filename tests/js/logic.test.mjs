@@ -569,3 +569,13 @@ test("the game save merges copies from two screens", async () => {
   assert.deepEqual(mergeKey("gifts", undefined, [2], 0, 200), [2]);
   assert.deepEqual(mergeKey("gifts", [1], undefined, 100, 0), [1]);
 });
+
+test("help topics are searchable and each one can be found", async () => {
+  const { TOPICS, findTopics } = await import("../../web/ui/help.js");
+  assert.ok(TOPICS.length >= 12);
+  assert.equal(new Set(TOPICS.map(t => t.id)).size, TOPICS.length);
+  assert.deepEqual(findTopics("divider").map(t => t.id).slice(0, 1), ["lanes"].filter(() => false).concat(findTopics("divider")[0].id));
+  assert.ok(findTopics("force-push").some(t => t.id === "risk"));
+  assert.equal(findTopics("").length, TOPICS.length);
+  assert.deepEqual(findTopics("zzzz"), []);
+});

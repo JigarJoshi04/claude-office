@@ -13,6 +13,7 @@ import { SETS, setsDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
 import { md } from "./md.js";
 import { pageHtml as scrapHtml, bindPage as bindScrap } from "./scrapbook.js";
 import { exportSave, importSave } from "./sync.js";
+import { helpHtml } from "./help.js";
 import { seasonFor, SEASON_NAME } from "../engine/season.js";
 import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
@@ -32,7 +33,7 @@ const EVENT_ICON = { levelup: "star", achievement: "trophy", arrive: "play", lea
 export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
   let hireDraft = store.get("hireDraft", { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true });
-  let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null, egressData = null;
+  let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null, egressData = null, helpQuery = "";
   let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
   const sessTab = new Map();
   const chatFind = new Map();     // session id -> the text being searched for in its chat
@@ -392,7 +393,7 @@ export function makePanels(app) {
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
         <button data-go="news">${icon("news", 16)}News</button><button data-go="trophies">${icon("trophy", 16)}Trophies</button>
-        <button data-go="services">${icon("server", 16)}Services</button><button data-go="cabinet">${icon("files", 16)}Filing cabinet</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="doctor">${icon("heart", 16)}Doctor</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
+        <button data-go="services">${icon("server", 16)}Services</button><button data-go="cabinet">${icon("files", 16)}Filing cabinet</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="doctor">${icon("heart", 16)}Doctor</button><button data-go="help">${icon("sparkles", 16)}Help</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
@@ -1777,6 +1778,13 @@ export function makePanels(app) {
     draftHire: (d) => { hireDraft = { ...hireDraft, ...d }; store.set("hireDraft", hireDraft); },
     needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml,
     bakeoff,
+    help: (v) => ({ html: helpHtml({ crumbs, topic: v.topic, query: helpQuery }),
+      bind(root) {
+        const f = root.querySelector("#helpFind");
+        if (f) f.addEventListener("input", debounce(() => { helpQuery = f.value; app.rerender(true); const g = document.getElementById("helpFind"); if (g) { g.focus(); g.setSelectionRange(g.value.length, g.value.length); } }, 150));
+        root.querySelectorAll("[data-help-go]").forEach(b => b.addEventListener("click", () => app.go(JSON.parse(b.dataset.helpGo))));
+        if (v.topic) { const t = root.querySelector(`[data-topic="${CSS.escape(v.topic)}"]`); if (t) t.scrollIntoView({ block: "start" }); }
+      } }),
     scrapbook: () => ({ html: scrapHtml({ crumbs, privacy: app.privacy() }),
       bind(root) { bindScrap(root, { dialog: document.getElementById("dialog"), rerender: () => app.rerender(true), privacy: app.privacy() }); } }), persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"

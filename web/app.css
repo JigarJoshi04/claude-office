@@ -1758,3 +1758,7 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .bake-h { display: flex; align-items: center; gap: 8px; } .bake-h b { font: 700 22px var(--mono); }
 .bake-col .facts { margin: 0; } .bake-col .quote { margin: 0; }
 .check.bake-t { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; font-size: 14px; }
+/* Help (ui/help.js). */
+.help-t { border-radius: 12px; background: var(--surface-2); padding: 0 14px; } .help-t + .help-t { margin-top: 8px; }
+.help-t summary { display: flex; align-items: center; gap: 10px; padding: 12px 0; cursor: pointer; list-style: none; } .help-t summary::-webkit-details-marker { display: none; }
+.help-t summary svg { color: var(--accent); flex: none; } .help-t p { margin: 0 0 10px; line-height: 1.55; color: var(--text-2, var(--text)); } .help-t .btn { margin-bottom: 12px; }

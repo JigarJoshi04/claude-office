@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.124.0] - 2026-10-19
+
+### Added
+- Help: sixteen short topics on how the office works (seats and plan windows, Needs you, lanes, the divider, talking
+  to a session, tokens, the trust check, the risky-action watch, the analyst, the game, share-safe, screens and clips,
+  what leaves the machine, the terminal, the keyboard), searchable, each with Show me where there is a page for it.
+  From the briefing's links, `#help`, or Ctrl+K ("Help: …").
+
 ## [3.123.0] - 2026-10-19
 
 ### Added

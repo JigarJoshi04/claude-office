@@ -6,6 +6,7 @@ import * as scrapbook from "./ui/scrapbook.js";
 import { openStandupMode } from "./ui/standupmode.js";
 import { makeRecorder } from "./ui/recorder.js";
 import { syncSave } from "./ui/sync.js";
+import { TOPICS as HELP_TOPICS } from "./ui/help.js";
 import { openPoster } from "./ui/poster.js";
 import { makeDirector } from "./ui/director.js";
 import { makePanels } from "./ui/panels.js";
@@ -408,6 +409,7 @@ function hashFor(v) {
   if (v.kind === "session") return "#session=" + encodeURIComponent(v.seat) + "/" + encodeURIComponent(v.id);
   if (v.kind === "lane") return "#lane=" + encodeURIComponent(v.id);
   if (v.kind === "bakeoff") return "#bakeoff=" + encodeURIComponent(v.id);
+  if (v.kind === "help") return "#help" + (v.topic ? "=" + encodeURIComponent(v.topic) : "");
   if (v.kind === "project") return "#project=" + encodeURIComponent(v.name);
   return v.kind === "ceo" ? "#" : "#" + v.kind;
 }
@@ -422,6 +424,7 @@ function viewFromHash() {
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
   if (k === "bakeoff") return { kind: "bakeoff", id: rest.slice(0, 20) };
+  if (k === "help") return { kind: "help", topic: rest ? rest.slice(0, 30) : null };
   return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "scrapbook", "office", "loose", "prs", "inbox", "cabinet", "doctor"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
@@ -1346,6 +1349,7 @@ function paletteItems() {
     { icon: icon("star", 16), label: "Scrapbook", keywords: "photos moments memories album pictures", run: () => go({ kind: "scrapbook" }) },
     { icon: icon("play", 16), label: "Record a clip of the floor", hint: "15 s", keywords: "record video clip webm capture gif", run: () => { setView("floor"); recorder.clip(15); } },
     { icon: icon("rewind", 16), label: "Record today's timelapse", keywords: "record video timelapse day replay webm", run: () => { setView("floor"); recorder.timelapse(24); } },
+    ...HELP_TOPICS.map(t => ({ icon: icon(t.icon, 16), label: `Help: ${t.title}`, keywords: "help how what explain " + t.text.slice(0, 160), run: () => go({ kind: "help", topic: t.id }) })),
     { icon: icon("users", 16), label: "Standup on the floor", keywords: "standup morning lounge gather walk", run: () => { setView("floor"); standupScene(true); } },
     { icon: icon("tv", 16), label: "Standup mode", hint: "2 min", keywords: "standup present screen share meeting slides morning", run: () => presentStandup() },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
