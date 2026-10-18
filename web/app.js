@@ -2,6 +2,7 @@
 import { createOffice } from "./office.js";
 import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss, setToastGate, clock } from "./ui/util.js";
 import { configureGoals, goals } from "./ui/goals.js";
+import { openPoster } from "./ui/poster.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
@@ -852,47 +853,8 @@ function renderRightNow() {
 // ------------------------------------------------------------------------------------------------ menu
 // A PNG of the floor with a footer naming each character, its level and what it is doing. Only pixel art and
 // character names go in: no session names, topics or accounts, so it is safe to share.
-async function savePicture() {
-  const { canvas: src, W: worldW } = office.picture();
-  if (!src || !snap) return;
-  const k = Math.max(1, Math.round(1600 / src.width)), w = src.width * k, fh = src.height * k, foot = 132;
-  const c = document.createElement("canvas"); c.width = w; c.height = fh + foot;
-  const g = c.getContext("2d");
-  g.imageSmoothingEnabled = false;
-  g.fillStyle = "#0a0c12"; g.fillRect(0, 0, c.width, c.height);
-  g.drawImage(src, 0, 0, w, fh);
-  try { await Promise.all([document.fonts.load("26px Silkscreen"), document.fonts.load("600 17px Inter"), document.fonts.load("500 15px Inter")]); } catch { /* system fonts */ }
-  const u = w / worldW;                 // the neon sign is page text on the floor, so paint it in (office.js: 254,10 92x24)
-  g.save(); g.font = `${Math.round(6.2 * u)}px Silkscreen, monospace`; g.textAlign = "center"; g.textBaseline = "middle";
-  g.shadowColor = "#ff4fd8"; g.shadowBlur = 5 * u; g.fillStyle = "#ffd8fb";
-  g.fillText((snap.office.name || "Claude Office").toUpperCase(), 300 * u, 22 * u); g.restore();
-  g.fillStyle = "#eef0f6"; g.font = "26px Silkscreen, monospace"; g.textBaseline = "alphabetic";
-  g.fillText((snap.office.name || "Claude Office").toUpperCase(), 32, fh + 50);
-  const t = snap.totals || {};
-  g.font = "500 15px Inter, sans-serif"; g.fillStyle = "#9298ae";
-  g.fillText(`${new Date().toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })} · ${t.working || 0} working, ${t.sessions || 0} sessions`, 32, fh + 78);
-  g.textAlign = "right"; g.fillText("github.com/JigarJoshi04/claude-office", w - 32, fh + 50); g.textAlign = "left";
-  let x = 32;
-  for (const s of snap.seats) {
-    const p = panels.persona(s), lv = s.career ? ` · Lv ${s.career.level}` : "";
-    const label = `${p.name}${lv}`, mood = (SEAT_LABEL[s.status] || s.status || "").toLowerCase();
-    g.font = "600 17px Inter, sans-serif"; const lw = g.measureText(label).width;
-    g.font = "500 14px Inter, sans-serif"; const mw = g.measureText(mood).width;
-    if (x + 22 + lw + 8 + mw > w - 32) break;
-    g.fillStyle = s.color; g.beginPath(); g.arc(x + 6, fh + 107, 6, 0, Math.PI * 2); g.fill();
-    g.font = "600 17px Inter, sans-serif"; g.fillStyle = "#eef0f6"; g.fillText(label, x + 20, fh + 113);
-    g.font = "500 14px Inter, sans-serif"; g.fillStyle = "#9298ae"; g.fillText(mood, x + 20 + lw + 8, fh + 113);
-    x += 20 + lw + 8 + mw + 34;
-  }
-  c.toBlob((b) => {
-    if (!b) { toast("Could not make the picture.", "bad"); return; }
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(b); const d = new Date(); a.download = `claude-office-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.png`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-    toast("Saved a picture of the office.", "good");
-  }, "image/png");
-}
+// "Save a picture of the office": the floor as a poster, sized for a post (ui/poster.js).
+function savePicture() { openPoster(app, office, (s) => panels.persona(s)); }
 
 // The day card (ui/daycard.js): shown in a dialog with Save and Copy, so it can go straight into a post or a channel.
 async function shareDay() {

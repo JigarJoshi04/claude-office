@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.77.0] - 2026-10-19
+
+### Added
+- Poster mode for "Save a picture of the office": pick a size (as it is, a 16:9 slide, a square post or a phone
+  story), add the date in a corner if you like, then save or copy. Each room's nameplate (name, level, status and
+  plan left) and the lounge, meeting and garden labels are painted into the picture.
+
+### Fixed
+- The office's name in the picture is painted on the lobby sign, where it belongs (it landed over the rooms).
+
 ## [3.76.0] - 2026-10-19
 
 ### Added

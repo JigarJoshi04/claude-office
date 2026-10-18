@@ -1547,7 +1547,12 @@ export function createOffice(stage, handlers) {
     setWalkBoost(k) { walkBoost = Math.max(1, Math.min(8, k || 1)); },
     // The next update seats everyone where they belong at once (no walking in or out): for jumps in time (replay).
     reset() { for (const a of agents.values()) if (a.tagEl) a.tagEl.remove(); agents.clear(); leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; }); fresh.clear(); first = true; },
-    picture: () => ({ canvas, W }),   // W is the current plan's width    // the whole floor, whatever the camera shows (for "Save a picture")
+    // The whole floor, whatever the camera shows, and where its page text stands, to paint in (ui/poster.js).
+    picture: () => ({ canvas, W, neon: { x: 6, y: 8, w: 70, h: 22 },
+      plates: L ? L.pods.map(p => ({ seat: p.seat.id, x: p.room.x + 12, y: p.room.y + p.room.h - 31, w: p.room.w - 24,
+        line: plateLine(p.seat, (p.seat.sessions || []).filter(x => x.live !== false)) })) : [],
+      labels: L ? [L.lounge && { text: "LOUNGE", x: L.lounge.x + 8, y: L.lounge.y + BACK_LABEL }, L.meet && { text: "MEETING", x: L.meet.x + 8, y: L.meet.y + BACK_LABEL },
+        ...L.open.map(o => ({ text: "GARDEN", x: o.x + 8, y: o.y + BACK_LABEL }))].filter(Boolean) : [] }),
     zoom(dir) { const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
     pan(dx, dy) { cam.tx += dx; cam.ty += dy; clampCam(cam); },
   };
