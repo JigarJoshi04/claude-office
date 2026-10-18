@@ -108,16 +108,16 @@ export async function dayCard({ snap, stats, persona, goalDays }) {
 }
 
 // The text, shortened with an ellipsis to fit maxW at the current font.
-function fit(g, text, maxW) {
+export function fit(g, text, maxW) {
   if (g.measureText(text).width <= maxW) return text;
   let t = text;
   while (t.length > 1 && g.measureText(t + "…").width > maxW) t = t.slice(0, -1);
   return t + "…";
 }
-function roundRect(g, x, y, w, h, r) {
+export function roundRect(g, x, y, w, h, r) {
   g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
 }
-function wrap(g, text, x, y, maxW, lh, lines) {
+export function wrap(g, text, x, y, maxW, lh, lines) {
   const words = text.split(" "); let line = "", n = 0;
   for (const w of words) {
     const t = line ? line + " " + w : w;

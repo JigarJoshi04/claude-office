@@ -64,6 +64,9 @@ export function createOffice(stage, handlers) {
   let clockAt = null;                  // replay's time (seconds), or null for now
   let seasonal = true;                 // Settings → Seasonal decorations
   let gifts = [];                      // gift boxes waiting on the floor: {id, seat, from, label}
+  let giftsSeen = null;                // ids already on the floor (null before the first list: those are simply there)
+  let couriers = [];                   // delivery people carrying new CEO-desk gifts in from the elevator
+  const carried = new Set();           // gift ids still in a courier's hands (not on the floor yet)
   let happy = false;                   // the day's happy hour: party lights in the lobby and corridors
   let sets = new Set();                // finished album sets (rarities): their rewards on the floor
   const said = new Map();              // session id -> {text, until, at}: personality lines
@@ -170,6 +173,7 @@ export function createOffice(stage, handlers) {
   const UFO_EVERY = 75000, UFO_FLIGHT = 12000;      // the epic set's saucer, out of step with the drone
   const ufoUp = (t) => sets.has("epic") && !reduced && (t + 31000) % UFO_EVERY > UFO_EVERY - UFO_FLIGHT;
   function walkingNow() {
+    if (couriers.length) return true;
     for (const a of agents.values()) if (a.mode === "walking" || a.shift) return true;
     return !!L && L.pods.some(p => p.targetY != null && p.y !== p.targetY);
   }
@@ -177,21 +181,41 @@ export function createOffice(stage, handlers) {
     const k = 1 - Math.exp(-dt * 9);                 // people slide along a resized desk; the desk glides up or down
     for (const a of agents.values()) if (a.shift) { a.shift -= a.shift * k; if (Math.abs(a.shift) < 0.3) a.shift = 0; }
     if (L) for (const p of L.pods) if (p.targetY != null && p.y !== p.targetY) { p.y += (p.targetY - p.y) * k; if (Math.abs(p.targetY - p.y) < 0.3) p.y = p.targetY; }
-    const move = (a) => {
-      if (!a.path.length) return true;
-      const [tx, ty] = a.path[0];
-      const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
-      const step = SPEED * walkBoost * dt;
-      if (Math.abs(dx) > Math.abs(dy)) a.facing = dx > 0 ? "right" : "left"; else a.facing = dy > 0 ? "down" : "up";
-      if (d <= step) { a.x = tx; a.y = ty; a.path.shift(); return !a.path.length; }
-      a.x += dx / d * step; a.y += dy / d * step;
-      return false;
-    };
+    const move = (a) => walkStep(a, dt);
     let settled = false;
     for (const a of agents.values()) if (a.mode === "walking" && move(a)) { a.mode = "seated"; settled = true; }
     for (const a of leavers) if (move(a)) { a.gone = true; openElevator(); }
     if (leavers.some(a => a.gone)) { leavers.filter(a => a.gone && a.tagEl).forEach(a => a.tagEl.remove()); leavers = leavers.filter(a => !a.gone); settled = true; }
+    for (const c of couriers) {
+      if (!walkStep(c, dt)) continue;
+      if (c.phase === "in") {                        // drop the box, then head back
+        carried.delete(c.gift); settled = true;
+        if (!reduced) burst(c.drop[0] + 6, c.drop[1] + 4, 8, "spark");
+        c.phase = "out"; c.path = c.back;
+      } else { c.gone = true; openElevator(); }
+    }
+    couriers = couriers.filter(c => !c.gone);
     if (settled) { ovKey = ""; renderOverlay(); }
+  }
+  // One step along a walker's path (top-left coordinates); true once it has arrived.
+  function walkStep(a, dt) {
+    if (!a.path.length) return true;
+    const [tx, ty] = a.path[0];
+    const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
+    const step = (a.speed || SPEED) * walkBoost * dt;
+    if (Math.abs(dx) > Math.abs(dy)) a.facing = dx > 0 ? "right" : "left"; else a.facing = dy > 0 ? "down" : "up";
+    if (d <= step) { a.x = tx; a.y = ty; a.path.shift(); return !a.path.length; }
+    a.x += dx / d * step; a.y += dy / d * step;
+    return false;
+  }
+  // A courier out of the elevator, down the clear lane between the palm and the CEO desk, to the gift's spot.
+  function sendCourier(p) {
+    const ex = ELEVATOR.x + 8, ey = ELEVATOR.y + 18, lane = 85, drop = [p.x - 12, p.y - 6];   // lane: clear of the palm, the board and the desk
+    const there = [[ex, WALK_Y], [lane, WALK_Y], [lane, drop[1]], drop];
+    carried.add(p.g.id);
+    couriers.push({ gift: p.g.id, color: p.color, x: ex, y: ey, path: there, back: [[lane, drop[1]], [lane, WALK_Y], [ex, WALK_Y], [ex, ey]],
+      drop, phase: "in", facing: "down", speed: 40, look: S.lookFor("courier", "#8a5a2a") });
+    openElevator();
   }
 
   // ------------------------------------------------------------------------------------- particles
@@ -242,8 +266,11 @@ export function createOffice(stage, handlers) {
     }
     if (happy) drawParty(reduced ? 0 : t);
     drawGifts(t);
-    const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers].sort((a, b) => a.y - b.y);
-    for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
+    const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers, ...couriers].sort((a, b) => a.y - b.y);
+    for (const a of walkers) {
+      S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
+      if (a.phase === "in") { S.rect(ctx, a.x + 2, a.y + 8, 7, 5, a.color); S.rect(ctx, a.x + 5, a.y + 8, 1, 5, "#ffd24a"); S.rect(ctx, a.x + 2, a.y + 8, 7, 1, "#ffffff"); }   // the box in both hands
+    }
     S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
     if (cat.mode === "sleep") S.drawZ(ctx, cat.x + 8, cat.y - 2, t);
     if (has("dog")) { S.drawDog(ctx, Math.round(dog.x), Math.round(dog.y), dog.mode, dog.facing, t); if (dog.mode === "sleep") S.drawZ(ctx, dog.x + 9, dog.y - 2, t); }
@@ -278,9 +305,10 @@ export function createOffice(stage, handlers) {
 
   // Gift boxes: a seat's in its room, above the nameplate (clear of the seasonal pumpkin); the morning delivery, swaps
   // and gifts from a seat that has left the plan wait in front of the CEO desk.
-  function giftSpots() {
+  function giftSpots(all = false) {
     const out = [], per = new Map();
     for (const g of gifts) {
+      if (!all && carried.has(g.id)) { per.set("", (per.get("") || 0) + 1); continue; }   // keeps its place while it is carried
       const pod = g.seat && L.pods.find(p => p.seat.id === g.seat), key = pod ? g.seat : "", k = per.get(key) || 0;
       per.set(key, k + 1);
       out.push(pod ? { g, x: pod.room.x + 26 + k * 15, y: pod.room.y + pod.room.h - 48, color: pod.seat.color, ribbon: "#ffffff" }
@@ -1129,7 +1157,14 @@ export function createOffice(stage, handlers) {
     officeLevel: () => ol,
     spotlight(id) { spot = id || null; },
     setSeasonal(on) { seasonal = !!on; },
-    setGifts(list) { gifts = list || []; ovKey = ""; renderOverlay(); },
+    setGifts(list) {
+      gifts = list || [];
+      const ids = new Set(gifts.map(g => g.id));
+      for (const id of [...carried]) if (!ids.has(id)) carried.delete(id);
+      if (giftsSeen && L && !reduced && !clockAt) for (const p of giftSpots(true)) if (!giftsSeen.has(p.g.id) && !(p.g.seat && L.pods.some(q => q.seat.id === p.g.seat))) sendCourier(p);
+      giftsSeen = ids;
+      ovKey = ""; renderOverlay();
+    },
     setHappy(on) { happy = !!on; },
     setSets(s) { sets = new Set(s || []); },
     // Confetti where a gift was, as it opens.

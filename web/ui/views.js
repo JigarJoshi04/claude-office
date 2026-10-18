@@ -134,7 +134,7 @@ function weekCard(app, shown) {
       <text class="ax" x="${x + 18}" y="${B + 18}" text-anchor="middle">${wd(d.day)}</text><title>${tip}</title></g>`;
   }).join("");
   const empty = last.every(d => !d.sessions && !d.reports && !d.tool_calls);
-  return `<div class="view-card week"><div class="section-h"><h4>Last 7 days</h4>
+  return `<div class="view-card week"><div class="section-h"><h4>Last 7 days</h4><button class="btn sm ghost" data-week-play title="Your week in review: a short story of the last seven days">${icon("play", 13)}Play the week</button><span class="grow"></span>
       <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(WEEK_METRICS).map(([k, [l]]) => `<button data-week-metric="${k}" class="${k === key ? "on" : ""}">${l}</button>`).join("")}</div></div>
     <div class="wk-head"><b>${fmt(now)}</b><span>${label.toLowerCase()} in the last 7 days</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% vs the week before</em>`}</div>
     <div class="wk-body"><svg class="wk" viewBox="0 0 ${W} ${H + T + 26}" role="img" aria-label="${label} per day for the last seven days"><line class="base" x1="0" x2="${W}" y1="${H + T}" y2="${H + T}"/>${bars}</svg>
@@ -160,6 +160,7 @@ function weekFacts(app, last) {
 // The view re-renders whole, so a bar or measure button used from the keyboard is focused again once it is back.
 let refocus = null;
 function bindWeek(el, app) {
+  const play = el.querySelector("[data-week-play]"); if (play) play.addEventListener("click", () => app.playWeek());
   el.querySelectorAll("[data-week-metric]").forEach(b => b.addEventListener("click", () => { refocus = `[data-week-metric="${b.dataset.weekMetric}"]`; app.setPref("weekMetric", b.dataset.weekMetric); renderStats(el, app); }));
   el.querySelectorAll("[data-week-day]").forEach(g => {
     const open = () => { const d = g.dataset.weekDay, day = d === app.weekCache().slice(-1)[0].day ? null : d; refocus = `[data-week-day="${d}"]`; app.setPref("statsDay", day); app.loadStats(day, true); };

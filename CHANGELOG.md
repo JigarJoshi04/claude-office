@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.11.0] - 2026-10-18
+
+### Added
+- Your week in review: the last seven days as a short story (reports and the change on the week before, agent hours,
+  the star of the week, new stickers, badges and goal days), with a picture to save or copy. It plays on the first
+  visit of a Monday, and from the menu, the palette or "Play the week" on the week chart. `?week=1` plays it in the
+  demo.
+- A courier brings gifts for the CEO desk out of the elevator and drops them off, including the morning delivery.
+
 ## [3.10.0] - 2026-10-18
 
 ### Added

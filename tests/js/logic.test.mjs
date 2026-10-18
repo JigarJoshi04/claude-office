@@ -228,3 +228,22 @@ test("gifts: grants go past the cap a little; sets finish with every sticker of 
   assert.equal(setsDone({ ...commons, rocket: { n: 2 } }).has("rare"), false);
   assert.equal(setsDone(Object.fromEntries(STICKERS.map(s => [s.id, { n: 1 }]))).size, 4);
 });
+
+test("the week in review sums the last seven days and what was collected in them", async () => {
+  const { weekSummary } = await import("../../web/ui/weekreview.js");
+  const days = Array.from({ length: 14 }, (_, i) => ({ day: `2026-10-${String(5 + i).padStart(2, "0")}`, reports: i < 7 ? 2 : 3, sessions: 1, active_min: 60, tool_calls: 10, mvp: i >= 7 ? (i % 2 ? "a" : "b") : null }));
+  days[9].mvp = "a";
+  const at = (d) => new Date(d + "T12:00:00").getTime() / 1000;
+  const w = weekSummary(days, { album: { duck: { n: 1, first: at("2026-10-13") }, mug: { n: 2, first: at("2026-10-01") } }, badges: { welcome: at("2026-10-18") }, goalDays: ["2026-10-04", "2026-10-15"] });
+  assert.equal(w.from, "2026-10-12");
+  assert.equal(w.to, "2026-10-18");
+  assert.equal(w.reports, 21);
+  assert.equal(w.prev, 14);
+  assert.equal(w.delta, 50);
+  assert.equal(w.hours, 7);
+  assert.deepEqual(w.stars, ["a"]);
+  assert.deepEqual(w.stickers, ["duck"]);
+  assert.deepEqual(w.badges, ["welcome"]);
+  assert.equal(w.goalDays, 1);
+  assert.equal(weekSummary(days.slice(-6)), null);
+});

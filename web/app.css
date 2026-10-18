@@ -1203,3 +1203,44 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .alb-set .as-bar i { display: block; height: 100%; border-radius: 99px; background: var(--rar); }
 .alb-set.on { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rar) 55%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--rar) 12%, var(--surface-2)), var(--surface-2) 70%); }
 .alb-set.on .as-ic { background: var(--rar); color: #1d1606; }
+
+/* ------------------------------------------------------------------ your week in review (3.11) */
+#dialog.week-review { width: min(460px, calc(100vw - 24px)); background: #120b24; color: #fff; overflow: hidden; }
+.wr { position: relative; min-height: min(620px, calc(100dvh - 80px)); display: grid; grid-template-rows: auto 1fr; padding: 14px 18px 22px;
+  background: radial-gradient(120% 60% at 80% 0%, rgba(255,79,216,.28), transparent 60%), radial-gradient(90% 60% at 0% 100%, rgba(91,141,239,.28), transparent 60%), linear-gradient(170deg, #1a0f33, #0b1a2e); }
+.wr-bars { display: flex; gap: 4px; padding-right: 40px; }
+.wr-bars i { flex: 1; height: 4px; border-radius: 99px; background: rgba(255,255,255,.22); overflow: hidden; }
+.wr-bars b { display: block; height: 100%; width: 0; background: #fff; border-radius: 99px; }
+.wr-x { position: absolute; top: 4px; right: 8px; color: #fff; z-index: 3; }
+.wr-stage { position: relative; z-index: 2; display: grid; align-content: center; pointer-events: none; }
+.wr-stage .btn, .wr-stage a { pointer-events: auto; }
+.wr-slide { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 18px 4px; animation: wrin .45s cubic-bezier(.2,.9,.3,1); }
+@keyframes wrin { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+.wr-eyebrow { font: 800 12px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: #ff9fd8; }
+.wr-title { margin: 0; font: 800 34px/1.1 Inter, sans-serif; letter-spacing: -.02em; }
+.wr-big { font: 900 112px/1 Inter, sans-serif; letter-spacing: -.04em; background: linear-gradient(180deg, #fff, #ffc6ec); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 6px 30px rgba(255,79,216,.35)); }
+.wr-big small { font-size: 40px; letter-spacing: 0; }
+.wr-sub { margin: 0; font-size: 17px; line-height: 1.45; color: #e6e1f5; max-width: 34ch; }
+.wr-sub b.up { color: #7df0ad; } .wr-sub b.down { color: #ff9b9b; }
+.wr-hint { margin: 0; font-size: 14.5px; color: #b6b0cc; max-width: 36ch; } .wr-hint b { color: #fff; } .wr-hint .ic { vertical-align: -2px; }
+.wr-team { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 10px 0 4px; }
+.wr-team .av { width: 52px; height: 52px; border-radius: 14px; background: color-mix(in srgb, var(--seat) 30%, #1a0f33); box-shadow: inset 0 0 0 2px var(--seat); }
+.wr-team .av canvas { width: 32px; height: 40px; margin-top: 10px; }
+.wr-stars { display: flex; gap: 18px; justify-content: center; margin: 8px 0; }
+.wr-star { display: grid; justify-items: center; gap: 10px; } .wr-star b { font-size: 24px; }
+.wr-star .av { width: 128px; height: 128px; border-radius: 28px; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--seat) 55%, #2a1650), #1a0f33);
+  box-shadow: 0 0 0 3px #ffd24a, 0 0 40px rgba(255,210,74,.45); }
+.wr-star .av canvas { width: 72px; height: 90px; margin-top: 24px; }
+.wr-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin: 6px 0; }
+.wr-tiles > div { display: grid; gap: 4px; padding: 16px 8px; border-radius: 16px; background: rgba(255,255,255,.07); }
+.wr-tiles b { font: 900 42px/1 Inter, sans-serif; } .wr-tiles span { font-size: 13px; color: #c9c2e0; }
+.wr-stickers { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.wr-stickers canvas { width: 54px; height: 54px; image-rendering: pixelated; }
+.wr-act { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+.wr-act .btn.ghost { color: #fff; }
+.wr-tap { position: absolute; top: 40px; bottom: 0; z-index: 1; width: 50%; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.wr-tap.prev { left: 0; cursor: w-resize; } .wr-tap.next { right: 0; cursor: e-resize; }
+.wr-tap:focus-visible { outline: 2px solid #ff9fd8; outline-offset: -6px; border-radius: 16px; }
+:root[data-motion="reduced"] .wr-slide { animation: none; }
+@media (max-width: 420px) { .wr-big { font-size: 88px; } .wr-title { font-size: 28px; } .wr-star .av { width: 104px; height: 104px; } .wr-star .av canvas { width: 60px; height: 75px; margin-top: 18px; } }

@@ -38,6 +38,7 @@ const P = {
   external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.5"/><path d="M20 3v5.5h-5.5"/>',
   play: '<path d="M7 4v16l13-8Z"/>',
+  download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
   pause: '<path d="M8 5v14M16 5v14"/>',
   rewind: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
   tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',

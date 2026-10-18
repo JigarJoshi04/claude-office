@@ -10,10 +10,11 @@ import { pulse, line, reaction, voice, binding, leftOf, banter } from "./ui/pers
 import { goals, streak, weekly } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
 import { dayCard } from "./ui/daycard.js";
-import { award, bump } from "./ui/badges.js";
+import { award, bump, earned } from "./ui/badges.js";
 import { startTour } from "./ui/tour.js";
 import { makeFloor } from "./ui/floor.js";
 import { makeGiftBox } from "./ui/giftbox.js";
+import { makeWeekReview } from "./ui/weekreview.js";
 import { hydrateStickers } from "./engine/stickers.js";
 import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
@@ -214,6 +215,8 @@ function tour() {
 const floor = makeFloor({ app, office, panels, replay, prefs, QS, DEMO, go, setView, badge: (b) => badge(b), award, zoomNow });
 const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView, prefs, forceHappy: QS.has("happy"), fullAlbum: QS.get("stickers") === "all", badge: (b) => badge(b), award, onAlbum: () => openAlbum() });
 app.gifts = giftBox;
+const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });
+app.playWeek = () => weekReview.play();
 // "Your office", scrolled to the sticker album.
 function openAlbum() { go({ kind: "office" }); requestAnimationFrame(() => { const a = document.getElementById("album"); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }); }
 
@@ -382,7 +385,7 @@ function apply(next) {
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   if (!DEMO) { checkBadges(); cheerWeekly(); anniversaries(); }   // the demo office never hands out badges
-  if (first) { visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); }
+  if (first) { visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
   if (!replay.active()) giftBox.daily();       // the first visit of a day finds a gift at the CEO desk
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
@@ -847,7 +850,7 @@ function openMenu(focusItem) {
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
-    + "<hr>" + item("daycard", "star", "Share today's card") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -871,6 +874,7 @@ function openMenu(focusItem) {
     else if (k === "checkpoint") checkpoint();
     else if (k === "tv") floor.setTv(true);
     else if (k === "daycard") shareDay();
+    else if (k === "week") weekReview.play();
     else if (k === "tour") tour();
     else if (k === "install") installApp();
     else if (k === "replay") { setView("floor"); replay.open(6); }
@@ -1037,7 +1041,8 @@ function paletteItems() {
     { icon: icon("gift", 16), label: "Sticker album", keywords: "stickers album gifts collection swap", run: () => openAlbum() },
     ...(giftBox.waiting().length ? [{ icon: icon("gift", 16), label: `Find the gift on the floor (${giftBox.waiting().length} waiting)`, keywords: "gift open present box", run: () => giftBox.seek() }] : []),
     { icon: icon("sparkles", 16), label: "Take the tour", keywords: "help onboarding guide tutorial how", run: () => tour() },
-    { icon: icon("star", 16), label: "Share today's card", keywords: "share picture day summary post card wrapped", run: () => shareDay() },
+    { icon: icon("star", 16), label: "Share today's card", keywords: "share picture day summary post card", run: () => shareDay() },
+    { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },
     { icon: icon("rewind", 16), label: "Replay the last 24 hours", keywords: "history playback rewind day yesterday", run: () => { setView("floor"); replay.open(24); } },
