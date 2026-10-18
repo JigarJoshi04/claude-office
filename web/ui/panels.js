@@ -29,7 +29,7 @@ export function makePanels(app) {
 
   const S = () => app.snap();
   const seatById = (id) => S().seats.find(s => s.id === id);
-  const P = (s) => personaFor(s, S().seats.indexOf(s));
+  const P = (s) => personaFor(s, S().seats.findIndex(x => x.id === s.id));
   const nameOf = (id) => { const s = seatById(id); return s ? P(s).name : id; };
   const STATUS_WORD = { READY: "ready for review", DONE: "done", BLOCKED: "blocked", FAILED: "failed", PARTIAL: "partly done", COMPLETE: "done", SUCCESS: "done" };
   const humanise = (text) => {

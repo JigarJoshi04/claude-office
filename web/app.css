@@ -782,6 +782,54 @@ dialog .db { padding: 16px 20px; max-height: 70vh; overflow: auto; }
 .lg-foot { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
 .cam button[aria-expanded="true"] { background: rgba(255,122,69,.9); color: #1b0c05; }
 
+/* ---- TV mode: the floor alone, full screen ---- */
+body.tv { height: 100vh; height: 100dvh; overflow: hidden; grid-template-rows: minmax(0, 1fr); }
+body.tv .top, body.tv .tabs, body.tv .dock, body.tv .panel, body.tv .splitter, body.tv .floor-hint { display: none !important; }
+body.tv .main { grid-template-columns: minmax(0, 1fr); padding: 0; height: 100%; }
+body.tv .viewport, body.tv #viewFloor { height: 100%; min-height: 0; }
+body.tv #viewFloor { display: flex; flex-direction: column; overflow: hidden; }
+body.tv #viewFloor .floor-frame { flex: 1; min-height: 0; padding-top: calc(54px * var(--ui-zoom, 1)); background: #070912; }
+body.tv #viewFloor .stage-scroll, body.tv #viewFloor .stage { height: 100%; width: 100%; }
+body.tv #viewFloor .stage { --fit: contain; border-radius: 0; box-shadow: none; }
+body.tv .stage-scroll .stage { width: 100%; }
+.tv-hud { position: absolute; left: 0; right: 0; top: 0; z-index: 8; display: flex; align-items: center; gap: 18px; height: 54px; padding: 0 20px; zoom: var(--ui-zoom, 1);
+  background: #070912; color: #eef0f6; pointer-events: none; border-bottom: 1px solid rgba(255,255,255,.06); }
+.tv-hud .tv-brand { font: 400 15px var(--pixel); letter-spacing: .06em; color: #ff9b6a; }
+.tv-hud .tv-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); box-shadow: 0 0 10px var(--good); flex: none; }
+.tv-hud .tv-line { flex: 1; min-width: 0; font-size: 17px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-hud .tv-clock { font: 700 22px var(--mono); color: #ffd479; }
+.tv-hud .btn { pointer-events: auto; color: #eef0f6; opacity: .55; } .tv-hud .btn:hover { opacity: 1; background: rgba(255,255,255,.1); }
+body.tv .peek { width: 340px; }
+
+/* ---- replay: the floor plays back the day ---- */
+.floor-frame.replaying .stage { filter: saturate(.82) sepia(.12); }
+.rp-badge { position: absolute; left: 14px; top: 14px; z-index: 7; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 99px; zoom: var(--ui-zoom, 1);
+  font: 700 12px/1 Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #fff; background: rgba(10,12,22,.82); box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+.rp-badge i { width: 8px; height: 8px; border-radius: 50%; background: #ff5566; animation: beat 1.4s infinite; }
+.rp-badge b { font: 700 13px var(--mono); letter-spacing: 0; text-transform: none; color: #ffd479; }
+.replay { position: absolute; left: 50%; bottom: 14px; translate: -50% 0; z-index: 7; display: grid; grid-template-columns: auto auto minmax(200px, 1fr) auto auto; align-items: center; gap: 10px 12px;
+  width: min(860px, calc(100% - 90px)); padding: 10px 12px; border-radius: 16px; zoom: var(--ui-zoom, 1); color: #eef0f6;
+  background: rgba(10,12,22,.86); backdrop-filter: blur(10px); box-shadow: 0 20px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.1); }
+.rp-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 0; border-radius: 10px; background: rgba(255,255,255,.1); color: inherit; font: 600 13px Inter, sans-serif; cursor: pointer; }
+.rp-btn[data-rp-play] { width: 38px; padding: 0; justify-content: center; background: var(--accent); color: var(--accent-ink); }
+.rp-btn:hover { background: rgba(255,255,255,.18); } .rp-btn[data-rp-play]:hover { background: var(--accent-2); }
+.rp-speed { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(255,255,255,.07); }
+.rp-speed button { border: 0; padding: 5px 8px; border-radius: 7px; background: none; color: rgba(238,240,246,.7); font: 600 12px var(--mono); cursor: pointer; }
+.rp-speed button.on { background: rgba(255,255,255,.16); color: #fff; }
+.rp-track { position: relative; min-width: 0; padding-top: 6px; }
+.rp-range { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.rp-ticks { position: absolute; left: 8px; right: 8px; top: 0; height: 6px; pointer-events: none; }
+.rp-tick { position: absolute; top: 0; width: 3px; height: 6px; border-radius: 2px; translate: -50% 0; background: #9aa3b5; }
+.rp-tick.good { background: #3ddc84; } .rp-tick.warn { background: #ffc24b; } .rp-tick.bad { background: #ff6170; } .rp-tick.gold { background: #ffd24a; }
+.rp-ends { display: flex; justify-content: space-between; font: 500 11px var(--mono); color: rgba(238,240,246,.55); }
+.rp-time { font: 700 15px var(--mono); color: #ffd479; min-width: 74px; text-align: right; }
+.rp-news { grid-column: 1 / -1; min-height: 18px; font-size: 13px; color: rgba(238,240,246,.82); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-news.flash { animation: fadein .5s ease; }
+@media (min-width: 1241px) and (min-height: 640px) { #viewFloor .floor-frame.replaying { padding-bottom: calc(108px * var(--ui-zoom, 1)); } }   /* the building re-plans above the bar */
+.floor-frame.replaying .replay { bottom: 0; }
+@media (min-width: 1241px) and (min-height: 640px) { .floor-frame.replaying .cam { bottom: calc(120px * var(--ui-zoom, 1)); } }
+@media (max-width: 1240px), (max-height: 639px) { .floor-frame.replaying .replay { position: relative; left: 0; translate: none; width: 100%; margin-top: 10px; } }
+
 /* right now: what every active agent is doing */
 .dock { display: grid; gap: 10px; min-width: 0; margin-top: 14px; }
 .dock-h { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0 4px; }

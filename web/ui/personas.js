@@ -107,6 +107,7 @@ export function line(p, key) {
 }
 
 export function personaFor(seat, index = 0) {
+  index = Math.max(0, index);                 // a seat not (yet) in the list still gets a character
   const base = seat.kind === "codex" ? CODEX : ARCHETYPES[index % ARCHETYPES.length];   // one character per seat, in order
   return {
     name: seat.nickname || (seat.kind === "codex" ? "Astra" : NAMES[index % NAMES.length]),

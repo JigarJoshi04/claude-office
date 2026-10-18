@@ -8,6 +8,7 @@ import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
 import { pulse, line, reaction, voice, binding, leftOf } from "./ui/personas.js";
 import { goals } from "./ui/goals.js";
+import { makeReplay } from "./ui/replay.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
 const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
@@ -100,6 +101,8 @@ const office = createOffice($("stage"), {
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
+const replay = makeReplay(app, office, document.querySelector(".floor-frame"));   // the floor plays back the day (ui/replay.js)
+app.replay = replay;
 
 // ------------------------------------------------------------------------------------------------ inspector width
 // Drag the handle between the floor and the inspector (or use the arrow keys); double-click puts it back.
@@ -208,6 +211,43 @@ function peekCard(id, r) {
   peekEl.style.left = left + "px"; peekEl.style.top = top + "px";
 }
 addEventListener("scroll", () => { peekEl.hidden = true; }, { passive: true, capture: true });
+
+// TV mode: the floor alone, full screen, for a second monitor or a wall. A heads-up line keeps the time and the
+// office's one-sentence status; every few seconds the tour lights up the next room with people in it and shows its card.
+let tvTimer = 0, tvAt = -1;
+function tvTour() {
+  if (!snap || !document.body.classList.contains("tv")) return;
+  const seats = [...snap.seats.filter(s => live(s).length), ...snap.seats.filter(s => !live(s).length)];
+  if (!seats.length) return;
+  tvAt = (tvAt + 1) % seats.length;
+  const s = seats[tvAt], el = document.querySelector(`.hot.pod[data-k="pod:${CSS.escape(s.id)}"]`);
+  office.spotlight(s.id);
+  if (el) peekCard(s.id, el.getBoundingClientRect());
+  const hud = document.querySelector(".tv-hud .tv-line");
+  if (hud) hud.textContent = $("pulseText").textContent;
+}
+function setTv(on) {
+  if (on === document.body.classList.contains("tv")) return;
+  if (on) {
+    setView("floor");
+    const hud = document.createElement("div");
+    hud.className = "tv-hud";
+    hud.innerHTML = `<span class="tv-brand">${esc(snap ? snap.office.name || "Claude Office" : "Claude Office")}</span><i class="tv-dot"></i><span class="tv-line">${esc($("pulseText").textContent)}</span><span class="tv-clock"></span><button class="btn sm ghost" data-tv-exit>${icon("x", 14)}Exit TV</button>`;
+    document.querySelector(".floor-frame").appendChild(hud);
+    hud.querySelector("[data-tv-exit]").addEventListener("click", () => setTv(false));
+    document.body.classList.add("tv");
+    tvAt = -1; clearInterval(tvTimer); tvTimer = setInterval(tvTour, 9000); setTimeout(tvTour, 600);
+    try { if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); } catch { /* not allowed */ }
+  } else {
+    document.body.classList.remove("tv");
+    clearInterval(tvTimer); office.spotlight(null); peekCard(null);
+    const hud = document.querySelector(".tv-hud"); if (hud) hud.remove();
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  }
+}
+app.setTv = setTv;
+setInterval(() => { const c = document.querySelector(".tv-clock"); if (c) c.textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }, 1000);
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("tv") && QS.get("tv") !== "1") setTv(false); });
 
 // The floor legend: what the colours, badges and little icons mean.
 function legend(btn) {
@@ -386,7 +426,7 @@ function apply(next) {
   if (!next || !next.seats) return;
   const first = !snap;
   snap = next; setNow(snap.now);
-  office.update(snap);
+  if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderLatest(); renderRightNow(); renderMain(true);
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
@@ -525,8 +565,9 @@ function paintLatest() {
   if (!ev.length) { el.innerHTML = `${icon("coffee", 18)}<span class="txt">Quiet in the office. News shows up here as agents arrive, finish and file reports.</span>`; return; }
   const e = ev[latestIdx % ev.length];
   const ic = { levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert", lane: "briefcase", reply: "chat", message: "send" }[e.kind] || "news";
-  el.innerHTML = `${icon(ic, 18, { good: "good", warn: "warn", bad: "bad" }[e.level] || "")}<span class="txt" title="${esc(panels.humanise(e.text))}">${esc(panels.humanise(e.text))}</span><span class="when">${relTime(e.ts)}</span><button class="btn sm ghost" data-go-news>All news</button>`;
+  el.innerHTML = `${icon(ic, 18, { good: "good", warn: "warn", bad: "bad" }[e.level] || "")}<span class="txt" title="${esc(panels.humanise(e.text))}">${esc(panels.humanise(e.text))}</span><span class="when">${relTime(e.ts)}</span><button class="btn sm ghost" data-go-news>All news</button><button class="btn sm ghost" data-replay title="Replay the last 6 hours on the floor (R)">${icon("rewind", 15)}Replay</button>`;
   el.querySelector("[data-go-news]").addEventListener("click", () => go({ kind: "news" }));
+  el.querySelector("[data-replay]").addEventListener("click", () => { setView("floor"); replay.open(6); });
 }
 setInterval(() => { if (snap && prefs.motion !== "reduced") { latestIdx++; paintLatest(); } }, 7000);
 
@@ -621,7 +662,7 @@ async function savePicture() {
 function shortcuts() {
   const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S", "Floor, Timeline, Team, Today"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
-    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["\\", "Hide or show the inspector"],
+    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["\\", "Hide or show the inspector"],
     ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
   $("dialogBody").innerHTML = `<div class="dh"><b>Keyboard shortcuts</b><button class="btn sm ghost" id="kClose">${icon("x", 16)}</button></div>
     <div class="db"><table class="keys">${keys.map(([k, what]) => `<tr><td>${k.split(" ").map(x => `<kbd>${esc(x)}</kbd>`).join(" ")}</td><td>${esc(what)}</td></tr>`).join("")}</table></div>`;
@@ -640,7 +681,7 @@ function openMenu(focusItem) {
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
-    + "<hr>" + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -662,6 +703,8 @@ function openMenu(focusItem) {
     else if (k === "theme") setPref("theme", { dark: "light", light: "system", system: "dark" }[prefs.theme] || "dark");
     else if (k === "text") setPref("textSize", { auto: "s", s: "m", m: "l", l: "xl", xl: "auto" }[prefs.textSize] || "auto");
     else if (k === "checkpoint") checkpoint();
+    else if (k === "tv") setTv(true);
+    else if (k === "replay") { setView("floor"); replay.open(6); }
     else if (k === "broadcast") broadcast();
     else if (k === "picture") savePicture();
     else go({ kind: k });
@@ -674,6 +717,7 @@ function openMenu(focusItem) {
 // ------------------------------------------------------------------------------------------------ views
 function setView(v) {
   if (!["floor", "timeline", "board", "stats"].includes(v)) v = "floor";
+  if (v !== "floor" && typeof replay !== "undefined" && replay.active()) replay.close();   // replay lives on the floor
   mainDrawn.delete(v);
   setPref("view", v);
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.view === v));
@@ -807,6 +851,9 @@ function paletteItems() {
     { icon: icon("plus", 16), label: "Hire a lane", hint: "H", keywords: "new lane dispatch task", run: () => go({ kind: "hire" }) },
     { icon: icon("sliders", 16), label: "Load divider", hint: "D", keywords: "split weights bench", run: () => go({ kind: "divider" }) },
     { icon: icon("floor", 16), label: "Floor", hint: "F", run: () => setView("floor") },
+    { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => setTv(true) },
+    { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },
+    { icon: icon("rewind", 16), label: "Replay the last 24 hours", keywords: "history playback rewind day yesterday", run: () => { setView("floor"); replay.open(24); } },
     { icon: icon("timeline", 16), label: "Timeline", hint: "T", keywords: "gantt history", run: () => setView("timeline") },
     { icon: icon("users", 16), label: "Team", hint: "B", keywords: "board cards", run: () => setView("board") },
     { icon: icon("trophy", 16), label: "Today: stats and MVP", hint: "S", keywords: "league employee of the day", run: () => setView("stats") },
@@ -856,6 +903,14 @@ document.addEventListener("keydown", (e) => {
   // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).
   if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back, dialog[open]")) return;
   const k = e.key;
+  if (replay.active()) {
+    if (k === "Escape") { e.preventDefault(); replay.close(); return; }
+    if (k === " ") { e.preventDefault(); replay.toggle(); return; }
+    if (k === "ArrowLeft" || k === "ArrowRight") { e.preventDefault(); replay.step(k === "ArrowLeft" ? -5 : 5); return; }
+  }
+  if (k === "r" && prefs.view === "floor" && !replay.active()) { replay.open(6); return; }
+  if (document.body.classList.contains("tv") && k === "Escape") { setTv(false); return; }
+  if (k === "v") { setTv(!document.body.classList.contains("tv")); return; }
   if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else { const back = $("panel").contains(document.activeElement); go({ kind: "ceo" }); if (back) $("panel").focus({ preventScroll: true }); } }
   else if (k === "h") go({ kind: "hire" });
   else if (k === "d") go({ kind: "divider" });
@@ -892,6 +947,6 @@ sound.set(prefs.sound);
 setView(QS.get("view") || prefs.view || "floor");
 view = viewFromHash();
 connect();
-const startT = setInterval(() => { if (snap) { clearInterval(startT); go(view, true); } }, 100);
+const startT = setInterval(() => { if (snap) { clearInterval(startT); go(view, true); if (QS.get("tv") === "1") setTv(true); } }, 100);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !es) pollOnce(); });
 export { app };

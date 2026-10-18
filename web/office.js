@@ -57,7 +57,8 @@ export function createOffice(stage, handlers) {
   let plan = { cols: 3, roomH: ROOM_H };   // rooms per row and room height, re-planned to fill the frame (resize)
   let selected = null, privacy = false, reduced = false, mvp = null, hoverId = null, persona = null;
   let spot = null;
-  let skyKey = "";                     // a seat being pointed at in the inspector or on the floor: its room lights up
+  let skyKey = "";
+  let walkBoost = 1;                   // replay speeds walking up so arrivals reach their desks in replay time                     // a seat being pointed at in the inspector or on the floor: its room lights up
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
   let leavers = [];                   // agents walking out
@@ -152,7 +153,7 @@ export function createOffice(stage, handlers) {
       if (!a.path.length) return true;
       const [tx, ty] = a.path[0];
       const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
-      const step = SPEED * dt;
+      const step = SPEED * walkBoost * dt;
       if (Math.abs(dx) > Math.abs(dy)) a.facing = dx > 0 ? "right" : "left"; else a.facing = dy > 0 ? "down" : "up";
       if (d <= step) { a.x = tx; a.y = ty; a.path.shift(); return !a.path.length; }
       a.x += dx / d * step; a.y += dy / d * step;
@@ -969,6 +970,9 @@ export function createOffice(stage, handlers) {
     },
     focusSeat, focusSession, fit, celebrate, alarm, banner,
     spotlight(id) { spot = id || null; },
+    setWalkBoost(k) { walkBoost = Math.max(1, Math.min(8, k || 1)); },
+    // The next update seats everyone where they belong at once (no walking in or out): for jumps in time (replay).
+    reset() { for (const a of agents.values()) if (a.tagEl) a.tagEl.remove(); agents.clear(); leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; }); fresh.clear(); first = true; },
     picture: () => ({ canvas, W }),   // W is the current plan's width    // the whole floor, whatever the camera shows (for "Save a picture")
     zoom(dir) { const { sw, sh } = sizes(); zoomAt(dir > 0 ? cam.tz * 1.4 : cam.tz / 1.4, sw / 2, sh / 2); },
     pan(dx, dy) { cam.tx += dx; cam.ty += dy; clampCam(cam); },

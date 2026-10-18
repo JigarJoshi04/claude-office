@@ -11,7 +11,7 @@ export function renderTimeline(el, app) {
   el.innerHTML = `<div class="view-card">
     <div class="view-head"><div class="grow"><h3>Timeline</h3><p>Every session on every seat, with plan resets coming up on the right.</p></div>
       <div class="seg-ctl">${[1, 3, 6, 12, 24].map(h => `<button data-h="${h}" class="${h === hours ? "on" : ""}">${h} h</button>`).join("")}</div></div>
-    ${hist ? (hist.unavailable ? `<div class="muted" style="padding:20px">The timeline needs the history store on the server. Restart the office after updating.</div>` : timeline(hist, app.snap(), width, hours, (s) => personaFor(s, app.snap().seats.indexOf(s)).name, app.humanise))
+    ${hist ? (hist.unavailable ? `<div class="muted" style="padding:20px">The timeline needs the history store on the server. Restart the office after updating.</div>` : timeline(hist, app.snap(), width, hours, (s) => personaFor(s, app.snap().seats.findIndex(x => x.id === s.id)).name, app.humanise))
       : `<div class="skeleton"></div><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:60%"></div>`}
     <div class="tl-legend"><span><i class="k working"></i>Working</span><span><i class="k waiting"></i>Waiting on a tool</span><span><i class="k idle"></i>Idle</span><span><i class="k limited"></i>Out of plan</span><span><i class="k stuck"></i>Quiet</span>
       <span>◆ News</span><span style="color:var(--info)">┆ Plan resets</span><span style="color:var(--bad)">✕ Runs out at this pace</span><span>✓ Reported</span></div>
@@ -53,7 +53,7 @@ export function renderStats(el, app) {
   const st = app.statsCache(day);
   const snap = app.snap();
   const seatOf = (id) => snap.seats.find(s => s.id === id);
-  const nameOf = (id) => { const s = seatOf(id); return s ? personaFor(s, snap.seats.indexOf(s)).name : id; };
+  const nameOf = (id) => { const s = seatOf(id); return s ? personaFor(s, snap.seats.findIndex(x => x.id === s.id)).name : id; };
   if (!st) { el.innerHTML = `<div class="view-card"><div class="skeleton"></div><div class="skeleton" style="width:70%"></div></div>`; return; }
   if (st.unavailable) { el.innerHTML = `<div class="view-card"><div class="muted">Daily stats need the history store on the server. Restart the office after updating.</div></div>`; return; }
   const rows = Object.entries(st.seats || {}).map(([id, v]) => ({ id, ...v, seat: seatOf(id) })).filter(r => r.seat).sort((a, b) => b.active_min - a.active_min || b.reports - a.reports);
@@ -85,7 +85,7 @@ export function renderStats(el, app) {
       </div>
     </div>
     ${(st.digest || []).length ? `<div class="view-card"><div class="section-h"><h4>The day in a few lines</h4></div><ul class="digest">${st.digest.map(x => `<li>${esc(human(x))}</li>`).join("")}</ul></div>` : ""}
-    <div class="view-card"><div class="section-h"><h4>Diaries</h4></div><div class="diaries">${rows.map(r => { const p = personaFor(r.seat, snap.seats.indexOf(r.seat));
+    <div class="view-card"><div class="section-h"><h4>Diaries</h4></div><div class="diaries">${rows.map(r => { const p = personaFor(r.seat, snap.seats.findIndex(x => x.id === r.seat.id));
       return `<div class="diary-row" style="--seat:${esc(r.seat.color)}"><i data-portrait="mascot-${esc(r.id)}|${esc(r.seat.color)}|"></i><div><b>${esc(p.name)}</b><span>${esc(diary(p, r))}</span></div></div>`; }).join("")}</div></div>
     ${won.length ? `<div class="view-card"><div class="section-h"><h4>Trophies won · ${won.length}</h4><button class="btn sm ghost" data-trophies>${icon("trophy", 14)}Trophy room</button></div>
       <div class="won">${won.map(w => `<span class="wonchip" style="--seat:${esc(w.s.color)}" title="${esc(w.a.desc)}">${icon(w.a.icon, 15)}<b>${esc(nameOf(w.s.id))}</b>${esc(w.a.name)}<small>${clock(w.at)}</small></span>`).join("")}</div></div>` : ""}
