@@ -1605,3 +1605,11 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .par-now b { display: block; font: 700 13px var(--mono); } .par-now small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .par-total { font: 800 14px var(--mono); } .par-total.under { color: #3ddc84; } .par-total.over { color: #ffb35c; }
 :root[data-theme="light"] .par-total.under { color: #11703c; } :root[data-theme="light"] .par-total.over { color: #9a5200; }
+/* Empty states (util.js emptyState) and the week chart's days with no record */
+.empty-st { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; background: var(--surface-2); color: var(--text-2); }
+.empty-st .es-ic { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--surface-3); color: var(--muted); }
+.empty-st .grow { min-width: 0; } .empty-st b { display: block; font-size: 14px; color: var(--text); }
+.empty-st p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.empty-st .es-code { display: block; margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface-3); font: 12px/1.5 var(--mono); color: var(--text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
+.empty-st .es-act { margin-top: 10px; }
+.wk .hatch-line { fill: var(--line, rgba(255,255,255,.12)); } .wk-bar.norec .hatch { opacity: .7; }

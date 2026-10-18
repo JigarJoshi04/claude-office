@@ -1,6 +1,6 @@
 // The inspector: one renderer per view. Each returns { html, bind(root) }. Plain words first, numbers second.
 import { esc, fmtTok, ago, until, clock, dur, pct, live, store, toast, debounce, avatar, relTime, inWords, dayTime,
-  STATE_LABEL, SEAT_LABEL, mmss, portrait } from "./util.js";
+  STATE_LABEL, SEAT_LABEL, mmss, portrait, emptyState } from "./util.js";
 import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary, PERSONALITIES, weekPace } from "./personas.js";
@@ -716,7 +716,9 @@ export function makePanels(app) {
       <div class="seg-ctl cab-seats" role="group" aria-label="Character">${chips}</div>
       ${!d ? `<div class="skeleton"></div><div class="skeleton" style="width:70%"></div>`
         : `<p class="hint">${d.building ? "Reading the transcripts' first lines… " : ""}${d.total.toLocaleString()} session${d.total === 1 ? "" : "s"}${cabQ ? ` matching “${esc(cabQ)}”` : ""}.</p>
-           <ul class="loose cabs">${rows.map(row).join("") || `<li class="muted">Nothing matches.</li>`}</ul>
+           ${rows.length ? `<ul class="loose cabs">${rows.map(row).join("")}</ul>` : cabQ || cabSeat
+             ? emptyState("search", cabQ ? `Nothing matches “${cabQ}”` : "No sessions for this character", "Every word has to match a session's title, first instruction, project or folder.", `<button class="btn sm" data-cab-clear>Clear the search</button>`)
+             : emptyState("files", "No past sessions yet", "Every session on this machine lands here once it has a transcript.")}
            ${rows.length < d.total ? `<button class="btn sm" data-cab-more>${icon("chevronDown", 14)}Show more</button>` : ""}`}`,
       bind(root) {
         const qi = root.querySelector("#cabQ");
@@ -724,6 +726,7 @@ export function makePanels(app) {
         qi.addEventListener("input", () => { cabRaw = qi.value; run(); });
         qi.addEventListener("keydown", (e) => { if (e.key === "Escape" && qi.value) { e.stopPropagation(); qi.value = cabRaw = ""; run(); } });
         root.querySelectorAll("[data-cab-seat]").forEach(b => b.addEventListener("click", () => { cabSeat = b.dataset.cabSeat; cabMore = 0; app.rerender(true); }));
+        const cc = root.querySelector("[data-cab-clear]"); if (cc) cc.addEventListener("click", () => { cabQ = cabRaw = cabSeat = ""; cabMore = 0; app.rerender(true); });
         const more = root.querySelector("[data-cab-more]"); if (more) more.addEventListener("click", () => { cabMore++; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
       } };
@@ -828,9 +831,12 @@ export function makePanels(app) {
       ${repos}`,
       bind(root) { const b = root.querySelector("[data-loose-refresh]"); if (b) b.addEventListener("click", () => { app.looseCache(true); b.disabled = true; }); } };
   }
+  const PROG_SNIPPET = '"programmes": [{"match": "apollo", "name": "Apollo launch", "url": "https://example.com/board"}]';
   function programmes() {
     return { html: `${crumbs("Meeting room")}<h2>Programmes</h2><p class="lede">Live work grouped by programme. Names and links come from your config.</p>
-      ${section("On the whiteboard", (S().programmes || []).map(progCard).join("") || `<div class="muted">No running work belongs to a programme.</div>`)}` };
+      ${section("On the whiteboard", (S().programmes || []).map(progCard).join("") || emptyState("flag", "Nothing on the whiteboard",
+        `Programmes group live work under one name: a session or lane whose folder, unit or task matches goes up here. Add one to <code>~/.config/claude-office/config.json</code>:<code class="es-code">${esc(PROG_SNIPPET)}</code>`,
+        `<button class="btn sm" data-copy="${esc(PROG_SNIPPET)}" data-copy-note="Paste it into config.json, then restart the office.">${icon("copy", 14)}Copy the example</button>`))}` };
   }
   // The office's own level: everyone's XP adds up, and each level unlocks something on the floor.
   function office() {
@@ -946,7 +952,9 @@ export function makePanels(app) {
     const ev = (S().events || []).slice().reverse().filter(e => newsFilter === "all" || e.level === newsFilter);
     return { html: `${crumbs("News")}<h2>Office news</h2><p class="lede">Arrivals, departures, reports, limits, resets, messages and your own changes.</p>
       <div class="seg-ctl" style="margin-top:16px">${[["all", "All"], ["good", "Good"], ["warn", "Heads-up"], ["bad", "Problems"]].map(([f, l]) => `<button data-news="${f}" class="${newsFilter === f ? "on" : ""}">${l}</button>`).join("")}</div>
-      <div style="margin-top:12px">${ev.length ? newsGroups(ev) : `<div class="muted">Nothing yet.</div>`}</div>`,
+      <div style="margin-top:12px">${ev.length ? newsGroups(ev) : newsFilter !== "all"
+        ? emptyState("news", "Nothing under this filter", "", `<button class="btn sm" data-news="all">Show all the news</button>`)
+        : emptyState("news", "No news yet", "Arrivals, reports, limits, resets and what you change show up here as they happen.")}</div>`,
       bind(root) { root.querySelectorAll("[data-news]").forEach(b => b.addEventListener("click", () => { newsFilter = b.dataset.news; app.rerender(true); })); } };
   }
 
@@ -1230,7 +1238,7 @@ export function makePanels(app) {
   function laneListHtml() {
     const active = S().lanes.filter(l => UNFINISHED.includes(l.status)).length;
     return (active > 1 ? `<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn sm danger" data-stop-all>${icon("stop", 14)}Stop all ${active}</button></div>` : "")
-      + (S().lanes.length ? S().lanes.map(laneRow).join("") : `<div class="muted">No office lanes yet.</div>`);
+      + (S().lanes.length ? S().lanes.map(laneRow).join("") : emptyState("briefcase", "No office lanes yet", "A lane is a session the office runs for you in the background: write a brief, pick a seat or let the divider pick, and it works until it files a report."));
   }
   // The panic button: every office lane that is still going stops (your own terminals are never touched).
   async function stopAllLanes() {

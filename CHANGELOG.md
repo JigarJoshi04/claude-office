@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.71.0] - 2026-10-19
+
+### Added
+- Empty states that teach the next step: an empty whiteboard shows the config line for a programme (with a copy
+  button), a search in the filing cabinet that finds nothing offers to clear it, a news filter with nothing in it
+  offers all the news, and the hiring desk explains what a lane is before the first one.
+- The week chart hatches the days before the office opened instead of drawing them as zero.
+
 ## [3.70.1] - 2026-10-19
 
 ### Fixed

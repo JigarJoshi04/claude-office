@@ -189,9 +189,14 @@ function weekCard(app, shown) {
   const sum = (xs) => xs.reduce((a, d) => a + get(d), 0), now = sum(last), prev = sum(before);
   const delta = before.length === 7 && prev > 0 ? Math.round((now - prev) / prev * 100) : null;
   const max = Math.max(1e-9, ...last.map(get)), H = 120, W = 7 * 64, T = 22;   // T: room above the tallest bar for its label
+  // Days before the office existed have no record: hatched, not drawn as zero.
+  const born = Math.min(...app.snap().seats.map(s => (s.career || {}).since).filter(Boolean)), bornDay = Number.isFinite(born) ? localDay(new Date(born * 1000)) : null;
+  const noRecord = (d) => bornDay && d.day < bornDay && !d.sessions && !d.reports && !d.tool_calls;
   const wd = (d) => new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short" });
   const bars = last.map((d, i) => {
     const v = get(d), h = v > 0 ? Math.max(3, Math.round(v / max * H)) : 0, x = i * 64 + 14, on = d.day === shown, B = H + T;
+    if (noRecord(d)) return `<g class="wk-bar norec"><rect class="hatch" x="${x}" y="${B - H}" width="36" height="${H}" rx="4" fill="url(#wkHatch)"/>
+      <text class="ax" x="${x + 18}" y="${B + 18}" text-anchor="middle">${wd(d.day)}</text><title>No record: the office opened ${esc(new Date(born * 1000).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" }))}</title></g>`;
     const tip = `${new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })} · ${d.reports} report${d.reports === 1 ? "" : "s"} · ${WEEK_METRICS.hours[2](d.active_min / 60)} · ${d.tool_calls.toLocaleString()} tool calls · ${d.sessions} session${d.sessions === 1 ? "" : "s"}`;
     return `<g class="wk-bar ${on ? "on" : ""}" data-week-day="${d.day}" tabindex="0" role="button" aria-label="${tip}">
       <rect class="hit" x="${x - 8}" y="0" width="52" height="${B + 26}" fill="transparent"/>
@@ -203,9 +208,9 @@ function weekCard(app, shown) {
   return `<div class="view-card week"><div class="section-h"><h4>Last 7 days</h4><button class="btn sm ghost" data-week-play title="Your week in review: a short story of the last seven days">${icon("play", 13)}Play the week</button><span class="grow"></span>
       <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(WEEK_METRICS).map(([k, [l]]) => `<button data-week-metric="${k}" class="${k === key ? "on" : ""}">${l}</button>`).join("")}</div></div>
     <div class="wk-head"><b>${fmt(now)}</b><span>${label.toLowerCase()} in the last 7 days</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% vs the week before</em>`}</div>
-    <div class="wk-body"><svg class="wk" viewBox="0 0 ${W} ${H + T + 26}" role="img" aria-label="${label} per day for the last seven days"><line class="base" x1="0" x2="${W}" y1="${H + T}" y2="${H + T}"/>${bars}</svg>
+    <div class="wk-body"><svg class="wk" viewBox="0 0 ${W} ${H + T + 26}" role="img" aria-label="${label} per day for the last seven days"><defs><pattern id="wkHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="hatch-line" width="2" height="6"/></pattern></defs><line class="base" x1="0" x2="${W}" y1="${H + T}" y2="${H + T}"/>${bars}</svg>
       ${weekFacts(app, last)}</div>
-    <div class="hint">${empty ? "Nothing on record yet: the bars fill in as your agents work. " : ""}Click a day to open it. Earlier days come from the office's day ledger.</div></div>`;
+    <div class="hint">${empty ? "Nothing on record yet: the bars fill in as your agents work. " : ""}${last.some(noRecord) ? "Hatched days came before the office opened. " : ""}Click a day to open it. Earlier days come from the office's day ledger.</div></div>`;
 }
 // Beside the chart: the best day, the star of the week (most days as employee of the day) and the week's totals.
 function weekFacts(app, last) {

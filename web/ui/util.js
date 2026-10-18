@@ -3,6 +3,11 @@ import * as S from "../engine/sprites.js";
 import { icon } from "./icons.js";
 
 export const $ = (id) => document.getElementById(id);
+// A blank screen says why it is blank and what to do next: an icon, a line, a hint (HTML the caller has escaped) and at
+// most one action.
+export function emptyState(ic, title, text = "", action = "") {
+  return `<div class="empty-st"><span class="es-ic">${icon(ic, 18)}</span><div class="grow"><b>${esc(title)}</b>${text ? `<p>${text}</p>` : ""}${action ? `<div class="es-act">${action}</div>` : ""}</div></div>`;
+}
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
