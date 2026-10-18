@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.129.0] - 2026-10-19
+
+### Fixed
+- Shipped could take a quiet commit's subject from text inside a script or file the same command wrote; it now reads
+  the command itself. The ledger reads its transcripts once more.
+
 ## [3.128.0] - 2026-10-19
 
 ### Fixed

@@ -30,7 +30,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 10               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 11               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -128,8 +128,8 @@ def ship_items(kinds: set, cmd: str, text: str, v: list) -> list[dict]:
         for m in _COMMIT_ITEM.finditer(text):
             out.append({"k": "c", "sha": m.group(2)[:9], "sub": " ".join(m.group(3).split())[:120], "b": m.group(1).split()[-1][:60]})
         if not out:                                       # a quiet commit (-q) prints nothing: its message from the command
-            m = _COMMIT_MSG.search(cmd)
-            msg = next((g for g in m.groups() if g), "") if m else ""
+            ms = list(_COMMIT_MSG.finditer(strip_heredocs(cmd)))   # the command itself, not a script or a file it writes
+            msg = next((g for g in ms[-1].groups() if g), "") if ms else ""
             out.append({"k": "c", "sha": None, "sub": " ".join(msg.split())[:120] or "a commit"})
     if v[2]:
         t = _PR_TITLE.search(cmd)

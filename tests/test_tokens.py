@@ -448,6 +448,9 @@ class ShipItemsTests(unittest.TestCase):
         quiet = 'git commit -qm "Fix the limiter" && git push -q'
         k = ship_kinds(quiet)
         self.assertEqual(ship_items(k, quiet, "", shipped(k, "")), [{"k": "c", "sha": None, "sub": "Fix the limiter"}])   # -q prints nothing
+        mixed = "cat >> t.py <<'EOF'\nx = 'git commit -qm \"Not this\"'\nEOF\ngit add -A && git commit -q -m \"The real one\" && git push -q"
+        k = ship_kinds(mixed)
+        self.assertEqual(ship_items(k, mixed, "", shipped(k, ""))[0]["sub"], "The real one")                    # not text in a heredoc
         cmd = "gh pr create --title 'Smooth bursts' --body x"
         k = ship_kinds(cmd)
         self.assertEqual(ship_items(k, cmd, "https://github.com/a/b/pull/482\n", shipped(k, "https://github.com/a/b/pull/482\n")),
