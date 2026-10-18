@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.20.1] - 2026-10-18
+
+### Fixed
+- Since 3.16, a successful hire showed "Could not hire" (inviting a second, duplicate lane) and a delivered message
+  showed "Could not send": moving the game layer out of `app.js` dropped `app.badge` and `app.bump`. A new static test
+  (`tests/js/wiring.test.mjs`) checks that every `app.X()` the UI calls is defined.
+- The token ledger read each transcript's new part whole (up to hundreds of MB at once, about 800 MB peak); it now
+  reads line by line (31 MB peak for a full first read).
+
 ## [3.20.0] - 2026-10-18
 
 ### Fixed

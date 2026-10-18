@@ -239,6 +239,8 @@ app.gifts = giftBox;
 const game = makeGame({ app, office, panels, replay, store, DEMO, prefs, gifts: giftBox, view: () => view, renderPanel });
 const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });
 app.playWeek = () => weekReview.play();
+app.badge = (id) => badge(award(id));            // badges from the panels (a hire, a replay)
+app.bump = (key, n, id) => badge(bump(key, n, id)); // counter badges (messages sent)
 app.badgeProgress = () => progress({ visits: game.visits(), stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });
 // The office radio (ui/radio.js): remembered across visits, but browsers only start audio after a click or a key.
 const radio = makeRadio();

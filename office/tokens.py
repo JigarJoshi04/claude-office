@@ -164,53 +164,61 @@ class TokenLedger:
             return False
         project_dir, sid = self._session_of(root, path)
         changed = False
-        with open(path, "rb") as fh:
+        pos = offset
+        with open(path, "rb") as fh:                       # line by line: a transcript can be hundreds of MB
             fh.seek(offset)
-            chunk = fh.read(size - offset)
-        end = chunk.rfind(b"\n")
-        if end < 0:
+            for raw in fh:
+                if not raw.endswith(b"\n"):                # a line still being written: read it next time
+                    break
+                pos += len(raw)
+                changed |= self._take(raw, sid, last_id)
+                last_id = self._last
+        if pos == offset:
             return False
-        for raw in chunk[:end].split(b"\n"):
-            if b'"usage"' not in raw or b'"assistant"' not in raw:
-                continue
-            try:
-                d = json.loads(raw)
-            except ValueError:
-                continue
-            m = d.get("message") if isinstance(d, dict) else None
-            u = m.get("usage") if isinstance(m, dict) else None
-            if d.get("type") != "assistant" or not isinstance(u, dict):
-                continue
-            mid = m.get("id")
-            if mid and mid == last_id:                     # one response is written as several lines
-                continue
-            last_id = mid
-            model = m.get("model") or "?"
-            if model.startswith("<"):                      # <synthetic> lines are not API calls
-                continue
-            n = lambda k: int(u.get(k) or 0)
-            f = n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens")
-            c, o = n("cache_read_input_tokens"), n("output_tokens")
-            day, at = _day(d.get("timestamp")), _epoch(d.get("timestamp"))
-            with self.lock:
-                s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": at, "l": at, "m": {}, "d": {}})
-                if not s.get("p") and d.get("cwd"):
-                    s["p"] = os.path.basename(d["cwd"].rstrip("/")) or d["cwd"]
-                if at:
-                    s["fi"] = min(s.get("fi") or at, at); s["l"] = max(s.get("l") or at, at)
-                _add(s, f, c, o)
-                s["m"][model] = s["m"].get(model, 0) + f + c
-                if day:
-                    s["d"][day] = s["d"].get(day, 0) + f + c
-                    _add(self.data["days"].setdefault(day, {}), f, c, o)
-                _add(self.data["models"].setdefault(model, {}), f, c, o)
-            changed = True
         if not self.data["sessions"].get(sid, {}).get("p"):
             with self.lock:
                 if sid in self.data["sessions"]:
                     self.data["sessions"][sid]["p"] = project_dir.rsplit("-", 1)[-1] or project_dir
-        self.data["files"][key] = [offset + end + 1, last_id]
+        self.data["files"][key] = [pos, last_id]
         return changed
+
+    def _take(self, raw: bytes, sid: str, last_id) -> bool:
+        """One transcript line: count it if it is a new API response. Sets self._last to the response id seen."""
+        self._last = last_id
+        if b'"usage"' not in raw or b'"assistant"' not in raw:
+            return False
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return False
+        m = d.get("message") if isinstance(d, dict) else None
+        u = m.get("usage") if isinstance(m, dict) else None
+        if d.get("type") != "assistant" or not isinstance(u, dict):
+            return False
+        mid = m.get("id")
+        if mid and mid == last_id:                     # one response is written as several lines
+            return False
+        self._last = mid
+        model = m.get("model") or "?"
+        if model.startswith("<"):                      # <synthetic> lines are not API calls
+            return False
+        n = lambda k: int(u.get(k) or 0)
+        f = n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens")
+        c, o = n("cache_read_input_tokens"), n("output_tokens")
+        day, at = _day(d.get("timestamp")), _epoch(d.get("timestamp"))
+        with self.lock:
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": at, "l": at, "m": {}, "d": {}})
+            if not s.get("p") and d.get("cwd"):
+                s["p"] = os.path.basename(d["cwd"].rstrip("/")) or d["cwd"]
+            if at:
+                s["fi"] = min(s.get("fi") or at, at); s["l"] = max(s.get("l") or at, at)
+            _add(s, f, c, o)
+            s["m"][model] = s["m"].get(model, 0) + f + c
+            if day:
+                s["d"][day] = s["d"].get(day, 0) + f + c
+                _add(self.data["days"].setdefault(day, {}), f, c, o)
+            _add(self.data["models"].setdefault(model, {}), f, c, o)
+        return True
 
     def _scan_codex(self, path: Path) -> bool:
         key = str(path)
@@ -222,45 +230,47 @@ class TokenLedger:
         offset, t0, c0, o0 = rec
         if size <= offset:
             return False
-        with open(path, "rb") as fh:
-            fh.seek(offset)
-            chunk = fh.read(size - offset)
-        end = chunk.rfind(b"\n")
-        if end < 0:
-            return False
         sid = "codex:" + path.stem
         changed = False
-        for raw in chunk[:end].split(b"\n"):
-            if b'"token_count"' not in raw:
-                continue
-            try:
-                d = json.loads(raw)
-            except ValueError:
-                continue
-            p = d.get("payload") if isinstance(d, dict) else None
-            info = p.get("info") if isinstance(p, dict) else None
-            tot = info.get("total_token_usage") if isinstance(info, dict) else None
-            if not isinstance(tot, dict):
-                continue
-            t, cached, out = int(tot.get("total_tokens") or 0), int(tot.get("cached_input_tokens") or 0), int(tot.get("output_tokens") or 0)
-            if t <= t0:
-                continue
-            dc, dout = max(0, cached - c0), max(0, out - o0)
-            dfresh = max(0, (t - t0) - dc)                      # Codex counts cached input inside its input
-            t0, c0, o0 = t, cached, out
-            day, at = _day(d.get("timestamp")), _epoch(d.get("timestamp"))
-            with self.lock:
-                s = self.data["sessions"].setdefault(sid, {"p": None, "s": "@codex", "fi": at, "l": at, "m": {}, "d": {}})
-                if at:
-                    s["fi"] = min(s.get("fi") or at, at); s["l"] = max(s.get("l") or at, at)
-                _add(s, dfresh, dc, dout)
-                s["m"]["codex"] = s["m"].get("codex", 0) + dfresh + dc
-                if day:
-                    s["d"][day] = s["d"].get(day, 0) + dfresh + dc
-                    _add(self.data["days"].setdefault(day, {}), dfresh, dc, dout)
-                _add(self.data["models"].setdefault("codex", {}), dfresh, dc, dout)
-            changed = True
-        self.data["codex"][key] = [offset + end + 1, t0, c0, o0]
+        pos = offset
+        with open(path, "rb") as fh:
+            fh.seek(offset)
+            for raw in fh:
+                if not raw.endswith(b"\n"):
+                    break
+                pos += len(raw)
+                if b'"token_count"' not in raw:
+                    continue
+                try:
+                    d = json.loads(raw)
+                except ValueError:
+                    continue
+                p = d.get("payload") if isinstance(d, dict) else None
+                info = p.get("info") if isinstance(p, dict) else None
+                tot = info.get("total_token_usage") if isinstance(info, dict) else None
+                if not isinstance(tot, dict):
+                    continue
+                t, cached, out = int(tot.get("total_tokens") or 0), int(tot.get("cached_input_tokens") or 0), int(tot.get("output_tokens") or 0)
+                if t <= t0:
+                    continue
+                dc, dout = max(0, cached - c0), max(0, out - o0)
+                dfresh = max(0, (t - t0) - dc)                      # Codex counts cached input inside its input
+                t0, c0, o0 = t, cached, out
+                day, at = _day(d.get("timestamp")), _epoch(d.get("timestamp"))
+                with self.lock:
+                    s = self.data["sessions"].setdefault(sid, {"p": None, "s": "@codex", "fi": at, "l": at, "m": {}, "d": {}})
+                    if at:
+                        s["fi"] = min(s.get("fi") or at, at); s["l"] = max(s.get("l") or at, at)
+                    _add(s, dfresh, dc, dout)
+                    s["m"]["codex"] = s["m"].get("codex", 0) + dfresh + dc
+                    if day:
+                        s["d"][day] = s["d"].get(day, 0) + dfresh + dc
+                        _add(self.data["days"].setdefault(day, {}), dfresh, dc, dout)
+                    _add(self.data["models"].setdefault("codex", {}), dfresh, dc, dout)
+                changed = True
+        if pos == offset:
+            return False
+        self.data["codex"][key] = [pos, t0, c0, o0]
         return changed
 
     def run(self, stop: threading.Event, live=lambda: {}, every: float = 120) -> None:
