@@ -553,6 +553,10 @@ export function createOffice(stage, handlers) {
   function drawRoom(pod, t, lights, env) {
     const s = pod.seat, room = pod.room, wr = windowRect(room), st = s.status;
     S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, reduced ? 0 : t, env.night, weatherOf(s), windowExtras());   // still under reduced motion
+    // the wall clock, with a wedge to when the 5-hour plan comes back (red if it runs out first)
+    const f5 = (s.usage || {}).five_hour, fc = ((s.forecast || {}).five_hour || {}).state;
+    S.drawClock(ctx, room.x + 112, room.y + 12, clockAt ? new Date(clockAt * 1000) : new Date(),
+      f5 && f5.resets_at ? { to: new Date(f5.resets_at * 1000), color: st === "limited" || fc === "runs_out" ? "#e8475a" : s.color } : null);
     if (env.night) lights.push({ x: wr.x + wr.w / 2, y: wr.y + wr.h + 6, r: 24, c: "#9bb8ff", i: 0.2 });
     const live = s.sessions.filter(x => x.live !== false);
     const dark = st === "offline" ? 0.5 : st === "limited" ? 0.42 : st === "benched" ? 0.3 : !live.length ? 0.2 : 0;
@@ -807,6 +811,12 @@ export function createOffice(stage, handlers) {
     overlay.appendChild(plate);
     const podHot = hot("pod", `${who.name}'s desks`, pod.room.x + 2, pod.room.y + 2, pod.room.w - 4, pod.room.h - 30, () => handlers.openSeat(s.id), () => focusSeat(s.id));
     podHot.dataset.k = "pod:" + s.id;
+    const f5 = (s.usage || {}).five_hour, wk = (s.usage || {}).weekly, when = (ts) => new Date(ts * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+    if (f5 && f5.resets_at) {                          // the wall clock says when the plan comes back
+      const ck = hot("wallhot clock", `${who.name}'s clock: the 5-hour plan ${s.status === "limited" ? "is back" : "resets"} ${when(f5.resets_at)}${wk && wk.resets_at ? `, the week resets ${when(wk.resets_at)}` : ""}`,
+        pod.room.x + 111, pod.room.y + 11, 17, 17, () => handlers.openSeat(s.id));
+      ck.dataset.k = "clock:" + s.id;
+    }
     const roomMenu = (el) => el.addEventListener("contextmenu", (e) => { if (!handlers.onRoomMenu) return; e.preventDefault(); e.stopPropagation(); peek(null); handlers.onRoomMenu(s.id, e.clientX, e.clientY, el); });
     for (const el of [podHot, plate]) {
       roomMenu(el);

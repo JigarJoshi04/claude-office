@@ -488,8 +488,15 @@ export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear", ex
   rect(ctx, x - 3, y + h + 2, w + 6, 2, "#6c7398");
 }
 
-export function drawClock(ctx, x, y, date) {
+// A wall clock; wedge {to: Date, color} shades the dial from now to that time (a plan reset within 12 hours).
+export function drawClock(ctx, x, y, date, wedge = null) {
   rect(ctx, x, y, 15, 15, "#2b2f3a"); rect(ctx, x + 1, y + 1, 13, 13, P.white);
+  const dial = (d) => (d.getHours() % 12 + d.getMinutes() / 60) / 12 * Math.PI * 2 - Math.PI / 2;
+  if (wedge && wedge.to - date > 0 && wedge.to - date < 12 * 3600e3) {
+    ctx.fillStyle = wedge.color; ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.moveTo(x + 7.5, y + 7.5); ctx.arc(x + 7.5, y + 7.5, 6, dial(date), dial(wedge.to)); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   for (let i = 0; i < 12; i += 3) {
     const a = i / 12 * Math.PI * 2;
     rect(ctx, x + 7 + Math.round(Math.sin(a) * 5), y + 7 - Math.round(Math.cos(a) * 5), 1, 1, "#6b7080");

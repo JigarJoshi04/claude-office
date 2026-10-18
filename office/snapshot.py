@@ -386,7 +386,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.24.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.25.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -442,6 +442,13 @@ class Office(LiveOffice):
             label = s["label"]
             if (s.get("health") or {}).get("state") == "login":
                 items.append({"level": "bad", "seat": s["id"], "text": f"{label} is logged out: run /login on it"})
+            else:                                     # a login that lapses soon: warn three days ahead, urgently at 12 h
+                rexp = (s.get("health") or {}).get("refresh_expires_at")
+                left = (rexp - snap["now"]) if rexp else None
+                if left is not None and 0 < left < 3 * 86400:
+                    when = f"{left / 3600:.0f} hours" if left < 2 * 86400 else f"{left / 86400:.0f} days"
+                    items.append({"level": "bad" if left < 12 * 3600 else "warn", "seat": s["id"],
+                                  "text": f"{label}'s login lapses in {when}: run /login on it", "resets_at": rexp})
             u = s.get("usage") or {}
             for key, name in (("five_hour", "5-hour"), ("weekly", "weekly")):
                 w = u.get(key) or {}

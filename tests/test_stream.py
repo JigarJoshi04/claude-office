@@ -180,4 +180,19 @@ class StreamTests(unittest.TestCase):
             self.office.emit("report", "Demo report")
             self.office.build()
         self.assertEqual(self.office.get()["office"]["started_at"], before)
-        self.assertEqual(self.office.get()["office"]["version"], "3.24.0")
+        self.assertEqual(self.office.get()["office"]["version"], "3.25.0")
+
+
+class LoginExpiryTests(unittest.TestCase):
+    def test_a_login_lapsing_within_three_days_needs_you(self):
+        from office.snapshot import Office
+        now = 1_000_000.0
+        seat = lambda sid, left: {"id": sid, "label": sid, "status": "idle", "sessions": [], "lanes": 0, "usage": {}, "forecast": {},
+                                  "health": {"state": "ok", "refresh_expires_at": now + left if left else None}}
+        snap = {"now": now, "lanes": [], "units": [], "seats": [seat("a", 20 * 86400), seat("b", 2.5 * 86400), seat("c", 6 * 3600), seat("d", None)]}
+        items = {i["seat"]: i for i in Office._attention(snap) if "login" in i["text"]}
+        self.assertEqual(set(items), {"b", "c"})
+        self.assertEqual(items["b"]["level"], "warn")
+        self.assertIn("lapses in 2 days", items["b"]["text"])
+        self.assertIn("lapses in 6 hours", items["c"]["text"])
+        self.assertEqual(items["c"]["level"], "bad")

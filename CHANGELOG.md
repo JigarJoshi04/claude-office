@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.25.0] - 2026-10-18
+
+### Added
+- A wall clock in every room, with a wedge from now to when the 5-hour plan comes back (red if it runs out first);
+  pointing at it says when the plan and the week reset.
+- Needs you warns three days before a seat's login lapses (urgent from 12 hours), with the login command to copy.
+- A token picture from the Tokens tab: the range's total, every character ranked with the top one crowned, shipped
+  work and the model split, 1200×630, to save or copy. Names and counts only.
+
 ## [3.24.0] - 2026-10-18
 
 ### Added

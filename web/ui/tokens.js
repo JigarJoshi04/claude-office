@@ -1,7 +1,7 @@
 // All-time tokens, in the Today view: the office's total since its transcripts begin, who burns the most (characters,
 // sessions, projects), the models, and the last 60 days. One measure at a time: everything the model processed, fresh
 // tokens (input, cache writes and output) or output alone. Data from /api/tokens (office/tokens.py).
-import { esc, fmtTok, relTime, hydratePortraits } from "./util.js";
+import { esc, fmtTok, relTime, hydratePortraits, portrait } from "./util.js";
 import { icon } from "./icons.js";
 import { personaFor } from "./personas.js";
 
@@ -112,7 +112,7 @@ export function renderTokens(el, app) {
   const head = `<div class="tp-head"><div class="grow"><h3>Tokens${seat ? ` · ${esc(who(seat))}` : ""}</h3><p>${seat ? `Everything ${esc(who(seat))} burned` : "Who burns the most, and when"}, counted from the transcripts on this machine.</p></div>
     <div class="seg-ctl" role="group" aria-label="Range">${RANGES.map(([k, l]) => `<button data-tp-range="${k}" class="${k === rng ? "on" : ""}">${l}</button>`).join("")}</div>
     <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(TOKEN_METRICS).map(([k, [l, d]]) => `<button data-tok-metric="${k}" class="${k === key ? "on" : ""}" title="${esc(d)}">${l}</button>`).join("")}</div>
-    ${seat ? `<button class="btn sm" data-tp-seat="">${icon("x", 14)}All characters</button>` : ""}<button class="btn sm" data-tp-csv>${icon("download", 14)}CSV</button></div>`;
+    ${seat ? `<button class="btn sm" data-tp-seat="">${icon("x", 14)}All characters</button>` : ""}<button class="btn sm" data-tp-csv>${icon("download", 14)}CSV</button><button class="btn sm" data-tp-share>${icon("star", 14)}Picture</button></div>`;
   if (!t) { el.innerHTML = `<div class="view-card">${head}<div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`; bind(); return; }
   const total = val(t.total), prev = t.prev_total ? t.prev_total.all : null;
   const delta = key === "all" && prev ? Math.round((total - prev) / prev * 100) : null;
@@ -214,6 +214,8 @@ export function renderTokens(el, app) {
       b.addEventListener("click", go);
       b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
     });
+    const share = el.querySelector("[data-tp-share]");
+    if (share) share.addEventListener("click", () => { const d = app.tokensCache(rng, seat); if (d) shareTokens(app, d, rng); });
     const csv = el.querySelector("[data-tp-csv]");
     if (csv) csv.addEventListener("click", () => downloadCsv(app, rng, seat, who));
   }
@@ -234,4 +236,72 @@ async function downloadCsv(app, rng, seat, who) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   } catch { /* the toast belongs to the app; a failed export just does nothing */ }
+}
+
+// The token picture: 1200×630, for a post or a channel. The range's total, every character ranked (the top one
+// crowned), shipped work and the model split. Names and counts only: no projects, no sessions.
+export async function tokensPicture(app, t, rng) {
+  try { await Promise.all([document.fonts.load("40px Silkscreen"), document.fonts.load("800 56px Inter")]); } catch { /* system fonts */ }
+  const W = 1200, H = 630, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"), snap = app.snap(), who = (id) => { const s = snap.seats.find(x => x.id === id); return s ? personaFor(s, snap.seats.indexOf(s)).name : "Unknown seat"; };
+  const bg = g.createLinearGradient(0, 0, W, H); bg.addColorStop(0, "#1c0f08"); bg.addColorStop(1, "#0b0e1c");
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  const glow = g.createRadialGradient(260, 120, 0, 260, 120, 560); glow.addColorStop(0, "rgba(255,122,69,0.28)"); glow.addColorStop(1, "rgba(255,122,69,0)");
+  g.fillStyle = glow; g.fillRect(0, 0, W, H);
+  g.font = "38px Silkscreen, monospace"; g.fillStyle = "#ffd8b0"; g.shadowColor = "#ff7a45"; g.shadowBlur = 16;
+  g.fillText((snap.office.name || "Claude Office").toUpperCase().slice(0, 28), 60, 88); g.shadowBlur = 0;
+  g.font = "500 22px Inter, sans-serif"; g.fillStyle = "#b8a99c";
+  g.fillText(`My AI team's tokens · ${{ today: "today", 7: "the last 7 days", 30: "the last 30 days", 90: "the last 90 days", all: t.since ? "since " + new Date(t.since + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "long" }) : "all time" }[rng]}`, 60, 126);
+  g.fillStyle = "#ffffff"; g.font = "800 92px Inter, sans-serif"; g.fillText(big(t.total.all), 60, 250);
+  g.fillStyle = "#c9b9ab"; g.font = "600 20px Inter, sans-serif";
+  g.fillText(`${big(t.total.cache)} cache reads · ${big(t.total.fresh)} fresh · ${big(t.total.output)} written`, 64, 288);
+  const sh = t.shipped || {};
+  if (sh.commits) { g.fillStyle = "#7df0ad"; g.fillText(`${sh.commits.toLocaleString()} commits · ${sh.prs_merged} PRs merged · ${big(t.total.all / sh.commits)} tokens a commit`, 64, 322); }
+  // the ranking
+  const rows = (t.seats || []).filter(s => s.seat && s.all > 0).slice(0, 6), max = Math.max(1, ...rows.map(s => s.all));
+  rows.forEach((s, i) => {
+    const seat = snap.seats.find(x => x.id === s.seat), y = 380 + i * 38, color = seat ? seat.color : "#82889f";
+    g.fillStyle = "#ffffff"; g.font = "700 20px Inter, sans-serif"; g.fillText(`${i + 1}. ${who(s.seat)}`.slice(0, 22), 60, y + 20);
+    g.fillStyle = "rgba(255,255,255,0.08)"; g.fillRect(300, y + 6, 420, 14);
+    g.fillStyle = color; g.fillRect(300, y + 6, Math.max(4, 420 * s.all / max), 14);
+    g.fillStyle = "#d9cbbf"; g.font = "700 18px Inter, sans-serif"; g.fillText(big(s.all), 734, y + 20);
+  });
+  // the top burner, crowned
+  const top = rows[0] && snap.seats.find(x => x.id === rows[0].seat);
+  if (top) {
+    g.fillStyle = "rgba(255,122,69,0.12)"; g.fillRect(860, 150, 280, 300);
+    g.strokeStyle = "rgba(255,160,90,0.5)"; g.lineWidth = 2; g.strokeRect(860, 150, 280, 300);
+    g.fillStyle = "#ff9b3d"; g.font = "700 15px Inter, sans-serif"; g.fillText(rng === "all" ? "TOP BURNER" : "BURNING HOTTEST", 884, 184);
+    g.imageSmoothingEnabled = false; g.drawImage(portrait("mascot-" + top.id, top.color, { scale: 9, crown: true, level: top.career ? top.career.level : 0 }), 946, 200);
+    g.fillStyle = "#ffffff"; g.font = "800 30px Inter, sans-serif"; g.textAlign = "center"; g.fillText(who(top.id).slice(0, 14), 1000, 380);
+    g.fillStyle = "#d9cbbf"; g.font = "600 17px Inter, sans-serif"; g.fillText(`${Math.round(rows[0].all / Math.max(1, t.total.all) * 100)}% of the tokens`, 1000, 410); g.textAlign = "left";
+  }
+  // the models, as one strip
+  const models = (t.models || []).filter(m => m.all > 0).slice(0, 4), mt = models.reduce((a, m) => a + m.all, 0) || 1;
+  let x = 860; const hues = ["#ff7a45", "#ffb36b", "#7aa8ff", "#a993ff"];
+  models.forEach((m, i) => { const w = 280 * m.all / mt; g.fillStyle = hues[i]; g.fillRect(x, 480, Math.max(2, w - 2), 12); x += w; });
+  g.font = "600 14px Inter, sans-serif"; g.fillStyle = "#c9b9ab";
+  const names = models.map(m => `${modelName(m.model)} ${Math.round(m.all / mt * 100)}%`);
+  while (names.length > 1 && g.measureText(names.join(" · ")).width > 290) names.pop();   // whole names only
+  g.fillText(names.join(" · "), 860, 516);
+  g.fillStyle = "#7a6f68"; g.font = "500 15px Inter, sans-serif"; g.textAlign = "right";
+  g.fillText("Claude Office · github.com/JigarJoshi04/claude-office", W - 60, H - 30); g.textAlign = "left";
+  return c;
+}
+
+// The picture in a dialog, to save or copy.
+export async function shareTokens(app, t, rng) {
+  const { $, toast } = await import("./util.js");
+  const c = await tokensPicture(app, t, rng), url = c.toDataURL("image/png");
+  $("dialogBody").innerHTML = `<div class="dh"><b>Tokens picture</b><button class="btn sm ghost" id="tsClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="db"><img class="daycard" src="${url}" alt="The office's tokens: the total, every character ranked, shipped work and the models">
+    <div class="row" style="margin-top:12px;gap:8px"><button class="btn primary" id="tsSave">${icon("download", 15)}Save</button><button class="btn" id="tsCopy">${icon("copy", 15)}Copy</button></div></div>`;
+  $("dialog").showModal();
+  $("tsClose").addEventListener("click", () => $("dialog").close());
+  $("tsSave").addEventListener("click", () => { const a = document.createElement("a"); a.download = `tokens-${rng}.png`; a.href = url; a.click(); });
+  $("tsCopy").addEventListener("click", () => c.toBlob(b => {
+    if (!b || !navigator.clipboard || !window.ClipboardItem) { toast("Copying pictures is not supported here: use Save.", "info"); return; }
+    navigator.clipboard.write([new ClipboardItem({ "image/png": b })]).then(() => toast("Copied. Paste it into a post or a channel.", "good"), () => toast("Could not copy: use Save.", "warn"));
+  }));
+  $("tsSave").focus();
 }
