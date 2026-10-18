@@ -18,6 +18,7 @@ class GradeTests(unittest.TestCase):
         self.assertEqual([grade(p)["score"] for p in (98, 92, 75, 45, 12, 2)], [-2, -1, 0, 1, 2, None])
         self.assertEqual(grade(100, 1, 30)["name"], "Bogey")                  # ran out of the week
         self.assertEqual(grade(100, 1, 7 * 60)["name"], "Double bogey")       # and waited a long time
+        self.assertEqual(grade(100)["name"], "Bogey")                           # a reading of 100% is running out
         self.assertEqual(grade(20, benched=True)["name"], "Rest week")         # on holiday: not scored
         self.assertEqual(grade(80, benched=True)["name"], "Par")
 

@@ -23,6 +23,8 @@ WEEK = 7 * 86400
 def grade(peak: float | None, week_limits: int = 0, limited_min: float = 0, benched: bool = False) -> dict:
     """A closed (or so-far) window's score against par, with its name and why. A seat sent on holiday is not scored
     for the plan it left unused."""
+    if peak is not None and peak >= 100:                  # the reading tops out at 100: that is running out
+        week_limits = max(1, week_limits)
     if peak is None or peak < 5 or (benched and not week_limits and peak < 60):
         return {"score": None, "name": "Rest week", "why": "on holiday" if benched else "the seat was barely used"}
     if week_limits:
@@ -82,7 +84,7 @@ class Weeks:
                     w["benched"] = True
                 limited = s.get("status") == "limited"
                 by_week = limited and pct >= 99
-                if limited and w.get("was_limited") is False:
+                if limited and not w.get("was_limited"):         # it ran into a wall (a new window's first reading too)
                     if by_week:
                         w["limits"] += 1
                     else:

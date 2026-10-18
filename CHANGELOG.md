@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.70.1] - 2026-10-19
+
+### Fixed
+- Par for the week: a week whose reading reaches 100% has run out (a bogey, not an eagle), and a seat that is
+  already out when its window is first seen counts as having run out.
+
 ## [3.70.0] - 2026-10-19
 
 ### Added
