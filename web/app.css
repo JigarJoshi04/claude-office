@@ -1154,6 +1154,28 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .pol span { padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
 .brief-check .bc.ok { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
 .brief-check .bc-n { margin-left: auto; font: 500 12px var(--mono); color: var(--faint); }
+.coach { position: relative; margin: 0 0 14px; padding: 12px 40px 10px 14px; border-radius: 12px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); font-size: 14px; line-height: 1.5; }
+.coach.err { box-shadow: inset 3px 0 0 var(--bad); }
+.coach > [data-coach-x] { position: absolute; top: 6px; right: 6px; }
+.coach p { margin: 0 0 8px; }
+.coach-sim { margin: 0 0 10px; font-size: 13px; }
+.coach-sim summary { cursor: pointer; color: var(--muted); }
+.coach-sim ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.coach-sim li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.coach-sim small { color: var(--faint); }
+.coach-sim .o-done { color: var(--good); } .coach-sim .o-blocked, .coach-sim .o-failed { color: var(--bad); }
+.coach-f { margin: 4px 0 10px; padding: 0; list-style: none; display: grid; gap: 6px; }
+.coach-f li { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: baseline; }
+.coach-f li svg { align-self: start; margin-top: 3px; color: var(--warn); }
+.coach-f li.k-good svg { color: var(--good); } .coach-f li.k-risky svg, .coach-f li.k-too-big svg { color: var(--bad); }
+.coach-f b { font-size: 12.5px; }
+.coach-m svg { display: inline-block; vertical-align: -2px; margin-right: 4px; }
+.coach-m .btn { margin-left: 6px; vertical-align: middle; }
+.coach-rw summary { cursor: pointer; font-weight: 600; }
+.coach-rw summary small { font-weight: 400; color: var(--faint); }
+.coach-rw .diff { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface); white-space: pre-wrap; font-size: 13.5px; max-height: 320px; overflow: auto; }
+.coach-rw ins { text-decoration: none; background: color-mix(in srgb, var(--good) 22%, transparent); border-radius: 3px; }
+.coach-rw del { color: var(--faint); background: color-mix(in srgb, var(--bad) 14%, transparent); border-radius: 3px; }
 
 /* ------------------------------------------------------------------ gifts and the sticker album (3.9) */
 .giftchip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border: 0; border-radius: 99px; cursor: pointer;

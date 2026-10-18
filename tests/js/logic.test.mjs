@@ -579,3 +579,16 @@ test("help topics are searchable and each one can be found", async () => {
   assert.equal(findTopics("").length, TOPICS.length);
   assert.deepEqual(findTopics("zzzz"), []);
 });
+
+import { wordDiff } from "../../web/ui/coach.js";
+
+test("the brief coach's diff marks words in and out and keeps the spacing", () => {
+  const d = wordDiff("Fix the test now", "Fix the flaky test\nnow");
+  assert.equal(d.filter(p => p.t !== "add").map(p => p.s).join(""), "Fix the test now");
+  assert.equal(d.filter(p => p.t !== "del").map(p => p.s).join(""), "Fix the flaky test\nnow");
+  assert.ok(d.some(p => p.t === "add" && p.s.includes("flaky")));
+  assert.deepEqual(wordDiff("same words", "same words"), [{ t: "same", s: "same words" }]);
+  assert.deepEqual(wordDiff("", "new"), [{ t: "add", s: "new" }]);
+  const big = Array.from({ length: 2100 }, (_, i) => "w" + i).join(" ");
+  assert.deepEqual(wordDiff(big, big + " x").map(p => p.t), ["del", "add"]);       // too long for the table: out and in
+});

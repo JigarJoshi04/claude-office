@@ -176,6 +176,16 @@ def away_digest(events: list[dict], attention: list[dict], lanes: list[dict]) ->
             + ("\n".join(needs) or "- nothing") + "\n\nLanes still out:\n" + ("\n".join(out) or "- none"))
 
 
+def analyst_seat(snap: dict) -> dict | None:
+    """A seat the analyst itself would use (brain.GUARD_5H) for a question that is not about one session: the divider's
+    pick first."""
+    ok = lambda s: s.get("kind") == "claude" and s.get("status") not in ("limited", "offline", "benched") and \
+        (s.get("health") or {}).get("state") != "login" and (((s.get("usage") or {}).get("five_hour") or {}).get("pct") or 0) < brain.GUARD_5H
+    seats = [s for s in snap.get("seats", []) if ok(s)]
+    pick = (snap.get("next_pick") or {}).get("seat")
+    return next((s for s in seats if s["id"] == pick), None) or (seats[0] if seats else None)
+
+
 def away(office, body: dict, demo: bool = False) -> dict:
     """The away card, written: a headline, what needs a decision, what got done, and how much was noise."""
     since = body.get("since")
@@ -190,12 +200,7 @@ def away(office, body: dict, demo: bool = False) -> dict:
     snap = office.get() or {}
     events = [e for e in standup.events_between(office._events_path, since, now + 1)]
     text = away_digest(events, snap.get("attention") or [], snap.get("lanes") or [])
-    # A seat the analyst itself would use (brain.GUARD_5H), the divider's pick first.
-    ok = lambda s: s.get("kind") == "claude" and s.get("status") not in ("limited", "offline", "benched") and \
-        (s.get("health") or {}).get("state") != "login" and (((s.get("usage") or {}).get("five_hour") or {}).get("pct") or 0) < brain.GUARD_5H
-    seats = [s for s in snap.get("seats", []) if ok(s)]
-    pick = (snap.get("next_pick") or {}).get("seat")
-    seat = next((s for s in seats if s["id"] == pick), None) or (seats[0] if seats else None)
+    seat = analyst_seat(snap)
     hours = (now - since) / 3600
     prompt = ("You write the 'while you were away' note for the person who runs a small office of AI coding agents. "
               f"They were away for {hours:.1f} hours. From the log below, write: a headline of at most 15 words; "

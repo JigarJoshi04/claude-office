@@ -14,6 +14,7 @@ import { md } from "./md.js";
 import { pageHtml as scrapHtml, bindPage as bindScrap } from "./scrapbook.js";
 import { exportSave, importSave } from "./sync.js";
 import { helpHtml } from "./help.js";
+import { coachHtml } from "./coach.js";
 import { seasonFor, SEASON_NAME } from "../engine/season.js";
 import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
@@ -32,6 +33,7 @@ const EVENT_ICON = { levelup: "star", achievement: "trophy", arrive: "play", lea
 
 export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
+  let coachState = null;              // the brief coach's last read (coach.js), for this visit to the hiring desk
   let hireDraft = store.get("hireDraft", { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true });
   let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null, egressData = null, helpQuery = "";
   let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
@@ -1461,6 +1463,8 @@ export function makePanels(app) {
           <label class="f">For each (one per line: PRs, failing tests, files)<textarea id="hEach" placeholder="#481&#10;#482&#10;tests/test_export.py" style="min-height:76px">${esc(d.each || "")}</textarea></label>
           <p class="hint">Each line becomes its own lane in the backlog (at most 20), running in waves as seats free up. Write {{item}} in the title or the brief where the line goes; otherwise it is added to both.</p></details>
         <div class="brief-check" id="hCheck" aria-live="polite">${briefCheck(d.brief)}</div>
+        <div class="row" style="gap:8px;margin:-6px 0 12px;flex-wrap:wrap"><button class="btn sm" id="hSharpen" ${coachState && coachState.pending ? "disabled" : ""}>${icon("sparkles", 14)}Sharpen the brief</button><span class="hint">How big jobs like it have been, and the analyst's read when it is on</span></div>
+        <div id="hCoach" aria-live="polite">${coachHtml(coachState, { now: d.brief, model: d.model || ld.model, privacy: app.privacy() })}</div>
         <label class="f">Working folder<input type="text" id="hDir" list="hDirs" value="${esc(d.workdir || snap.office.default_workdir || "")}"><datalist id="hDirs">${dirs.map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
         <div class="grid2">
           <label class="f">Who does it<select id="hSeat"><option value="auto" ${d.seat === "auto" ? "selected" : ""}>Let the divider pick (now ${esc(np.seat ? nameOf(np.seat) : "nobody")})</option>
@@ -1507,6 +1511,35 @@ export function makePanels(app) {
         const goLabel = () => { const n = items().length; q("hGo").innerHTML = `${icon("briefcase", 16)}${n >= 2 ? `Hire ${Math.min(n, 20)} lanes into the backlog` : "Hire and start"}`; };
         q("hEach").addEventListener("input", goLabel); goLabel();
         q("hBrief").addEventListener("input", () => { q("hCheck").innerHTML = briefCheck(q("hBrief").value); });
+        // The brief coach: similar past lanes always, the analyst's read when it is on; nothing changes until picked.
+        const coachPaint = () => {
+          const el = q("hCoach");
+          if (!el) return;
+          el.innerHTML = coachHtml(coachState, { now: q("hBrief").value, model: q("hModel").value, privacy: app.privacy() });
+          q("hSharpen").disabled = !!(coachState && coachState.pending);
+          el.querySelectorAll("[data-coach-x]").forEach(b => b.addEventListener("click", () => { coachState = null; coachPaint(); }));
+          el.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: b.dataset.go })));
+          el.querySelectorAll("[data-coach-model]").forEach(b => b.addEventListener("click", () => {
+            q("hModel").value = b.dataset.coachModel; save(); q("hModelHint").innerHTML = modelHint(q("hSeat").value, q("hModel").value); coachPaint();
+          }));
+          const put = (text, applied) => { q("hBrief").value = text; save(); q("hCheck").innerHTML = briefCheck(text); coachState = { ...coachState, applied }; coachPaint(); };
+          const use = el.querySelector("[data-coach-use]");
+          if (use) use.addEventListener("click", () => put(coachState.data.coach.rewrite.trim(), true));
+          const undo = el.querySelector("[data-coach-undo]");
+          if (undo) undo.addEventListener("click", () => put(coachState.brief, false));
+        };
+        coachPaint();
+        q("hBrief").addEventListener("input", debounce(() => { if (coachState && !coachState.pending) coachPaint(); }, 400));
+        q("hModel").addEventListener("change", () => { if (coachState && !coachState.pending) coachPaint(); });
+        q("hSharpen").addEventListener("click", async () => {
+          const brief = q("hBrief").value.trim();
+          if (brief.length < 20) { toast("Write a few lines of the brief first.", "warn"); q("hBrief").focus(); return; }
+          coachState = { pending: true }; coachPaint();
+          try { coachState = { brief, data: await app.post("/api/ai/coach", { title: q("hTitle").value, brief, model: q("hModel").value }) }; }
+          catch (err) { coachState = { error: err.message }; }
+          if (root.isConnected) coachPaint();
+          else if (document.getElementById("hCoach")) app.rerender(true);   // the desk was drawn again while it read
+        });
         q("hMsg").addEventListener("change", save);
         q("hMax").addEventListener("change", save);
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });

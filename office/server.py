@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import askabout, asks, brain, checkpoint, config, divider, lanes, messaging, sessions, talk, settings, tokens
+from . import askabout, asks, brain, checkpoint, coach, config, divider, lanes, messaging, sessions, talk, settings, tokens
 from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.129.0"
+    server_version = "ClaudeOffice/3.130.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -414,6 +414,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, askabout.ask(self.office, body, self.demo))
             if path == "/api/ai/away":                    # the away card, written by the analyst (askabout.away)
                 return self._json(200, askabout.away(self.office, body, self.demo))
+            if path == "/api/ai/coach":                   # the hiring desk's brief coach (coach.py): similar lanes, and the analyst's read
+                return self._json(200, coach.coach(self.office, body, self.demo))
             if path == "/api/ask":                        # an agent's question for the CEO (python3 -m office ask)
                 return self._json(200, ask_question(self.office, body))
             if path in ("/api/ask/answer", "/api/ask/dismiss"):

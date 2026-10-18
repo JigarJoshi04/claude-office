@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.130.0] - 2026-10-19
+
+### Added
+- The brief coach. Sharpen the brief on the hiring desk to see how big jobs like it have been: the finished lanes whose
+  briefs share the most words with it, how long they ran, the tokens they took, how they ended and on which model
+  (medians from three or more). This part is counted, not asked, and works with the analyst off. With the analyst on,
+  it also reads the brief and says what is missing, vague, risky or too big, suggests a model with a reason, and
+  offers a tighter brief as a word diff (or whole, when mostly rewritten). Nothing on the form changes until you pick
+  it, and Undo puts your brief back. Only the brief and past lanes' titles and outcomes are sent, never their briefs.
+
 ## [3.129.0] - 2026-10-19
 
 ### Fixed
