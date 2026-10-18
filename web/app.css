@@ -928,3 +928,8 @@ body.tv .peek { width: 340px; }
 .panel-toggle { margin-left: 4px; }
 .panel-toggle[aria-pressed="false"] { color: var(--accent); background: var(--accent-soft); }
 @media (max-width: 1240px), (max-height: 639px) { .panel-toggle { display: none; } }
+
+/* the day card dialog */
+#dialog.wide { width: min(860px, calc(100vw - 32px)); max-width: none; }
+.daycard { display: block; width: 100%; height: auto; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.goals-done .btn { flex: none; }

@@ -9,6 +9,7 @@ import { icon } from "./ui/icons.js";
 import { pulse, line, reaction, voice, binding, leftOf } from "./ui/personas.js";
 import { goals } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
+import { dayCard } from "./ui/daycard.js";
 import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
 
@@ -684,6 +685,28 @@ async function savePicture() {
   }, "image/png");
 }
 
+// The day card (ui/daycard.js): shown in a dialog with Save and Copy, so it can go straight into a post or a channel.
+async function shareDay() {
+  const stats = app.statsCache(null);
+  if (!snap || !stats || stats.unavailable) { toast("Today's numbers are still loading. Try again in a moment.", "info"); loadStats(null, true); return; }
+  const c = await dayCard({ snap, stats, persona: (s) => panels.persona(s), goalDays: store.get("goalDays", []) });
+  const url = c.toDataURL("image/png");
+  $("dialogBody").innerHTML = `<div class="dh"><b>Today's card</b><button class="btn sm ghost" id="dcClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="db"><img class="daycard" src="${url}" alt="A card of today's work: reports, hours, tool calls, the employee of the day, goals and the team">
+    <p class="hint" style="margin:10px 0 0">Only character names, levels and counts: no session names, topics or accounts.</p>
+    <div class="row" style="margin-top:14px;gap:8px"><button class="btn primary" id="dcSave">${icon("copy", 15)}Save PNG</button><button class="btn" id="dcCopy">${icon("copy", 15)}Copy image</button></div></div>`;
+  $("dialog").classList.add("wide"); $("dialog").showModal();
+  $("dialog").addEventListener("close", () => $("dialog").classList.remove("wide"), { once: true });
+  $("dcClose").addEventListener("click", () => $("dialog").close());
+  $("dcSave").addEventListener("click", () => { const a = document.createElement("a"); a.href = url; a.download = `claude-office-day-${stats.day || "today"}.png`; document.body.appendChild(a); a.click(); a.remove(); toast("Saved today's card.", "good"); });
+  $("dcCopy").addEventListener("click", () => c.toBlob(async (b) => {
+    try { await navigator.clipboard.write([new ClipboardItem({ "image/png": b })]); toast("Copied. Paste it into a post or a channel.", "good"); }
+    catch { toast("This browser cannot copy images: use Save instead.", "warn"); }
+  }, "image/png"));
+  $("dcSave").focus();
+}
+app.shareDay = shareDay;
+
 function shortcuts() {
   const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S", "Floor, Timeline, Team, Today"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
@@ -706,7 +729,7 @@ function openMenu(focusItem) {
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
-    + "<hr>" + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -729,6 +752,7 @@ function openMenu(focusItem) {
     else if (k === "text") setPref("textSize", { auto: "s", s: "m", m: "l", l: "xl", xl: "auto" }[prefs.textSize] || "auto");
     else if (k === "checkpoint") checkpoint();
     else if (k === "tv") setTv(true);
+    else if (k === "daycard") shareDay();
     else if (k === "replay") { setView("floor"); replay.open(6); }
     else if (k === "broadcast") broadcast();
     else if (k === "picture") savePicture();
@@ -877,6 +901,7 @@ function paletteItems() {
     { icon: icon("sliders", 16), label: "Load divider", hint: "D", keywords: "split weights bench", run: () => go({ kind: "divider" }) },
     { icon: icon("floor", 16), label: "Floor", hint: "F", run: () => setView("floor") },
     { icon: icon("star", 16), label: "Your office: level and unlocks", keywords: "office level unlocks xp progress", run: () => go({ kind: "office" }) },
+    { icon: icon("star", 16), label: "Share today's card", keywords: "share picture day summary post card wrapped", run: () => shareDay() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => setTv(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },
     { icon: icon("rewind", 16), label: "Replay the last 24 hours", keywords: "history playback rewind day yesterday", run: () => { setView("floor"); replay.open(24); } },

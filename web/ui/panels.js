@@ -109,7 +109,7 @@ export function makePanels(app) {
     if (!gl) return "";
     const done = gl.filter(g => g.done).length, run = streak(store.get("goalDays", []), st.day);
     const flame = run >= 2 ? `<span class="streak" title="Days in a row with every goal done">${icon("flame", 14)}${run}-day streak</span>` : "";
-    if (done === gl.length) return `<div class="goals-done">${icon("trophy", 18)}<span><b>All three goals done today.</b> New ones at midnight.</span>${flame}</div>`;
+    if (done === gl.length) return `<div class="goals-done">${icon("trophy", 18)}<span><b>All three goals done today.</b> New ones at midnight.</span>${flame}<button class="btn sm" data-share-day>Share the day</button></div>`;
     const r = 17, len = 2 * Math.PI * r;
     return `<section class="b-sec"><h3 class="b-h">Today's goals<span class="count">${done}/${gl.length}</span><span class="grow"></span>${flame}</h3><div class="goals">${gl.map(g => `
       <div class="goal${g.done ? " done" : ""}" title="${esc(g.label)}: ${esc(g.text)}"><span class="g-ring"><svg class="g-arc" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="${r}" class="trk"/><circle cx="20" cy="20" r="${r}" class="val" stroke-dasharray="${(len * g.f).toFixed(1)} ${len.toFixed(1)}"/></svg>${icon(g.done ? "check" : g.icon, 16)}</span>
@@ -205,6 +205,7 @@ export function makePanels(app) {
         <button data-go="services">${icon("server", 16)}Services</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
+        const sd = root.querySelector("[data-share-day]"); if (sd) sd.addEventListener("click", () => app.shareDay());
         const at = root.querySelector("[data-away-toggle]"); if (at) at.addEventListener("click", () => { awayOpen = !awayOpen; app.rerender(true); });
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
