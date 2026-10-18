@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.94.0] - 2026-10-19
+
+### Changed
+- Lanes waiting for a seat start the moment one is free: they used to sleep until their next guess (up to half an
+  hour); now the office wakes them when the divider has a seat again, and the oldest waiting lane goes first.
+
 ## [3.93.0] - 2026-10-19
 
 ### Added

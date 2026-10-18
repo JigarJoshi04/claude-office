@@ -469,6 +469,9 @@ class Office(LiveOffice):
                 else:
                     x["talk"] = "later"   # running without a message socket: follow up once it finishes
         evaluation = divider.evaluate(seats_out, div, limited_until=limits, now=now)
+        if evaluation["pick"] and not getattr(self, "_pick_was", None) and any(l.get("status") == "waiting" for l in lane_list if isinstance(l, dict)):
+            lanes.wake_waiting()                           # a seat can take a lane again: waiting lanes go now, not in 30 min
+        self._pick_was = evaluation["pick"]
         programmes = {}
         for s in seats_out:
             for x in s["sessions"]:
@@ -480,7 +483,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.93.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.94.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,

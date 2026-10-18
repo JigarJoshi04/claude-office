@@ -592,6 +592,42 @@ def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[l
     return cmd, env
 
 
+WAKE = ".wake"                   # the office touches it the moment a seat can take a lane again
+
+
+def wake_waiting() -> None:
+    """Wake the lanes waiting for a seat (they check every 15 s instead of sleeping until their next guess)."""
+    try:
+        lanes_dir().mkdir(parents=True, exist_ok=True)
+        (lanes_dir() / WAKE).touch()
+    except OSError:
+        pass
+
+
+def woken_since(mark: float) -> bool:
+    try:
+        return (lanes_dir() / WAKE).stat().st_mtime >= mark - 0.05     # file times are coarser than time.time()
+    except OSError:
+        return False
+
+
+def queue_position(lane_id: str) -> int:
+    """This lane's place among those waiting for a seat, oldest first (0 = next)."""
+    waiting = sorted((l for l in unfinished_lanes(("waiting",))), key=lambda l: l.get("created_at") or 0)
+    return next((i for i, l in enumerate(waiting) if l["id"] == lane_id), 0)
+
+
+def _sleep_or_wake(lane_id: str, delay: float, step: float = 15.0) -> None:
+    """Wait up to `delay` for a seat; when the office says one is free, go at once, the oldest waiting lane first."""
+    mark, waited = time.time(), 0.0
+    while waited < delay:
+        time.sleep(min(step, delay - waited))
+        waited += step
+        if woken_since(mark):
+            time.sleep(min(60, 5 * queue_position(lane_id)))    # older lanes get the seat first
+            return
+
+
 def _wait_until_seated(seat: dict, proc, timeout: float = 30.0) -> str | None:
     """Block until the new agent shows up as a live session on its seat (or exits, or the timeout passes).
     Returns its Claude session id when it can be read, so the CEO can follow up on it later."""
@@ -674,7 +710,7 @@ def run_lane(lane_id: str) -> int:
             save_lane(lane)
             _log(lane_id, f"waiting for a seat: {why}")
             delay = max(60, min(1800, (wake or time.time() + 600) - time.time() + 60))
-            time.sleep(delay)
+            _sleep_or_wake(lane_id, delay)
             continue
         if not seat:
             _log(lane_id, f"seat {seat_id} vanished")

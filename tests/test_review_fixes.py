@@ -348,3 +348,25 @@ class BacklogTests(unittest.TestCase):
                 start.assert_called_once_with("late")
                 with self.assertRaises(ValueError):
                     lanes.to_front("nope")
+
+
+class WakeTests(unittest.TestCase):
+    def test_waiting_lanes_wake_when_a_seat_frees_oldest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "lanes"
+            for i, created in (("old", 1.0), ("new", 5.0)):
+                (root / i).mkdir(parents=True)
+                (root / i / "lane.json").write_text(json.dumps({"id": i, "status": "waiting", "created_at": created, "title": "t"}))
+            with patch.object(lanes, "lanes_dir", return_value=root):
+                self.assertEqual((lanes.queue_position("old"), lanes.queue_position("new")), (0, 1))
+                self.assertFalse(lanes.woken_since(0))
+                slept = []
+                def sleep(s):
+                    slept.append(s)
+                    if len(slept) == 2:
+                        lanes.wake_waiting()                                # the office: a seat is free
+                with patch.object(lanes.time, "sleep", side_effect=sleep):
+                    lanes._sleep_or_wake("new", 1800)
+                self.assertEqual(slept[:2], [15.0, 15.0])
+                self.assertEqual(slept[2], 5)                               # second in line: a short head start for the oldest
+                self.assertEqual(len(slept), 3)                             # not the whole 30 minutes
