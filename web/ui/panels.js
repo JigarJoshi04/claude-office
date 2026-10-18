@@ -118,7 +118,7 @@ export function makePanels(app) {
       const y = wk && wk.length >= 2 ? wk[wk.length - 2] : null;
       const recap = y && (y.reports || y.active_min) ? `Yesterday: ${y.reports} report${y.reports === 1 ? "" : "s"} and ${hrs(y.active_min)} of agent work.` : "A fresh day.";
       return `<div class="rhythm am">${icon("sun", 20)}<div class="grow"><b>Good morning${ceo && ceo !== "CEO" ? ", " + esc(ceo) : ""}.</b>
-        <span>${esc(recap)} Today's goals: ${goalsFor(st.day).map(g => esc(g.label.toLowerCase())).join(", ")}.</span></div>
+        <span>${esc(recap)} Today's goals: ${goalsFor(st.day).map(g => esc(g.label.toLowerCase())).join(", ")}.${(() => { const w = weekly(wk); return w && !w.calibrating && !w.done ? ` This week: ${w.have} of ${w.target} reports, ${w.daysLeft + 1} day${w.daysLeft ? "s" : ""} to go.` : ""; })()}</span></div>
         <button class="btn sm ghost icon" data-rhythm="am-${esc(st.day)}" aria-label="Dismiss" title="Dismiss">${icon("x", 15)}</button></div>`;
     }
     if (h >= 18 && !seen["pm-" + st.day] && ((st.office || {}).reports || sum(st, "active_min"))) {
