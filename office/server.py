@@ -113,6 +113,9 @@ def answer_question(office, body: dict, dismiss: bool, demo: bool) -> dict:
         except ValueError as e:                           # not delivered: the question stays open, to try again
             office.asks.release(ask_id)
             raise ValueError(f"Not sent: {e}")
+        except Exception:                                 # anything else (systemd-run failing, say): open again too
+            office.asks.release(ask_id)
+            raise
         if delivery == "followup":
             note = "That session had ended, so a follow-up lane picks up your answer."
     else:
@@ -167,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.64.0"
+    server_version = "ClaudeOffice/3.65.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -399,10 +402,11 @@ class Handler(BaseHTTPRequestHandler):
                 if path == "/api/dnd":
                     until = quiet.dnd(minutes)
                 else:
-                    key = body.get("key")
-                    if not isinstance(key, str) or not 1 <= len(key) <= 200:
-                        raise ValueError("key must be 1-200 characters")
-                    quiet.snooze(key, minutes)
+                    keys = body.get("keys") if "keys" in body else [body.get("key")]   # a grouped item snoozes all it holds
+                    if not isinstance(keys, list) or not 1 <= len(keys) <= 50 or not all(isinstance(k, str) and 1 <= len(k) <= 200 for k in keys):
+                        raise ValueError("key must be 1-200 characters (keys: a list of up to 50)")
+                    for key in keys:
+                        quiet.snooze(key, minutes)
                     until = None
                 self.office.build()
                 return self._json(200, {"ok": True, "until": until})
@@ -456,7 +460,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.office.emit("lane", f"CEO hired office lane '{lane['title']}' ({lane['seat_pref']})" + (" to start later" if lane.get("schedule") else ""), level="good")
                 return self._json(200, {"ok": True, "lane": lane})
             if path == "/api/lanes/stop-all":               # the panic button: every office lane that is not finished
-                stopped = [lanes.stop_lane(l["id"])["id"] for l in lanes.list_lanes() if l.get("status") in ("running", "waiting", "queued")]
+                stopped = [lanes.stop_lane(l["id"])["id"] for l in lanes.unfinished_lanes()]
                 if stopped:
                     self.office.emit("lane", f"CEO stopped every office lane ({len(stopped)})", None, "warn")
                 self.office.build()

@@ -30,7 +30,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 6                # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 7                # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -221,7 +221,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
-                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w") if k in r}
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
@@ -425,6 +425,8 @@ class TokenLedger:
         if m:
             self._ts = m.group(1).decode()
         priced = self._cost(raw, sid) if b'"usage"' in raw and b'"assistant"' in raw else False   # a line can carry both
+        if b'"tool_use"' in raw and (b'"WebSearch"' in raw or b'"WebFetch"' in raw):
+            priced |= self._web(raw, sid)
         if b'"tool_use"' in raw and b'"Bash"' in raw and (b"git" in raw or b"gh " in raw):
             try:
                 d = json.loads(raw)
@@ -472,6 +474,28 @@ class TokenLedger:
                 pr = pr_number(kinds if v[3] else {"pr_open"}, cmd, text) if v[2] or v[3] else None
                 self.events.append({"session": sid, "kind": kind, "v": v[:4], "pr": pr, "at": at})
         return changed
+
+    def _web(self, raw: bytes, sid: str) -> bool:
+        """Web searches and page fetches, per day as [searches, fetches]: the WebSearch and WebFetch calls themselves
+        (Claude Code leaves the usage's server_tool_use counts at zero)."""
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return False
+        content = (d.get("message") or {}).get("content") if isinstance(d, dict) and d.get("type") == "assistant" else None
+        hit = [0, 0]
+        for c in content if isinstance(content, list) else []:
+            if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") in ("WebSearch", "WebFetch") \
+                    and not self._seen("tool", sid, c.get("id")):
+                hit[c["name"] == "WebFetch"] += 1
+        if not any(hit):
+            return False
+        day, _ = _when(self._ts)
+        with self.lock:
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+            v = s.setdefault("web", {}).setdefault(day or "?", [0, 0])
+            v[0] += hit[0]; v[1] += hit[1]
+        return True
 
     def _note_wait(self, raw: bytes, sid: str) -> bool:
         """How long a session waited on its person: from a turn's end to the next prompt someone typed. Kept per day as
@@ -910,8 +934,10 @@ class TokenLedger:
         for r in mine.values():
             for d, v in (r.get("x") or {}).items():
                 if cur is None or d in cur:
-                    for i in range(4):
-                        where[i] += v[i]
+                    where[0] += v[0]; where[1] += v[1]
+            for d, v in (r.get("web") or {}).items():                    # counted from the calls (see _web)
+                if cur is None or d in cur:
+                    where[2] += v[0]; where[3] += v[1]
         waits, longest, wait_days = [0, 0, 0] + [0] * len(WAIT_EDGES), [], {}  # seconds, replies, away, histogram
         for sid, r in mine.items():
             for d, v in (r.get("w") or {}).items():

@@ -171,7 +171,8 @@ def _demo_token_ledger() -> TokenLedger:
                                  "d": {d.isoformat(): [f, c, o]}, "h": hours, "f": f, "c": c, "o": o, "n": int(size / 1e5),
                                  "g": {d.isoformat(): [commits, int(commits > 0), prs, prs if rnd("m", d, seat, k) < 0.8 else 0, commits * 37, commits * 9]}}
                 if seat != "astra":                                   # where they went: helpers, thinking, the web
-                    sessions[sid]["x"] = {d.isoformat(): [int((f + c) * (0.1 + 0.3 * rnd("hx", d, seat, k))), int(o * 0.35), int(rnd("ws", d, seat, k) * 4), int(rnd("wf", d, seat, k) * 6)]}
+                    sessions[sid]["x"] = {d.isoformat(): [int((f + c) * (0.1 + 0.3 * rnd("hx", d, seat, k))), int(o * 0.35), 0, 0]}
+                    sessions[sid]["web"] = {d.isoformat(): [int(rnd("ws", d, seat, k) * 4), int(rnd("wf", d, seat, k) * 6)]}
                 if seat in ("claude", "claude2") and rnd("tw", d, seat, k) < 0.7:   # desks the CEO talks to wait on replies
                     n = 2 + int(rnd("wn", d, seat, k) * 9)
                     waits = sorted(int(15 + 1500 * rnd("wv", d, seat, k, i) ** 2.6) for i in range(n))
@@ -432,6 +433,10 @@ class DemoOffice(LiveOffice):
                       "status": "waiting", "seat": None, "runs": [], "unit": "office-lane-1016-150000-nightly-flake-hunt",
                       "waiting_reason": "Every seat is busy or at its cap", "report_status": None, "state_tail": None,
                       "unit_active": True})
+        lanes.append({"id": "1016-220000-draft-release-notes", "title": "Draft the release notes", "workdir": "/home/you/work/apollo",
+                      "seat_pref": "auto", "model": "sonnet", "permission_mode": "acceptEdits", "created_at": now - 1200,
+                      "status": "scheduled", "schedule": {"at": (now // 3600 + 3) * 3600}, "seat": None, "runs": [],
+                      "unit": "office-lane-1016-220000-draft-release-notes", "report_status": None, "state_tail": None, "unit_active": False})
         units = [
             {"unit": "apollo-conductor.service", "active": "active", "sub": "running", "description": "Apollo conductor (lanes, integrator)"},
             {"unit": "apollo-lane-l12.service", "active": "active", "sub": "running", "description": "Apollo lane L12"},
@@ -441,7 +446,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.64.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.65.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

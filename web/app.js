@@ -309,7 +309,7 @@ if (prefs.radio) {
   addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 }
 const cards = makeCards({ app, panels, prefs });
-const alarms = makeAlarms({ app, prefs, toast, notify: (t, b) => { notifyTarget = { kind: "ceo" }; notify(t, b); }, sound, panels, DEMO });
+const alarms = makeAlarms({ app, prefs, toast, notify: (t, b) => { notifyTarget = { kind: "ceo" }; notify(t, b); }, sound, panels, DEMO, quiet: () => dndOn() });
 const burn = makeBurn({ app, office, panels, store, DEMO, prefs, giftBox, toast, sound, replay, alarms });
 app.openCard = (id) => cards.open(id);
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
@@ -525,7 +525,9 @@ function pageError(message, where) {
 }
 window.addEventListener("error", (e) => { if (!e.filename || e.filename.startsWith(location.origin)) pageError(e.message, e.filename ? `${e.filename.replace(location.origin, "")}:${e.lineno}` : null); });
 window.addEventListener("unhandledrejection", (e) => { const r = e.reason; if (r && /Failed to fetch|NetworkError|aborted/i.test(String(r.message || r))) return; pageError(r && r.message ? r.message : String(r), r && r.stack ? String(r.stack).split("\n")[1] : null); });
-function safeNews(e) { try { onNews(e); } catch (err) { console.error("office news:", err); } }
+// News is background: do not disturb quiets its toasts (a toast that answers something the CEO did always shows).
+let inNews = 0;
+function safeNews(e) { inNews++; try { onNews(e); } catch (err) { console.error("office news:", err); } finally { inNews--; } }
 function onNews(e) {
   const fx = replay.active() ? NOFX : office;     // while replaying, the floor shows the past: live news only toasts
   const key = e.ts + "|" + e.text;
@@ -680,7 +682,7 @@ function renderBurn() {
 $("burn").addEventListener("click", () => setView("tokens"));
 // Do not disturb, shared by every screen (POST /api/dnd): no sounds, no notifications, only serious toasts.
 const dndOn = () => !!(snap && snap.office.dnd_until && snap.office.dnd_until > Date.now() / 1000);
-setToastGate((level) => !dndOn() || level === "bad");
+setToastGate((level) => !inNews || !dndOn() || level === "bad");
 { const play = sound.play.bind(sound); sound.play = (...a) => { if (!dndOn()) play(...a); }; }
 async function setDnd(minutes) {
   try {

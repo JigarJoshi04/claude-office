@@ -200,3 +200,21 @@ class StatsTests(unittest.TestCase):
             current = snap(self.start + 60)
             current["lanes"] = [{"id": "0", "created_at": self.start}]
             self.assertEqual(self.h.stats(current, "2026-10-16")["office"]["lanes_hired"], 45)
+
+
+class AllOutTests(unittest.TestCase):
+    def test_a_benched_seat_does_not_hide_the_minutes_lost_to_limits(self):
+        import tempfile
+        from pathlib import Path
+        t = 1_792_281_600.0                                           # a day start; the day is read in local time below
+        with tempfile.TemporaryDirectory() as tmp:
+            h = HistoryStore(Path(tmp) / "h.jsonl", clock=lambda: t + 600)
+            snap2 = lambda ts, a, b: {"now": ts, "lanes": [], "seats": [
+                {"id": "a", "kind": "claude", "status": a, "usage": {}, "sessions": []},
+                {"id": "b", "kind": "claude", "status": b, "usage": {}, "sessions": []}]}
+            for i, (a, b) in enumerate([("limited", "benched"), ("limited", "offline"), ("benched", "offline"), ("limited", "idle")]):
+                h.record(snap2(t + 60 + i * 60, a, b))
+            day = __import__("time").strftime("%Y-%m-%d", __import__("time").localtime(t + 60))
+            out = h.stats(snap2(t + 400, "idle", "idle"), day)
+            self.assertEqual(out["office"]["all_out_min"], 2)          # limited + out anyway; never when nobody was limited
+            self.assertEqual(out["seats"]["a"]["limited_min"], 3)

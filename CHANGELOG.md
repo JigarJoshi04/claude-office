@@ -3,6 +3,31 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.65.0] - 2026-10-19
+
+### Fixed
+From an adversarial review of 3.45–3.62 (every finding reproduced first):
+- A lane hired for later can be cancelled or started now; its page says when it starts. Starting it early takes it
+  off the schedule, so it never starts twice.
+- "Stop every office lane" stops lanes that are starting or scheduled too, and counts them.
+- A finished chain stage that is run again no longer starts its next stage a second time; a report that says
+  "STATUS: DONE - unblocked …" no longer reads as blocked (one test for BLOCKED everywhere).
+- Scheduled lanes older than the 40 newest start when due; a "when a seat has N% left" schedule ignores seats that
+  are benched, offline or logged out.
+- Helper drones dock when a helper finishes while its session is busy (the notice arrives queued).
+- "Merged this week" counts every PR merged in the last week, not just those among the newest 40.
+- Snoozing a grouped Needs-you item ("2 sessions paused") snoozes all it holds; a lane waiting for a seat and the
+  same lane failing are separate items to snooze.
+- Do not disturb quiets the Jarvis voice too, keeps the toasts that answer your own clicks, and alarms that came up
+  during it ring once it ends.
+- Share-safe mode keeps a session's repeated call and its report out of Needs you.
+- A question whose answer failed to send for any reason opens again (it no longer stays "sending").
+- A state file that is not UTF-8, or a hand-edited quiet.json, is set aside instead of stopping the office; the
+  daily backup includes quiet.json.
+- Web searches and page fetches are counted from the calls themselves (the usage field was always zero); the
+  ledger reads the transcripts once more to count them.
+- "Hours lost to limits" counts minutes when the other seats were benched or offline anyway.
+
 ## [3.64.0] - 2026-10-19
 
 ### Added

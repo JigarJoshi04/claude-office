@@ -292,6 +292,9 @@ class TranscriptState:
             msg = {}
         if t == "user" and not d.get("isSidechain") and self.helpers:
             self._helper_result(msg.get("content"))
+        if t == "attachment" and self.helpers and isinstance(d.get("attachment"), dict) \
+                and d["attachment"].get("type") == "queued_command":   # a helper that finished while the session was busy
+            self._helper_result(d["attachment"].get("prompt"))
         if t == "user" and not d.get("isSidechain") and self.task_pending and isinstance(msg.get("content"), list):
             for c in msg["content"]:                # "Task #3 created successfully: …" gives a new task its id
                 if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") in self.task_pending:
@@ -553,6 +556,15 @@ def tail_text(path: str | None, max_lines: int = 12, max_bytes: int = 16384) -> 
         return None
     lines = [l for l in data.splitlines() if l.strip()]
     return redact("\n".join(lines[-max_lines:]))
+
+
+_BLOCKED = re.compile(r"^[\s#*_>`-]*(?:STATUS\W*)?BLOCKED\b", re.I)
+
+
+def report_blocked(line: str | None) -> bool:
+    """Whether a report's status line says BLOCKED ("STATUS: BLOCKED - ...", "**Status:** blocked"), and not a DONE
+    that merely mentions it ("STATUS: DONE - unblocked the release")."""
+    return bool(line and _BLOCKED.match(line))
 
 
 def first_line(path: str | None) -> str | None:

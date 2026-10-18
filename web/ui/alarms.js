@@ -5,12 +5,13 @@
 export const ALARM_DEFAULTS = { alarmBurnM: null, alarmRunoutMin: null, alarmMilestone: false, alarmTopBurner: false };
 
 export function makeAlarms(ctx) {
-  const { app, prefs, toast, notify, sound, panels, DEMO } = ctx;
+  const { app, prefs, toast, notify, sound, panels, DEMO, quiet = () => false } = ctx;
   const rung = new Map();                     // rule key -> when it last rang
   const name = (s) => (s ? panels.persona(s).name : "A seat");
   function ring(key, text, level = "warn", every = 3600e3) {
     const at = rung.get(key);
     if (at && Date.now() - at < every) return;
+    if (quiet() && level !== "bad") return;   // do not disturb: it rings once that is over, if it still holds
     rung.set(key, Date.now());
     toast(text, level, { ic: "bell", ms: 8000 });
     sound.play(level === "bad" ? "bad" : "limit");

@@ -36,9 +36,10 @@ def attention_key(a: dict) -> str:
     """What a Needs-you item is about, without the numbers that change as it ticks ("usage at 91%" stays one item)."""
     if a.get("ask"):
         return "ask:" + a["ask"]
-    for k in ("lane", "unit"):
-        if a.get(k):
-            return f"{k}:{a[k]}"
+    if a.get("lane"):                                     # waiting for a seat and failed are two things to snooze
+        return f"lane:{a['lane']}:{a.get('status') or ''}"
+    if a.get("unit"):
+        return f"unit:{a['unit']}"
     kind = "ci" if a.get("ci") else "ghost" if a.get("ghost") else "loop" if a.get("loop") else re.sub(r"[\d.,:%~]+", "#", a.get("text", ""))[:60]
     return f"{kind}:{a.get('seat') or ''}:{a.get('session') or ''}"
 
@@ -68,10 +69,12 @@ class Quiet:
     def __init__(self, path: Path | None):
         self.path, self.lock = path, threading.Lock()
         d = config.read_state(path) if path else None
-        self.data = {"dnd_until": 0, "snoozed": {}}
-        if isinstance(d, dict):
-            self.data["dnd_until"] = float(d.get("dnd_until") or 0)
-            self.data["snoozed"] = {k: float(v) for k, v in (d.get("snoozed") or {}).items() if isinstance(v, (int, float))}
+        self.data = {"dnd_until": 0.0, "snoozed": {}}
+        if isinstance(d, dict):                           # a hand-edited file never stops the office from starting
+            if isinstance(d.get("dnd_until"), (int, float)) and not isinstance(d["dnd_until"], bool):
+                self.data["dnd_until"] = float(d["dnd_until"])
+            if isinstance(d.get("snoozed"), dict):
+                self.data["snoozed"] = {str(k): float(v) for k, v in d["snoozed"].items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
 
     def get(self) -> dict:
         with self.lock:
@@ -314,7 +317,9 @@ class Office(LiveOffice):
         with self.condition:
             self.events.append(ev)
             self.notify_news(ev)
-        self.announcer.announce(ev, self.cfg, demo=self.demo)
+        quiet = getattr(self, "quiet", None)
+        if not (quiet and quiet.get()["dnd_until"] > time.time()):   # do not disturb: Jarvis keeps quiet too
+            self.announcer.announce(ev, self.cfg, demo=self.demo)
         try:
             config.STATE_DIR.mkdir(parents=True, exist_ok=True)
             with open(self._events_path, "a") as f:
@@ -345,7 +350,7 @@ class Office(LiveOffice):
                         self.emit("stuck", f"{x['name']} on {s['label']} has been quiet for 15+ minutes", s["id"], "warn")
                     if x.get("report_status") and not psess[sid].get("report_status") and sid not in self._reported:
                         self._reported.add(sid)
-                        lvl = "warn" if "BLOCKED" in x["report_status"].upper() else "good"
+                        lvl = "warn" if sessions.report_blocked(x["report_status"]) else "good"
                         self.emit("report", f"{x['name']} filed its report: {x['report_status']}", s["id"], lvl)
             for sid, x in psess.items():
                 if sid not in csess:
@@ -461,7 +466,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.64.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.65.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -596,15 +601,15 @@ class Office(LiveOffice):
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"],
                                   "text": f"{x['name']} on {label} is stopped by the usage limit"})
                 rs = x.get("report_status") or ""
-                if "BLOCKED" in rs.upper() and x.get("live", True):
+                if sessions.report_blocked(rs) and x.get("live", True):
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"],
                                   "text": f"{x['name']} is blocked: {rs[:120]}"})
         for l in snap["lanes"]:
             if l.get("status") in ("failed", "blocked"):
-                items.append({"level": "bad" if l["status"] == "failed" else "warn", "lane": l["id"],
+                items.append({"level": "bad" if l["status"] == "failed" else "warn", "lane": l["id"], "status": l["status"],
                               "text": f"Office lane '{l['title']}' {l['status']}"})
             if l.get("status") == "waiting":
-                items.append({"level": "warn", "lane": l["id"],
+                items.append({"level": "warn", "lane": l["id"], "status": "waiting",
                               "text": f"Office lane '{l['title']}' is waiting for a seat"})
         for u in snap["units"]:
             if u["active"] == "failed":

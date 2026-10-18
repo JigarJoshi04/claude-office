@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 FIELDS = "number,title,state,isDraft,url,headRefName,updatedAt,mergedAt,reviewDecision,statusCheckRollup,author,isCrossRepository"
+MERGED_FIELDS = "number,title,state,isDraft,url,headRefName,updatedAt,mergedAt,author,isCrossRepository"   # no checks: light
 STALE_S = 180
 _GH_REMOTE = re.compile(r"github\.com[:/]([\w.-]+)/([\w.-]+?)(?:\.git)?/?$")
 
@@ -56,9 +57,10 @@ def summarize(pr: dict) -> dict:
             "author": ((pr.get("author") or {}).get("login")), "fork": bool(pr.get("isCrossRepository"))}
 
 
-def _list(gh: str, repo: str, state: str, limit: int) -> list[dict] | None:
+def _list(gh: str, repo: str, state: str, limit: int, search: str | None = None, fields: str = FIELDS) -> list[dict] | None:
     try:
-        r = subprocess.run([gh, "pr", "list", "-R", repo, "--state", state, "--limit", str(limit), "--json", FIELDS],
+        r = subprocess.run([gh, "pr", "list", "-R", repo, "--state", state, "--limit", str(limit), "--json", fields]
+                           + (["--search", search] if search else []),
                            capture_output=True, text=True, timeout=30, env={**os.environ, "GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
     except (OSError, subprocess.SubprocessError):
         return None
@@ -71,15 +73,18 @@ def _list(gh: str, repo: str, state: str, limit: int) -> list[dict] | None:
 
 
 def fetch(repo: str, limit: int = 40) -> list[dict] | None:
-    """Every open PR (old ones too: a busy repository's last 40 can all be closed) and the most recent of the rest."""
+    """Every open PR (old ones too: a busy repository's last 40 can all be closed), the most recent of the rest, and
+    every PR merged in the last week (a busy repository merges far more than 40)."""
     gh = shutil.which("gh")
     if not gh:
         return None
+    since = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 8 * 86400))
     opened, recent = _list(gh, repo, "open", 200), _list(gh, repo, "all", limit)
     if opened is None and recent is None:
         return None
+    week = _list(gh, repo, "merged", 500, f"merged:>={since}", MERGED_FIELDS) or []
     seen, out = set(), []
-    for p in (opened or []) + (recent or []):
+    for p in (opened or []) + (recent or []) + week:
         if p["number"] not in seen:
             seen.add(p["number"]); out.append(p)
     return out

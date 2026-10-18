@@ -127,6 +127,20 @@ def active_lane_units() -> set[str]:
         return set()
 
 
+UNFINISHED = ("scheduled", "queued", "starting", "running", "waiting")
+
+
+def unfinished_lanes() -> list[dict]:
+    """Every lane that has not finished, however old (list_lanes shows only the newest 40)."""
+    d = lanes_dir()
+    out = []
+    for p in d.iterdir() if d.is_dir() else []:
+        lane = load_lane(p.name)
+        if lane and lane.get("status") in UNFINISHED:
+            out.append(lane)
+    return out
+
+
 def list_lanes() -> list[dict]:
     out = []
     d = lanes_dir()
@@ -234,8 +248,9 @@ def due(lane: dict, seats: list[dict], now: float) -> bool:
         for s in seats:
             u = s.get("usage") or {}
             five, week = (u.get("five_hour") or {}).get("pct"), (u.get("weekly") or {}).get("pct")
-            if s.get("kind") == "claude" and s.get("status") != "limited" and five is not None and 100 - five >= sch["left"] \
-                    and (week is None or week < 95):
+            if s.get("kind") == "claude" and s.get("status") not in ("limited", "offline", "benched") and five is not None \
+                    and (s.get("divider") or {}).get("enabled", True) and (s.get("health") or {}).get("state") != "login" \
+                    and 100 - five >= sch["left"] and (week is None or week < 95):
                 return True
     return False
 
@@ -244,7 +259,7 @@ def start_scheduled(seats: list[dict], now: float | None = None) -> list[dict]:
     """Start every scheduled lane that is due; returns the lanes started."""
     now = now or time.time()
     started = []
-    for lane in list_lanes():
+    for lane in unfinished_lanes():
         if lane.get("status") == "scheduled" and due(lane, seats, now):
             full = load_lane(lane["id"])
             if not full:
@@ -257,6 +272,8 @@ def start_scheduled(seats: list[dict], now: float | None = None) -> list[dict]:
             except (ValueError, OSError) as e:
                 full["status"] = "scheduled"
                 save_lane(full)
+                _log(full["id"], f"could not start on schedule: {e}")
+            except RuntimeError as e:                      # systemd-run refused: start_unit marked it failed
                 _log(full["id"], f"could not start on schedule: {e}")
     return started
 
@@ -359,6 +376,8 @@ def resume_lane(lane_id: str, seat: str | None, seat_ids: list[str]) -> dict:
             raise ValueError(f"Unknown seat {seat}")
         lane["seat_pref"] = seat
     lane["fails"] = 0
+    if lane.get("status") == "scheduled":             # started early: off the schedule, so it never starts twice
+        lane["status"] = "queued"
     save_lane(lane)
     start_unit(lane_id)
     return load_lane(lane_id) or lane
@@ -528,11 +547,12 @@ def run_lane(lane_id: str) -> int:
         lane = load_lane(lane_id) or lane
         if (d / "REPORT.md").exists() and (d / "REPORT.md").stat().st_size:
             status_line = _first_line(d / "REPORT.md") or ""
-            lane["status"] = "blocked" if "BLOCKED" in status_line.upper() else "done"
+            from .sessions import report_blocked
+            lane["status"] = "blocked" if report_blocked(status_line) else "done"
             lane["finished_at"] = time.time()
             save_lane(lane)
             _log(lane_id, f"report written: {status_line}")
-            if lane.get("chain"):
+            if lane.get("chain") and not lane.get("chain_next"):   # run again after a resume: its next stage already started
                 _next_stage(lane, cfg)
             return 0
         # Choosing a seat and starting the agent happen under one lock, and the lock is held until the new

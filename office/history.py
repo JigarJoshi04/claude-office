@@ -26,7 +26,8 @@ def sample(snapshot):
             (usage.get("five_hour") or {}).get("pct"), (usage.get("weekly") or {}).get("pct"),
             sum(x.get("state") in ("working", "waiting") for x in live),
             sum(x.get("kind") == "lane" for x in live), seat.get("tokens_1h") or 0,
-            1 if seat.get("status") == "limited" else 0]                 # out of plan this minute (hours lost to limits)
+            1 if seat.get("status") == "limited" else                   # out of plan this minute (hours lost to limits)
+            2 if seat.get("status") in ("offline", "benched") or (seat.get("health") or {}).get("state") == "login" else 0]   # out for another reason
         for x in live:
             out["sessions"][x["id"]] = [seat["id"], x.get("name"), x.get("kind", "desk"),
                 x.get("state") if x.get("state") in STATES else "idle", x.get("title"),
@@ -341,10 +342,11 @@ class HistoryStore:
                     dest = ensure(sid)
                     if x[0] is not None:
                         dest["peak_p5"] = max(dest["peak_p5"] or 0, x[0])
-                    if len(x) > 5 and x[5]:
+                    if len(x) > 5 and x[5] == 1:
                         limited[sid].add(int(row["ts"] // 60))
                 claude = [x for sid, x in row["seats"].items() if sid in snap_claude]
-                if claude and all(len(x) > 5 and x[5] for x in claude):      # no Claude seat could take work this minute
+                # no Claude seat could take work this minute, and limits are why (benched or logged-out seats were out anyway)
+                if claude and all(len(x) > 5 and x[5] for x in claude) and any(x[5] == 1 for x in claude):
                     all_out.add(int(row["ts"] // 60))
         day_events = [e for e in self.events(start, end, events) if e["ts"] < end]
         for e in day_events:

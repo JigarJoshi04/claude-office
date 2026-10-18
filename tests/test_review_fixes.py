@@ -96,3 +96,102 @@ class LaunchFixes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Qa16Fixes(unittest.TestCase):
+    """The review of 3.45–3.62."""
+
+    def test_blocked_means_a_blocked_status_not_the_word(self):
+        for line in ("STATUS: BLOCKED - need creds", "**Status:** blocked on review", "BLOCKED: no access", "# STATUS: BLOCKED"):
+            self.assertTrue(sessions.report_blocked(line), line)
+        for line in ("STATUS: DONE - unblocked the release pipeline", "STATUS: DONE", "Status: done, not blocked", None, ""):
+            self.assertFalse(sessions.report_blocked(line), line)
+
+    def test_helpers_dock_when_they_finish_while_the_session_is_busy(self):
+        st = sessions.TranscriptState(Path("/x.jsonl"))
+        use = json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": "m1", "content": [
+            {"type": "tool_use", "id": "toolu_A", "name": "Agent", "input": {"description": "look", "run_in_background": True}}]}}).encode()
+        launched = json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "toolu_A", "content": "Async agent launched successfully."}]}}).encode()
+        queued = json.dumps({"type": "attachment", "attachment": {"type": "queued_command", "prompt":
+            "<task-notification>\n<task-id>x</task-id>\n<tool-use-id>toolu_A</tool-use-id>\n<status>completed</status>\n</task-notification>"}}).encode()
+        for line in (use, launched):
+            st.feed_line(line)
+        self.assertEqual((len(st.helpers), st.helpers_done), (1, 0))
+        st.feed_line(queued)
+        self.assertEqual((len(st.helpers), st.helpers_done), (0, 1))
+
+    def test_a_state_file_that_is_not_utf8_is_set_aside(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "career.json"
+            p.write_bytes(b'{"a": "\xff"}')
+            self.assertIsNone(config.read_state(p))
+            self.assertFalse(p.exists())
+            self.assertEqual(len(list(Path(tmp).glob("career.json.broken-*"))), 1)
+
+    def test_a_hand_edited_quiet_file_never_stops_the_office(self):
+        from office.snapshot import Quiet
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "quiet.json"
+            for bad in ({"dnd_until": "x"}, {"snoozed": ["a"]}, {"dnd_until": True, "snoozed": {"k": "soon", "j": 5.0}}):
+                p.write_text(json.dumps(bad))
+                q = Quiet(p).get()
+                self.assertIsInstance(q["dnd_until"], float)
+                self.assertTrue(all(isinstance(v, float) for v in q["snoozed"].values()))
+
+    def test_waiting_and_failed_are_two_things_to_snooze(self):
+        from office.snapshot import attention_key
+        self.assertNotEqual(attention_key({"lane": "l1", "status": "waiting"}), attention_key({"lane": "l1", "status": "failed"}))
+
+    def test_a_left_schedule_ignores_seats_that_cannot_work(self):
+        s = lambda **k: dict({"kind": "claude", "status": "idle", "usage": {"five_hour": {"pct": 10}, "weekly": {"pct": 10}}}, **k)
+        lane = {"schedule": {"left": 30}}
+        self.assertTrue(lanes.due(lane, [s()], 0))
+        for out in (s(status="benched"), s(status="offline"), s(divider={"enabled": False}), s(health={"state": "login"})):
+            self.assertFalse(lanes.due(lane, [out], 0), out)
+
+    def test_old_scheduled_lanes_start_and_an_early_start_leaves_the_schedule(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "lanes"
+            root.mkdir()
+            for i in range(45):                                       # more lanes than the list shows
+                (root / f"l{i}").mkdir()
+                (root / f"l{i}" / "lane.json").write_text(json.dumps({"id": f"l{i}", "status": "scheduled" if i == 0 else "done",
+                                                                      "schedule": {"at": 1.0}, "title": "t"}))
+            with patch.object(lanes, "lanes_dir", return_value=root), patch.object(lanes, "start_unit") as start, \
+                    patch.object(lanes, "active_lane_units", return_value=set()):
+                self.assertEqual([l["id"] for l in lanes.unfinished_lanes()], ["l0"])
+                started = lanes.start_scheduled([], now=10.0)
+                self.assertEqual([l["id"] for l in started], ["l0"])
+                start.assert_called_once_with("l0")
+                (root / "l1" / "lane.json").write_text(json.dumps({"id": "l1", "status": "scheduled", "schedule": {"at": 9e9}, "title": "t"}))
+                lanes.resume_lane("l1", None, [])
+                self.assertEqual(lanes.load_lane("l1")["status"], "queued")
+
+    def test_a_finished_stage_run_again_does_not_start_its_next_stage_twice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "lanes"
+            (root / "l1").mkdir(parents=True)
+            (root / "l1" / "lane.json").write_text(json.dumps({"id": "l1", "status": "done", "title": "t", "chain": [{"title": "b", "brief": "x"}],
+                                                              "chain_next": "l2"}))
+            (root / "l1" / "REPORT.md").write_text("STATUS: DONE - unblocked it\n")
+            with patch.object(lanes, "lanes_dir", return_value=root), patch.object(lanes.config, "load_config", return_value={}), \
+                    patch.object(lanes, "_next_stage") as nxt:
+                self.assertEqual(lanes.run_lane("l1"), 0)
+                nxt.assert_not_called()
+                self.assertEqual(lanes.load_lane("l1")["status"], "done")
+
+    def test_the_week_of_merged_prs_is_fetched_whole(self):
+        from office import prs
+        calls = []
+        def run(cmd, **kw):
+            calls.append(cmd)
+            state = cmd[cmd.index("--state") + 1]
+            out = {"open": [{"number": 1, "state": "OPEN"}], "all": [{"number": 1, "state": "OPEN"}, {"number": 2, "state": "MERGED"}],
+                   "merged": [{"number": n, "state": "MERGED", "mergedAt": "2026-10-18T10:00:00Z"} for n in range(2, 300)]}[state]
+            return type("R", (), {"returncode": 0, "stdout": json.dumps(out)})()
+        with patch.object(prs.shutil, "which", return_value="/usr/bin/gh"), patch.object(prs.subprocess, "run", side_effect=run):
+            got = prs.fetch("acme/rocket")
+        self.assertEqual(len(got), 299)                                # 1 open + 298 merged, each once
+        merged_call = next(c for c in calls if c[c.index("--state") + 1] == "merged")
+        self.assertIn("--search", merged_call)
+        self.assertTrue(merged_call[merged_call.index("--search") + 1].startswith("merged:>="))

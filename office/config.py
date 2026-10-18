@@ -142,12 +142,12 @@ def read_state(path: Path | None):
     if not path:
         return None
     try:
-        text = path.read_text()
+        raw = path.read_bytes()
     except OSError:
         return None
     try:
-        return json.loads(text)
-    except ValueError:
+        return json.loads(raw.decode("utf-8"))
+    except ValueError:                                      # not JSON, or not even UTF-8 (UnicodeDecodeError)
         try:
             path.rename(path.with_name(f"{path.name}.broken-{time.strftime('%Y%m%d-%H%M%S')}"))
         except OSError:
@@ -155,7 +155,7 @@ def read_state(path: Path | None):
         return None
 
 
-STATE_FILES = ("tokens.json", "career.json", "asks.json", "days.json", "usage-history.json", "loose-roots.json")
+STATE_FILES = ("tokens.json", "career.json", "asks.json", "days.json", "usage-history.json", "loose-roots.json", "quiet.json")
 
 
 def backup_state(now: float | None = None, keep: int = 7) -> Path | None:

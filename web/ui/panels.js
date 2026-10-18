@@ -40,6 +40,9 @@ export function makePanels(app) {
   const P = (s) => personaFor(s, S().seats.findIndex(x => x.id === s.id));
   const nameOf = (id) => { const s = seatById(id); return s ? P(s).name : id; };
   const STATUS_WORD = { READY: "ready for review", DONE: "done", BLOCKED: "blocked", FAILED: "failed", PARTIAL: "partly done", COMPLETE: "done", SUCCESS: "done" };
+  // A Needs-you item's words; share-safe keeps out what a session is doing (the question, the call it repeats, its report).
+  const needText = (a) => (!app.privacy() ? humanise(a.text) : a.ask ? "An agent asks you a question"
+    : humanise(a.text.replace(/( in a row| is blocked): [\s\S]*$/, "$1")));
   const humanise = (text) => {
     let t = String(text || "");
     for (const s of S().seats) {
@@ -221,7 +224,7 @@ export function makePanels(app) {
         if (use) { g.pct = +use[2]; g.win = use[1]; }
         if (eta) { g.eta = eta[2]; g.win = g.win || eta[1]; }
         g.resets_at = g.resets_at || a.resets_at;
-        g.key = g.key || a.key;
+        g.keys = [...(g.keys || []), a.key].filter(Boolean); g.key = g.keys[0];   // snoozing the group snoozes every item in it
         if (!nearly.has(st.id)) { nearly.set(st.id, g); out.push(g); }
         continue;
       }
@@ -229,7 +232,7 @@ export function makePanels(app) {
         const g = spent.get(st.id) || { level: "bad", seat: st.id, paused: 0, resets_at: null, grouped: true };
         if (/stopped by the usage limit/i.test(a.text)) g.paused++;
         g.resets_at = g.resets_at || a.resets_at;
-        g.key = g.key || a.key;
+        g.keys = [...(g.keys || []), a.key].filter(Boolean); g.key = g.keys[0];
         if (!spent.has(st.id)) { spent.set(st.id, g); out.push(g); }
         continue;
       }
@@ -267,7 +270,7 @@ export function makePanels(app) {
       </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
       ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
-          <span class="grow"><span class="t">${esc(a.ask && app.privacy() ? "An agent asks you a question" : humanise(a.text))}</span>${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? `<button class="btn sm ghost icon snz" data-snooze="${esc(a.key)}" title="Snooze for an hour, on every screen" aria-label="Snooze for an hour">${icon("sleep", 14)}</button>` : ""}</div>`).join("")}
+          <span class="grow"><span class="t">${esc(needText(a))}</span>${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify(a.keys || [a.key]))}" title="Snooze for an hour, on every screen" aria-label="Snooze for an hour">${icon("sleep", 14)}</button>` : ""}</div>`).join("")}
           ${S().snoozed ? `<p class="hint">${S().snoozed} snoozed for now.</p>` : ""}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
@@ -287,7 +290,7 @@ export function makePanels(app) {
         const at = root.querySelector("[data-away-toggle]"); if (at) at.addEventListener("click", () => { awayOpen = !awayOpen; app.rerender(true); });
         root.querySelectorAll("[data-snooze]").forEach(b => b.addEventListener("click", async () => {
           b.disabled = true;
-          try { await app.post("/api/snooze", { key: b.dataset.snooze, minutes: 60 }); app.refresh(); toast("Snoozed for an hour.", "info"); }
+          try { await app.post("/api/snooze", { keys: JSON.parse(b.dataset.snooze), minutes: 60 }); app.refresh(); toast("Snoozed for an hour.", "info"); }
           catch (e) { b.disabled = false; toast("Could not snooze: " + e.message, "bad"); }
         }));
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
@@ -480,7 +483,7 @@ export function makePanels(app) {
           ${x && x.model ? pill(x.model.replace(/^claude-/, "")) : ""}
           ${x && x.git ? gitChip(x) : ""}
           ${x && x.cache && x.state !== "working" ? cachePill(x) : ""}
-          ${x && x.loop ? `<span class="pill ${x.loop.count >= 8 ? "warn" : ""}" title="The same call, ${x.loop.count} times in a row: ${esc(x.loop.text)}. A session repeating itself with nothing in between may be stuck.">${icon("refresh", 13)}Same call ×${x.loop.count}</span>` : ""}
+          ${x && x.loop ? `<span class="pill ${x.loop.count >= 8 ? "warn" : ""}" title="The same call, ${x.loop.count} times in a row${app.privacy() ? "" : ": " + esc(x.loop.text)}. A session repeating itself with nothing in between may be stuck.">${icon("refresh", 13)}Same call ×${x.loop.count}</span>` : ""}
           ${x && x.ci ? `<a class="pill ci ${esc(x.ci.checks || "")}" href="${esc(x.ci.url)}" target="_blank" rel="noopener noreferrer" title="Its branch's pull request on GitHub">${icon(x.ci.checks === "fail" ? "x" : x.ci.checks === "pass" ? "check" : "clock", 13)}PR #${x.ci.number}${x.ci.checks ? ` · ${CI_WORD[x.ci.checks]}` : ""}</a>` : ""}
           ${x && x.spent && x.spent.usd ? `<span class="pill spent" title="${fmtTok(x.spent.tokens)} tokens so far (its helpers included), at API list prices">${icon("coin", 13)}${esc(money(x.spent.usd))} so far</span>` : ""}
           ${x && x.cache && x.cache.window ? (() => { const f = Math.min(1, x.cache.context / Math.max(x.cache.window, x.cache.context)), pc = Math.round(f * 100);
@@ -935,16 +938,21 @@ export function makePanels(app) {
     if (!l && d && d.missing) return { html: crumbs("Lane") + `<div class="allclear">That lane is no longer here.</div><div class="row" style="margin-top:12px"><button class="btn sm" data-go="hire">${icon("briefcase", 15)}Hiring desk</button></div>` };
     if (!l) return { html: crumbs("Lane") + `<div class="skeleton"></div><div class="skeleton" style="width:70%"></div>` };
     const runs = (d && d.lane.runs) || l.runs || [];
-    const running = l.unit_active || ["running", "starting", "waiting"].includes(l.status);
+    const running = l.unit_active || ["running", "starting", "waiting", "queued"].includes(l.status);
+    const scheduled = l.status === "scheduled", sch = l.schedule || {};
     const sid = l.last_session_id;
     return { html: `${crumbs(`<button data-go="hire">Hiring desk</button>`, esc(l.title))}
       <h2>${esc(l.title)}</h2>
       <div class="row wrap" style="gap:6px;margin-top:8px">${pill(l.status, { done: "good", finished: "good", running: "info", failed: "bad", blocked: "warn", waiting: "warn" }[l.status] || "")}
         ${l.seat ? pill("on " + nameOf(l.seat)) : ""}${pill(l.model)}${pill(l.seat_pref === "auto" ? "divider picks the seat" : "pinned to " + nameOf(l.seat_pref))}${l.allow_messages === true ? pill("takes messages", "good", "chat") : ""}</div>
+      ${scheduled ? `<div class="need info" style="margin-top:12px"><span class="ico">${icon("clock", 16)}</span><div class="grow"><div class="t">Hired for later</div><div class="d">${sch.at
+        ? `Starts ${esc(new Date(sch.at * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }))}`
+        : `Starts when a seat has ${esc(String(sch.left))}% of its 5-hour plan left`}. Cancel it, or start it now.</div></div></div>` : ""}
       ${l.waiting_reason ? `<div class="need warn" style="margin-top:12px"><span class="ico">${icon("clock", 16)}</span><div class="grow"><div class="t">Waiting for a seat</div><div class="d">${esc(humanise(l.waiting_reason))}</div></div></div>` : ""}
       <div class="row wrap" style="gap:8px;margin-top:16px">
         ${sid && l.seat ? `<button class="btn sm primary" data-chat-session="${esc(l.seat)}|${esc(sid)}">${icon("chat", 15)}${running ? "Chat with it" : "Follow up"}</button>` : ""}
-        ${running ? `<button class="btn sm danger" id="lStop">${icon("stop", 15)}Stop</button>` : `<button class="btn sm" id="lResume">${icon("play", 15)}Resume</button>`}
+        ${running || scheduled ? `<button class="btn sm danger" id="lStop">${icon("stop", 15)}${scheduled ? "Cancel" : "Stop"}</button>` : ""}
+        ${!running ? `<button class="btn sm" id="lResume">${icon("play", 15)}${scheduled ? "Start now" : "Resume"}</button>` : ""}
         <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">As before</option><option value="auto">Let the divider pick</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
       </div>
@@ -1199,14 +1207,15 @@ export function makePanels(app) {
         });
       } };
   }
+  const UNFINISHED = ["scheduled", "queued", "starting", "running", "waiting"];   // as lanes.UNFINISHED
   function laneListHtml() {
-    const active = S().lanes.filter(l => ["running", "waiting", "queued"].includes(l.status)).length;
+    const active = S().lanes.filter(l => UNFINISHED.includes(l.status)).length;
     return (active > 1 ? `<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn sm danger" data-stop-all>${icon("stop", 14)}Stop all ${active}</button></div>` : "")
       + (S().lanes.length ? S().lanes.map(laneRow).join("") : `<div class="muted">No office lanes yet.</div>`);
   }
   // The panic button: every office lane that is still going stops (your own terminals are never touched).
   async function stopAllLanes() {
-    const active = S().lanes.filter(l => ["running", "waiting", "queued"].includes(l.status)).length;
+    const active = S().lanes.filter(l => UNFINISHED.includes(l.status)).length;
     if (!active) { toast("No office lane is running.", "info"); return; }
     if (!confirm(`Stop all ${active} office lane${active === 1 ? "" : "s"}? Each one keeps its notes and can be resumed. Sessions in your own terminals are not touched.`)) return;
     try {

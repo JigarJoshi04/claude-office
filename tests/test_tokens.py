@@ -337,12 +337,15 @@ class WhereTests(unittest.TestCase):
             u = lambda out, think=0, ws=0: {"input_tokens": 10, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 90, "output_tokens": out,
                                              "output_tokens_details": {"thinking_tokens": think}, "server_tool_use": {"web_search_requests": ws, "web_fetch_requests": 0}}
             ln = lambda mid, usage: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": mid, "model": "claude-opus-5-5", "usage": usage}}) + "\n"
-            (proj / "s1.jsonl").write_text(ln("m1", u(5, 2)) + ln("m1", u(50, 30, 1)))         # thinking and a search grow with the lines
+            web = lambda mid, tid, name: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": mid, "model": "claude-opus-5-5",
+                                                       "content": [{"type": "tool_use", "id": tid, "name": name, "input": {}}]}}) + "\n"
+            (proj / "s1.jsonl").write_text(ln("m1", u(5, 2)) + ln("m1", u(50, 30, 1))         # thinking grows with the lines
+                                           + web("m2", "t1", "WebSearch") + web("m2", "t1", "WebSearch") + web("m3", "t2", "WebFetch"))   # searches: the calls, once each
             (proj / "s1" / "subagents" / "agent-a.jsonl").write_text(ln("h1", u(20)))
             led = TokenLedger(root / "tokens.json", [("claude", root / ".claude")])
             led.scan()
             w = led.view([{"id": "claude", "kind": "claude"}], today="2026-10-18")["where"]
-            self.assertEqual((w["helpers"], w["thinking"], w["searches"], w["output"]), (120, 30, 1, 70))
+            self.assertEqual((w["helpers"], w["thinking"], w["searches"], w["fetches"], w["output"]), (120, 30, 1, 1, 70))
             self.assertEqual(w["main"], 150)
 
 

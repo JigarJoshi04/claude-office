@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from . import config
+from .sessions import report_blocked
 
 XP_TOOL, XP_MINUTE, XP_SESSION, XP_REPORT = 1, 2, 10, 100
 XP_SHIP = (25, 5, 50, 150)              # a commit, a push, a PR opened, a PR merged
@@ -167,7 +168,7 @@ class Career:
                             news += self._unlock(c, sid, s, "ultramarathon", now)
                     if x.get("report_status") and not st.get("reported"):
                         st["reported"] = True
-                        if "BLOCKED" not in str(x["report_status"]).upper():
+                        if not report_blocked(str(x["report_status"])):
                             c["reports"] += 1
                             gained += XP_REPORT
                             if not quiet and x.get("started_at") and now - x["started_at"] <= 600:
