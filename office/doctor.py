@@ -65,6 +65,13 @@ def checkup(office, snap: dict) -> list[dict]:
     days = sorted(p.name for p in (config.STATE_DIR / "backups").glob("*") if p.is_dir()) if (config.STATE_DIR / "backups").is_dir() else []
     out.append(_check("Backups", "ok" if days else "info", f"{len(days)} daily backup{'s' if len(days) != 1 else ''} of the state files, the latest {days[-1]}" if days
                       else "No backup yet: the first one is made within a minute of starting", None))
+    cp = getattr(office, "_auto_cp", 0)
+    if cp:
+        out.append(_check("Hourly checkpoint", "ok", f"resume-latest.sh written {round((now - cp) / 60)} min ago: after a restart, `sh` it to reopen your terminal sessions in tmux"))
+    cut = [l for l in snap.get("lanes", []) if l.get("status") == "interrupted"]
+    if cut:
+        out.append(_check("Interrupted lanes", "warn", f"{len(cut)} lane{'s were' if len(cut) > 1 else ' was'} cut off" + (" by a restart" if any(l.get("reboot") for l in cut) else ""),
+                          "Needs you has a Resume button: each lane picks up from its notes."))
     out.append(_check("Lanes", "ok" if shutil.which("systemd-run") else "warn",
                       "systemd can run office lanes" if shutil.which("systemd-run") else "systemd-run is missing: office lanes cannot start",
                       None if shutil.which("systemd-run") else "Office lanes need a Linux machine with systemd user services."))

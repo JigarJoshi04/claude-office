@@ -3,6 +3,21 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.68.0] - 2026-10-19
+
+### Added
+- Reboot recovery. A lane whose service vanished without being stopped (a restart, a crash, the OOM killer) is now
+  marked interrupted and kept, noting a restart of the machine when there was one. Needs you lists them as one item
+  with "Resume all" (`POST /api/lanes/resume-interrupted`), and each lane picks up from its notes.
+- The hourly checkpoint: `office-checkpoint-latest.md` and `resume-latest.sh` in the checkpoint folder, written
+  while terminal sessions are live, so the one from before a restart survives it. The script reopens every session
+  in a tmux window of its own (its folder, then `claude --resume`), noting the branch without switching anything.
+- The doctor lists interrupted lanes and when the hourly checkpoint was written.
+
+### Changed
+- A lane is only called interrupted when systemd could be asked and the lane has been up for more than 90 seconds,
+  so a slow start or a systemctl hiccup never marks one.
+
 ## [3.67.0] - 2026-10-19
 
 ### Added

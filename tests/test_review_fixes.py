@@ -195,3 +195,64 @@ class Qa16Fixes(unittest.TestCase):
         merged_call = next(c for c in calls if c[c.index("--state") + 1] == "merged")
         self.assertIn("--search", merged_call)
         self.assertTrue(merged_call[merged_call.index("--search") + 1].startswith("merged:>="))
+
+
+class RebootRecoveryTests(unittest.TestCase):
+    def _lanes(self, tmp, **lane):
+        root = Path(tmp) / "lanes"
+        (root / "l1").mkdir(parents=True)
+        (root / "l1" / "lane.json").write_text(json.dumps(dict({"id": "l1", "title": "Migrate", "status": "running", "created_at": 1.0}, **lane)))
+        return root
+
+    def test_a_lane_whose_unit_vanished_is_interrupted_and_kept(self):
+        import time
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._lanes(tmp, unit_started_at=time.time() - 600, boot_id="old-boot")
+            with patch.object(lanes, "lanes_dir", return_value=root), patch.object(lanes, "boot_id", return_value="new-boot"):
+                with patch.object(lanes, "active_lane_units", return_value=None):      # systemd could not be asked: no change
+                    self.assertEqual(lanes.list_lanes()[0]["status"], "running")
+                with patch.object(lanes, "active_lane_units", return_value=set()):
+                    l = lanes.list_lanes()[0]
+                self.assertEqual((l["status"], l["reboot"]), ("interrupted", True))
+                saved = lanes.load_lane("l1")
+                self.assertEqual(saved["status"], "interrupted")                       # kept, not only shown
+                self.assertNotIn("unit_active", saved)
+                self.assertEqual([x["id"] for x in lanes.interrupted_lanes()], ["l1"])
+                with patch.object(lanes, "start_unit") as start:
+                    self.assertEqual(lanes.resume_interrupted(["claude"], gap=0), ["l1"])
+                    start.assert_called_once_with("l1")
+
+    def test_just_started_or_stopped_lanes_are_not_interrupted(self):
+        import time
+        for extra in ({"unit_started_at": time.time() - 5}, {"unit_started_at": time.time() - 600, "stop_requested": 1.0}, {}):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = self._lanes(tmp, **extra)
+                with patch.object(lanes, "lanes_dir", return_value=root), patch.object(lanes, "active_lane_units", return_value=set()):
+                    self.assertEqual(lanes.list_lanes()[0]["status"], "stopped", extra)
+                    self.assertEqual(lanes.load_lane("l1")["status"], "running")      # shown as stopped, file untouched
+
+    def test_one_needs_you_item_for_every_lane_cut_off(self):
+        from office.snapshot import Office, attention_key
+        snap = {"now": 1000.0, "seats": [], "units": [], "asks": [], "lanes": [
+            {"id": "a", "title": "A", "status": "interrupted", "reboot": True, "interrupted_at": 900.0},
+            {"id": "b", "title": "B", "status": "interrupted", "interrupted_at": 950.0}]}
+        items = [a for a in Office._attention(snap) if a.get("interrupted")]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["interrupted"], ["a", "b"])
+        self.assertIn("2 office lanes were cut off by a restart", items[0]["text"])
+        self.assertEqual(attention_key(items[0]), "interrupted:")
+
+    def test_the_hourly_checkpoint_never_writes_over_one_with_sessions(self):
+        from office import checkpoint
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = {"checkpoint_dir": tmp}
+            empty = {"now": 1.0, "seats": [{"id": "c", "label": "c", "kind": "claude", "config_dir": "/c", "sessions": []}]}
+            self.assertIsNone(checkpoint.write_latest(empty, cfg))
+            live = {"now": 2.0, "seats": [{"id": "c", "label": "c", "kind": "claude", "config_dir": "/c", "sessions": [
+                {"id": "s1", "name": "api", "kind": "desk", "live": True, "cwd": "/w/api", "git": {"branch": "main"}}]}]}
+            path = checkpoint.write_latest(live, cfg)
+            self.assertTrue(path.endswith("resume-latest.sh"))
+            self.assertIn("claude --resume s1", Path(path).read_text())
+            self.assertEqual(Path(path).stat().st_mode & 0o777, 0o700)
+            self.assertIsNone(checkpoint.write_latest(empty, cfg))                    # after a restart: still there
+            self.assertIn("s1", Path(path).read_text())

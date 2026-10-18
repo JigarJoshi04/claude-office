@@ -433,6 +433,11 @@ class DemoOffice(LiveOffice):
                       "status": "waiting", "seat": None, "runs": [], "unit": "office-lane-1016-150000-nightly-flake-hunt",
                       "waiting_reason": "Every seat is busy or at its cap", "report_status": None, "state_tail": None,
                       "unit_active": True})
+        lanes.append({"id": "1016-031200-migrate-the-billing-tables", "title": "Migrate the billing tables", "workdir": "/home/you/work/billing",
+                      "seat_pref": "auto", "model": "opus", "permission_mode": "acceptEdits", "created_at": now - 9 * 3600,
+                      "status": "interrupted", "reboot": True, "interrupted_at": now - 25 * 60, "seat": "claude3", "runs": [],
+                      "unit": "office-lane-1016-031200-migrate-the-billing-tables", "report_status": None,
+                      "state_tail": "02:58 copied invoices and refunds\n03:05 started on the ledger table", "unit_active": False})
         lanes.append({"id": "1016-220000-draft-release-notes", "title": "Draft the release notes", "workdir": "/home/you/work/apollo",
                       "seat_pref": "auto", "model": "sonnet", "permission_mode": "acceptEdits", "created_at": now - 1200,
                       "status": "scheduled", "schedule": {"at": (now // 3600 + 3) * 3600}, "seat": None, "runs": [],
@@ -446,7 +451,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.67.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.68.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

@@ -88,10 +88,10 @@ export function makePanels(app) {
     </div>`;
   }
   function laneRow(l) {
-    const tn = { done: "good", finished: "good", running: "info", blocked: "warn", failed: "bad", waiting: "warn", scheduled: "info" }[l.status] || "info";
+    const tn = { done: "good", finished: "good", running: "info", blocked: "warn", failed: "bad", waiting: "warn", scheduled: "info", interrupted: "warn" }[l.status] || "info";
     const when = l.status === "scheduled" && l.schedule ? (l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
-    return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop", scheduled: "calendar" }[l.status] || "briefcase", 16)}</span>
-      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status)}${when}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
+    return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop", scheduled: "calendar", interrupted: "alert" }[l.status] || "briefcase", 16)}</span>
+      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status)}${when}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
   }
 
   // ---------------------------------------------------------------------------------------- briefing
@@ -191,6 +191,7 @@ export function makePanels(app) {
   function needAction(a) {
     const st = a.seat && seatById(a.seat);
     if (a.ask) return `<button class="btn sm primary" data-go="inbox">${icon("reply", 14)}Answer</button>`;
+    if (a.interrupted) return `<button class="btn sm primary" data-resume-all>${icon("play", 14)}Resume ${a.interrupted.length > 1 ? "all" : "it"}</button>`;
     if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
     if (a.session) return `<button class="btn sm" data-open-session="${esc(a.seat)}|${esc(a.session)}">${icon("chat", 14)}Open</button>`;
     if (a.lane) return `<button class="btn sm" data-lane-go="${esc(a.lane)}">${icon("briefcase", 14)}Open</button>`;
@@ -296,6 +297,14 @@ export function makePanels(app) {
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
         root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
+        root.querySelectorAll("[data-resume-all]").forEach(b => b.addEventListener("click", async () => {
+          b.disabled = true;
+          try {
+            const r = await app.post("/api/lanes/resume-interrupted", {});
+            toast(r.demo ? "Demo office: nothing was resumed." : `Resuming ${r.resuming.length} lane${r.resuming.length === 1 ? "" : "s"}, one after another. Each picks up from its notes.`, r.demo ? "info" : "good");
+            app.refresh();
+          } catch (e) { b.disabled = false; toast("Could not resume: " + e.message, "bad"); }
+        }));
       } };
   }
   function progCard(p) {
@@ -953,7 +962,7 @@ export function makePanels(app) {
     const sid = l.last_session_id;
     return { html: `${crumbs(`<button data-go="hire">Hiring desk</button>`, esc(l.title))}
       <h2>${esc(l.title)}</h2>
-      <div class="row wrap" style="gap:6px;margin-top:8px">${pill(l.status, { done: "good", finished: "good", running: "info", failed: "bad", blocked: "warn", waiting: "warn" }[l.status] || "")}
+      <div class="row wrap" style="gap:6px;margin-top:8px">${pill(l.status, { done: "good", finished: "good", running: "info", failed: "bad", blocked: "warn", waiting: "warn", interrupted: "warn" }[l.status] || "")}
         ${l.seat ? pill("on " + nameOf(l.seat)) : ""}${pill(l.model)}${pill(l.seat_pref === "auto" ? "divider picks the seat" : "pinned to " + nameOf(l.seat_pref))}${l.allow_messages === true ? pill("takes messages", "good", "chat") : ""}</div>
       ${scheduled ? `<div class="need info" style="margin-top:12px"><span class="ico">${icon("clock", 16)}</span><div class="grow"><div class="t">Hired for later</div><div class="d">${sch.at
         ? `Starts ${esc(new Date(sch.at * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }))}`

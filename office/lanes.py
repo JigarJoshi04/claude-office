@@ -116,15 +116,28 @@ def parse_reset(text: str, now: float | None = None) -> float:
     return now + 1800
 
 
-def active_lane_units() -> set[str]:
-    """Every running office-lane unit, in one systemctl call."""
+def active_lane_units() -> set[str] | None:
+    """Every running office-lane unit, in one systemctl call; None when systemd could not be asked."""
     try:
         r = subprocess.run(["systemctl", "--user", "list-units", "office-lane-*", "--type=service", "--output=json",
                             "--no-pager"], capture_output=True, text=True, timeout=8)
+        if r.returncode != 0:
+            return None
         return {u["unit"].removesuffix(".service") for u in json.loads(r.stdout or "[]")
                 if u.get("active") in ("active", "activating")}
     except (OSError, ValueError, subprocess.SubprocessError):
-        return set()
+        return None
+
+
+def boot_id() -> str | None:
+    """This boot of the machine (a new one after every restart)."""
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip() or None
+    except OSError:
+        return None
+
+
+GRACE_S = 90                    # a unit just started may not be listed yet
 
 
 UNFINISHED = ("scheduled", "queued", "starting", "running", "waiting")
@@ -146,15 +159,27 @@ def list_lanes() -> list[dict]:
     d = lanes_dir()
     dirs = sorted(d.iterdir() if d.is_dir() else [], key=lambda p: p.stat().st_mtime, reverse=True)[:40]
     active = active_lane_units() if dirs else set()
+    now, boot = time.time(), None
     for p in dirs:
         lane = load_lane(p.name)
         if not lane:
             continue
         lane["report_status"] = _first_line(p / "REPORT.md")
         lane["state_tail"] = _tail(p / "STATE.md", 6)
-        lane["unit_active"] = unit_name(lane["id"]) in active
-        if not lane["unit_active"] and lane.get("status") in ("running", "starting", "waiting", "queued"):
-            lane["status"] = "stopped"   # the unit died without the runner recording why
+        lane["unit_active"] = active is not None and unit_name(lane["id"]) in active
+        if active is not None and not lane["unit_active"] and lane.get("status") in ("running", "starting", "waiting", "queued"):
+            started = lane.get("unit_started_at")
+            if started and now - started > GRACE_S and not lane.get("stop_requested"):
+                # The unit is gone and nobody stopped it: a restart, a crash or the OOM killer cut it off. Kept, so the
+                # office can offer to resume it.
+                boot = boot or boot_id()
+                full = load_lane(lane["id"]) or {}
+                full.update(status="interrupted", interrupted_at=now, reboot=bool(boot and lane.get("boot_id") and lane["boot_id"] != boot))
+                save_lane(full)
+                _log(lane["id"], "interrupted: its unit is gone" + (" after a restart of the machine" if full["reboot"] else ""))
+                lane.update(status="interrupted", interrupted_at=now, reboot=full["reboot"])
+            else:
+                lane["status"] = "stopped"   # the unit died without the runner recording why
         out.append(lane)
     return out
 
@@ -350,6 +375,8 @@ def start_unit(lane_id: str) -> None:
         raise RuntimeError(f"systemd-run failed: {lane['error']}")
     lane["status"] = "starting"
     lane.pop("stop_requested", None)
+    lane.update(boot_id=boot_id(), unit_started_at=time.time())    # to tell a lane cut off by a restart (list_lanes)
+    lane.pop("interrupted_at", None); lane.pop("reboot", None)
     save_lane(lane)
 
 
@@ -365,6 +392,24 @@ def stop_lane(lane_id: str) -> dict:
         lane["status"] = "stopped"
     save_lane(lane)
     return lane
+
+
+def interrupted_lanes() -> list[dict]:
+    d = lanes_dir()
+    return [l for p in (d.iterdir() if d.is_dir() else []) if (l := load_lane(p.name)) and l.get("status") == "interrupted"]
+
+
+def resume_interrupted(seat_ids: list[str], gap: float = 3.0) -> list[str]:
+    """Start every interrupted lane again, one after another (the launch lock seats them one at a time)."""
+    out = []
+    for lane in sorted(interrupted_lanes(), key=lambda l: l.get("interrupted_at") or 0):
+        try:
+            resume_lane(lane["id"], None, seat_ids)
+            out.append(lane["id"])
+            time.sleep(gap)
+        except (ValueError, OSError, RuntimeError) as e:
+            _log(lane["id"], f"could not resume: {e}")
+    return out
 
 
 def resume_lane(lane_id: str, seat: str | None, seat_ids: list[str]) -> dict:

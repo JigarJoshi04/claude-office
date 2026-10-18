@@ -170,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.67.0"
+    server_version = "ClaudeOffice/3.68.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -465,6 +465,12 @@ class Handler(BaseHTTPRequestHandler):
                     self.office.emit("lane", f"CEO stopped every office lane ({len(stopped)})", None, "warn")
                 self.office.build()
                 return self._json(200, {"ok": True, "stopped": stopped})
+            if path == "/api/lanes/resume-interrupted":     # after a restart: every lane that was cut off, one after another
+                ids = [l["id"] for l in lanes.interrupted_lanes()]
+                if ids:
+                    threading.Thread(target=lanes.resume_interrupted, args=(seat_ids,), daemon=True, name="resume-interrupted").start()
+                    self.office.emit("lane", f"CEO resumed {len(ids)} interrupted lane{'s' if len(ids) > 1 else ''}", None, "good")
+                return self._json(200, {"ok": True, "resuming": ids})
             if path == "/api/lanes/stop":
                 lane = lanes.stop_lane(str(body.get("id", "")))
                 self.office.emit("lane", f"CEO stopped office lane '{lane['title']}'", lane.get("seat"), "warn")

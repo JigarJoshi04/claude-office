@@ -16,7 +16,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, cabinet, config, divider, lanes, loose, prs, seats as seatmod, sessions
+from . import asks, cabinet, checkpoint, config, divider, lanes, loose, prs, seats as seatmod, sessions
 from .career import CATALOGUE, Career
 from .history import DayLedger, HistoryStore
 from .tokens import TokenLedger
@@ -36,6 +36,8 @@ def attention_key(a: dict) -> str:
     """What a Needs-you item is about, without the numbers that change as it ticks ("usage at 91%" stays one item)."""
     if a.get("ask"):
         return "ask:" + a["ask"]
+    if a.get("interrupted"):
+        return "interrupted:"
     if a.get("lane"):                                     # waiting for a seat and failed are two things to snooze
         return f"lane:{a['lane']}:{a.get('status') or ''}"
     if a.get("unit"):
@@ -466,7 +468,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.67.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.68.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -604,6 +606,13 @@ class Office(LiveOffice):
                 if sessions.report_blocked(rs) and x.get("live", True):
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"],
                                   "text": f"{x['name']} is blocked: {rs[:120]}"})
+        cut = [l for l in snap["lanes"] if l.get("status") == "interrupted"]
+        if cut:                                            # one item for all of them, with "Resume all"
+            restart = any(l.get("reboot") for l in cut)
+            at = time.strftime("%H:%M", time.localtime(min(l.get("interrupted_at") or snap["now"] for l in cut)))
+            items.append({"level": "warn", "interrupted": [l["id"] for l in cut],
+                          "text": (f"{len(cut)} office lanes were" if len(cut) > 1 else f"Office lane '{cut[0]['title']}' was")
+                                  + f" cut off{' by a restart of the machine' if restart else ''} (noticed at {at})"})
         for l in snap["lanes"]:
             if l.get("status") in ("failed", "blocked"):
                 items.append({"level": "bad" if l["status"] == "failed" else "warn", "lane": l["id"], "status": l["status"],
@@ -656,6 +665,12 @@ class Office(LiveOffice):
             snap = self.get() or {}
             live = {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
             config.backup_state()                          # once a day: the state files, the last 7 days kept
+            if time.time() - getattr(self, "_auto_cp", 0) > 3600 and snap.get("seats"):   # the hourly checkpoint, for after a restart
+                try:
+                    if checkpoint.write_latest(snap, self.cfg):
+                        self._auto_cp = time.time()
+                except OSError:
+                    pass
             try:                                           # lanes hired for later: start the ones that are due
                 for l in lanes.start_scheduled((self.get() or {}).get("seats", [])):
                     self.emit("lane", f"Scheduled lane '{l['title']}' is starting", None, "good")

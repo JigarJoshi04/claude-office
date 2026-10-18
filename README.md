@@ -193,7 +193,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   - Lanes run as low-priority background services.
   - A lane keeps notes, moves to another seat if its seat hits a limit, and files a report when done.
   - You can stop, resume, re-hire or chat with any lane.
-- **Checkpoint**: writes every session and its resume command to a file, for before you restart.
+  - After a restart or a crash, lanes that were cut off say so in Needs you, with one button to resume them all.
+- **Checkpoint**: writes every session and its resume command to a file, for before you restart. Every hour the office
+  also keeps `office-checkpoint-latest.md` and `resume-latest.sh` up to date while terminal sessions are live; after a
+  restart, `sh resume-latest.sh` reopens each of them in a tmux window.
 - **Save a picture of the office**: a PNG of the floor with each character's level and status. It has no session
   names or accounts in it, so it is safe to post.
 - **Everything else**: Ctrl/⌘ K command palette, share-safe mode for screen sharing, 8-bit sound effects, desktop
