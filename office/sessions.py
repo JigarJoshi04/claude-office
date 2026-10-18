@@ -30,14 +30,24 @@ SECRET_RE = re.compile(
     r"(sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}"
     r"|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{16,}"
-    r"|(?i:(?:password|passwd|secret|token|api[_-]?key)\s*[=:]\s*)[^\s'\"]{6,})")
+    r"|(?i:(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)\w*\s*[=:]\s*)[^\s'\"]{6,})")
+# Credentials that sit next to something worth keeping: the password in `user:pass@host`, `curl -u user:pass` and
+# `mysql -pSecret` (the user and the host stay readable).
+_URL_PASS = re.compile(r"(\b[a-z][\w+.-]*://[^\s/:@'\"]+:)[^\s@'\"]+(?=@)")
+_USER_PASS = re.compile(r"((?:\s-u|--user)[ =]?[^\s:'\"]+:)[^\s'\"]+")
+_MYSQL_P = re.compile(r"(\b(?:mysql|mysqldump|mariadb|mysqladmin)\b[^\n|;&]*?\s-p)[^\s'\"]{3,}")
 
 
 def redact(text):
     """Mask credential-shaped substrings. Commit SHAs and ids stay readable."""
     if not text or not isinstance(text, str):
         return text
-    return SECRET_RE.sub(lambda m: m.group(0)[:6] + "…[hidden]", text)
+    text = SECRET_RE.sub(lambda m: m.group(0)[:6] + "…[hidden]", text)
+    if ":" in text or "-p" in text:
+        text = _URL_PASS.sub(r"\1…[hidden]", text)
+        text = _USER_PASS.sub(r"\1…[hidden]", text)
+        text = _MYSQL_P.sub(r"\1…[hidden]", text)
+    return text
 
 
 # ---------------------------------------------------------------------------------------------- processes
@@ -210,7 +220,7 @@ _TEST_CMD = re.compile(r"^(?:\w+=\S*\s+)*(?:(?:time|nice|timeout\s+\S+|uv run|po
 
 
 # A test run's output that says it failed, whatever the exit code (piped through tail, the exit code is tail's).
-_TEST_FAILED = re.compile(r"\bFAILED\b|(?<!expected )\bfailures=[1-9]|\berrors=[1-9]|\b[1-9]\d* failed(?=,| in \d)|\b[1-9]\d* failing\b|ℹ fail [1-9]|^# fail [1-9]|^not ok\b"
+_TEST_FAILED = re.compile(r"\bFAILED\b|(?<!expected )\bfailures=[1-9]|\berrors=[1-9]|\b[1-9]\d* failed(?=\s*(?:[,|(]|in \d|$))|\b[1-9]\d* failing\b|ℹ fail [1-9]|^# fail [1-9]|^not ok\b"
                           r"|^Tests:.*\b[1-9]\d* failed|^--- FAIL|^FAIL\b", re.M)
 
 
@@ -218,7 +228,7 @@ _HEREDOC_START = re.compile(r"<<-?\s*(['\"]?)(\w+)\1")
 
 
 def strip_heredocs(cmd: str) -> str:
-    """The command with each heredoc taken out, from `<<WORD` to the line that is just WORD. One pass over the lines
+    """The command with each heredoc's body taken out (the lines up to the one that is just WORD). One pass over the lines
     (a backtracking regex took minutes on long scripts full of C++'s `cout << x`); a `<<` with no closing line stays."""
     if "<<" not in cmd:
         return cmd
@@ -237,8 +247,8 @@ def strip_heredocs(cmd: str) -> str:
             break
         ends = closers.get(m.group(2)) or []
         k = bisect.bisect_left(ends, (nl + 1, -1))   # the first closing line after the heredoc's first line
-        if k < len(ends):
-            out.append(cmd[pos:m.start()])
+        if k < len(ends):                            # the body goes; the rest of its first line stays (`<<EOF && git push`)
+            out.append(cmd[pos:m.start()] + cmd[m.end():nl])
             pos = ends[k][1]
     return "".join(out) + cmd[pos:]
 
@@ -266,8 +276,10 @@ def screen_for(name: str, inp: dict) -> str | None:
 
 
 _SHIP = re.compile(r"(?:git\s+(?:commit|push|tag)|gh\s+(?:pr\s+(?:create|merge|ready)|release\s+create))\b")
-_LOOK = re.compile(r"(?:cat|ls|head|tail|grep|rg|find|wc|tree|less|jq|git\s+(?:log|show|diff|status|blame|branch|fetch)"
-                   r"|gh\s+(?:pr|run|issue|api)\s*(?:view|list|checks|diff|watch)?)\b")
+_LOOK = re.compile(r"(?:cat|ls|head|tail|grep|rg|find(?!.*\s-(?:delete|exec))|wc|tree|less|jq|git\s+(?:log|show|diff|status|blame|branch|fetch)"
+                   r"|gh\s+(?:(?:pr|run|issue)\s+(?:view|list|checks|diff|watch|status)|api))\b")
+_GIT_OPTS = re.compile(r"^git\s+(?:(?:-C|-c)\s+\S+\s+)+")      # git -C <dir> / -c k=v before the verb
+_WRITES = re.compile(r"^(?:cat|tee|printf|echo)\b.*>\s*\S")       # a file written from the shell
 
 
 def step_kind(name: str, inp, screen: str | None) -> str | None:
@@ -281,9 +293,11 @@ def step_kind(name: str, inp, screen: str | None) -> str | None:
     if name in ("Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch") or name.startswith("mcp__"):
         return "look"
     if name == "Bash":
-        segs = [x for x in _segments(str(inp.get("command") or "")) if x and not re.match(r"cd\b", x)]
+        segs = [_GIT_OPTS.sub("git ", x) for x in _segments(str(inp.get("command") or "")) if x and not re.match(r"cd\b", x)]
         if any(_SHIP.match(x) for x in segs):
             return "ship"
+        if any(_WRITES.match(x) for x in segs):
+            return "edit"
         return "look" if segs and all(_LOOK.match(x) for x in segs) else "run"
     return None
 
@@ -846,7 +860,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "helpers_done": tr.helpers_done if tr else 0,
             "screen": tr.screen if tr else None,
             "test_ok": tr.test_ok if tr else None,
-            "risks": list(tr.risks[-5:]) if tr else [],
+            "risks": list(tr.risks) if tr else [],        # all it keeps (20): each is announced once
             "phase": phase_of(tr.steps, tr.test_ok) if tr and state in ("working", "waiting") else None,
             "trust": _trust(report_status, tr) if tr and report_status else None,
             "touch": touch_of(tr.edits, now) if tr and tr.edits else None,

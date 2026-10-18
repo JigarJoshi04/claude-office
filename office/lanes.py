@@ -324,6 +324,13 @@ def start_scheduled(seats: list[dict], now: float | None = None, can_hire: bool 
                 full = load_lane(lane["id"])
                 if not full or full.get("status") != "scheduled":   # started by hand since the list was read
                     continue
+                refused = policy_refuses(full)               # the policy may have changed since it was scheduled
+                if refused:
+                    (lane_dir(full["id"]) / "REPORT.md").write_text(f"STATUS: BLOCKED - the lane policy refused it: {refused}\n")
+                    full.update(status="blocked", finished_at=now, report_status=f"STATUS: BLOCKED - the lane policy refused it: {refused}")
+                    save_lane(full)
+                    _log(full["id"], f"refused by the lane policy: {refused}")
+                    continue
                 full["status"] = "queued"
                 save_lane(full)
             try:
@@ -397,8 +404,16 @@ def policy(cfg: dict) -> dict:
     tasks = p.get("tasks_max")
     return {"roots": [os.path.realpath(os.path.expanduser(r)) for r in roots if isinstance(r, str) and r.strip()][:20],
             "allow_full_trust": p.get("allow_full_trust", True) is not False,
-            "memory_max": mem if re.fullmatch(r"\d+(?:\.\d+)?[KMGT]?|\d{1,2}%", mem) else None,
+            "memory_max": _mem(mem),
             "tasks_max": tasks if isinstance(tasks, int) and not isinstance(tasks, bool) and 64 <= tasks <= 1_000_000 else None}
+
+
+def _mem(v: str) -> str | None:
+    """A memory cap for systemd: "8G", "8g", "512M", "50%"; zero, "" or anything else is no cap."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)([KMGTkmgt]?)|(\d{1,2})%", v)
+    if not m or float(m.group(1) or m.group(3)) <= 0:
+        return None
+    return f"{m.group(3)}%" if m.group(3) else m.group(1) + m.group(2).upper()
 
 
 def check_policy(workdir: str, permission_mode: str, cfg: dict) -> None:
@@ -411,6 +426,17 @@ def check_policy(workdir: str, permission_mode: str, cfg: dict) -> None:
             raise ValueError("Full trust is off for lanes (lane_policy.allow_full_trust in config.json): choose Edit files instead")
         if workdir in ("/", os.path.realpath(str(config.HOME))):
             raise ValueError("Full trust is never given to a lane in / or your whole home folder: pick a project folder")
+
+
+def policy_refuses(lane: dict) -> str | None:
+    """Why the lane policy, as config.json says now, will not let this lane run (None: it may)."""
+    if not lane.get("workdir"):
+        return None
+    try:
+        check_policy(lane["workdir"], lane.get("permission_mode") or "acceptEdits", config.load_config())
+    except ValueError as e:
+        return str(e)
+    return None
 
 
 def unit_limits(cfg: dict) -> list[str]:
@@ -498,6 +524,9 @@ def resume_lane(lane_id: str, seat: str | None, seat_ids: list[str]) -> dict:
     lane = load_lane(lane_id)
     if not lane:
         raise ValueError("No such lane")
+    refused = policy_refuses(lane)                      # the policy as it is now, not as it was at hire time
+    if refused:
+        raise ValueError(refused)
     if seat:
         if seat != "auto" and seat not in seat_ids:
             raise ValueError(f"Unknown seat {seat}")
@@ -744,6 +773,17 @@ def run_lane(lane_id: str) -> int:
             if lane.get("chain") and not lane.get("chain_next"):   # run again after a resume: its next stage already started
                 _next_stage(lane, cfg)
             return 0
+        dl = lane.get("deadline")
+        if dl and time.time() > dl + OVERTIME_S:          # its time ran out while it waited for a seat: never relaunched
+            lane.update(status="stopped", stopped_reason="time budget", finished_at=time.time())
+            save_lane(lane)
+            _log(lane_id, f"stopped: over its time budget of {lane.get('max_minutes')} min (it was waiting for a seat)")
+            return 0
+        refused = policy_refuses(lane)                     # the policy as it is now, not as it was when it was hired
+        if refused:
+            (d / "REPORT.md").write_text(f"STATUS: BLOCKED - the lane policy refused it: {refused}\n")
+            _log(lane_id, f"refused by the lane policy: {refused}")
+            continue                                       # the top of the loop records it as blocked
         # Choosing a seat and starting the agent happen under one lock, and the lock is held until the new
         # session shows up on that seat, so two runners never both take the last free slot.
         proc, log, seat_id = None, None, None
@@ -785,6 +825,8 @@ def run_lane(lane_id: str) -> int:
             save_lane(lane)
             _log(lane_id, f"waiting for a seat: {why}")
             delay = max(60, min(1800, (wake or time.time() + 600) - time.time() + 60))
+            if lane.get("deadline"):                       # wake in time to stop it at its time limit
+                delay = max(5, min(delay, lane["deadline"] + OVERTIME_S - time.time() + 1))
             _sleep_or_wake(lane_id, delay)
             continue
         if not seat:

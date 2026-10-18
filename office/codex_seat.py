@@ -102,6 +102,36 @@ def _tool_activity(payload):
     return "Using: " + name[:160]
 
 
+def _risks(session, payload):
+    """The risky-action watch (risk.py) over a Codex tool call: its shell command, and the files a patch writes."""
+    from .risk import RULES, check
+    raw = payload.get("arguments", payload.get("input", {}))
+    try:
+        args = _dict(json.loads(raw)) if isinstance(raw, str) and raw.lstrip().startswith("{") else _dict(raw)
+    except ValueError:
+        args = {}
+    hits = []
+    cmd = args.get("cmd", args.get("command"))
+    if isinstance(cmd, list) and len(cmd) >= 3 and re.fullmatch(r"-[a-z]*c[a-z]*", str(cmd[1])):   # ["bash", "-lc", "<script>"]
+        cmd = cmd[2]
+    command = _command(cmd)
+    if command:
+        hits += check("Bash", {"command": command})
+    patch = args.get("patch", raw if isinstance(raw, str) else "")
+    if isinstance(patch, str):
+        for path in re.findall(r"\*\*\* (?:Update|Add) File: ([^\n]+)", patch)[:20]:
+            hits += check("Write", {"file_path": path.strip()})
+    call = str(payload.get("call_id") or payload.get("id") or hash(json.dumps(payload, sort_keys=True, default=str)))
+    have = {(r["rule"], r["text"], r["ts"]) for r in session.get("risks") or []}
+    for rule, shown in hits:                         # a call and its exec event are one action
+        if (rule, shown, session.get("updated_at")) in have or any(r["id"] == f"codex:{call}:{rule}" for r in session.get("risks") or []):
+            continue
+        session.setdefault("risks", []).append({"id": f"codex:{call}:{rule}", "ts": session.get("updated_at"), "rule": rule,
+                                                "label": RULES[rule], "text": shown, "helper": False})
+    if hits:
+        del session["risks"][:-20]
+
+
 def _tokens(value):
     value = _dict(value)
     return {key: max(0, int(_number(value.get(source)) or 0)) for key, source in (
@@ -144,11 +174,13 @@ def _item(session, payload):
             _message(session, content)
     elif kind in ("function_call", "custom_tool_call"):
         session["activity"] = _tool_activity(payload)
+        _risks(session, payload)
     elif kind in ("reasoning", "Reasoning"):
         session["activity"] = "Thinking"
     elif kind in ("exec_command_begin", "CommandExecution"):
         command = _short(_command(payload.get("command", payload.get("cmd"))), 160)
         session["activity"] = "Running: " + (command or "command")
+        _risks(session, {"call_id": payload.get("call_id"), "arguments": {"command": payload.get("command", payload.get("cmd"))}})
 
 
 def _record(entry, record):

@@ -253,3 +253,10 @@ class LongBacklogTests(unittest.TestCase):
             self.assertTrue(all(f"b{i:02d}" in listed for i in range(20)))
             self.assertEqual(listed["b00"]["backlog_pos"], 0)
             self.assertEqual(listed["b19"]["backlog_pos"], 19)
+
+
+class MemoryCapTests(unittest.TestCase):
+    def test_memory_caps_read_as_systemd_takes_them(self):
+        self.assertEqual([lanes._mem(x) for x in ("8G", "8g", "0", "0%", "512m", "50%", "abc", "", "1.5G")],
+                         ["8G", "8G", None, None, "512M", "50%", None, None, "1.5G"])
+        self.assertEqual(lanes.unit_limits({"lane_policy": {"memory_max": "0", "tasks_max": 0}}), [])

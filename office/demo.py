@@ -512,7 +512,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.112.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.113.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
@@ -524,6 +524,7 @@ class DemoOffice(LiveOffice):
         snap["office"]["shipped_today"] = {"day": time.strftime("%Y-%m-%d"), "commits": c, "prs_opened": o, "prs_merged": m,
                                            "seats": {k: list(v) for k, v in self._ship_seats.items()}}
         snap["asks"] = self.asks.view(30)
+        snap["risks"] = [dict(r, ts=now - r["ago"], seat=st["id"], session=x["id"], name=x["name"]) for st in seats for x in st["sessions"] for r in DEMO_RISKS.get(x["id"], [])]
         snap["contradicted"] = [{"session": "d-old", "seat": "claude3", "lane": "1016-031200-migrate-the-billing-tables", "name": "billing-migration",
                                  "level": "contradicted", "why": "its last test run failed", "at": now - 1800}]
         snap["attention"] = Office._attention(snap)

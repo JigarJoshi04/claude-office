@@ -3,6 +3,31 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.113.0] - 2026-10-19
+
+### Fixed
+- Risky actions: the page now plays the bad sound, shows a toast and a desktop notification (and the voice says it,
+  on by default for this kind); an item stays in Needs you after its session ends, until Seen or 12 hours; every
+  risky call is announced, not only the last five; Codex sessions are watched too (shell calls and patched files).
+- Risk rules read each command's words instead of long regexes, so they no longer backtrack for seconds on long
+  lines, and they now catch `aws --profile … terminate-instances`, `aws s3 rb`, SQL sent to a database client in a
+  heredoc, commands after `<<EOF` on the same line, scripts run with `bash -c`/`sh -c` or sent over `ssh`,
+  `bash -c "$(curl …)"` and `bash <(curl …)`, and shell writes (`>>`, `cp`, `tee`) to `.env`, `~/.ssh`, start-up
+  files and Claude Code's settings. No longer flagged: `git rm -r --cached`, `terraform plan -destroy`,
+  `kubectl auth can-i delete`, a grep for "DROP TABLE".
+- Credentials masked in more places: AWS secret keys, `mysql -p…`, `curl -u user:pass`, and passwords in URLs.
+- A failing vitest or Playwright run (`1 failed | 41 passed`) read as passed since 3.103.
+- A lane whose time limit ran out while it waited for a seat was started anyway; the lane policy was only checked at
+  hire time, so a resumed, backlog or scheduled lane could run with full trust outside the allowed folders.
+- Review comments: the count stopped at six, PRs with the same number in two repositories became one item, and one
+  failed `gh` read hid the comments for five minutes.
+- Phases: `git -C <dir> commit` and `cat > file <<EOF` read wrong; `find -delete` and `gh pr comment` read as looking.
+- Ask about it lost "Reading…" on the next refresh (inviting a second, paid question), and could send one account's
+  transcript through another seat.
+- `memory_max` of "0" capped lanes at zero (now no cap); "8g" was ignored.
+- PR-merged reminders can name their repository (`owner/name#12`, and a bell on each open PR on the shelf), so
+  another repository's #12 never sets them off.
+
 ## [3.112.0] - 2026-10-19
 
 ### Added

@@ -441,7 +441,11 @@ class PhaseTests(unittest.TestCase):
                  ("Bash", {"command": "npm install"}, None, "run"), ("Write", {"file_path": "/l/REPORT.md"}, None, "ship"),
                  ("Edit", {"file_path": "/l/STATE.md"}, None, None), ("Edit", {"file_path": "/w/app.py"}, None, "edit"),
                  ("Read", {"file_path": "a"}, None, "look"), ("Bash", {"command": "pytest -q"}, "test", "test"),
-                 ("Bash", {"command": 'git commit -m "x"'}, None, "ship"), ("TodoWrite", {}, None, None), ("Bash", None, None, "run")]
+                 ("Bash", {"command": 'git commit -m "x"'}, None, "ship"), ("TodoWrite", {}, None, None), ("Bash", None, None, "run"),
+                 ("Bash", {"command": "git -C /repo commit -qm x"}, None, "ship"), ("Bash", {"command": "git -C /r -c user.name=a push"}, None, "ship"),
+                 ("Bash", {"command": "cat > app.py <<'EOF'\nx = 1\nEOF"}, None, "edit"), ("Bash", {"command": "find . -name '*.pyc' -delete"}, None, "run"),
+                 ("Bash", {"command": "gh pr comment 12 -b hi"}, None, "run"), ("Bash", {"command": "gh issue create -t x"}, None, "run"),
+                 ("Bash", {"command": "gh pr view 12"}, None, "look"), ("Bash", {"command": "find . -name x"}, None, "look")]
         for name, inp, screen, want in cases:
             self.assertEqual(step_kind(name, inp, screen), want, (name, inp))
 
@@ -456,13 +460,25 @@ class PhaseTests(unittest.TestCase):
         self.assertEqual(phase_of(["look", "look", "look", "run"], None), "exploring")
 
 
+class RedactTests(unittest.TestCase):
+    def test_passwords_beside_what_stays_readable(self):
+        from office.sessions import redact
+        self.assertNotIn("bPxRfiCY", redact("AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY aws s3 ls"))
+        self.assertEqual(redact("mysql -u root -pSecret123 db"), "mysql -u root -p…[hidden] db")
+        self.assertEqual(redact("curl -u alice:hunter22 https://api"), "curl -u alice:…[hidden] https://api")
+        self.assertEqual(redact("psql postgres://u:pa55word@host/db"), "psql postgres://u:…[hidden]@host/db")
+        for keep in ("git log --oneline", "find . -print", "ssh -p 2222 host", "https://github.com/x/y"):
+            self.assertEqual(redact(keep), keep)
+
+
 class HeredocTests(unittest.TestCase):
     """strip_heredocs: one pass, however many `<<` a long command has (a backtracking regex took minutes)."""
 
     def test_bodies_go_and_a_lone_shift_stays(self):
         from office.sessions import strip_heredocs
-        self.assertEqual(strip_heredocs("cat <<'EOF' > f\nrm -rf /\nEOF\necho done"), "cat \necho done")
+        self.assertEqual(strip_heredocs("cat <<'EOF' > f\nrm -rf /\nEOF\necho done"), "cat  > f\necho done")
         self.assertEqual(strip_heredocs("cat <<A\n1\nA\ncat <<-B\n2\n\tB\nend"), "cat \ncat \nend")
+        self.assertEqual(strip_heredocs("cat > f <<EOF && git push --force\nbody\nEOF"), "cat > f  && git push --force")
         self.assertEqual(strip_heredocs("python3 -c 'x << 2'"), "python3 -c 'x << 2'")
         self.assertEqual(strip_heredocs("cat <<EOF\nnever closed"), "cat <<EOF\nnever closed")
 
@@ -480,7 +496,8 @@ class HeredocTests(unittest.TestCase):
         from office.sessions import _TEST_FAILED
         for ok in ("OK (expected failures=1)", "2 failed attempts to connect"):
             self.assertIsNone(_TEST_FAILED.search(ok), ok)
-        for bad in ("=== 1 failed, 40 passed in 3s", "1 failed in 0.1s", "3 failing", "FAILED (failures=2)"):
+        for bad in ("=== 1 failed, 40 passed in 3s", "1 failed in 0.1s", "3 failing", "FAILED (failures=2)",
+                    " Test Files  1 failed (1)", " Tests  1 failed | 41 passed (42)", "  1 failed\n  40 passed (3.1s)"):
             self.assertIsNotNone(_TEST_FAILED.search(bad), bad)
 
 

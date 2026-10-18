@@ -174,8 +174,9 @@ class PullRequests:
                         return
                     key = self._want.pop()
                 threads = fetch_reviews(*key)
-                with self.lock:
-                    self.reviews[key] = {"at": time.time(), "threads": threads or []}
+                with self.lock:                          # a failed read keeps what was known (and tries again later)
+                    old = self.reviews.get(key)
+                    self.reviews[key] = {"at": time.time(), "threads": threads if threads is not None else (old["threads"] if old else [])}
                     if len(self.reviews) > 40:
                         self.reviews.pop(next(iter(self.reviews)))
         finally:

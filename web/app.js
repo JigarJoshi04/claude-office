@@ -643,6 +643,7 @@ function onNews(e) {
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
     case "reset": toast(text, "good"); fx.celebrate(e.seat, null, "Fresh plan!"); sound.play("arrive"); if (who) fx.sayAtSeat(e.seat, line(who, "reset"), 6000); teammateReacts(e, "reset"); break;
     case "stuck": if (who) fx.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
+    case "risk": case "collision": sound.play("bad"); toast(text, "bad"); notify(e.kind === "risk" ? "Risky action" : "Two sessions, one working tree", text); break;
     case "levelup":
     case "achievement": {
       const lvl = e.kind === "levelup";

@@ -140,7 +140,11 @@ def ask(office, body: dict, demo: bool = False) -> dict:
         raise ValueError("Unknown seat")
     if seat.get("kind") != "claude":
         raise brain.Unavailable("Asking about Codex sessions is not supported yet.")
-    text, kept = digest(talk._transcript(seat, sid, (x or {}).get("transcript")))
+    path = talk._transcript(seat, sid, (x or {}).get("transcript"))
+    own = (Path(seat["config_dir"]) / "projects").resolve()
+    if path and own not in path.resolve().parents:     # only this seat's own transcripts go through this seat
+        raise brain.Unavailable("That conversation belongs to another account, so it is not sent through this seat.")
+    text, kept = digest(path)
     if not text:
         raise brain.Unavailable("This session's transcript could not be read.")
     r = office.brain.ask("ask", prompt_for(question, text), SCHEMA, seat, office.cfg, about=f"{(x or {}).get('name') or sid[:8]}: {question}")

@@ -266,7 +266,7 @@ def _codex_seat(meta: dict, now: float) -> dict:
             "state": state, "live": bool(s.get("live")), "activity": sessions.redact(s.get("activity")) or "Thinking",
             "activity_kind": "type" if (s.get("activity") or "").startswith(("Running", "Editing")) else "think",
             "title": None, "task": sessions.redact(s.get("task")), "last_text": sessions.redact(s.get("last_message")),
-            "model": s.get("model"),
+            "model": s.get("model"), "risks": list(s.get("risks") or []),      # the risky-action watch (codex_seat._risks)
             "tool_calls": None, "recent": [], "tokens_total": (s.get("tokens") or {}).get("total"),
             "state_file": None, "report_file": None, "report_status": None, "transcript": s.get("rollout"),
             "resume_cmd": (f"gpt -R {s.get('id')} \"...\"" if wrapper else f"codex resume {s.get('id')}") if s.get("id") else None,
@@ -530,7 +530,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.112.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.113.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -549,7 +549,10 @@ class Office(LiveOffice):
             for x in s.get("sessions", []):
                 for r in x.get("risks") or []:
                     if self.risk_seen.first(r["id"]) and r.get("ts") and now - r["ts"] < risk.RECENT_S and r["rule"] not in mute:
+                        self.risk_seen.keep(r["id"], {"ts": r["ts"], "rule": r["rule"], "text": r["text"], "seat": s["id"], "session": x["id"],
+                                                      "name": x.get("name") or "A session", "helper": r.get("helper", False)})
                         self.emit("risk", f"{x.get('name') or 'A session'} on {s['label']}: {risk.RULES[r['rule']]}: {r['text']}", s["id"], "bad")
+        snap["risks"] = self.risk_seen.within(now)        # Needs you keeps them after their session has gone
         self.risk_seen.save()
         for s in seats_out:                                # what each session and lane has cost so far (the ledger)
             for x in s.get("sessions", []):
@@ -583,7 +586,7 @@ class Office(LiveOffice):
         snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > now)
         snap["ceo"] = self.presence.get()                  # at the computer or away (presence.py)
         snap["capacity"] = forecast.capacity(snap["seats"], now, float((snap.get("divider") or {}).get("weekly_guard") or 95))   # the next 7 days
-        merged_prs = [(p["number"], _iso_ts(p.get("merged"))) for d in list(self.prs.data.values()) for p in (d.get("prs") or [])
+        merged_prs = [(p["number"], _iso_ts(p.get("merged")), repo) for repo, d in list(self.prs.data.items()) for p in (d.get("prs") or [])
                       if p.get("state") == "merged" and p.get("number")]
         for r in self.reminders.check(snap, now, list(self.events)[-80:], merged_prs):   # notes to yourself whose moment came
             self.emit("reminder", ("Late: " if r["late"] else "") + r["text"], r.get("seat"), "warn")
@@ -647,6 +650,15 @@ class Office(LiveOffice):
             items.append({"level": "bad" if c["same_file"] else "warn", "seat": c["who"][0]["seat"], "session": c["who"][0]["id"],
                           "collision": c["root"], "text": f"{names} are both editing {os.path.basename(c['root'])}"
                                                            + (", the same file" if c["same_file"] else " right now")})
+        by_sess: dict = {}                                   # risky actions of the last 12 hours, one item per session (risk.py)
+        for r in snap.get("risks") or []:
+            if r.get("rule") not in mute and snap["now"] - (r.get("ts") or 0) < risk.WINDOW_S:
+                by_sess.setdefault(r.get("session"), []).append(r)
+        for sid, rs in by_sess.items():
+            r = rs[-1]
+            items.append({"level": "bad", "seat": r.get("seat"), "session": sid if sid in live_ids else None, "risk": r["id"], "rule": r["rule"], "cmd": r["text"],
+                          "text": f"{r.get('name') or 'A session'}{' on ' + labels[r['seat']] if r.get('seat') in labels else ''}: {risk.RULES[r['rule']]}"
+                                  + (f" (and {len(rs) - 1} more)" if len(rs) > 1 else "")})
         reviewed = set()                                     # one review item per PR, however many desks share its branch
         for s in snap["seats"]:
             label = s["label"]
@@ -667,20 +679,14 @@ class Office(LiveOffice):
                 if lp and lp["count"] >= 8 and x.get("live", True) and x.get("state") in ("working", "waiting"):
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"], "loop": True,
                                   "text": f"{x.get('name') or 'A session'} on {label} has made the same call {lp['count']} times in a row: {lp['text']}"})
-                rs = [r for r in x.get("risks") or [] if r.get("ts") and snap["now"] - r["ts"] < risk.WINDOW_S and r["rule"] not in mute]
-                if rs:                                           # it did something risky (risk.py): the latest, and how many
-                    r = rs[-1]
-                    items.append({"level": "bad", "seat": s["id"], "session": x["id"], "risk": r["id"], "rule": r["rule"], "cmd": r["text"],
-                                  "text": f"{x.get('name') or 'A session'} on {label}: {risk.RULES[r['rule']]}"
-                                          + (f" (and {len(rs) - 1} more)" if len(rs) > 1 else "")})
                 ci = x.get("ci")
-                if ci and ci.get("threads") and x.get("live", True) and ci["number"] not in reviewed:   # comments nobody resolved
-                    reviewed.add(ci["number"])
-                    n = len(ci["threads"])
+                if ci and ci.get("threads") and x.get("live", True) and (ci.get("repo"), ci["number"]) not in reviewed:   # comments nobody resolved
+                    reviewed.add((ci.get("repo"), ci["number"]))
+                    n = ci.get("thread_count") or len(ci["threads"])
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"], "review": True,
                                   "text": f"PR #{ci['number']} has {n} unresolved review comment{'' if n == 1 else 's'}: {x.get('name') or 'a session'} on {label}"})
-                if ci and ci.get("checks") == "fail" and x.get("live", True) and ci["number"] not in seen_prs:
-                    seen_prs.add(ci["number"])
+                if ci and ci.get("checks") == "fail" and x.get("live", True) and (ci.get("repo"), ci["number"]) not in seen_prs:
+                    seen_prs.add((ci.get("repo"), ci["number"]))
                     items.append({"level": "warn", "seat": s["id"], "ci": True, "session": x["id"],
                                   "text": f"PR #{ci['number']}'s checks failed: {x.get('name') or 'a session'} on {label}"})
             g = s.get("ghost")
@@ -836,9 +842,10 @@ class Office(LiveOffice):
                     key = (gh.get(g.get("repo")), p["number"])
                     if x.get("live", True) and (key in asked or len(asked) < 10):
                         asked.add(key)
+                    threads = self.prs.reviews_for(*key) if key in asked else []   # unresolved review comments
                     x["ci"] = {"checks": p["checks"], "number": p["number"], "url": p["url"], "state": p["state"], "review": p["review"],
-                               "title": p.get("title"), "branch": p.get("branch"),
-                               "threads": self.prs.reviews_for(*key)[:6] if key in asked else []}   # unresolved review comments
+                               "title": p.get("title"), "branch": p.get("branch"), "repo": key[0],
+                               "threads": threads[:6], "thread_count": len(threads)}
 
     def cabinet_view(self, q: str = "", seat: str | None = None, offset: int = 0) -> dict:
         """The filing cabinet: past sessions matching q, most recent first (cabinet.py)."""

@@ -33,9 +33,12 @@ def trigger_from(t, now: float | None = None) -> dict:
     ref = t.get("ref")
     if not isinstance(ref, str) or not 1 <= len(ref) <= 200:
         raise ValueError("The trigger needs what it is about (ref)")
-    if t["kind"] == "pr_merged" and not re.fullmatch(r"#?\d{1,7}", ref):
-        raise ValueError("A PR is its number, like #482")
-    return {"kind": t["kind"], "ref": ref.lstrip("#") if t["kind"] == "pr_merged" else ref}
+    if t["kind"] == "pr_merged":                      # "#482", or with its repository: "owner/name#482"
+        m = re.fullmatch(r"([\w.-]+/[\w.-]+)?#?(\d{1,7})", ref)
+        if not m:
+            raise ValueError("A PR is its number, like #482, or owner/name#482")
+        return {"kind": "pr_merged", "ref": f"{m.group(1)}#{m.group(2)}" if m.group(1) else m.group(2)}
+    return {"kind": t["kind"], "ref": ref}
 
 
 class Reminders:
@@ -91,9 +94,10 @@ class Reminders:
             m = e.get("kind") == "shipped" and re.search(r"PR #(\d+) merged$", e.get("text") or "")
             if m:
                 merged[m.group(1)] = max(merged.get(m.group(1), 0), e.get("ts") or now)
-        for item in merged_prs:                     # (number, merged at) from the shelf; a bare number counts as now
-            n, at = item if isinstance(item, (tuple, list)) else (item, now)
-            merged[str(n)] = max(merged.get(str(n), 0), at or 0)
+        for item in merged_prs:                     # (number, merged at, repo) from the shelf; a bare number counts as now
+            n, at, repo = (list(item) + [None, None])[:3] if isinstance(item, (tuple, list)) else (item, now, None)
+            for k in [str(n)] + ([f"{repo}#{n}"] if repo else []):
+                merged[k] = max(merged.get(k, 0), at or 0)
         fired, flipped = [], False
         with self.lock:
             for x in self.items:
