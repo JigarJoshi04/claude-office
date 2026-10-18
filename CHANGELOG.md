@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.46.0] - 2026-10-18
+
+### Added
+- A drone swarm: each helper a session sends off (the Agent tool, in the foreground or the background) is a drone
+  orbiting its desk until it finishes, when it docks with a spark and "Helper done". The session's page lists the
+  helpers at work and for how long. Sessions carry `helpers` and `helpers_done`.
+
 ## [3.45.0] - 2026-10-18
 
 ### Added

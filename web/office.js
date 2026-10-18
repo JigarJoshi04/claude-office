@@ -231,6 +231,7 @@ export function createOffice(stage, handlers) {
   // ------------------------------------------------------------------------------------- particles
   // Paper planes: a message from the CEO flies from the desk to the session it is for, in an arc, and lands with a spark.
   const planes = [];
+  const helpersDone = new Map();          // session id -> helpers finished when last drawn, to dock drones as more finish
   function drawPlanes() {
     const now = performance.now();
     for (let i = planes.length - 1; i >= 0; i--) {
@@ -737,10 +738,26 @@ export function createOffice(stage, handlers) {
         }
         S.drawChairBack(ctx, x - 1, pod.y + 74);
       }
-      if (a && pose === "delegate") {
+      const helpers = a ? (a.sess.helpers || []).length : 0;
+      if (helpers) {                                    // one drone per helper at work, orbiting its owner
+        const cx = x + 2, cy = sp.top ? sp.seatY - 4 : sp.seatY - 8, n = Math.min(6, helpers);
+        for (let i = 0; i < n; i++) {
+          const ang = (reduced ? 0 : t / 1100) + i * 2 * Math.PI / n, hx = Math.round(cx + Math.cos(ang) * 13), hy = Math.round(cy + Math.sin(ang) * 6);
+          S.drawDrone(ctx, hx, hy, s.color, t + slot * 400 + i * 170);
+        }
+        lights.push({ x: cx + 3, y: cy + 2, r: 16, c: s.color, i: 0.45 });
+      } else if (a && pose === "delegate") {
         const hx = x + 11, hy = sp.top ? sp.seatY - 2 : sp.seatY - 6;
         S.drawDrone(ctx, hx, hy, s.color, t + slot * 400);
         lights.push({ x: hx + 3, y: hy + 2, r: 10, c: s.color, i: 0.5 });
+      }
+      if (a) {                                          // a helper finished: its drone docks with a spark
+        const done = a.sess.helpers_done || 0, was = helpersDone.get(a.id);
+        if (was != null && done > was && !reduced && game !== "off") {
+          const [ax, ay] = anchorFor(a); burst(ax, ay - 4, 12, "spark");
+          if (game === "full") pops.push({ el: div("pop good", done - was > 1 ? `${done - was} helpers done` : "Helper done", ax, ay - 10), until: performance.now() + 2200 });
+        }
+        helpersDone.set(a.id, done);
       }
     }
     if (off) { S.rect(ctx, pod.x + 56, pod.y + 46, 16, 13, "#ffe066"); S.rect(ctx, pod.x + 58, pod.y + 49, 12, 1, "#8a6d00"); S.rect(ctx, pod.x + 58, pod.y + 52, 8, 1, "#8a6d00"); S.rect(ctx, pod.x + 58, pod.y + 55, 10, 1, "#8a6d00"); }

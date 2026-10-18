@@ -236,7 +236,7 @@ class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
                  "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context",
-                 "tasks", "task_pending")
+                 "tasks", "task_pending", "helpers", "helpers_done")
 
     def __init__(self, path: Path):
         self.path = path
@@ -265,6 +265,8 @@ class TranscriptState:
         self.context = 0            # that response's prompt: input, cache reads and cache writes
         self.tasks: dict = {}       # the session's own task list (TaskCreate/TaskUpdate, or TodoWrite): id -> task
         self.task_pending: dict = {}   # TaskCreate tool_use id -> (subject, activeForm), until its result names the id
+        self.helpers: dict = {}        # Agent/Task tool_use id -> {"desc", "since", "bg"}: helpers at work right now
+        self.helpers_done = 0          # how many have finished (the floor docks a drone each time it goes up)
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -287,6 +289,8 @@ class TranscriptState:
         msg = d.get("message")
         if not isinstance(msg, dict):
             msg = {}
+        if t == "user" and not d.get("isSidechain") and self.helpers:
+            self._helper_result(msg.get("content"))
         if t == "user" and not d.get("isSidechain") and self.task_pending and isinstance(msg.get("content"), list):
             for c in msg["content"]:                # "Task #3 created successfully: …" gives a new task its id
                 if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") in self.task_pending:
@@ -346,6 +350,12 @@ class TranscriptState:
             if c.get("type") == "tool_use":
                 if not d.get("isSidechain"):
                     self._task_tool(c)
+                    if c.get("name") in ("Agent", "Task") and c.get("id"):     # a helper goes to work
+                        inp = c.get("input") if isinstance(c.get("input"), dict) else {}
+                        self.helpers[c["id"]] = {"desc": redact(_short(str(inp.get("description") or inp.get("prompt") or "a helper"), 80)),
+                                                 "since": ts, "bg": bool(inp.get("run_in_background"))}
+                        while len(self.helpers) > 24:
+                            self.helpers.pop(next(iter(self.helpers)))
                 self.tool_calls += 1
                 text, kind = describe_tool(str(c.get("name") or ""), c.get("input") or {})
                 if d.get("isSidechain"):
@@ -356,6 +366,26 @@ class TranscriptState:
                 self._push(ts, "Writing: " + _short(c["text"], 70), "talk")
             elif c.get("type") == "thinking" and not d.get("isSidechain"):
                 self._push(ts, "Thinking", "think", dedupe=True)
+
+    def _helper_result(self, content) -> None:
+        """A helper is done when its result comes back, or, for one in the background, when its task notification
+        arrives ("Async agent launched" only means it started)."""
+        items = content if isinstance(content, list) else [{"type": "text", "text": content}] if isinstance(content, str) else []
+        for c in items:
+            if not isinstance(c, dict):
+                continue
+            if c.get("type") == "tool_result" and c.get("tool_use_id") in self.helpers:
+                body = c.get("content")
+                text = body if isinstance(body, str) else " ".join(x.get("text", "") for x in body if isinstance(x, dict)) if isinstance(body, list) else ""
+                if "Async agent launched" in text or "launched successfully" in text:
+                    self.helpers[c["tool_use_id"]]["bg"] = True
+                else:
+                    self.helpers.pop(c["tool_use_id"]); self.helpers_done += 1
+            text = c.get("text") if c.get("type") == "text" else None
+            if isinstance(text, str) and "<task-notification>" in text:
+                for m in re.finditer(r"<tool-use-id>([\w-]+)</tool-use-id>", text):
+                    if self.helpers.pop(m.group(1), None) is not None:
+                        self.helpers_done += 1
 
     def _task_tool(self, c: dict) -> None:
         """Follow the session's task list: TaskCreate and TaskUpdate (Claude Code today), TodoWrite (before)."""
@@ -587,6 +617,9 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "tokens_5h": tr.tokens(now - 5 * 3600) if tr else None,
             "cache": cache_view(tr),
             "tasks": task_view(tr),
+            "helpers": [{"desc": h["desc"], "since": h["since"]} for h in tr.helpers.values()
+                        if (h["since"] or now) > now - 6 * 3600][:8] if tr else [],
+            "helpers_done": tr.helpers_done if tr else 0,
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,
             "report_file": report_file,

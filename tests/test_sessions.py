@@ -354,3 +354,20 @@ class BigTranscriptTaskTests(unittest.TestCase):
             st = sessions.TranscriptCache().read(p)
             v = sessions.task_view(st)
             self.assertEqual((v["done"], v["total"]), (3, 3))
+
+
+class HelperTests(unittest.TestCase):
+    def test_helpers_in_the_foreground_and_the_background(self):
+        import json
+        st = sessions.TranscriptState(Path("/x.jsonl"))
+        use = lambda tid, bg: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": "m" + tid, "content": [
+            {"type": "tool_use", "id": tid, "name": "Agent", "input": {"description": "Review the diff", "prompt": "…", "run_in_background": bg}}]}}).encode()
+        res = lambda tid, text: json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": text}]}}).encode()
+        note = lambda tid: json.dumps({"type": "user", "message": {"content": f"<task-notification>\n<task-id>x</task-id>\n<tool-use-id>{tid}</tool-use-id>\n<status>completed</status>"}}).encode()
+        st.feed_line(use("t1", False)); st.feed_line(use("t2", True))
+        self.assertEqual(len(st.helpers), 2)
+        st.feed_line(res("t1", "Here is the review."))                       # a foreground helper is done with its result
+        st.feed_line(res("t2", "Async agent launched successfully."))        # a background one has only started
+        self.assertEqual((list(st.helpers), st.helpers_done), (["t2"], 1))
+        st.feed_line(note("t2"))
+        self.assertEqual((st.helpers, st.helpers_done), ({}, 2))

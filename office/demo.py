@@ -56,7 +56,12 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "cache": _demo_cache(sid, state, now),
         "tasks": _demo_tasks(sid, now),
         "ci": DEMO_CI.get(sid),
+        "helpers": [{"desc": d, "since": now - 300 - i * 140} for i, d in enumerate(DEMO_HELPERS.get(sid, []))][: 1 + int(now // 40) % 3],
+        "helpers_done": int(now // 40) if sid in DEMO_HELPERS else 0,
     }
+
+
+DEMO_HELPERS = {"d-orch": ["Check the overnight lanes' reports", "Read the failing CI logs", "Draft tomorrow's lane briefs"]}
 
 
 DEMO_CI = {   # the desks' CI lamps: a PR's checks on the branch each lane has out
@@ -416,7 +421,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.45.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.46.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,
