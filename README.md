@@ -65,6 +65,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Replay** (`R`): the floor plays back the last 6 or 24 hours from the office's own history, at up to 900×. People
   come and go, reports burst into confetti and level-ups get their banner as they happened; scrub with the timeline,
   `Space` pauses, the arrows step, `Esc` returns to live.
+- **Install it as an app** (☰ → Install as an app, in Chrome or Edge): its own window, and a badge on its icon with the
+  number of things that need you.
 - **TV mode** (`V`, or open `/?tv=1` on a spare screen): the floor alone, full screen, with a status strip and a clock,
   while a slow tour lights up each room and shows its card.
 

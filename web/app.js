@@ -752,6 +752,7 @@ function renderOfficeLevel() {
 }
 $("officeLvl").addEventListener("click", () => go({ kind: "office" }));
 
+let badgeN = -1;
 function renderTop() {
   $("officeName").textContent = snap.office.name || "Claude Office";
   const bad = snap.attention.some(a => a.level === "bad"), warn = snap.attention.length > 0;
@@ -763,6 +764,10 @@ function renderTop() {
   const full = pulse(snap, (s) => panels.persona(s), dayTime), needs = n ? ` ${n} thing${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} you.` : "";
   $("pulseText").textContent = full.split(/(?<=\.) /)[0] + needs + (DEMO ? " (Demo office.)" : "");
   p.title = full + needs;
+  if (n !== badgeN && "setAppBadge" in navigator) {   // an installed app shows the Needs-you count on its dock icon
+    badgeN = n;
+    (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+  }
 }
 let latestIdx = 0, latestSig = "";
 function renderLatest() {
