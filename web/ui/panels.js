@@ -89,7 +89,8 @@ export function makePanels(app) {
   }
   function laneRow(l) {
     const tn = { done: "good", finished: "good", running: "info", blocked: "warn", failed: "bad", waiting: "warn", scheduled: "info", interrupted: "warn" }[l.status] || "info";
-    const when = l.status === "scheduled" && l.schedule ? (l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
+    const backlog = (S().lanes || []).filter(x => x.status === "scheduled" && x.schedule && x.schedule.backlog).sort((a, b) => (a.schedule.order || 0) - (b.schedule.order || 0));
+    const when = l.status === "scheduled" && l.schedule ? (l.schedule.backlog ? ` · in the backlog, ${ordinal(backlog.indexOf(l) + 1)} in line` : l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
     return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop", scheduled: "calendar", interrupted: "alert" }[l.status] || "briefcase", 16)}</span>
       <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status)}${when}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
   }
@@ -1078,9 +1079,10 @@ export function makePanels(app) {
       <h2>${esc(l.title)}</h2>
       <div class="row wrap" style="gap:6px;margin-top:8px">${pill(l.status, { done: "good", finished: "good", running: "info", failed: "bad", blocked: "warn", waiting: "warn", interrupted: "warn" }[l.status] || "")}
         ${l.seat ? pill("on " + nameOf(l.seat)) : ""}${pill(l.model)}${pill(l.seat_pref === "auto" ? "divider picks the seat" : "pinned to " + nameOf(l.seat_pref))}${l.allow_messages === true ? pill("takes messages", "good", "chat") : ""}</div>
-      ${scheduled ? `<div class="need info" style="margin-top:12px"><span class="ico">${icon("clock", 16)}</span><div class="grow"><div class="t">Hired for later</div><div class="d">${sch.at
-        ? `Starts ${esc(new Date(sch.at * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }))}`
-        : `Starts when a seat has ${esc(String(sch.left))}% of its 5-hour plan left`}. Cancel it, or start it now.</div></div></div>` : ""}
+      ${scheduled ? `<div class="need info" style="margin-top:12px"><span class="ico">${icon("clock", 16)}</span><div class="grow"><div class="t">${sch.backlog ? "In the backlog" : "Hired for later"}</div><div class="d">${sch.backlog
+        ? "Starts when the divider has a seat for it, oldest first, one at a time"
+        : sch.at ? `Starts ${esc(new Date(sch.at * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }))}`
+        : `Starts when a seat has ${esc(String(sch.left))}% of its 5-hour plan left`}. Cancel it, or start it now.</div></div>${sch.backlog ? `<button class="btn sm" id="lFront">${icon("chevronRight", 14)}Move to the front</button>` : ""}</div>` : ""}
       ${l.waiting_reason ? `<div class="need warn" style="margin-top:12px"><span class="ico">${icon("clock", 16)}</span><div class="grow"><div class="t">Waiting for a seat</div><div class="d">${esc(humanise(l.waiting_reason))}</div></div></div>` : ""}
       <div class="row wrap" style="gap:8px;margin-top:16px">
         ${sid && l.seat ? `<button class="btn sm primary" data-chat-session="${esc(l.seat)}|${esc(sid)}">${icon("chat", 15)}${running ? "Chat with it" : "Follow up"}</button>` : ""}
@@ -1098,6 +1100,10 @@ export function makePanels(app) {
       ${section("Details", `<dl class="facts"><dt>Lane id</dt><dd><code>${esc(l.id)}</code></dd><dt>Unit</dt><dd><code>${esc(l.unit)}</code></dd><dt>Folder</dt><dd><code>${esc(l.workdir)}</code></dd></dl>`)}`,
       bind(root) {
         const stop = root.querySelector("#lStop"), res = root.querySelector("#lResume"), clone = root.querySelector("#lClone"), chat = root.querySelector("[data-chat-session]");
+        const front = root.querySelector("#lFront");
+        if (front) front.addEventListener("click", async () => {
+          try { const r = await app.post("/api/lanes/front", { id: l.id }); toast(r.demo ? "Demo office: nothing was moved." : "First in line now.", r.demo ? "info" : "good"); app.refresh(); } catch (e) { toast("Could not move it: " + e.message, "bad"); }
+        });
         if (stop) stop.addEventListener("click", async () => { if (!confirm("Stop this lane? Its progress notes stay, so you can resume it.")) return; try { const r = await app.post("/api/lanes/stop", { id: v.id }); result(r, "Lane stopped.", "warn"); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
         if (res) res.addEventListener("click", async () => { try { const r = await app.post("/api/lanes/resume", { id: v.id, seat: root.querySelector("#lSeat").value || null }); result(r, "Resuming the lane."); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
         if (clone) clone.addEventListener("click", () => {
@@ -1270,7 +1276,8 @@ export function makePanels(app) {
         <div class="grid2"><label class="f">Start<select id="hStart">
           <option value="" ${!d.start ? "selected" : ""}>Now</option>
           <option value="at" ${d.start === "at" ? "selected" : ""}>At a time…</option>
-          <option value="left" ${d.start === "left" ? "selected" : ""}>When a seat has 30% of its window left</option></select></label>
+          <option value="left" ${d.start === "left" ? "selected" : ""}>When a seat has 30% of its window left</option>
+          <option value="backlog" ${d.start === "backlog" ? "selected" : ""}>Add to the backlog (oldest first, as seats free up)</option></select></label>
           ${d.start === "at" ? `<label class="f">At<input type="datetime-local" id="hStartAt" value="${esc(d.startAt || "")}"></label>` : "<span></span>"}</div>
         <label class="f">Then, in the same folder<select id="hThen">
           <option value="" ${!d.chain ? "selected" : ""}>Nothing: it reports and stops</option>
@@ -1344,7 +1351,7 @@ export function makePanels(app) {
           try {
             const startAt = hireDraft.start === "at" && hireDraft.startAt ? Date.parse(hireDraft.startAt) / 1000 : null;
             if (hireDraft.start === "at" && !startAt) { q("hGo").disabled = false; toast("Pick when it should start.", "warn"); return; }
-            const r = await app.post("/api/lanes", { ...hireDraft, start: hireDraft.start === "at" ? { at: startAt } : hireDraft.start === "left" ? { left: 30 } : null });
+            const r = await app.post("/api/lanes", { ...hireDraft, start: hireDraft.start === "at" ? { at: startAt } : hireDraft.start === "left" ? { left: 30 } : hireDraft.start === "backlog" ? { backlog: true } : null });
             if (r.demo) toast("Demo office: no lane was started.");
             else { sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true, chain: "" }; store.set("hireDraft", hireDraft); }
             app.refresh(); app.rerender(true);
@@ -1353,6 +1360,7 @@ export function makePanels(app) {
       } };
   }
   const UNFINISHED = ["scheduled", "queued", "starting", "running", "waiting", "interrupted"];   // lanes.UNFINISHED, and the cut-off ones
+  const ordinal = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th");
   // Next up: lanes worth hiring, from what the office saw (blocked reports, failed lanes, PRs whose checks fail), as
   // ready briefs in the folder they concern. Three at most; "Not now" hides one in this browser.
   function nextUp() {

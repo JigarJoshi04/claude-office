@@ -262,7 +262,9 @@ def schedule_from(body_start, now: float | None = None) -> dict | None:
         if isinstance(n, bool) or not isinstance(n, int) or not 5 <= n <= 100:
             raise ValueError("left must be a percentage from 5 to 100")
         return {"left": n}
-    raise ValueError("start needs at or left")
+    if body_start.get("backlog") is True:             # the backlog: started oldest first, one at a time, as seats free up
+        return {"backlog": True, "order": now}
+    raise ValueError("start needs at, left or backlog")
 
 
 def due(lane: dict, seats: list[dict], now: float) -> bool:
@@ -281,12 +283,36 @@ def due(lane: dict, seats: list[dict], now: float) -> bool:
     return False
 
 
-def start_scheduled(seats: list[dict], now: float | None = None) -> list[dict]:
-    """Start every scheduled lane that is due; returns the lanes started."""
+def backlog_next(lanes_now: list[dict], can_hire: bool, now: float) -> str | None:
+    """The backlog lane to start now: the first in order, when the divider has a seat for a lane and no lane has
+    just been started (one at a time, so each finds its seat before the next goes)."""
+    if not can_hire or any(l.get("status") in ("queued", "starting") and now - (l.get("unit_started_at") or l.get("created_at") or 0) < 90 for l in lanes_now):
+        return None
+    queue = sorted((l for l in lanes_now if l.get("status") == "scheduled" and (l.get("schedule") or {}).get("backlog")),
+                   key=lambda l: ((l.get("schedule") or {}).get("order") or l.get("created_at") or 0, l.get("created_at") or 0))
+    return queue[0]["id"] if queue else None
+
+
+def to_front(lane_id: str) -> dict:
+    """A backlog lane goes to the head of the queue."""
+    lane = load_lane(lane_id)
+    if not lane or not (lane.get("schedule") or {}).get("backlog") or lane.get("status") != "scheduled":
+        raise ValueError("That lane is not in the backlog")
+    first = min(((l.get("schedule") or {}).get("order") or 0) for l in unfinished_lanes(("scheduled",)) if (l.get("schedule") or {}).get("backlog"))
+    lane["schedule"]["order"] = first - 1
+    save_lane(lane)
+    return lane
+
+
+def start_scheduled(seats: list[dict], now: float | None = None, can_hire: bool = False) -> list[dict]:
+    """Start every scheduled lane that is due, and the backlog's next when there is room; returns the lanes started."""
     now = now or time.time()
     started = []
-    for lane in unfinished_lanes():
-        if lane.get("status") == "scheduled" and due(lane, seats, now):
+    pending = unfinished_lanes()
+    nxt = backlog_next(pending, can_hire, now)
+    for lane in pending:
+        if lane.get("status") == "scheduled" and ((lane.get("schedule") or {}).get("backlog") and lane["id"] == nxt
+                                                  or not (lane.get("schedule") or {}).get("backlog") and due(lane, seats, now)):
             full = load_lane(lane["id"])
             if not full or full.get("status") != "scheduled":   # started by hand since the list was read
                 continue

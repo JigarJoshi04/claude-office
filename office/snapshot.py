@@ -480,7 +480,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.89.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.90.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -690,8 +690,9 @@ class Office(LiveOffice):
                 except OSError:
                     pass
             try:                                           # lanes hired for later: start the ones that are due
-                for l in lanes.start_scheduled((self.get() or {}).get("seats", [])):
-                    self.emit("lane", f"Scheduled lane '{l['title']}' is starting", None, "good")
+                cur = self.get() or {}
+                for l in lanes.start_scheduled(cur.get("seats", []), can_hire=bool((cur.get("next_pick") or {}).get("seat"))):
+                    self.emit("lane", f"{'Backlog' if (l.get('schedule') or {}).get('backlog') else 'Scheduled'} lane '{l['title']}' is starting", None, "good")
             except Exception:
                 pass
             try:

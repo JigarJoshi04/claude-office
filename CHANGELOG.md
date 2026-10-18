@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.90.0] - 2026-10-19
+
+### Added
+- The backlog: hire a lane with "Add to the backlog" and the office starts it when the divider has a seat for a lane,
+  oldest first and one at a time (each finds its seat before the next goes). The lane list says where each is in
+  line; a lane's page has "Move to the front", Cancel and Start now. `{"start": {"backlog": true}}` on
+  `POST /api/lanes`, `POST /api/lanes/front`.
+
 ## [3.89.0] - 2026-10-19
 
 ### Added

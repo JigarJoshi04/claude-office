@@ -324,3 +324,27 @@ class Qa17Fixes(unittest.TestCase):
         for line in ("⛔ STATUS: BLOCKED - creds", "[BLOCKED] no access", "1. STATUS: BLOCKED"):
             self.assertTrue(sessions.report_blocked(line), line)
         self.assertFalse(sessions.report_blocked("STATUS: DONE - unblocked the release"))
+
+
+class BacklogTests(unittest.TestCase):
+    def test_the_backlog_drains_oldest_first_one_at_a_time(self):
+        now = 1_000_000.0
+        b = lambda i, order, created: {"id": i, "status": "scheduled", "schedule": {"backlog": True, "order": order}, "created_at": created}
+        lanes_now = [b("late", 30.0, 30.0), b("early", 10.0, 10.0), {"id": "at", "status": "scheduled", "schedule": {"at": now + 999}}]
+        self.assertEqual(lanes.backlog_next(lanes_now, True, now), "early")
+        self.assertIsNone(lanes.backlog_next(lanes_now, False, now))                       # no seat for a lane
+        busy = lanes_now + [{"id": "x", "status": "starting", "unit_started_at": now - 30}]
+        self.assertIsNone(lanes.backlog_next(busy, True, now))                             # one has just gone: wait
+        self.assertEqual(lanes.schedule_from({"backlog": True}, now), {"backlog": True, "order": now})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "lanes"
+            for l in lanes_now[:2]:
+                (root / l["id"]).mkdir(parents=True)
+                (root / l["id"] / "lane.json").write_text(json.dumps(dict(l, title="t")))
+            with patch.object(lanes, "lanes_dir", return_value=root), patch.object(lanes, "start_unit") as start:
+                self.assertEqual(lanes.to_front("late")["schedule"]["order"], 9.0)
+                started = lanes.start_scheduled([], now, can_hire=True)
+                self.assertEqual([l["id"] for l in started], ["late"])                     # now first in line
+                start.assert_called_once_with("late")
+                with self.assertRaises(ValueError):
+                    lanes.to_front("nope")
