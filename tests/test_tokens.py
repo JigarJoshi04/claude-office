@@ -284,7 +284,8 @@ class TokenViewTests(unittest.TestCase):
             v = led.view([{"id": "claude", "kind": "claude"}])
             self.assertEqual(v["total"]["all"], 100)
             self.assertEqual(v["seats"][0]["all"], 100)
-            self.assertEqual(json.loads(p.read_text())["v"], 3)
+            from office.tokens import VERSION
+            self.assertEqual(json.loads(p.read_text())["v"], VERSION)
             self.assertTrue(json.loads(p.read_text())["sessions"]["gone"]["legacy"])
 
 
@@ -310,3 +311,21 @@ class SpentTests(unittest.TestCase):
         self.assertEqual(s["tokens"], r["f"] + r["c"])
         self.assertAlmostEqual(s["usd"], round(sum(r["$"].values()) / 1e6, 2))
         self.assertIsNone(led.spent(["nobody"]))
+
+
+class WhereTests(unittest.TestCase):
+    def test_helpers_thinking_and_web(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proj = root / ".claude" / "projects" / "-w"
+            (proj / "s1" / "subagents").mkdir(parents=True)
+            u = lambda out, think=0, ws=0: {"input_tokens": 10, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 90, "output_tokens": out,
+                                             "output_tokens_details": {"thinking_tokens": think}, "server_tool_use": {"web_search_requests": ws, "web_fetch_requests": 0}}
+            ln = lambda mid, usage: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": mid, "model": "claude-opus-5-5", "usage": usage}}) + "\n"
+            (proj / "s1.jsonl").write_text(ln("m1", u(5, 2)) + ln("m1", u(50, 30, 1)))         # thinking and a search grow with the lines
+            (proj / "s1" / "subagents" / "agent-a.jsonl").write_text(ln("h1", u(20)))
+            led = TokenLedger(root / "tokens.json", [("claude", root / ".claude")])
+            led.scan()
+            w = led.view([{"id": "claude", "kind": "claude"}], today="2026-10-18")["where"]
+            self.assertEqual((w["helpers"], w["thinking"], w["searches"], w["output"]), (120, 30, 1, 70))
+            self.assertEqual(w["main"], 150)

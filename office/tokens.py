@@ -12,6 +12,8 @@ plus cache reads: every token the model processed. Only counts and project folde
 Version 2 keeps each session's days split by measure ([fresh, cache, output]) and its tokens by weekday and hour, for
 ranges, leaderboards that move, a calendar and a heatmap. Version 3 counts a response that Claude Code writes as several
 lines (its output grows line by line) by its final usage, and a response copied into a forked subagent's file once.
+Version 4 also keeps, per day, the tokens of helpers (subagents), the thinking in the output, and web searches and
+page fetches, for "where the tokens go".
 An older file is rebuilt from the transcripts still on disk while the old numbers keep showing; a session whose
 transcript Claude Code has since deleted keeps what the old file had.
 """
@@ -27,7 +29,7 @@ from pathlib import Path
 
 from . import prices
 
-VERSION = 3
+VERSION = 4
 SHIP_RULES = 5                # bumped when the rules for shipped work or prices change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
@@ -179,6 +181,7 @@ class TokenLedger:
         self._seen_total = 0
         self._read_sids: set = set()            # sessions whose files this scan read
         self._counted = None                    # what the response being read (self._last) has been counted at so far
+        self._helper_file = False               # the file being read is a helper's (a subagent's)
         self._xusd = 0                          # the same, for its price
         self.data = self._load()
 
@@ -189,9 +192,9 @@ class TokenLedger:
     def _load(self) -> dict:
         try:
             d = json.loads(self.path.read_text())
-            if d.get("v") in (1, 2):               # rebuilt from the transcripts on the first scan; see _merge_legacy
+            if d.get("v") in (1, 2, 3):            # rebuilt from the transcripts on the first scan; see _merge_legacy
                 self._legacy = d
-                self._serve = d if d.get("v") == 2 else None    # the old numbers show until the rebuild is done
+                self._serve = d if d.get("v") >= 2 else None    # the old numbers show until the rebuild is done
                 return self._empty()
             if d.get("v") == VERSION:
                 if d.get("sr") != SHIP_RULES:          # recount shipped work and costs from the transcripts still on disk
@@ -345,6 +348,7 @@ class TokenLedger:
             return False
         project_dir, sid = self._session_of(root, path)
         self._read_sids.add(sid)
+        self._helper_file = "subagents" in path.relative_to(root).parts      # a helper's own transcript
         changed = False
         pos = start
         self._ts = None
@@ -502,25 +506,30 @@ class TokenLedger:
         model = m.get("model") or "?"
         if model.startswith("<"):                      # <synthetic> lines are not API calls
             return False
-        n = lambda k: int(u.get(k) or 0)
+        n = lambda k, d=u: int((d or {}).get(k) or 0)
         f = n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens")
         c, o = n("cache_read_input_tokens"), n("output_tokens")
+        tools = u.get("server_tool_use") if isinstance(u.get("server_tool_use"), dict) else {}
+        details = u.get("output_tokens_details") if isinstance(u.get("output_tokens_details"), dict) else {}
+        now = [f, c, o, n("thinking_tokens", details), n("web_search_requests", tools), n("web_fetch_requests", tools)]
         new = 1
         if mid and mid == last_id:                     # one response written as several lines, its output growing
             was = self._counted
             if was is None:
                 return False
-            df, dc, do = max(0, f - was[0]), max(0, c - was[1]), max(0, o - was[2])
-            if not (df or dc or do):
+            was = (list(was) + [0, 0, 0])[:6]
+            delta = [max(0, a - b) for a, b in zip(now, was)]
+            if not any(delta):
                 return False
-            self._counted = [max(f, was[0]), max(c, was[1]), max(o, was[2])]
-            f, c, o, new = df, dc, do, 0                # count only what this line adds
+            self._counted = [max(a, b) for a, b in zip(now, was)]
+            now, new = delta, 0                         # count only what this line adds
         else:
             self._last = mid
             if mid and self._seen("take", sid, mid):   # a forked subagent's copy of its parent's line
                 self._counted = None
                 return False
-            self._counted = [f, c, o]
+            self._counted = list(now)
+        f, c, o, think, searches, fetches = now
         (day, wh), at = _when(d.get("timestamp")), _epoch(d.get("timestamp"))
         with self.lock:
             s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": at, "l": at, "m": {}, "d": {}, "h": {}})
@@ -533,6 +542,9 @@ class TokenLedger:
             if day:
                 v = s["d"].setdefault(day, [0, 0, 0]); v[0] += f; v[1] += c; v[2] += o
                 _add(self.data["days"].setdefault(day, {}), f, c, o, new)
+                if self._helper_file or think or searches or fetches:     # where the tokens go: helpers, thinking, web
+                    x = s.setdefault("x", {}).setdefault(day, [0, 0, 0, 0])
+                    x[0] += (f + c) if self._helper_file else 0; x[1] += think; x[2] += searches; x[3] += fetches
             if wh:
                 h = s.setdefault("h", {}); h[wh] = h.get(wh, 0) + f + c
             _add(self.data["models"].setdefault(model, {}), f, c, o, new)
@@ -805,6 +817,12 @@ class TokenLedger:
             if d[:7] in months:
                 months[d[:7]][3] += v
         tot_usd = sum(v for d, v in usd_series.items() if cur is None or d in cur)
+        where = [0, 0, 0, 0]                                              # helpers' tokens, thinking, web searches, page fetches
+        for r in mine.values():
+            for d, v in (r.get("x") or {}).items():
+                if cur is None or d in cur:
+                    for i in range(4):
+                        where[i] += v[i]
         board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")}, "usd": round(v["usd"], 2),
                          "today_by": by(v["today_by"], v["today_usd"]),
                          "top_model": max(v["m"], key=v["m"].get) if v["m"] else None,
@@ -870,6 +888,8 @@ class TokenLedger:
         for b in board:
             b["plan_month"] = plans.get(b["seat"])
         return {
+            "where": {"helpers": where[0], "main": max(0, tot[0] + tot[1] - where[0]), "thinking": where[1], "output": tot[2],
+                      "searches": where[2], "fetches": where[3]},
             "value": {"usd": round(tot_usd, 2), "estimated": round(min(estimated, tot_usd), 2), "plans": plans, "days": plan_days,
                       "plan_usd": round(plan_cost, 2), "covered_usd": round(covered, 2),
                       "multiple": round(covered / plan_cost, 1) if plan_cost else None},

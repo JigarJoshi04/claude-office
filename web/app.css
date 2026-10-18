@@ -1518,3 +1518,8 @@ ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
 .cab-act { display: flex; gap: 4px; flex: none; }
 .pill.spent { color: #ffd27a; } :root[data-theme="light"] .pill.spent { color: #8a5a00; }
 .visits .frz { margin-left: 3px; font-size: 10px; color: #9fd6ff; }
+/* where the tokens go (3.50) */
+.split { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: var(--surface-3); gap: 2px; }
+.split i { display: block; height: 100%; } .split .sp-main { background: #ff9b3d; } .split .sp-help { background: #7aa8ff; }
+.split-key { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 13px; color: var(--text-2); }
+.split-key i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; vertical-align: 0; } .split-key i.sp-main { background: #ff9b3d; } .split-key i.sp-help { background: #7aa8ff; }

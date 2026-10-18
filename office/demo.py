@@ -168,6 +168,8 @@ def _demo_token_ledger() -> TokenLedger:
                 sessions[sid] = {"p": proj, "s": "@codex" if seat == "astra" else seat, "fi": start, "l": start + 5400, "m": {mo: f + c},
                                  "d": {d.isoformat(): [f, c, o]}, "h": hours, "f": f, "c": c, "o": o, "n": int(size / 1e5),
                                  "g": {d.isoformat(): [commits, int(commits > 0), prs, prs if rnd("m", d, seat, k) < 0.8 else 0, commits * 37, commits * 9]}}
+                if seat != "astra":                                   # where they went: helpers, thinking, the web
+                    sessions[sid]["x"] = {d.isoformat(): [int((f + c) * (0.1 + 0.3 * rnd("hx", d, seat, k))), int(o * 0.35), int(rnd("ws", d, seat, k) * 4), int(rnd("wf", d, seat, k) * 6)]}
                 if seat != "astra":                                   # priced per response, as the real ledger does
                     usd = round(prices.estimate(mo, f, c, o) * (1 + 0.15 * rnd("1h", d, seat, k)) * 1e6)
                     sessions[sid]["$"] = {d.isoformat(): usd}
@@ -422,7 +424,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.49.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.50.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

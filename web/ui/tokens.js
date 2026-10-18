@@ -227,6 +227,17 @@ function renderTokensInner(el, app) {
       ${rows ? `<div class="table-scroll"><table class="league ship"><thead><tr><th>Character</th><th class="num">Plan</th><th class="num">At API prices</th><th class="num">Paid back</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
       <p class="hint">Every response priced at Anthropic's and OpenAI's list prices (October 2026): input, 5-minute and 1-hour cache writes, cache reads and output, with fast mode. Tokens only: web searches are left out.${v.estimated ? ` ${money(v.estimated)} of it is estimated from totals kept before prices were.` : ""} A plan's cost is its list price for the tier unless you set it in Settings.</p></div>`;
   }
+  // Where the tokens go: the main conversations against their helpers, how much of the output was thinking, the web.
+  function whereCard() {
+    const w = t.where;
+    if (!w || !(w.main + w.helpers)) return "";
+    const all = w.main + w.helpers, hp = Math.round(w.helpers / all * 100), tp = w.output ? Math.round(w.thinking / w.output * 100) : 0;
+    return `<div class="view-card"><h5>Where the tokens go · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+      <div class="split" role="img" aria-label="Main conversations ${100 - hp}%, helpers ${hp}%"><i class="sp-main" style="width:${100 - hp}%"></i><i class="sp-help" style="width:${hp}%"></i></div>
+      <div class="split-key"><span><i class="sp-main"></i>Main conversations <b>${big(w.main)}</b> · ${100 - hp}%</span><span><i class="sp-help"></i>Helpers (subagents) <b>${big(w.helpers)}</b> · ${hp}%</span></div>
+      <div class="tok-parts" style="margin:12px 0 0">${w.output ? `<span title="Thinking is part of the output: what the models reasoned before they wrote">${icon("sparkles", 13)}${tp}% of the output was thinking (${big(w.thinking)})</span>` : ""}
+        ${w.searches || w.fetches ? `<span>${icon("search", 13)}${w.searches.toLocaleString()} web search${w.searches === 1 ? "" : "es"} · ${w.fetches.toLocaleString()} page fetch${w.fetches === 1 ? "" : "es"}</span>` : ""}</div></div>`;
+  }
   const list = (items, fn) => items.length ? `<ol>${items.map(fn).join("")}</ol>` : `<p class="muted">Nothing ${esc(rangeWord[rng])}.</p>`;
   const sessions = list((t.sessions || []).slice(0, 8), (s, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(s.project || "a session")}</b>
     <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""}</small></span><em>${fmt(val(s))}</em></li>`);
@@ -253,6 +264,7 @@ function renderTokensInner(el, app) {
       <div class="view-card"><h5>The week's hours${rng === "all" ? "" : " · " + esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tp-heat" role="img" aria-label="Tokens by weekday and hour">${hlabels}${hcells}</div>
         <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div></div>
     ${valueCard()}
+    ${whereCard()}
     ${shipCard()}
     ${records ? `<div class="view-card"><h5>Records${seat ? ` · ${esc(who(seat))}` : ""}</h5><div class="tp-recs">${records}</div></div>` : ""}
     <div class="view-card tok"><div class="tok-lists"><div><h5>Hungriest sessions</h5>${sessions}</div><div><h5>Projects</h5>${projects}</div><div><h5>Models</h5><ul class="tok-models">${models.replace(/^<ol>|<\/ol>$/g, "")}</ul></div></div>

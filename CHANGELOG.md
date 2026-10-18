@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.50.0] - 2026-10-18
+
+### Added
+- Where the tokens go, on the Tokens tab: the main conversations against their helpers (subagents), how much of the
+  output was thinking, and how many web searches and page fetches the sessions made, for any range or character. The
+  ledger (version 4) keeps these per day and rebuilds itself once from the transcripts, showing the old numbers until
+  it is done. `/api/tokens` has `where`.
+
 ## [3.49.0] - 2026-10-18
 
 ### Added
