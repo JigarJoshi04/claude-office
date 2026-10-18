@@ -5,7 +5,7 @@ import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary, PERSONALITIES, weekPace } from "./personas.js";
 import { sound } from "./sound.js";
-import { goals, goalsFor, streak, weekly, localDay } from "./goals.js";
+import { goals, streak, weekly, localDay, canReroll, rerollGoals } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
@@ -127,7 +127,7 @@ export function makePanels(app) {
       const y = wk && wk.length >= 2 ? wk[wk.length - 2] : null;
       const recap = y && (y.reports || y.active_min) ? `Yesterday: ${y.reports} report${y.reports === 1 ? "" : "s"} and ${hrs(y.active_min)} of agent work.` : "A fresh day.";
       return `<div class="rhythm am">${icon("sun", 20)}<div class="grow"><b>Good morning${ceo && ceo !== "CEO" ? ", " + esc(ceo) : ""}.</b>
-        <span>${esc(recap)}${app.prefs().game === "off" ? "" : ` Today's goals: ${goalsFor(st.day).map(g => esc(g.label.toLowerCase())).join(", ")}.`}${app.prefs().game === "off" ? "" : (() => { const w = weekly(wk); return w && !w.calibrating && !w.done ? ` This week: ${w.have} of ${w.target} reports, ${w.daysLeft + 1} day${w.daysLeft ? "s" : ""} to go.` : ""; })()}${app.gifts && app.gifts.waiting().some(g => g.from === "daily") ? ` <button class="linkish" data-gift-seek>${icon("gift", 13)}Your delivery is at the desk</button>` : ""}</span></div>
+        <span>${esc(recap)}${app.prefs().game === "off" || !goals(st) ? "" : ` Today's goals: ${goals(st).map(g => esc(g.label.toLowerCase())).join(", ")}.`}${app.prefs().game === "off" ? "" : (() => { const w = weekly(wk); return w && !w.calibrating && !w.done ? ` This week: ${w.have} of ${w.target} reports, ${w.daysLeft + 1} day${w.daysLeft ? "s" : ""} to go.` : ""; })()}${app.gifts && app.gifts.waiting().some(g => g.from === "daily") ? ` <button class="linkish" data-gift-seek>${icon("gift", 13)}Your delivery is at the desk</button>` : ""}</span></div>
         <button class="btn sm ghost icon" data-rhythm="am-${esc(st.day)}" aria-label="Dismiss" title="Dismiss">${icon("x", 15)}</button></div>`;
     }
     if (h >= 18 && !seen["pm-" + st.day] && ((st.office || {}).reports || sum(st, "active_min"))) {
@@ -183,7 +183,8 @@ export function makePanels(app) {
     const flame = run >= 2 ? `<span class="streak" title="Days in a row with every goal done">${icon("flame", 14)}${run}-day streak</span>` : "";
     if (done === gl.length) return `<div class="goals-done">${icon("trophy", 18)}<span><b>All three goals done today.</b> New ones at midnight.</span>${flame}<button class="btn sm" data-share-day>Share the day</button></div>`;
     const r = 17, len = 2 * Math.PI * r;
-    return `<section class="b-sec"><h3 class="b-h">Today's goals<span class="count">${done}/${gl.length}</span><span class="grow"></span>${flame}</h3><div class="goals">${gl.map(g => `
+    const reroll = canReroll(st.day) ? `<button class="btn sm ghost icon" data-goals-reroll title="Swap the unfinished goals for others (once a day)" aria-label="Reroll today's unfinished goals">${icon("refresh", 14)}</button>` : "";
+    return `<section class="b-sec"><h3 class="b-h">Today's goals<span class="count">${done}/${gl.length}</span><span class="grow"></span>${flame}${reroll}</h3><div class="goals">${gl.map(g => `
       <div class="goal${g.done ? " done" : ""}" title="${esc(g.label)}: ${esc(g.text)}"><span class="g-ring"><svg class="g-arc" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="${r}" class="trk"/><circle cx="20" cy="20" r="${r}" class="val" stroke-dasharray="${(len * g.f).toFixed(1)} ${len.toFixed(1)}"/></svg>${icon(g.done ? "check" : g.icon, 16)}</span>
         <span class="g-txt"><b>${esc(g.label)}</b><small>${esc(g.text)}</small></span></div>`).join("")}</div></section>`;
   }
@@ -297,6 +298,8 @@ export function makePanels(app) {
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
         root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
+        const rr = root.querySelector("[data-goals-reroll]");
+        if (rr) rr.addEventListener("click", () => { if (rerollGoals(app.statsCache(null))) { toast("New goals for today. That was today's one reroll.", "good", { ic: "goal" }); app.rerender(true); } });
         root.querySelectorAll("[data-resume-all]").forEach(b => b.addEventListener("click", async () => {
           b.disabled = true;
           try {

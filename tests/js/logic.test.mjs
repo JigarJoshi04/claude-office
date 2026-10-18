@@ -409,3 +409,34 @@ test("streak freezes: earned every 7 days, spent on missed days, weekends free o
   const demo = streakStep({ visits: ["2026-10-01"], frozen: [], freezes: 2 }, at("2026-10-03"), false, true);
   assert.equal(demo.used, 0); assert.equal(demo.n, 1);
 });
+
+test("goals follow the office's pace, fit its size, stay put for the day and reroll once", async () => {
+  const { goals, goalsFor, poolFor, rerollGoals, canReroll, POOL } = await import("../../web/ui/goals.js");
+  const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? mem.get(k) : d), set: (k, v) => mem.set(k, v) };
+  const row = (i, o = {}) => ({ day: `2026-10-${String(5 + i).padStart(2, "0")}`, reports: 20, tool_calls: 4000, active_min: 900, sessions: 30, lanes_hired: 0, ...o });
+  const days = Array.from({ length: 14 }, (_, i) => row(i)), c = { store, days, seats: 2 };
+  const pool = Object.fromEntries(poolFor("2026-10-19", c).map(g => [g.kind, g.targets]));
+  assert.deepEqual(pool.reports, [16, 20, 26]);                       // the median ×0.8, ×1, ×1.3
+  assert.deepEqual(pool.calls, [3200, 4000, 5200]);
+  assert.deepEqual(pool.hours, [720, 900, 1170]);
+  assert.deepEqual(pool.team, [2]);                                    // never more characters than there are
+  assert.equal(pool.lanes, undefined);                                 // nobody hires lanes here
+  assert.deepEqual(poolFor("2026-10-19", { ...c, days: days.slice(0, 4) }).find(g => g.kind === "reports").targets, POOL[0].targets);   // too few days: fixed
+  const quiet = poolFor("2026-10-19", { ...c, days: days.map(d => ({ ...d, reports: 1, sessions: 1 })) });
+  assert.deepEqual(quiet.find(g => g.kind === "reports").targets, [2, 3, 4]);   // a floor, and three different steps
+  const st = { day: "2026-10-19", office: { reports: 30, sessions: 0 }, seats: {} };
+  const first = goalsFor("2026-10-19", c).map(g => g.id);
+  assert.deepEqual(goalsFor("2026-10-19", { ...c, days: days.map(d => ({ ...d, reports: 99 })) }).map(g => g.id), first);   // kept for the day
+  assert.equal(goals(st, { store, days: null }), null);                // not before the last two weeks are in
+  assert.ok(canReroll("2026-10-19", c));
+  const done = goals(st, c).map(g => g.done);
+  assert.ok(rerollGoals(st, c));
+  const after = goals(st, c);
+  after.forEach((g, i) => { if (done[i]) assert.equal(g.id, first[i]); });                  // finished ones stay, in place
+  const swapped = after.filter((g, i) => !done[i] && g.id !== first[i]);
+  assert.ok(swapped.length >= 1 && swapped.every(g => !first.includes(g.id) && !g.done));   // new, and none handed over done
+  assert.equal(new Set(after.map(g => g.id.split("-")[0])).size, 3);           // three different kinds
+  assert.equal(canReroll("2026-10-19", c), false);
+  assert.equal(rerollGoals(st, c), false);                              // once a day
+  assert.ok(canReroll("2026-10-20", c) === false && goalsFor("2026-10-20", c).length === 3 && canReroll("2026-10-20", c));   // a new day, a new set
+});

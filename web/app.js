@@ -1,6 +1,7 @@
 // Claude Office: the controller. Live data in; floor, inspector and views out.
 import { createOffice } from "./office.js";
 import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss, setToastGate, clock } from "./ui/util.js";
+import { configureGoals } from "./ui/goals.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
@@ -470,6 +471,7 @@ function apply(next) {
   if (first) { app.tokensCache(); game.visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : QS.has("wrapped") ? wrapped.play() : weekReview.maybeMonday()), 3500); setTimeout(() => wrapped.maybeNewMonth(), 6000); }
   if (!replay.active()) giftBox.daily(game.visits()); // the first visit of a day finds a gift at the CEO desk
   app.tokensCache();                                  // the odometer, the belt and milestones (fetched every 2 minutes)
+  configureGoals({ store, days: app.weekCache(), seats: snap.seats.filter(s => (s.divider || {}).enabled !== false && s.status !== "offline").length });   // today's goals follow the office's pace
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) safeNews(e);

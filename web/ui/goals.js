@@ -16,24 +16,82 @@ export const POOL = [
 ];
 function hashDay(day) { let h = 2166136261; for (const ch of String(day)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 
-// The three goals for a day ("YYYY-MM-DD"): different kinds, each with a difficulty.
-export function goalsFor(day) {
-  let h = hashDay(day || "today");
-  const kinds = POOL.map((g, i) => [g, i]), out = [];
-  while (out.length < 3) {
-    const [g] = kinds.splice(h % kinds.length, 1)[0];
+// Adapted to this office (app.js calls configureGoals on every snapshot): targets follow the median of the last two
+// weeks (×0.8, ×1 and ×1.3, rounded), a team goal never asks for more characters than there are, and lanes come up
+// only for an office that hires them. With fewer than five days on record the fixed targets above are used. A day's
+// three goals are kept once drawn (they never shift as the numbers do), and one reroll a day swaps the unfinished ones.
+let ctx = null;                        // { store, days: /api/week rows, seats: how many can work }
+export function configureGoals(c) { ctx = c; }
+const BASE = { reports: (d) => d.reports, calls: (d) => d.tool_calls, hours: (d) => d.active_min, sessions: (d) => d.sessions };
+const STEP = { reports: 1, calls: 100, hours: 30, sessions: 1 };
+const median = (xs) => { const v = [...xs].sort((a, b) => a - b), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+export function poolFor(day, c = ctx) {
+  if (!c || !Array.isArray(c.days)) return POOL;
+  const known = c.days.filter(d => d.day < day && (d.sessions || d.reports || d.active_min)).slice(-14);
+  return POOL.map(g => {
+    let targets = g.targets;
+    if (BASE[g.kind] && known.length >= 5) {
+      const m = median(known.map(BASE[g.kind])), st = STEP[g.kind], floor = Math.max(st, Math.ceil(g.targets[0] / 2 / st) * st);
+      targets = [0.8, 1, 1.3].map(k => Math.max(floor, Math.round(m * k / st) * st));
+      for (let i = 1; i < 3; i++) if (targets[i] <= targets[i - 1]) targets[i] = targets[i - 1] + st;   // three different steps
+    }
+    if (g.kind === "team") targets = targets.filter(t => t <= Math.max(1, c.seats || 0));
+    if (g.kind === "lanes" && !known.some(d => d.lanes_hired)) targets = [];
+    return targets.length ? { ...g, targets } : null;
+  }).filter(Boolean);
+}
+const make = (kind, target) => { const g = POOL.find(x => x.kind === kind); return g && { id: `${kind}-${target}`, kind, icon: g.icon, label: g.label(target), target, have: g.have, fmt: g.fmt }; };
+function pick(seed, pool, n, skip = new Set()) {
+  let h = hashDay(seed);
+  const kinds = pool.filter(g => !skip.has(g.kind)), out = [];
+  while (out.length < n && kinds.length) {
+    const g = kinds.splice(h % kinds.length, 1)[0];
     h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0;
     const target = g.targets[h % g.targets.length];
     h = Math.imul(h ^ (h >>> 11), 2246822519) >>> 0;
-    out.push({ id: `${g.kind}-${target}`, icon: g.icon, label: g.label(target), target, have: g.have, fmt: g.fmt });
+    out.push(make(g.kind, target));
   }
   return out;
 }
 
-// Progress for each goal from one day's stats, or null while the numbers are not in.
-export function goals(st) {
+// The three goals for a day ("YYYY-MM-DD"): different kinds, each with a difficulty.
+export function goalsFor(day, c = ctx) {
+  day = day || "today";
+  const kept = c && c.store && c.store.get("goalsSet", null);
+  if (kept && kept.day === day && Array.isArray(kept.set)) { const set = kept.set.map(x => make(x.kind, x.target)).filter(Boolean); if (set.length === 3) return set; }
+  const out = pick(day, poolFor(day, c), 3);
+  if (c && c.store && Array.isArray(c.days)) c.store.set("goalsSet", { day, reroll: 0, set: out.map(g => ({ kind: g.kind, target: g.target })) });
+  return out;
+}
+// One reroll a day: the unfinished goals make way for others (the finished ones stay). True when it rerolled.
+export function canReroll(day, c = ctx) { const k = c && c.store && c.store.get("goalsSet", null); return !!(k && k.day === day && !k.reroll); }
+export function rerollGoals(st, c = ctx) {
+  const gl = goals(st, c);
+  if (!gl || !canReroll(st.day, c) || gl.every(g => g.done)) return false;
+  const keep = goalsFor(st.day, c).filter((g, i) => gl[i].done);
+  // Only targets not reached yet: a reroll is a new challenge, never a goal (and its gift) handed over already done.
+  const open = poolFor(st.day, c).map(g => ({ ...g, targets: g.targets.filter(t => g.have(st) < t) })).filter(g => g.targets.length);
+  const old = goalsFor(st.day, c), fresh = pick(st.day + "|reroll", open, 3 - keep.length, new Set(old.map(g => g.kind)));
+  // A small office has few kinds: then another target of a kind it had, never the very same goal again.
+  const other = open.map(g => ({ ...g, targets: g.targets.filter(t => !old.some(o => o.kind === g.kind && o.target === t)) })).filter(g => g.targets.length);
+  const more = fresh.length < 3 - keep.length ? pick(st.day + "|reroll2", other, 3 - keep.length - fresh.length, new Set([...keep, ...fresh].map(g => g.kind))) : [];
+  const swaps = [...fresh, ...more], set = [...old];
+  for (let i = 0; i < set.length; i++) {             // each finished goal keeps its place; never two of one kind
+    if (gl[i].done) continue;
+    const j = swaps.findIndex(x => !set.some((g, k) => k !== i && g.kind === x.kind));
+    if (j >= 0) set[i] = swaps.splice(j, 1)[0];
+  }
+  if (set.every((g, i) => g === old[i])) return false;
+  c.store.set("goalsSet", { day: st.day, reroll: 1, set: set.map(g => ({ kind: g.kind, target: g.target })) });
+  return true;
+}
+
+// Progress for each goal from one day's stats, or null while the numbers are not in (or, adapted, while the last two
+// weeks are not in yet: the goals are drawn once, from them).
+export function goals(st, c = ctx) {
   if (!st || st.unavailable || !st.office) return null;
-  return goalsFor(st.day).map(g => {
+  if (c && !Array.isArray(c.days)) return null;
+  return goalsFor(st.day, c).map(g => {
     const have = g.have(st), done = have >= g.target;
     return { id: g.id, icon: g.icon, label: g.label, done, f: Math.min(1, have / g.target),
       text: done ? "Done" : `${g.fmt(have)} of ${g.fmt(g.target)}` };

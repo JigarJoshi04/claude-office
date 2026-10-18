@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.72.0] - 2026-10-19
+
+### Added
+- Today's goals follow this office's pace: with five days or more on record, targets come from the median of the
+  last two weeks (×0.8, ×1 and ×1.3, rounded), a team goal never asks for more characters than can work, and the
+  lane goal comes up only for an office that hires lanes. A day's goals are kept once drawn.
+- One reroll a day (the arrow by Today's goals): the unfinished goals make way for new ones, each finished goal keeps
+  its place, and a rerolled goal is never one that is already met.
+
 ## [3.71.0] - 2026-10-19
 
 ### Added
