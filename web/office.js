@@ -723,6 +723,7 @@ export function createOffice(stage, handlers) {
     hot("room", "Server closet: background services", L.server.x, L.server.y, L.server.w - 26, L.server.h, () => handlers.openServices());
     if (L.meet) hot("room", "Meeting room: programmes", L.meet.x, L.meet.y, L.meet.w, L.meet.h, () => handlers.openProgrammes());
     if (L.lounge) hot("room", "Lounge: seats on a break", L.lounge.x, L.lounge.y, L.lounge.w, L.lounge.h, () => handlers.openLounge());
+    if (L.lounge && handlers.openArcade) hot("wallhot", "Arcade: play Bug Squash", L.lounge.x + 163, L.lounge.y + 106, 20, 28, () => handlers.openArcade());
     const tv = TV();
     hot("wallhot", "Capacity board: plan left on every seat", tv.x - 2, tv.y - 2, tv.w + 4, tv.h + 20, () => handlers.openDivider());
     hot("wallhot", "Elevator: office news", ELEVATOR.x - 3, ELEVATOR.y - 6, 32, 46, () => handlers.openNews());

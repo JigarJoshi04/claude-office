@@ -87,7 +87,9 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   up always brings a gift, a daily happy hour doubles the odds, and each finished rarity puts something on the floor.
 - **Your week in review**: on Mondays (or from the menu) the last seven days play as a short story, ending in a
   picture to post: reports against the week before, agent hours, the star of the week and what you collected.
-- **Badges for you**: seventeen of them, from *Inbox zero* and *Hiring manager* to *Collector* and *Night owl*.
+- **Bug Squash**: the lounge's arcade cabinet plays a 30-second game of squashing bugs (not features) on a code
+  editor, for a gift when you beat your best.
+- **Badges for you**: eighteen of them, from *Inbox zero* and *Hiring manager* to *Collector* and *Night owl*.
 - **Seasons**: pumpkins and bats for Halloween, lamps and a rangoli for Diwali, a tree and snow in December.
 - **Combos**: reports and finished lanes within 15 minutes of each other chain into a combo (×2, ×3, …) with a timer
   draining on the floor and rising chimes.

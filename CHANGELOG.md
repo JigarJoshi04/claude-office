@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.12.0] - 2026-10-18
+
+### Added
+- Bug Squash, the lounge's arcade game (click the arcade cabinet, or ☰ → Play Bug Squash): 30 seconds of squashing
+  bugs on a code editor. Green bugs are worth 1, red 3, the rare golden bug 10, and squashing a feature costs 5. Mouse,
+  touch or keyboard. A new best score brings a gift once a day; 40 points earns the Exterminator badge.
+
 ## [3.11.0] - 2026-10-18
 
 ### Added

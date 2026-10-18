@@ -247,3 +247,14 @@ test("the week in review sums the last seven days and what was collected in them
   assert.equal(w.goalDays, 1);
   assert.equal(weekSummary(days.slice(-6)), null);
 });
+
+test("Bug Squash: features and red bugs grow more common, spawns speed up, golden bugs stay rare", async () => {
+  const { spawnKind, spawnGap, KINDS } = await import("../../web/ui/arcade.js");
+  const share = (t, kind) => { let n = 0; for (let i = 0; i < 1000; i++) if (spawnKind(i / 1000, t) === kind) n++; return n / 1000; };
+  assert.ok(Math.abs(share(0, "gold") - 0.04) < 0.002);
+  assert.ok(share(30, "red") > share(0, "red"));
+  assert.ok(share(30, "feature") > share(0, "feature"));
+  assert.ok(share(30, "bug") > 0.4, "green bugs stay the most common");
+  assert.ok(spawnGap(30) < spawnGap(0) && spawnGap(1000) === 0.28);
+  assert.ok(KINDS.feature.pts < 0 && KINDS.gold.pts > KINDS.red.pts && KINDS.red.pts > KINDS.bug.pts);
+});

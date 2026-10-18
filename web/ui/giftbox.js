@@ -18,7 +18,7 @@ export function makeGiftBox(ctx) {
   // What a gift is called on the floor, and on its reveal card.
   const KINDS = { daily: ["Morning delivery", "This morning's delivery"], swap: ["A swapped gift, rare or better", "Swapped for five spares"],
     goals: ["A gift for today's goals, rare or better", "For finishing today's goals"], office: ["An office level-up gift, epic or better", "For the office's level up"],
-    week: ["A record-week gift, epic or better", "For a record week"] };
+    week: ["A record-week gift, epic or better", "For a record week"], arcade: ["An arcade prize", "For a new best at Bug Squash"] };
   const label = (g) => {
     const who = nameOf(g.seat);
     if (KINDS[g.from]) return KINDS[g.from][0] + ": open it";
@@ -80,8 +80,10 @@ export function makeGiftBox(ctx) {
   function daily() { if (gifts.daily(localDay())) sync(); }
   // A gift earned for sure (all goals, a big combo, a level up, a record week); never from a replay.
   function grant(seatId, from, min) {
-    if (replay.active()) return;
-    if (gifts.grant(seatId, from, min)) sync();
+    if (replay.active()) return false;
+    const g = gifts.grant(seatId, from, min);
+    if (g) sync();
+    return !!g;
   }
 
   function open(id) {

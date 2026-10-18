@@ -15,6 +15,7 @@ import { startTour } from "./ui/tour.js";
 import { makeFloor } from "./ui/floor.js";
 import { makeGiftBox } from "./ui/giftbox.js";
 import { makeWeekReview } from "./ui/weekreview.js";
+import { makeArcade } from "./ui/arcade.js";
 import { hydrateStickers } from "./engine/stickers.js";
 import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
@@ -121,6 +122,7 @@ const office = createOffice($("stage"), {
   needsFor: (id) => panels.needsBySeat()[id] || 0,
   onLegend: (btn) => floor.legend(btn),
   onGift: (id) => giftBox.open(id),
+  openArcade: () => arcade.open(),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
@@ -217,6 +219,7 @@ const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView,
 app.gifts = giftBox;
 const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });
 app.playWeek = () => weekReview.play();
+const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
 // "Your office", scrolled to the sticker album.
 function openAlbum() { go({ kind: "office" }); requestAnimationFrame(() => { const a = document.getElementById("album"); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }); }
 
@@ -850,7 +853,7 @@ function openMenu(focusItem) {
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
-    + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("arcade", "bug", "Play Bug Squash") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -875,6 +878,7 @@ function openMenu(focusItem) {
     else if (k === "tv") floor.setTv(true);
     else if (k === "daycard") shareDay();
     else if (k === "week") weekReview.play();
+    else if (k === "arcade") arcade.open();
     else if (k === "tour") tour();
     else if (k === "install") installApp();
     else if (k === "replay") { setView("floor"); replay.open(6); }
@@ -1042,6 +1046,7 @@ function paletteItems() {
     ...(giftBox.waiting().length ? [{ icon: icon("gift", 16), label: `Find the gift on the floor (${giftBox.waiting().length} waiting)`, keywords: "gift open present box", run: () => giftBox.seek() }] : []),
     { icon: icon("sparkles", 16), label: "Take the tour", keywords: "help onboarding guide tutorial how", run: () => tour() },
     { icon: icon("star", 16), label: "Share today's card", keywords: "share picture day summary post card", run: () => shareDay() },
+    { icon: icon("bug", 16), label: "Play Bug Squash", keywords: "game arcade bugs squash play fun", run: () => arcade.open() },
     { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },
