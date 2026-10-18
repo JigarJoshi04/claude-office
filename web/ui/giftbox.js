@@ -30,8 +30,9 @@ export function makeGiftBox(ctx) {
   };
   const fromLine = (g) => g.from === "daily" && g.streak ? `Day ${g.streak} of your visit streak` : KINDS[g.from] ? KINDS[g.from][1] : nameOf(g.seat, g) ? `From ${nameOf(g.seat, g)}${g.from === "levelup" ? ", for levelling up" : g.from === "combo" ? ", for the combo" : ""}` : "";
 
+  const off = () => (prefs.game || "full") === "off";
   function sync() {
-    const list = gifts.waiting();
+    const list = off() ? [] : gifts.waiting();
     office.setGifts(list.map(g => ({ ...g, label: label(g) })));
     office.setSets(setsDone(gifts.album()));
     renderChip();
@@ -40,7 +41,7 @@ export function makeGiftBox(ctx) {
   function renderChip() {
     const chip = $("giftChip");
     if (!chip) return;
-    const n = gifts.waiting().length, h = happyNow(), on = happy();
+    const n = off() ? 0 : gifts.waiting().length, h = happyNow(), on = happy() && !off();
     chip.hidden = !n && !on;
     chip.classList.toggle("happy", on);
     const html = `${icon("gift", 14)}${n ? n : ""}${on ? `<span class="gc-happy">Happy hour${forceHappy ? "" : ` · ${h.left}m`}</span>` : ""}`;
@@ -60,8 +61,8 @@ export function makeGiftBox(ctx) {
       if (on && (forceHappy || DEMO || store.get("happyDay", "") !== localDay())) {
         if (!forceHappy && !DEMO) store.set("happyDay", localDay());
         if (prefs.view === "floor" && !replay.active()) office.banner("Happy hour!", "Gifts are twice as likely for half an hour", "#ff7ac8");
-        sound.play("happy");
-        toast("Happy hour: for the next half hour, reports are twice as likely to leave a gift.", "good", { ic: "gift", ms: 7000 });
+        if ((prefs.game || "full") === "full") sound.play("happy");
+        if (!off()) toast("Happy hour: for the next half hour, reports are twice as likely to leave a gift.", "good", { ic: "gift", ms: 7000 });
       }
     }
     renderChip();
@@ -71,7 +72,7 @@ export function makeGiftBox(ctx) {
 
   // A report or a finished lane may leave a gift (never while replaying: the floor shows the past).
   function earn(seatId, from) {
-    if (replay.active()) return;
+    if (replay.active() || off()) return;
     const g = gifts.earn(seatId, from, seatName(seatId));
     if (!g) return;
     sync();
@@ -81,10 +82,10 @@ export function makeGiftBox(ctx) {
       toast(`${nameOf(seatId) || "Someone"} left you a gift on the floor. Click the box to open it.`, "good", { ic: "gift", ms: 7000 });
     }
   }
-  function daily(streak) { if (gifts.daily(localDay(), streak)) sync(); }
+  function daily(streak) { if (!off() && gifts.daily(localDay(), streak)) sync(); }
   // A gift earned for sure (all goals, a big combo, a level up, a record week); never from a replay.
   function grant(seatId, from, min) {
-    if (replay.active()) return false;
+    if (replay.active() || off()) return false;
     const g = gifts.grant(seatId, from, min, seatName(seatId));
     if (g) { sync(); sound.play("drop"); }
     return !!g;
@@ -183,5 +184,6 @@ export function makeGiftBox(ctx) {
   const chip = $("giftChip");
   if (chip) chip.addEventListener("click", seek);
 
-  return { sync, earn, grant, daily, open, swap, seek, album: gifts.album, spares: gifts.spares, waiting: gifts.waiting, happy, STICKERS };
+  return { sync, earn, grant, daily, open, swap, seek, album: gifts.album, spares: gifts.spares,
+    waiting: () => (off() ? [] : gifts.waiting()), happy: () => happy() && !off(), STICKERS };
 }

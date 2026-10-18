@@ -1393,3 +1393,9 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 :root[data-theme="light"] .burnchip { color: #a8520d; }
 :root[data-motion="reduced"] .burnchip.hot .ic { animation: none; }
 @media (max-width: 560px) { .burnchip small { display: none; } }
+.pace-week { display: flex; gap: 8px; align-items: flex-start; margin: -4px 0 14px; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; background: var(--surface-2); color: var(--text-2); }
+.pace-week.good > .ic { color: var(--good); } .pace-week.warn > .ic { color: var(--warn); } .pace-week.bad { box-shadow: inset 0 0 0 1px rgba(255,97,112,.4); } .pace-week.bad > .ic { color: var(--bad); }
+.g-unused { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--seat); flex-wrap: wrap; }
+.g-unused > .ic { color: var(--info); flex: none; } .g-unused b { display: block; font-size: 14px; } .g-unused span span { display: block; font-size: 12.5px; color: var(--muted); }
+.g-unused .grow { flex: 1 1 200px; min-width: 0; }
+.unused { display: grid; gap: 8px; }

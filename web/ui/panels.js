@@ -3,7 +3,7 @@ import { esc, fmtTok, ago, until, clock, dur, pct, live, store, toast, debounce,
   STATE_LABEL, SEAT_LABEL } from "./util.js";
 import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
-import { personaFor, binding, leftOf, voice, diary, PERSONALITIES } from "./personas.js";
+import { personaFor, binding, leftOf, voice, diary, PERSONALITIES, weekPace } from "./personas.js";
 import { sound } from "./sound.js";
 import { goals, goalsFor, streak, weekly, localDay } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
@@ -142,6 +142,24 @@ export function makePanels(app) {
       <div class="wkc-bar"><i style="width:${Math.round(w.f * 100)}%"></i></div>
       <div class="hint">${w.done ? `Beat last week's ${w.last}. Keep going.` : `Last week: ${w.last} report${w.last === 1 ? "" : "s"}. ${w.target > Math.ceil(w.last * 1.1) ? `Every week aims for at least ${w.target}.` : "The target is 10% more."}`}</div></div></div>`;
   }
+  // A seat about to reset with a lot of its week unused: one quiet card per seat and window, with one-click work for it.
+  // It stays out of Needs you (nothing is wrong), and goes once dismissed or once the plan is used.
+  function unusedHtml() {
+    const snap = S(), seen = store.get("unusedSeen", {});
+    const cards = snap.seats.filter(s => {
+      const w = (s.usage || {}).weekly, left = leftOf(s, "weekly");
+      if (s.kind !== "claude" || !w || !w.resets_at || left == null || (s.usage || {}).stale) return false;
+      if (["benched", "offline", "limited"].includes(s.status) || (s.divider && s.divider.enabled === false)) return false;
+      const hours = (w.resets_at - snap.now) / 3600;
+      return hours > 0 && hours <= 18 && left >= 35 && !seen[s.id + "@" + Math.round(w.resets_at)];
+    });
+    if (!cards.length) return "";
+    return `<section class="b-sec unused">${cards.map(s => { const w = s.usage.weekly, p = P(s);
+      return `<div class="g-unused" style="--seat:${esc(s.color)}">${icon("clock", 16)}<span class="grow"><b>${esc(p.name)} has ${Math.round(leftOf(s, "weekly"))}% of its week left</b>
+        <span>It resets ${esc(dayTime(w.resets_at))} (${esc(inWords(w.resets_at))}) and the rest goes unused.</span></span>
+        <button class="btn sm" data-hire-for="${esc(s.id)}">${icon("plus", 14)}Hire a lane</button>
+        <button class="btn sm ghost icon" data-unused="${esc(s.id + "@" + Math.round(w.resets_at))}" aria-label="Dismiss" title="Dismiss">${icon("x", 14)}</button></div>`; }).join("")}</section>`;
+  }
   // The unearned badge closest to done, as one slim line under the challenges (never in the demo: it awards none).
   function almostHtml() {
     if (app.demo || !app.badgeProgress) return "";
@@ -244,9 +262,8 @@ export function makePanels(app) {
           <span class="grow"><span class="t">${esc(humanise(a.text))}</span>${a.resets_at ? `<span class="d">${a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at)} · ${inWords(a.resets_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
-      ${goalsHtml()}
-      ${weeklyHtml()}
-      ${almostHtml()}
+      ${unusedHtml()}
+      ${app.prefs().game === "off" ? "" : goalsHtml() + weeklyHtml() + almostHtml()}
       ${snap.seats.length ? `<section class="b-sec"><h3 class="b-h">Team<span class="count">${snap.seats.length}</span></h3>
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
@@ -256,6 +273,8 @@ export function makePanels(app) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
         root.querySelectorAll("[data-rhythm]").forEach(b => b.addEventListener("click", () => { store.set("rhythm", { ...store.get("rhythm", {}), [b.dataset.rhythm]: 1 }); app.rerender(true); }));
+        root.querySelectorAll("[data-unused]").forEach(b => b.addEventListener("click", () => { store.set("unusedSeen", { ...store.get("unusedSeen", {}), [b.dataset.unused]: 1 }); app.rerender(true); }));
+        root.querySelectorAll("[data-hire-for]").forEach(b => b.addEventListener("click", () => { hireDraft = { ...hireDraft, seat: b.dataset.hireFor }; store.set("hireDraft", hireDraft); app.go({ kind: "hire" }); }));
         const at = root.querySelector("[data-away-toggle]"); if (at) at.addEventListener("click", () => { awayOpen = !awayOpen; app.rerender(true); });
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
@@ -315,6 +334,7 @@ export function makePanels(app) {
         <blockquote class="voice">“${esc(vo.line)}”</blockquote>
       </div>
       <div class="prings">${planRing("five_hour", "5 hours")}${planRing("weekly", "This week")}</div>
+      ${(() => { const pc = weekPace(s, S().now); return pc ? `<div class="pace-week ${pc.tone}">${icon(pc.tone === "bad" ? "zap" : pc.tone === "warn" ? "flame" : "check", 15)}<span>${esc(pc.text)}</span></div>` : ""; })()}
       <div class="pace ${paceText.cls}">${icon(paceText.ic, 17)}<span>${esc(paceText.t)}</span>${s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}" title="Read the plan now" aria-label="Read the plan now">${icon("refresh", 14)}</button>` : ""}</div>
       <div class="stabs" role="tablist" aria-label="${esc(p.name)}">${tabs.filter(([k]) => k !== "career" || s.career).map(([k, label, ic]) => `<button role="tab" data-seat-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? "on" : ""}">${icon(ic, 15)}${label}</button>`).join("")}</div>
       <div class="stabs-body" role="tabpanel">${body}</div>`,
@@ -967,6 +987,8 @@ export function makePanels(app) {
         row("Theme", "Night is the default.", `<div class="seg-ctl">${[["dark", "Night"], ["light", "Day"], ["system", "System"]].map(([t, l]) => `<button data-theme-set="${t}" class="${p.theme === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
         row("Text size", (() => { const ts = app.textSize(); return ts.pref === "auto" ? `Auto shows text at ${Math.round(ts.zoom * 100)}% on this screen.` : "Bigger text for big or far-away screens."; })(),
           `<div class="seg-ctl">${[["auto", "Auto"], ["s", "S"], ["m", "M"], ["l", "L"], ["xl", "XL"]].map(([t, l]) => `<button data-text-set="${t}" class="${(p.textSize || "auto") === t ? "on" : ""}" aria-label="${esc(app.textSize().label[t])}">${l}</button>`).join("")}</div>`),
+        row("Game", "Full: gifts, banners and banter. Calm: no banners, confetti or chatter. Off: no game at all. Alerts stay at every level. Z cycles.",
+          `<div class="seg-ctl">${[["full", "Full"], ["calm", "Calm"], ["off", "Off"]].map(([t, l]) => `<button data-game-set="${t}" class="${(p.game || "full") === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
         row("Seasonal decorations", "Pumpkins for Halloween, lamps for Diwali, a tree and snow in December.", sw("seasonal", p.seasonal !== false, "Seasonal decorations")),
         row("Motion", "Reduced stops walking, confetti and fades.", `<div class="seg-ctl">${[["full", "Full"], ["reduced", "Reduced"]].map(([t, l]) => `<button data-motion-set="${t}" class="${p.motion === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
         row("Sound effects", "Little chimes for arrivals, reports and limits.", `<button class="btn sm ghost" data-test-sound>Play</button>${sw("sound", p.sound, "Sound effects")}`),
@@ -992,6 +1014,7 @@ export function makePanels(app) {
         root.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => { app.setPref("theme", b.dataset.themeSet); app.rerender(true); }));
         root.querySelectorAll("[data-text-set]").forEach(b => b.addEventListener("click", () => { app.setPref("textSize", b.dataset.textSet); app.rerender(true); }));
         root.querySelectorAll("[data-motion-set]").forEach(b => b.addEventListener("click", () => { app.setPref("motion", b.dataset.motionSet); app.rerender(true); }));
+        root.querySelectorAll("[data-game-set]").forEach(b => b.addEventListener("click", () => { app.setPref("game", b.dataset.gameSet); app.rerender(true); }));
         root.querySelectorAll("[data-pref]").forEach(c => c.addEventListener("change", () => app.setPref(c.dataset.pref, c.checked)));
         const ts = root.querySelector("[data-test-sound]"); if (ts) ts.addEventListener("click", () => sound.preview("levelup"));
         const sv = root.querySelector("#setSave");

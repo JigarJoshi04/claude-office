@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.22.0] - 2026-10-18
+
+### Added
+- Game intensity (Settings, Z, palette, `?game=calm`): Full; Calm, with no banners, confetti, character chatter, party
+  lights, XP floaters or game chimes; Off, with no game at all (no gifts, goals, combos, level chip or game toasts).
+  Real alerts, reports and Needs you stay at every level.
+- The week's pace on each character's page: ahead of or behind an even pace to the weekly reset, when it runs out if
+  it will, or how much will be left.
+- A quiet "week left" card in the briefing when a seat resets within 18 hours with at least 35% of its week unused,
+  with Hire a lane for that seat. Once per seat and window; never in Needs you.
+
 ## [3.21.0] - 2026-10-18
 
 ### Added

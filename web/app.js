@@ -26,7 +26,7 @@ const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
 const QS = new URLSearchParams(location.search);
 
 const prefs = Object.assign({ theme: "dark", motion: matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduced" : "full",
-  sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true, seasonal: true }, store.get("prefs", {}));
+  sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true, seasonal: true, game: "full" }, store.get("prefs", {}));
 let snap = null, view = { kind: "ceo" }, liveMode = "connecting";
 const details = new Map(), histCache = new Map(), statsCache = new Map(), inflight = new Set();
 const tokens = new Map();   // "range|seat" -> {data, at}
@@ -277,6 +277,7 @@ function setPref(k, v) {
   if (k === "textSize") { applyTextSize(); if (view.kind === "settings") renderPanel(true); }
   if (k === "panel") applyPanel();
   if (k === "seasonal") office.setSeasonal(v);
+  if (k === "game") applyGame();
   if (k === "privacy") { office.setPrivacy(v); renderPanel(true); renderMain(); rnSig = ""; if (snap) renderRightNow(); }
   if (k === "notify" && v) {
     // The switch only stays on if the browser really lets the office notify.
@@ -434,7 +435,7 @@ function teammateReacts(e, kind) {
 // replay or reduced motion, and never over another reaction.
 let lastReport = 0, lastReportSeat = null;
 setInterval(() => {
-  if (!snap || replay.active() || prefs.motion === "reduced" || document.hidden || prefs.view !== "floor" || Date.now() - lastReaction < 15000) return;
+  if (!snap || replay.active() || prefs.motion === "reduced" || prefs.game !== "full" || document.hidden || prefs.view !== "floor" || Date.now() - lastReaction < 15000) return;
   const awake = snap.seats.filter(s => !["limited", "offline", "benched"].includes(s.status) && live(s).length);
   if (awake.length < 2 || Math.random() < 0.4) return;
   const [a, b] = awake.sort(() => Math.random() - 0.5);
@@ -486,8 +487,8 @@ function onNews(e) {
       if (lvl && seat && prefs.view === "floor") fx.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
       if (who) fx.sayAtSeat(e.seat, line(who, e.kind), 6500);
       if (lvl) { teammateReacts(e, "levelup"); giftBox.grant(e.seat, "levelup"); }
-      sound.play(e.kind);
-      toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
+      if (prefs.game === "full") sound.play(e.kind);
+      if (prefs.game !== "off") toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
       notify(lvl ? "Level up" : "Achievement unlocked", text);
       break;
     }
@@ -737,7 +738,7 @@ function whatsNew() {
 function shortcuts() {
   const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S K", "Floor, Timeline, Team, Today, Tokens"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
-    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["M", "Office radio: lo-fi on or off"], ["\\", "Hide or show the inspector"],
+    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["M", "Office radio: lo-fi on or off"], ["Z", "Game intensity: Full, Calm, Off"], ["\\", "Hide or show the inspector"],
     ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
   $("dialogBody").innerHTML = `<div class="dh"><b>Keyboard shortcuts</b><button class="btn sm ghost" id="kClose">${icon("x", 16)}</button></div>
     <div class="db"><table class="keys">${keys.map(([k, what]) => `<tr><td>${k.split(" ").map(x => `<kbd>${esc(x)}</kbd>`).join(" ")}</td><td>${esc(what)}</td></tr>`).join("")}</table></div>`;
@@ -955,6 +956,7 @@ function paletteItems() {
     { icon: icon("star", 16), label: "Share today's card", keywords: "share picture day summary post card", run: () => shareDay() },
     { icon: icon("volume", 16), label: radio.on ? "Turn the office radio off" : "Turn the office radio on", keywords: "radio music lofi lo-fi sound play", run: () => setRadio(!radio.on) },
     ...(snap && snap.seats.length ? [{ icon: icon("star", 16), label: "Character cards", keywords: "card cards collectible trading character share picture", run: () => cards.open(snap.seats[0].id) }] : []),
+    ...["full", "calm", "off"].filter(g => g !== (prefs.game || "full")).map(g => ({ icon: icon("sparkles", 16), label: `Game intensity: ${GAME_WORD[g]}`, keywords: "game calm work mode quiet focus off full celebrations", run: () => setPref("game", g) })),
     { icon: icon("bug", 16), label: "Play Bug Squash", keywords: "game arcade bugs squash play fun", run: () => arcade.open() },
     { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
@@ -1004,6 +1006,18 @@ const landFocus = (items) => items.map(it => ({ ...it, run: () => { it.run(); se
 $("btnPalette").addEventListener("click", () => snap && openPalette(landFocus(paletteItems())));
 $("btnHire").addEventListener("click", () => go({ kind: "hire" }));
 $("btnMenu").addEventListener("click", (e) => { e.stopPropagation(); openMenu(); });
+// Game intensity: Full, Calm (no banners, confetti, banter, party lights or game chimes) or Off (no game at all:
+// no gifts, goals, combos, level chip or game toasts). Real alerts, reports and needs stay at every level.
+const GAME_WORD = { full: "Full", calm: "Calm", off: "Off" };
+function applyGame(quiet) {
+  const g = ["full", "calm", "off"].includes(prefs.game) ? prefs.game : "full";
+  document.documentElement.dataset.game = g;
+  office.setGameLevel(g);
+  if (typeof giftBox !== "undefined") giftBox.sync();
+  if (snap) { game.renderOfficeLevel(); game.renderCombo(); game.visitStreak(); renderPanel(true); }
+  if (!quiet) toast(g === "full" ? "Game: Full. Celebrations are back." : g === "calm" ? "Game: Calm. No banners, confetti or chatter; alerts stay." : "Game: Off. Just the office: no gifts, goals or celebrations.", "info", { ic: "sparkles", ms: 3500 });
+}
+function cycleGame() { setPref("game", { full: "calm", calm: "off", off: "full" }[prefs.game] || "calm"); }
 // The code everybody knows (↑ ↑ ↓ ↓ ← → ← → B A) throws a party on the floor, and a secret badge for finding it.
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 let konami = 0;
@@ -1038,6 +1052,7 @@ document.addEventListener("keydown", (e) => {
   if (document.body.classList.contains("tv") && k === "Escape") { floor.setTv(false); return; }
   if (k === "v") { floor.setTv(!document.body.classList.contains("tv")); return; }
   if (k === "m") { setRadio(!radio.on); return; }
+  if (k === "z") { cycleGame(); return; }
   if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else { const back = $("panel").contains(document.activeElement); go({ kind: "ceo" }); if (back) $("panel").focus({ preventScroll: true }); } }
   else if (k === "h") go({ kind: "hire" });
   else if (k === "d") go({ kind: "divider" });
@@ -1070,6 +1085,8 @@ if (["dark", "light", "system"].includes(qTheme)) prefs.theme = qTheme;
 document.documentElement.dataset.theme = prefs.theme;
 document.documentElement.dataset.motion = prefs.motion;
 office.setReducedMotion(prefs.motion === "reduced");
+if (["full", "calm", "off"].includes(QS.get("game"))) prefs.game = QS.get("game");   // ?game=calm for a screen share
+applyGame(true);
 office.setPrivacy(prefs.privacy);
 office.setSeasonal(prefs.seasonal);
 sound.set(prefs.sound);

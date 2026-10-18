@@ -126,6 +126,21 @@ export function leftOf(seat, key) {
   return w && w.pct != null ? Math.max(0, 100 - w.pct) : null;
 }
 
+// Where a seat's week stands against an even pace from reset to reset: "12% ahead of pace · runs out Thu 14:00".
+// tone: good (on or behind pace), warn (well ahead), bad (runs out before the reset). Null without a weekly reading.
+export function weekPace(seat, now, fmt = (t) => new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })) {
+  const w = (seat.usage || {}).weekly, WEEK = 7 * 86400;
+  if (!w || w.pct == null || !w.resets_at || w.resets_at <= now) return null;
+  const elapsed = Math.min(1, Math.max(0, 1 - (w.resets_at - now) / WEEK));
+  if (elapsed < 0.04) return { tone: "good", pace: 0, text: `A fresh week: ${Math.round(w.pct)}% used so far.` };
+  const pace = w.pct - elapsed * 100, rate = w.pct / (elapsed * WEEK);
+  const out = rate > 0 ? now + (100 - w.pct) / rate : null;
+  const where = Math.abs(pace) < 3 ? "On pace" : `${Math.round(Math.abs(pace))}% ${pace > 0 ? "ahead of" : "behind"} pace`;
+  if (out && out < w.resets_at) return { tone: "bad", pace, out, text: `${where} this week: runs out ${fmt(out)}, before the reset ${fmt(w.resets_at)}.` };
+  const endLeft = Math.max(0, Math.round(100 - (w.pct + rate * (w.resets_at - now))));
+  return { tone: pace > 10 ? "warn" : "good", pace, text: `${where} this week: about ${endLeft}% left at the reset ${fmt(w.resets_at)}.` };
+}
+
 // The tighter of the two plan windows: what actually limits this seat right now.
 export function binding(seat) {
   const a = leftOf(seat, "five_hour"), b = leftOf(seat, "weekly");

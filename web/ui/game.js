@@ -14,6 +14,10 @@ const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.l
 export function makeGame(ctx) {
   const { app, office, panels, replay, store, DEMO, prefs, gifts, view, renderPanel } = ctx;
   const fxNow = () => (replay.active() ? NOFX : office);   // floor effects for live news: none while replaying
+  // Game intensity (Settings, Z): chimes only at Full; game toasts hidden at Off (real alerts live elsewhere).
+  const level = () => prefs.game || "full";
+  const chime = (...a) => { if (level() === "full") sound.play(...a); };
+  const note = (...a) => { if (level() !== "off") toast(...a); };
 
   // A daily goal finishing while the office is open gets a banner, a chime and a toast. Goals already done when the page
   // opens are only noted, so a reload never re-celebrates them.
@@ -38,8 +42,8 @@ export function makeGame(ctx) {
       const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
       if (prefs.view === "floor") fxNow().banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
       if (all) gifts.grant(null, "goals", "rare");
-      sound.play(all ? "levelup" : "achievement");
-      toast(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
+      chime(all ? "levelup" : "achievement");
+      note(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
     }
     if (fresh.length) { store.set("goalsSeen", { day, ids: [...goalsSeen.ids] }); if (view().kind === "ceo") renderPanel(true); }
   }
@@ -47,7 +51,7 @@ export function makeGame(ctx) {
   // A CEO badge (ui/badges.js) was earned: a chime and a toast that opens Your office.
   function badge(b) {
     if (!b) return;
-    setTimeout(() => { sound.play("achievement"); toast(`Badge earned: ${b.name}. ${b.desc}`, "good", { ic: b.icon, ms: 6500 }); if (view().kind === "office") renderPanel(true); }, 900);
+    setTimeout(() => { chime("achievement"); note(`Badge earned: ${b.name}. ${b.desc}`, "good", { ic: b.icon, ms: 6500 }); if (view().kind === "office") renderPanel(true); }, 900);
   }
   // The weekly challenge finishing: one celebration per week (per browser), never in the demo.
   function cheerWeekly() {
@@ -57,8 +61,8 @@ export function makeGame(ctx) {
     if (seen === w.week) return;
     store.set("weeklyDone", w.week);
     if (prefs.view === "floor") fxNow().banner("Record week!", `${w.have} reports: you beat last week's ${w.last}`, "#ff7a45");
-    sound.play("levelup");
-    toast(`Record week: ${w.have} reports, beating last week's ${w.last}.`, "good", { ic: "flame", ms: 7000 });
+    chime("levelup");
+    note(`Record week: ${w.have} reports, beating last week's ${w.last}.`, "good", { ic: "flame", ms: 7000 });
     badge(award("record_week"));
     gifts.grant(null, "week", "epic");
   }
@@ -73,7 +77,7 @@ export function makeGame(ctx) {
     while (days.has(key(c))) { n++; c.setDate(c.getDate() - 1); }
     store.set("visits", [...days].sort().slice(-n));   // only the current run matters, however long it gets
     const el = $("visits");
-    el.hidden = n < 2;
+    el.hidden = n < 2 || level() === "off";
     el.innerHTML = `${icon("flame", 14)}${n}`;
     el.title = `${n} days in a row: you have checked on the office every day.`;
     el.setAttribute("aria-label", el.title);
@@ -99,7 +103,7 @@ export function makeGame(ctx) {
       office.celebrate(s.id, null, "Anniversary!");
       if (prefs.view === "floor") office.banner("Happy anniversary!", `${who.name}: ${hit[1]} at the office`, s.color);
       office.sayAtSeat(s.id, `${hit[1][0].toUpperCase() + hit[1].slice(1)} here. Thanks, boss!`, 6000);
-      toast(`${who.name} has been at the office for ${hit[1]}.`, "good", { ic: "calendar", ms: 6000 });
+      note(`${who.name} has been at the office for ${hit[1]}.`, "good", { ic: "calendar", ms: 6000 });
       break;                                            // one at a time
     }
   }
@@ -127,16 +131,16 @@ export function makeGame(ctx) {
     if (combo.n >= 3 && !DEMO) badge(award("hot_streak"));
     if (combo.n === 3 || combo.n === 5) gifts.grant(e.seat, "combo");
     if (combo.n >= 2) {
-      setTimeout(() => sound.play("combo", combo.n), 700);
+      setTimeout(() => chime("combo", combo.n), 700);
       const word = combo.n >= 5 ? "Unstoppable!" : combo.n >= 4 ? "On fire!" : combo.n >= 3 ? "Hot streak!" : "Combo!";
       if (combo.n >= 3 && prefs.view === "floor") fxNow().banner(`Combo ×${combo.n}`, word + (best ? " A new best today." : ""), "#ff7a45");
-      toast(`Combo ×${combo.n}: ${word}`, "good", { ic: "flame", ms: 4500 });
+      note(`Combo ×${combo.n}: ${word}`, "good", { ic: "flame", ms: 4500 });
     }
     renderCombo();
   }
   function renderCombo() {
     let el = document.querySelector(".combo");
-    const now = Date.now() / 1000, live = combo.n >= 2 && now < combo.until;
+    const now = Date.now() / 1000, live = combo.n >= 2 && now < combo.until && level() !== "off";
     if (!live) { if (el) el.remove(); return; }
     if (!el) {
       el = document.createElement("div"); el.className = "combo"; el.setAttribute("role", "status");
@@ -154,7 +158,7 @@ export function makeGame(ctx) {
   let olSeen = store.get("officeLevel", 0);
   function renderOfficeLevel() {
     const ol = officeLevel(app.snap().seats), b = $("officeLvl");
-    if (!app.snap().seats.some(s => s.career)) { b.hidden = true; return; }
+    if (!app.snap().seats.some(s => s.career) || level() === "off") { b.hidden = true; return; }
     b.hidden = false;
     const r = 9, len = 2 * Math.PI * r;
     const html = `<svg viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="${r}" class="trk"/><circle cx="11" cy="11" r="${r}" class="val" stroke-dasharray="${(len * ol.progress).toFixed(1)} ${len.toFixed(1)}"/></svg><span>Lv ${ol.level}</span>`;
@@ -165,8 +169,8 @@ export function makeGame(ctx) {
       const got = UNLOCKS_BY_LEVEL(olSeen, ol.level);
       for (const s of app.snap().seats) fxNow().celebrate(s.id, null, "Level up!");     // confetti in every room
       if (prefs.view === "floor") fxNow().banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
-      sound.play("levelup");
-      toast(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
+      chime("levelup");
+      note(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
       gifts.grant(null, "office", "epic");
     }
     if (ol.level > olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }   // only rises: a dip never re-celebrates

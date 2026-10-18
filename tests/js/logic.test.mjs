@@ -308,3 +308,18 @@ test("on a Monday the week review tells last week, Monday to Sunday", async () =
   assert.equal(w.to, "2026-10-18");
   assert.equal(w.prev, 7);                                                      // the week before is complete too
 });
+
+test("weekly pace: ahead, behind, running out before the reset", async () => {
+  const { weekPace } = await import("../../web/ui/personas.js");
+  const now = 1_000_000, day = 86400, fmt = (t) => String(t);
+  const seat = (pct, daysLeft) => ({ usage: { weekly: { pct, resets_at: now + daysLeft * day } } });
+  assert.equal(weekPace({ usage: {} }, now), null);
+  const half = weekPace(seat(50, 3.5), now, fmt);                 // half the week gone, half the plan used
+  assert.equal(half.tone, "good"); assert.match(half.text, /^On pace/);
+  const hot = weekPace(seat(80, 3.5), now, fmt);                  // 80% used at the half: runs out early
+  assert.equal(hot.tone, "bad"); assert.match(hot.text, /runs out/);
+  assert.ok(hot.out < now + 3.5 * day);
+  const slow = weekPace(seat(20, 3.5), now, fmt);
+  assert.match(slow.text, /30% behind pace/); assert.match(slow.text, /about 60% left/);
+  assert.match(weekPace(seat(2, 6.9), now, fmt).text, /fresh week/);
+});

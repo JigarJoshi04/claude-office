@@ -71,7 +71,8 @@ export function createOffice(stage, handlers) {
   let happy = false;                   // the day's happy hour: party lights in the lobby and corridors
   let sets = new Set();                // finished album sets (rarities): their rewards on the floor
   let radioOn = false;
-  let burner = null;                   // the seat with the most tokens of all time: a flame on its nameplate                 // the office radio is playing: notes rise from the boombox on the CEO desk
+  let burner = null;                   // the seat with the most tokens of all time: a flame on its nameplate
+  let game = "full";                   // game intensity: "full", "calm" (no banners, confetti, banter or party) or "off"                 // the office radio is playing: notes rise from the boombox on the CEO desk
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
   let leavers = [];                   // agents walking out
@@ -1133,6 +1134,7 @@ export function createOffice(stage, handlers) {
 
   // "+12 XP" rises from a desk as its people work: at most one every 20 seconds per desk, so it stays a nicety.
   function floatXp(t) {
+    if (game !== "full") { for (const s of snap.seats) { const st = xpSeen.get(s.id); if (st) st.pending = 0; } }
     for (const s of snap.seats) {
       const xp = s.career && s.career.xp;
       if (xp == null) continue;
@@ -1151,7 +1153,7 @@ export function createOffice(stage, handlers) {
   // arrive while one shows wait their turn, so a busy moment (a level up during a happy hour) shows each in full.
   const bannerQ = [];
   function banner(title, sub, color) {
-    if (reduced) return;
+    if (reduced || game !== "full") return;
     const host = stage.closest(".floor-frame") || stage;
     if (host.querySelector(".lvl-banner")) { if (bannerQ.length < 3) bannerQ.push([title, sub, color]); return; }
     const b = document.createElement("div");
@@ -1168,12 +1170,12 @@ export function createOffice(stage, handlers) {
   }
 
   function celebrate(seatId, sessionId, text) {
-    if (!L) return;
+    if (!L || game === "off") return;
     let x, y;
     const a = sessionId && agents.get(sessionId);
     if (a) [x, y] = anchorFor(a);
     else { const p = L.pods.find(p => p.seat.id === seatId); if (!p) return; x = p.x + POD_W / 2; y = p.y + 40; }
-    if (!reduced) burst(x, y, 46, "confetti");
+    if (!reduced && game === "full") burst(x, y, 46, "confetti");   // calm keeps the quiet "Shipped!" tag only
     pops.push({ el: div("pop good", text || "Shipped!", x, y - 6), until: performance.now() + 2600 });
   }
   function alarm(seatId, text) {
@@ -1188,8 +1190,9 @@ export function createOffice(stage, handlers) {
     setReducedMotion(on) { reduced = on; },
     setMvp(m) { mvp = m && m.seat ? m : null; ovKey = ""; renderOverlay(); },
     setPersonas(fn) { persona = fn; staticKey = ""; ovKey = ""; if (snap) update(snap); },
-    say(sessionId, text, ms = 6000) { if (!sessionId || !text) return; said.set(sessionId, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); },
+    say(sessionId, text, ms = 6000) { if (!sessionId || !text || game !== "full") return; said.set(sessionId, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); },
     sayAtSeat(seatId, text, ms = 6000) {
+      if (game !== "full") return;
       const a = [...agents.values()].find(x => x.seatId === seatId && x.mode === "seated");
       if (a) { said.set(a.id, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); }
     },
@@ -1205,7 +1208,11 @@ export function createOffice(stage, handlers) {
       giftsSeen = ids;
       ovKey = ""; renderOverlay();
     },
-    setHappy(on) { happy = !!on; },
+    setHappy(on) { happy = !!on && game === "full"; },
+    // Full: everything. Calm: no banners, confetti, character lines, party lights or XP floaters (real alerts stay).
+    // Off: also no gifts, level-up pops or game chrome.
+    setGameLevel(level) { game = ["full", "calm", "off"].includes(level) ? level : "full"; if (game !== "full") happy = false; ovKey = ""; renderOverlay(); },
+    gameLevel: () => game,
     setTopBurner(id) { if (id !== burner) { burner = id || null; ovKey = ""; renderOverlay(); } },
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },
