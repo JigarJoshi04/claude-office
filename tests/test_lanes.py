@@ -234,3 +234,22 @@ class LanePolicyTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "outside"):
                 lanes.create_lane("t", "b", tmp, "auto", "opus", "acceptEdits", ["c"], cfg, launch=False)
             self.assertFalse((Path(tmp) / "lanes").exists() and any((Path(tmp) / "lanes").iterdir()))
+
+
+class LongBacklogTests(unittest.TestCase):
+    def test_older_unfinished_lanes_stay_listed_with_their_place_in_line(self):
+        import time as _t
+        with tempfile.TemporaryDirectory() as tmp, patch.object(lanes, "lanes_dir", return_value=Path(tmp)), \
+                patch.object(lanes, "active_lane_units", return_value=set()):
+            for i in range(20):                           # the backlog, made first (oldest files)
+                d = Path(tmp) / f"b{i:02d}"; d.mkdir()
+                (d / "lane.json").write_text(json.dumps({"id": f"b{i:02d}", "title": "b", "status": "scheduled", "created_at": i,
+                                                         "schedule": {"backlog": True, "order": i}}))
+            _t.sleep(0.02)
+            for i in range(45):                           # then 45 finished lanes, changed more recently
+                d = Path(tmp) / f"d{i:02d}"; d.mkdir()
+                (d / "lane.json").write_text(json.dumps({"id": f"d{i:02d}", "title": "d", "status": "done", "created_at": 100 + i}))
+            listed = {l["id"]: l for l in lanes.list_lanes()}
+            self.assertTrue(all(f"b{i:02d}" in listed for i in range(20)))
+            self.assertEqual(listed["b00"]["backlog_pos"], 0)
+            self.assertEqual(listed["b19"]["backlog_pos"], 19)

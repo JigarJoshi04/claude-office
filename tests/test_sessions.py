@@ -454,3 +454,31 @@ class PhaseTests(unittest.TestCase):
         self.assertEqual(phase_of(["test", "edit", "look"], True), "building")              # a tie goes to building
         self.assertEqual(phase_of(["edit", "ship", "look"], False), "wrapping up")
         self.assertEqual(phase_of(["look", "look", "look", "run"], None), "exploring")
+
+
+class HeredocTests(unittest.TestCase):
+    """strip_heredocs: one pass, however many `<<` a long command has (a backtracking regex took minutes)."""
+
+    def test_bodies_go_and_a_lone_shift_stays(self):
+        from office.sessions import strip_heredocs
+        self.assertEqual(strip_heredocs("cat <<'EOF' > f\nrm -rf /\nEOF\necho done"), "cat \necho done")
+        self.assertEqual(strip_heredocs("cat <<A\n1\nA\ncat <<-B\n2\n\tB\nend"), "cat \ncat \nend")
+        self.assertEqual(strip_heredocs("python3 -c 'x << 2'"), "python3 -c 'x << 2'")
+        self.assertEqual(strip_heredocs("cat <<EOF\nnever closed"), "cat <<EOF\nnever closed")
+
+    def test_a_long_cpp_echo_is_fast(self):
+        import time as _t
+        from office.sessions import screen_for
+        from office.risk import check
+        cmd = "echo '" + "\n".join(f'std::cout << "line {i}" << std::endl;' for i in range(3000)) + "' > t.cpp"
+        t = _t.time()
+        screen_for("Bash", {"command": cmd})
+        check("Bash", {"command": cmd})
+        self.assertLess(_t.time() - t, 1.0)
+
+    def test_passing_runs_are_not_failures(self):
+        from office.sessions import _TEST_FAILED
+        for ok in ("OK (expected failures=1)", "2 failed attempts to connect"):
+            self.assertIsNone(_TEST_FAILED.search(ok), ok)
+        for bad in ("=== 1 failed, 40 passed in 3s", "1 failed in 0.1s", "3 failing", "FAILED (failures=2)"):
+            self.assertIsNotNone(_TEST_FAILED.search(bad), bad)

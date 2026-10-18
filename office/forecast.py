@@ -45,4 +45,8 @@ def dry_spells(caps: list[dict], now: float, horizon: float = HORIZON) -> list[l
 
 def capacity(seats: list[dict], now: float, guard: float = 95.0) -> dict:
     caps = [c for c in (seat_capacity(s, now, guard) for s in seats) if c]
-    return {"now": now, "horizon": HORIZON, "seats": caps, "dry": dry_spells(caps, now)}
+    # A seat on duty that this cannot see into (Codex, or Claude with no weekly reading) might take the work: no
+    # stretch is called dry while one is there.
+    unknown = any((s.get("divider") or {}).get("enabled", True) and s.get("status") not in ("benched", "offline")
+                  and (s.get("kind") != "claude" or not any(c["seat"] == s["id"] for c in caps)) for s in seats)
+    return {"now": now, "horizon": HORIZON, "seats": caps, "dry": [] if unknown else dry_spells(caps, now)}

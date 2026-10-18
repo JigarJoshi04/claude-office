@@ -564,7 +564,8 @@ setInterval(() => {
 
 // In share-safe mode, news whose words could name a session, a project or a report says only who and what kind.
 const PRIVATE_NEWS = { report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news", external: "has news",
-  reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer", risk: "did something risky" };
+  reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer", risk: "did something risky",
+  ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you" };
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {}, plane() {}, mail() {}, ringBell() {} };
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
 // A page error says so once, quietly, and reports itself to the office (the doctor lists it). Errors from browser
@@ -923,7 +924,14 @@ function openRemind(when = null, label = "", text = "") {
 // Goodnight: before you go, what still needs you, who works on overnight (and a note to the lanes to write theirs),
 // which seats get their plan back before morning, a checkpoint, and lights out until the morning.
 function morning() { const d = new Date(); d.setHours(7, 0, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); return d.getTime() / 1000; }
+// Goodnight, or, with the lights already out, lights on: the G key, the menu and the palette.
+const lightsOut = () => (prefs.lightsOutUntil || 0) > Date.now() / 1000;
+function nightToggle() {
+  if (lightsOut()) { setPref("lightsOutUntil", 0); office.setLightsOut(false); toast("Good morning. Lights on.", "good"); }
+  else goodnight();
+}
 function goodnight() {
+  if (!snap) return;                       // before the first snapshot there is nothing to sum up
   const need = panels.needsList(), working = snap.seats.flatMap(s => live(s).filter(x => x.state === "working" || x.state === "waiting"));
   const lanesUp = working.filter(x => x.kind === "lane").length, until = morning();
   const back = snap.seats.filter(s => s.kind === "claude").map(s => ({ s, at: ((s.usage || {}).five_hour || {}).resets_at }))
@@ -931,7 +939,7 @@ function goodnight() {
   const row = (ic, t, d, act = "") => `<div class="setup-step"><span class="es-ic">${icon(ic, 16)}</span><span class="grow"><b>${t}</b><small>${d}</small></span>${act}</div>`;
   $("dialogBody").innerHTML = `<div class="dh"><b>Goodnight${(snap.office.ceo || {}).name && snap.office.ceo.name !== "CEO" ? ", " + esc(snap.office.ceo.name) : ""}</b><button class="btn sm ghost" id="gnClose" aria-label="Close">${icon("x", 16)}</button></div>
     <div class="db">
-      ${row("alert", need.length ? `${need.length} thing${need.length === 1 ? "" : "s"} still need${need.length === 1 ? "s" : ""} you` : "Nothing needs you", need.length ? esc(need.slice(0, 2).map(a => a.text).join(" · ")) : "A clean desk.", need.length ? `<button class="btn sm" id="gnNeeds">Look</button>` : "")}
+      ${row("alert", need.length ? `${need.length} thing${need.length === 1 ? "" : "s"} still need${need.length === 1 ? "s" : ""} you` : "Nothing needs you", need.length ? esc(need.slice(0, 2).map(a => panels.needText(a)).join(" · ")) : "A clean desk.", need.length ? `<button class="btn sm" id="gnNeeds">Look</button>` : "")}
       ${row("moon", working.length ? `${working.length} session${working.length === 1 ? "" : "s"} at work overnight` : "Nobody at work", lanesUp ? `${lanesUp} of them ${lanesUp === 1 ? "is a lane" : "are lanes"}: ask them to write their notes before you go.` : "Lanes keep notes as they go.", lanesUp ? `<button class="btn sm" id="gnNotes">Ask for notes</button>` : "")}
       ${back.length ? row("refresh", "Back before morning", back.map(x => `${esc(panels.persona(x.s).name)} at ${esc(clock(x.at))}`).join(" · ")) : ""}
       <div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="gnCheck">${icon("pin", 15)}Take a checkpoint</button><button class="btn primary" id="gnOut">${icon("moon", 15)}Lights out</button></div>
@@ -1035,6 +1043,7 @@ function openMenu(focusItem) {
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
     + item("dnd", "moon", "Do not disturb", dndOn() ? `Until ${clock(snap.office.dnd_until)}` : "Off", dndOn())
+    + item("night", lightsOut() ? "sun" : "moon", lightsOut() ? "Lights on" : "Goodnight…")
     + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
@@ -1057,6 +1066,7 @@ function openMenu(focusItem) {
     else if (k === "theme") setPref("theme", { dark: "light", light: "system", system: "dark" }[prefs.theme] || "dark");
     else if (k === "text") setPref("textSize", { auto: "s", s: "m", m: "l", l: "xl", xl: "auto" }[prefs.textSize] || "auto");
     else if (k === "dnd") setDnd(dndOn() ? 0 : 60);
+    else if (k === "night") { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); nightToggle(); return; }
     else if (k === "checkpoint") checkpoint();
     else if (k === "tv") floor.setTv(true);
     else if (k === "daycard") shareDay();
@@ -1237,9 +1247,15 @@ function broadcast(preset = "") {
 function commandItems(q) {
   return paletteCommands(q).map(c => c.kind === "remind"
     ? { icon: icon("bell", 16), label: `Remind me ${c.when}: ${c.text}`, hint: "↵ to set", run: async () => {
-        try { await app.post("/api/reminders", { text: c.text, trigger: { kind: "at", at: c.at }, label: `at ${clock(c.at)}` }); toast(`Reminder set, ${c.when}.`, "good", { ic: "bell" }); pollOnce(); }
+        try { await app.post("/api/reminders", { text: c.text, trigger: { kind: "at", at: c.at }, label: `at ${dayTime(c.at)}` }); toast(`Reminder set, ${c.when}.`, "good", { ic: "bell" }); pollOnce(); }
         catch (e) { toast("Could not set it: " + e.message, "bad"); } } }
-    : c.kind === "hire" ? { icon: icon("briefcase", 16), label: `Hire a lane: ${c.title}`, hint: "the hiring desk, with this title", run: () => { panels.draftHire({ title: c.title }); go({ kind: "hire" }); } }
+    : c.kind === "hire" ? { icon: icon("briefcase", 16), label: `Hire a lane: ${c.title}`, hint: "the hiring desk, with this title", run: () => {
+        const cur = store.get("hireDraft", {}) || {}, mine = (cur.title || "").trim() || (cur.brief || "").trim();
+        // A draft on the desk is never replaced without asking; either way the desk opens with the brief to write.
+        if (!mine || cur.title === c.title || confirm(`Start a new lane "${c.title}"? Your draft on the hiring desk is replaced.`)) panels.draftHire({ title: c.title, brief: cur.title === c.title ? cur.brief || "" : "" });
+        go({ kind: "hire" });
+        setTimeout(() => { const f = document.getElementById("hBrief"); if (f) f.focus(); }, 50);
+      } }
     : { icon: icon("layers", 16), label: `Project ${c.name}`, hint: "its page", run: () => go({ kind: "project", name: c.name }) });
 }
 function paletteItems() {
@@ -1271,7 +1287,7 @@ function paletteItems() {
     { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
     { icon: icon("news", 16), label: "This morning's standup", keywords: "standup slack yesterday today blockers daily", run: openStandup },
     { icon: icon("bell", 16), label: "Remind me…", keywords: "reminder remind later timer alarm note", run: () => openRemind() },
-    { icon: icon("moon", 16), label: (prefs.lightsOutUntil || 0) > Date.now() / 1000 ? "Lights on" : "Goodnight…", hint: "G", keywords: "goodnight night lights out bed sleep wrap", run: () => ((prefs.lightsOutUntil || 0) > Date.now() / 1000 ? (setPref("lightsOutUntil", 0), office.setLightsOut(false)) : goodnight()) },
+    { icon: icon("moon", 16), label: lightsOut() ? "Lights on" : "Goodnight…", hint: "G", keywords: "goodnight night lights out bed sleep wrap", run: nightToggle },
     { icon: icon("eye", 16), label: prefs.director ? "Director cam: off" : "Director cam: on", keywords: "director camera follow auto tour", run: () => setDirector(!prefs.director) },
     { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },
@@ -1364,7 +1380,7 @@ document.addEventListener("keydown", (e) => {
   if (k === "Escape" && document.querySelector(".legend")) { floor.legend(document.querySelector('[data-cam="legend"]')); return; }
   if (document.body.classList.contains("tv") && k === "Escape") { floor.setTv(false); return; }
   if (k === "v") { floor.setTv(!document.body.classList.contains("tv")); return; }
-  if (k === "g") { if ((prefs.lightsOutUntil || 0) > Date.now() / 1000) { setPref("lightsOutUntil", 0); office.setLightsOut(false); toast("Good morning. Lights on.", "good"); } else goodnight(); return; }
+  if (k === "g") { nightToggle(); return; }
   if (k === "m") { setRadio(!radio.on); return; }
   if (k === "z") { cycleGame(); return; }
   if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else { const back = $("panel").contains(document.activeElement); go({ kind: "ceo" }); if (back) $("panel").focus({ preventScroll: true }); } }

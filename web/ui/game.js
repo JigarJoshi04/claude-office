@@ -85,7 +85,9 @@ export function makeGame(ctx) {
     const q = quests(app.weekCache());
     if (!q || !q.quests || DEMO) return;
     const stamps = store.get("questStamps", {}), month = localDay().slice(0, 7), mine = stamps[month] || [];
-    for (const x of q.quests.filter(x => x.done && !mine.includes(x.id))) {
+    const stamped = new Set(Object.values(stamps).flat());   // a week that spans two months is stamped once, in the month it finished
+    for (const x of q.quests.filter(x => x.done && !stamped.has(x.id))) {
+      stamped.add(x.id);
       mine.push(x.id); stamps[month] = mine; store.set("questStamps", stamps);
       const full = mine.length === PUNCH;
       if (prefs.view === "floor") fxNow().banner(full ? "Punch card full!" : "Quest done!", full ? `${PUNCH} quests this month` : x.label, "#ff7a45");

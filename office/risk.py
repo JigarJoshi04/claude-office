@@ -14,7 +14,7 @@ import shlex
 from pathlib import Path
 
 from . import config
-from .sessions import redact
+from .sessions import redact, strip_heredocs
 
 _SEG = r"[^|;&\n]*"                                   # within one command of a pipeline or a list
 BASH_RULES = [
@@ -43,17 +43,14 @@ TOKEN_RE = re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|git
 _WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 
 
-_HEREDOC = re.compile(r"<<-?\s*['\"]?(\w+)['\"]?.*?\n.*?^\s*\1\s*$", re.S | re.M)
-
-
 def _dequoted(cmd: str) -> str:
     """The command with heredoc bodies and quoted strings taken out, so a commit message never reads as a command."""
-    return re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", _HEREDOC.sub("", cmd))
+    return re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", strip_heredocs(cmd))
 
 
 def _commands(cmd: str) -> list[list[str]]:
     """The simple commands of a shell line as words (quotes honoured), split at ; & | ( ) and redirections."""
-    lex = shlex.shlex(_HEREDOC.sub("", cmd), posix=True, punctuation_chars=True)
+    lex = shlex.shlex(strip_heredocs(cmd), posix=True, punctuation_chars=True)
     lex.whitespace_split = True
     out, cur = [], []
     try:
@@ -97,7 +94,7 @@ def check(name: str, inp) -> list[tuple[str, str]]:
         show = redact(" ".join(cmd.split()))[:200]
         plain = _dequoted(cmd)
         for rid, _, rx in BASH_RULES:
-            if rx.search(plain if rid != "drop_table" else _HEREDOC.sub("", cmd)):   # SQL is quoted: psql -c "DROP TABLE …"
+            if rx.search(plain if rid != "drop_table" else strip_heredocs(cmd)):   # SQL is quoted: psql -c "DROP TABLE …"
                 out.append((rid, show))
         if any(_rm_outside(words) for words in _commands(cmd)):
             out.append(("rm_rf", show))

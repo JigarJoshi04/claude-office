@@ -44,7 +44,6 @@ _STAT = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+
 _PUSHED = re.compile(r"\b[0-9a-f]{7,40}\.{2,3}[0-9a-f]{7,40}\s+\S+ -> \S+|\* \[new branch\]")   # "..." is a forced update
 _PUSH_FAIL = re.compile(r"! \[(?:remote )?rejected\]|error: failed to push|^fatal:", re.M)
 _HOOK_FAIL = re.compile(r"\.{3,}\s*failed\b|- hook id:|^fatal:", re.M)              # pre-commit's "black....Failed"
-_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2[ \t]*(?=\n|$)", re.S)
 _NO_OUTPUT = "(bash completed with no output)"                           # Claude Code's words for an empty result
 _BACKGROUNDED = re.compile(r"moved to the background|running in the background with id", re.I)
 _QUIET = r"(?:\s-[a-zA-Z]*q[a-zA-Z]*\b|\s--quiet\b|>\s*/dev/null)"                 # -q, -qm, -qam, --quiet, >/dev/null
@@ -62,8 +61,10 @@ _COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|aborting
 
 
 def strip_heredocs(cmd: str) -> str:
-    """A command without its heredoc bodies: a script written to a file is not a script that ran."""
-    return _HEREDOC.sub("", cmd)
+    """A command without its heredoc bodies: a script written to a file is not a script that ran (one linear pass,
+    shared with the desks' screens and the risky-action watch)."""
+    from .sessions import strip_heredocs as strip
+    return strip(cmd)
 
 
 def ship_kinds(cmd: str) -> set:

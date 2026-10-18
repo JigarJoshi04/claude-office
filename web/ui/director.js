@@ -18,12 +18,12 @@ export function makeDirector({ office, prefs, replay }) {
     const ev = queue.shift();
     busy = true;
     if (ev.kind === "shipped" && ev.merged) office.focusShipBoard();
-    else if (ev.session) office.focusSession(ev.session);
-    else if (ev.seat) office.focusSeat(ev.seat);
+    else if (ev.session) office.focusSession(ev.session, { director: true });
+    else if (ev.seat) office.focusSeat(ev.seat, { director: true });
     timer = setTimeout(() => {
       busy = false;
       if (queue.length) next();
-      else if (on() && !handsOff()) office.fit();
+      else if (on() && !handsOff()) office.fit({ director: true });
     }, HOLD);
   }
   // One event of news (app.js onNews): its kind, its seat, the session it is about, whether a PR merged.

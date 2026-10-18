@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+from datetime import datetime
 import re
 import shutil
 import subprocess
@@ -32,6 +33,14 @@ except Exception:  # pragma: no cover
 
 THRESHOLDS = (50, 80, 95)
 FORECAST_WINDOWS = {"five_hour": 3600, "weekly": 6 * 3600}   # how far back the burn rate looks
+
+
+def _iso_ts(v) -> float | None:
+    """An ISO time from GitHub ("2026-10-19T08:00:00Z") as epoch seconds, or None."""
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp() if v else None
+    except ValueError:
+        return None
 
 
 def attention_key(a: dict) -> str:
@@ -487,7 +496,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.102.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.103.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg)},
@@ -531,7 +540,8 @@ class Office(LiveOffice):
         snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > now)
         snap["ceo"] = self.presence.get()                  # at the computer or away (presence.py)
         snap["capacity"] = forecast.capacity(snap["seats"], now, float((snap.get("divider") or {}).get("weekly_guard") or 95))   # the next 7 days
-        merged_prs = [p["number"] for d in list(self.prs.data.values()) for p in (d.get("prs") or []) if p.get("state") == "merged" and p.get("number")]
+        merged_prs = [(p["number"], _iso_ts(p.get("merged"))) for d in list(self.prs.data.values()) for p in (d.get("prs") or [])
+                      if p.get("state") == "merged" and p.get("number")]
         for r in self.reminders.check(snap, now, list(self.events)[-80:], merged_prs):   # notes to yourself whose moment came
             self.emit("reminder", ("Late: " if r["late"] else "") + r["text"], r.get("seat"), "warn")
         snap["reminders"] = self.reminders.view()

@@ -191,7 +191,7 @@ function capacityCard(app) {
     <div class="cap-days">${ticks.map(t => `<span style="left:${x(t).toFixed(2)}%">${esc(new Date(t * 1000).toLocaleDateString([], { weekday: "short" }))}</span>`).join("")}</div>
     ${c.seats.map(row).join("")}
     ${dry.length ? `<p class="cap-dry">${icon("alert", 15)}No seat on duty could take work ${esc(dry.join(", "))}.</p>` : ""}
-    <p class="hint" style="margin-top:8px">Green: plan left. Red: out of its week, until the white line, its weekly reset. The pace is the week's use so far drawn straight on, so it says where today's habits lead, not what will happen.</p></div>`;
+    <p class="hint" style="margin-top:8px">Each bar is a seat's week, in its own colour while it has plan left; red where it is out of its week, until the white line, its weekly reset. The pace is the week's use so far drawn straight on, so it says where today's habits lead, not what will happen.</p></div>`;
 }
 
 // Hours lost to limits, the last 7 days: how long each seat sat out of plan, and how long no Claude seat could take work.

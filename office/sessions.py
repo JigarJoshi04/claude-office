@@ -6,6 +6,7 @@ which is parsed incrementally: only bytes appended since the last look are read.
 """
 from __future__ import annotations
 
+import bisect
 import json
 import os
 import re
@@ -207,14 +208,43 @@ _TEST_CMD = re.compile(r"^(?:\w+=\S*\s+)*(?:(?:time|nice|timeout\s+\S+|uv run|po
 
 
 # A test run's output that says it failed, whatever the exit code (piped through tail, the exit code is tail's).
-_TEST_FAILED = re.compile(r"\bFAILED\b|\bfailures=[1-9]|\berrors=[1-9]|\b[1-9]\d* (?:failed|failing)\b|ℹ fail [1-9]|^# fail [1-9]|^not ok\b"
+_TEST_FAILED = re.compile(r"\bFAILED\b|(?<!expected )\bfailures=[1-9]|\berrors=[1-9]|\b[1-9]\d* failed(?=,| in \d)|\b[1-9]\d* failing\b|ℹ fail [1-9]|^# fail [1-9]|^not ok\b"
                           r"|^Tests:.*\b[1-9]\d* failed|^--- FAIL|^FAIL\b", re.M)
+
+
+_HEREDOC_START = re.compile(r"<<-?\s*(['\"]?)(\w+)\1")
+
+
+def strip_heredocs(cmd: str) -> str:
+    """The command with each heredoc taken out, from `<<WORD` to the line that is just WORD. One pass over the lines
+    (a backtracking regex took minutes on long scripts full of C++'s `cout << x`); a `<<` with no closing line stays."""
+    if "<<" not in cmd:
+        return cmd
+    closers, i = {}, 0                               # WORD -> [(start, end)] of the lines that are just WORD
+    for line in cmd.split("\n"):
+        w = line.strip()
+        if w and re.fullmatch(r"\w+", w):
+            closers.setdefault(w, []).append((i, i + len(line)))
+        i += len(line) + 1
+    out, pos = [], 0
+    for m in _HEREDOC_START.finditer(cmd):
+        if m.start() < pos:
+            continue
+        nl = cmd.find("\n", m.end())
+        if nl < 0:
+            break
+        ends = closers.get(m.group(2)) or []
+        k = bisect.bisect_left(ends, (nl + 1, -1))   # the first closing line after the heredoc's first line
+        if k < len(ends):
+            out.append(cmd[pos:m.start()])
+            pos = ends[k][1]
+    return "".join(out) + cmd[pos:]
 
 
 def _segments(cmd: str) -> list[str]:
     """A shell command's simple commands, with quoted strings and heredoc bodies taken out first, so a commit message
     or a script's text never reads as a command."""
-    cmd = re.sub(r"<<-?\s*['\"]?(\w+)['\"]?.*?\n.*?^\s*\1\s*$", "", cmd, flags=re.S | re.M)
+    cmd = strip_heredocs(cmd)
     cmd = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", cmd)
     return [seg.strip() for seg in re.split(r"&&|\|\||[;|\n(]", cmd)]
 

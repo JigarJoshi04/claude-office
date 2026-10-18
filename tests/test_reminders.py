@@ -68,3 +68,9 @@ class ReminderFixTests(unittest.TestCase):
         r, now = Reminders(None), 1_000_000.0
         r.add("merged", {"kind": "pr_merged", "ref": "482"}, now=now)
         self.assertEqual([x["text"] for x in r.check({"seats": [], "lanes": []}, now + 5, [], [482])], ["merged"])
+
+    def test_an_old_merge_of_the_same_number_does_not_fire(self):
+        r, now = Reminders(None), 1_000_000.0
+        r.add("merged", {"kind": "pr_merged", "ref": "12"}, now=now)
+        self.assertEqual(r.check({"seats": [], "lanes": []}, now + 5, [], [(12, now - 86400)]), [])    # another repo's #12, last week
+        self.assertEqual([x["text"] for x in r.check({"seats": [], "lanes": []}, now + 9, [], [(12, now - 86400), (12, now + 8)])], ["merged"])

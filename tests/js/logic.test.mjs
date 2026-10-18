@@ -518,8 +518,16 @@ test("plain-language commands in the palette", async () => {
   assert.equal(pc("remind me in 2h stand up", now)[0].at - now.getTime() / 1000, 7200);
   const b = pc("remind me at 5:30pm to reply to Vega", now)[0];
   assert.equal(new Date(b.at * 1000).getHours(), 17);
-  const c = pc("remind me at 9 call mum", now)[0];                                  // 9 o'clock has passed today: tomorrow
-  assert.equal(new Date(c.at * 1000).getDate(), 20);
+  const c = pc("remind me at 9 call mum", now)[0];                                  // a bare hour: the next 9 o'clock, tonight
+  assert.deepEqual([new Date(c.at * 1000).getDate(), new Date(c.at * 1000).getHours()], [19, 21]);
+  const late = new Date(2026, 9, 19, 18, 0, 0);
+  const d = pc("remind me at 5 to call", late)[0];                                   // both 5s have passed: 5 in the morning
+  assert.deepEqual([new Date(d.at * 1000).getDate(), new Date(d.at * 1000).getHours()], [20, 5]);
+  assert.match(d.when, /^tomorrow at /);
+  const e = pc("remind me at 5:30pm to reply", late)[0];                            // an exact time already past: tomorrow, said so
+  assert.deepEqual([new Date(e.at * 1000).getDate(), new Date(e.at * 1000).getHours()], [20, 17]);
+  assert.match(e.when, /^tomorrow at /);
+  assert.equal(pc("remind me at 17:30 stand up", late)[0].when.startsWith("tomorrow"), true);
   assert.deepEqual(pc("hire fix the flaky export test", now), [{ kind: "hire", title: "Fix the flaky export test" }]);
   assert.deepEqual(pc("project api-gateway", now), [{ kind: "project", name: "api-gateway" }]);
   assert.deepEqual(pc("tokens", now), []);

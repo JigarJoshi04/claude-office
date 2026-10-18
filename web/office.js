@@ -109,6 +109,10 @@ export function createOffice(stage, handlers) {
     // Where everyone sits right now, before desks resize: people then slide to their new seats, and anyone leaving
     // starts from the chair they were really in.
     for (const a of agents.values()) a.was = a.mode === "seated" && a.pod ? { ...seatSpot(a.pod, a.slot), shown: a.shift || 0 } : null;
+    // Leavers first: when a lane's old session ends and its new one starts in the same snapshot, the worker by the
+    // old chair is there to carry the box over (and not frozen beside a newcomer from the elevator).
+    const wanted = new Set(L.pods.flatMap(pod => pod.seat.sessions.filter(x => x.live !== false).slice(0, MAX_SLOTS).map(x => x.id)));
+    for (const [id, a] of agents) if (!wanted.has(id)) { agents.delete(id); leave(a); }
     for (const pod of L.pods) {
       const want = pod.seat.sessions.filter(x => x.live !== false).slice(0, MAX_SLOTS);
       pod.cap = capFor(want.length);                 // the desk grows and shrinks with the people at it
@@ -127,7 +131,7 @@ export function createOffice(stage, handlers) {
         let slot = 0; while (taken.has(slot)) slot++;
         taken.add(slot);
         const look = S.lookFor(x.id, pod.seat.color);
-        const held = !a && x.lane_id && leavers.find(l => l.hold && l.sess.lane_id === x.lane_id);
+        const held = !a && x.lane_id && leavers.find(l => l.hold > performance.now() && l.sess.lane_id === x.lane_id);   // still waiting by the chair
         const mover = held && held.seatId !== pod.seat.id ? held : null;
         if (held && !mover) {            // the lane came back on the same seat: its worker sits back down
           leavers = leavers.filter(l => l !== held);
@@ -153,17 +157,15 @@ export function createOffice(stage, handlers) {
       }
     }
     for (const a of agents.values()) if (a.mode === "seated" && a.was) a.shift = a.was.cx + (a.was.shown || 0) - seatSpot(a.pod, a.slot).cx;   // slide, don't jump
-    for (const [id, a] of agents) {
-      if (seen.has(id)) continue;
-      agents.delete(id);
-      if (a.mode === "seated" && !reduced) {      // walk out to the elevator, from the chair they were in
-        const p = pathTo(L, a.pod, a.slot).reverse();
-        const sp = a.was || seatSpot(a.pod, a.slot);
-        // A lane's worker waits by the chair for a while: if the lane comes back on another seat, they move over there.
-        const hold = a.sess && a.sess.lane_id && !first ? performance.now() + 45000 : 0;
-        leavers.push({ ...a, mode: "leaving", x: sp.cx + (sp.shown || 0), y: sp.standY, path: p.slice(1), gone: false, tagEl: null, hold });
-      }
-    }
+    for (const [id, a] of agents) if (!seen.has(id)) { agents.delete(id); leave(a); }
+  }
+  function leave(a) {
+    if (a.mode !== "seated" || reduced) return;   // walk out to the elevator, from the chair they were in
+    const p = pathTo(L, a.pod, a.slot).reverse();
+    const sp = a.was || seatSpot(a.pod, a.slot);
+    // A lane's worker waits by the chair for a while: if the lane comes back on another seat, they move over there.
+    const hold = a.sess && a.sess.lane_id && !first ? performance.now() + 45000 : 0;
+    leavers.push({ ...a, mode: "leaving", x: sp.cx + (sp.shown || 0), y: sp.standY, path: p.slice(1), gone: false, tagEl: null, hold });
   }
 
   // Pixel walks the lobby, the corridors and the lounge, joined by the walkway down the lobby's right side.
@@ -1090,7 +1092,9 @@ export function createOffice(stage, handlers) {
         pod.room.x + 111, pod.room.y + 11, 17, 17, () => handlers.openSeat(s.id));
       ck.dataset.k = "clock:" + s.id;
     }
-    const roomMenu = (el) => el.addEventListener("contextmenu", (e) => { if (!handlers.onRoomMenu) return; e.preventDefault(); e.stopPropagation(); peek(null); handlers.onRoomMenu(s.id, e.clientX, e.clientY, el); });
+    const roomMenu = (el) => el.addEventListener("contextmenu", (e) => { if (!handlers.onRoomMenu) return; e.preventDefault(); e.stopPropagation();
+      if (performance.now() - menuAt < 1000) return;      // the long-press timer already opened it (Chrome on Android sends both)
+      menuAt = performance.now(); peek(null); handlers.onRoomMenu(s.id, e.clientX, e.clientY, el); });
     for (const el of [podHot, plate]) {
       roomMenu(el);
       el.addEventListener("mouseenter", () => { spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); peek(s.id, podHot); });
@@ -1243,7 +1247,7 @@ export function createOffice(stage, handlers) {
   function focusSession(id) { refocus = { at: performance.now(), run: () => focusSession(id) }; const a = agents.get(id); if (!a) return; const [x, y] = anchorFor(a); focusRect(x - 44, y - 24, 88, 70); }
   function fit() { refocus = null; cam.tz = 1; cam.tx = 0; cam.ty = 0; clampCam(cam); }
   // The last time the CEO moved the camera themselves: the director cam (ui/director.js) stands down after it.
-  let userCamAt = -1e9;
+  let userCamAt = -1e9, menuAt = -1e9;     // menuAt: when a room menu last opened (a long press or a right click)
   const userCam = () => { userCamAt = performance.now(); };
   function applyCam(force) {
     const dz = cam.tz - cam.z, dx = cam.tx - cam.x, dy = cam.ty - cam.y;
@@ -1297,6 +1301,7 @@ export function createOffice(stage, handlers) {
   const pinchState = () => { const [a, b] = [...touches.values()], r = stage.getBoundingClientRect();
     return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2 - r.left, my: (a.y + b.y) / 2 - r.top }; };
   stage.addEventListener("pointerdown", (e) => {
+    swallowClick = false;               // phones send no click after a long press: a new press must not be eaten
     if (e.pointerType === "touch" && !e.target.closest(".cam")) {
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY });
       clearTimeout(press);
@@ -1304,8 +1309,8 @@ export function createOffice(stage, handlers) {
       const room = e.target.closest('[data-k^="pod:"], [data-k^="plate:"]');
       if (room && handlers.onRoomMenu) press = setTimeout(() => {
         const t = touches.get(e.pointerId);
-        if (!t || touches.size !== 1 || Math.hypot(t.x - t.x0, t.y - t.y0) > 8) return;
-        swallowClick = true; peek(null);
+        if (!t || touches.size !== 1 || Math.hypot(t.x - t.x0, t.y - t.y0) > 8 || performance.now() - menuAt < 1000) return;
+        swallowClick = true; menuAt = performance.now(); peek(null);
         handlers.onRoomMenu(room.dataset.k.split(":").slice(1).join(":"), t.x, t.y, room);
       }, 550);
     }
@@ -1534,7 +1539,11 @@ export function createOffice(stage, handlers) {
       const a = [...agents.values()].find(x => x.seatId === seatId && x.mode === "seated");
       if (a) { said.set(a.id, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); }
     },
-    focusSeat, focusSession, fit, celebrate, alarm, banner,
+    // The CEO moving the camera (a pick, a focus button, Zoom to fit) holds off the director cam; it passes {director: true}.
+    focusSeat: (id, o) => { if (!(o && o.director)) userCam(); focusSeat(id); },
+    focusSession: (id, o) => { if (!(o && o.director)) userCam(); focusSession(id); },
+    fit: (o) => { if (!(o && o.director)) userCam(); fit(); },
+    celebrate, alarm, banner,
     officeLevel: () => ol,
     spotlight(id) { spot = id || null; },
     setSeasonal(on) { seasonal = !!on; },

@@ -86,8 +86,14 @@ class Reminders:
         live = {x.get("id") for s in snap.get("seats", []) for x in s.get("sessions", []) if x.get("live", True)}
         lanes = {l.get("id"): l.get("status") for l in snap.get("lanes", [])}
         seats = {s["id"]: s for s in snap.get("seats", [])}
-        merged = {m.group(1) for e in events if e.get("kind") == "shipped" for m in [re.search(r"PR #(\d+) merged$", e.get("text") or "")] if m}
-        merged |= {str(n) for n in merged_prs}
+        merged: dict[str, float] = {}               # PR number -> when it was seen merged (the latest, across repos)
+        for e in events:
+            m = e.get("kind") == "shipped" and re.search(r"PR #(\d+) merged$", e.get("text") or "")
+            if m:
+                merged[m.group(1)] = max(merged.get(m.group(1), 0), e.get("ts") or now)
+        for item in merged_prs:                     # (number, merged at) from the shelf; a bare number counts as now
+            n, at = item if isinstance(item, (tuple, list)) else (item, now)
+            merged[str(n)] = max(merged.get(str(n), 0), at or 0)
         fired, flipped = [], False
         with self.lock:
             for x in self.items:
@@ -108,8 +114,8 @@ class Reminders:
                         x["seen"] = flipped = True
                 elif t["kind"] == "lane_end":
                     hit = lanes.get(t["ref"]) in _ENDED
-                elif t["kind"] == "pr_merged":
-                    hit = t["ref"] in merged
+                elif t["kind"] == "pr_merged":             # merged after it was set: an old #12 in another repo is not it
+                    hit = merged.get(t["ref"], -1) >= x["created"] - 300
                 if hit:
                     x["fired_at"] = now
                     x["late"] = bool(x.get("due") and now - x["due"] > LATE_S)

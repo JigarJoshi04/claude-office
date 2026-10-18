@@ -78,11 +78,12 @@ export function makePanels(app) {
 
   // Share-safe: news whose words could be private (a reminder you wrote, a report, a session's or project's name) says
   // only who and what kind, as the toasts do.
-  const PRIVATE_ROW = { reminder: "A reminder you set", report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "office lane news",
-    external: "has news", reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer" };
+  const PRIVATE_ROW = { reminder: "A reminder you set", report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news",
+    external: "has news", reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer",
+    ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you", risk: "did something risky" };
   function actRow(e) {
     const s = e.seat && seatById(e.seat), said = app.privacy() && PRIVATE_ROW[e.kind]
-      ? (e.kind === "reminder" ? PRIVATE_ROW.reminder : `${s ? P(s).name : "The office"} ${PRIVATE_ROW[e.kind]}`) : humanise(e.text);
+      ? (e.kind === "reminder" ? PRIVATE_ROW.reminder : !s && e.kind === "lane" ? "Office lane news" : `${s ? P(s).name : "The office"} ${PRIVATE_ROW[e.kind]}`) : humanise(e.text);
     return `<div class="act ${tone(e.level)} ${e.seat ? "click" : ""}" ${e.seat ? `data-seat="${esc(e.seat)}"` : ""}>${icon(EVENT_ICON[e.kind] || "dot", 16)}<span>${esc(said)}</span><span class="when">${relTime(e.ts)}</span></div>`;
   }
   function memberRow(s) {
@@ -97,7 +98,7 @@ export function makePanels(app) {
   function laneRow(l) {
     const tn = { done: "good", finished: "good", running: "info", blocked: "warn", failed: "bad", waiting: "warn", scheduled: "info", interrupted: "warn" }[l.status] || "info";
     const backlog = (S().lanes || []).filter(x => x.status === "scheduled" && x.schedule && x.schedule.backlog).sort((a, b) => (a.schedule.order || 0) - (b.schedule.order || 0));
-    const when = l.status === "scheduled" && l.schedule ? (l.schedule.backlog ? ` · in the backlog, ${ordinal(backlog.indexOf(l) + 1)} in line` : l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
+    const when = l.status === "scheduled" && l.schedule ? (l.schedule.backlog ? ` · in the backlog, ${ordinal((l.backlog_pos ?? backlog.indexOf(l)) + 1)} in line` : l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
     return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop", scheduled: "calendar", interrupted: "alert" }[l.status] || "briefcase", 16)}</span>
       <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status === "stopped" && l.stopped_reason === "time budget" ? "stopped at its time limit" : l.status)}${when}${l.deadline && ["running", "starting", "waiting"].includes(l.status) ? ` · until ${esc(clock(l.deadline))}` : !l.deadline && l.max_minutes && l.status !== "stopped" ? ` · ${l.max_minutes} min limit` : ""}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
   }
@@ -197,7 +198,7 @@ export function makePanels(app) {
   function remindersHtml() {
     const rs = S().reminders || [];
     if (!rs.length) return "";
-    const when = (r) => r.label || (r.trigger.kind === "at" ? `at ${clock(r.trigger.at)}` : r.trigger.kind.replace("_", " "));
+    const when = (r) => r.trigger.kind === "at" ? `at ${dayTime(r.trigger.at)}` : r.label || r.trigger.kind.replace("_", " ");   // the day, worked out now
     return `<section class="b-sec"><h3 class="b-h">${icon("bell", 16)}Reminders<span class="count">${rs.length}</span><span class="grow"></span><button class="btn sm ghost" data-remind-new>${icon("plus", 14)}New</button></h3>
       ${rs.slice(0, 6).map(r => `<div class="rem-row"><span class="grow"><b class="${app.privacy() ? "private" : ""}">${esc(r.text)}</b><small>${esc(when(r))}</small></span>
         <button class="btn sm ghost icon" data-remind-del="${esc(r.id)}" title="Delete this reminder" aria-label="Delete this reminder">${icon("x", 14)}</button></div>`).join("")}</section>`;
@@ -462,7 +463,7 @@ export function makePanels(app) {
       <div class="hero st-${vo.state}" style="--seat:${esc(s.color)}">
         <button class="btn sm ghost icon h-find" data-focus-seat="${esc(s.id)}" title="Show on the floor" aria-label="Show on the floor">${icon("target", 16)}</button>
         <button class="btn sm ghost icon h-card" data-card="${esc(s.id)}" title="${esc(p.name)}'s card" aria-label="${esc(p.name)}'s character card">${icon("star", 16)}</button>
-        ${s.kind === "claude" ? `<button class="btn sm ghost icon h-bell" data-remind="${esc(JSON.stringify(["seat_reset", s.id, `when ${p.name}'s 5-hour plan is back`]))}" title="Remind me when its 5-hour plan is back" aria-label="Remind me when ${esc(p.name)}'s plan is back">${icon("bell", 16)}</button>` : ""}
+        ${s.kind === "claude" ? `<button class="btn sm ghost icon h-bell" data-remind="${esc(JSON.stringify(["seat_reset", s.id, `when ${p.name}'s plan is back`]))}" title="Remind me when its plan is back (the 5-hour window, or the week when that ran out)" aria-label="Remind me when ${esc(p.name)}'s plan is back">${icon("bell", 16)}</button>` : ""}
         <div class="h-top">${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0), "big")}
           <div class="grow"><h2>${esc(p.name)}</h2><div class="role">${esc(p.role)}${s.career ? ` · Level ${s.career.level} ${esc(s.career.title)}` : ""}</div>
           <span class="m-word ${vo.tone}"><i></i>${esc(vo.word)}</span></div></div>
@@ -951,7 +952,7 @@ export function makePanels(app) {
           const [repo, n, title, branch, cwd] = JSON.parse(b.dataset.fixPr);
           if ((hireDraft.title.trim() || hireDraft.brief.trim()) && !confirm("Replace the brief on the hiring desk with one to fix this PR?")) return;
           hireDraft = { ...hireDraft, title: `Fix the checks on PR #${n}`, workdir: cwd || hireDraft.workdir,
-            brief: `Pull request #${n} ("${title}") in ${repo} has failing checks${branch ? ` on the branch ${branch}` : ""}.\n\nWork on that branch${cwd ? " (this folder has it checked out)" : " (switch to it, or use its worktree)"}. Read the failing checks with \`gh pr checks ${n} -R ${repo}\` and the failing job's log (\`gh run view --log-failed\`), fix the cause, push, and confirm the checks pass. Do not merge.` };
+            brief: `Pull request #${n} ("${title}") in ${repo} has failing checks${branch ? ` on the branch ${branch}` : ""}.\n\nWork on that branch${cwd ? " (this folder has it checked out)" : " (switch to it, or use its worktree)"}. Read the failing checks with \`gh pr checks ${n} -R ${repo}\`, then the failing run's log with \`gh run view <run id> -R ${repo} --log-failed\` (the run id is the number in the check's link), fix the cause, push, and confirm the checks pass. Do not merge.` };
           store.set("hireDraft", hireDraft); app.go({ kind: "hire" });
         }));
       } };
@@ -1460,20 +1461,27 @@ export function makePanels(app) {
           }
           if (hireDraft.permission_mode === "bypassPermissions" && !confirm("Full trust lets the lane run any command without asking. Start it?")) return;
           const list = items();
+          const fill = (t, item, sep) => (t.includes("{{item}}") ? t.split("{{item}}").join(item) : t + sep + item);
           if (list.length >= 2) {                     // fan out: one lane per line, all into the backlog
             const n = Math.min(20, list.length);
             if (!confirm(`Hire ${n} lanes, one for each line${list.length > 20 ? " (the first 20)" : ""}, into the backlog?`)) return;
             q("hGo").disabled = true;
-            const fill = (t, item, sep) => (t.includes("{{item}}") ? t.split("{{item}}").join(item) : t + sep + item);
             let ok = 0, demo = false;
+            const failed = [], errors = [];
             for (const item of list.slice(0, 20)) {
               try {
                 const r = await app.post("/api/lanes", { ...hireDraft, title: fill(hireDraft.title, item, " · ").slice(0, 80), brief: fill(hireDraft.brief, item, "\n\nThis lane's item: "), start: { backlog: true } });
                 if (r.demo) { demo = true; break; } ok++;
-              } catch (e) { toast(`Could not hire for “${item}”: ${e.message}`, "bad"); }
+              } catch (e) { failed.push(item); errors.push(e.message); }
             }
             if (demo) toast("Demo office: no lanes were hired.");
-            else { sound.play("hire"); toast(`${ok} lane${ok === 1 ? "" : "s"} in the backlog: they start as seats free up.`, "good"); app.badge("hiring"); hireDraft = { ...hireDraft, title: "", brief: "", each: "" }; store.set("hireDraft", hireDraft); }
+            else {
+              if (ok) { sound.play("hire"); app.badge("hiring"); }
+              toast(failed.length ? `${ok} of ${ok + failed.length} lanes in the backlog. Not hired: ${failed.length} (${[...new Set(errors)].slice(0, 2).join("; ")}). They stay in the list.`
+                : `${ok} lane${ok === 1 ? "" : "s"} in the backlog: they start as seats free up.`, failed.length ? (ok ? "warn" : "bad") : "good");
+              hireDraft = failed.length ? { ...hireDraft, each: failed.join("\n") } : { ...hireDraft, title: "", brief: "", each: "" };   // keep what did not go
+              store.set("hireDraft", hireDraft);
+            }
             q("hGo").disabled = false; app.refresh(); app.rerender(true);
             return;
           }
@@ -1481,7 +1489,8 @@ export function makePanels(app) {
           try {
             const startAt = hireDraft.start === "at" && hireDraft.startAt ? Date.parse(hireDraft.startAt) / 1000 : null;
             if (hireDraft.start === "at" && !startAt) { q("hGo").disabled = false; toast("Pick when it should start.", "warn"); return; }
-            const r = await app.post("/api/lanes", { ...hireDraft, start: hireDraft.start === "at" ? { at: startAt } : hireDraft.start === "left" ? { left: 30 } : hireDraft.start === "backlog" ? { backlog: true } : null });
+            const one = list.length === 1 ? { title: fill(hireDraft.title, list[0], " · ").slice(0, 80), brief: fill(hireDraft.brief, list[0], "\n\nThis lane's item: ") } : {};   // a single line still fills {{item}}
+            const r = await app.post("/api/lanes", { ...hireDraft, ...one, start: hireDraft.start === "at" ? { at: startAt } : hireDraft.start === "left" ? { left: 30 } : hireDraft.start === "backlog" ? { backlog: true } : null });
             if (r.demo) toast("Demo office: no lane was started.");
             else { sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true, chain: "" }; store.set("hireDraft", hireDraft); }
             app.refresh(); app.rerender(true);
@@ -1663,7 +1672,7 @@ export function makePanels(app) {
     try { const r = await app.post("/api/divider", cfg); result(r, on ? `${P(st).name} is back on duty.` : `${P(st).name} is on holiday: no new lanes go there.`); app.refresh(); }
     catch (e) { toast(e.message, "bad"); }
   }
-  return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
+  return { office, setDuty, needText, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
     draftHire: (d) => { hireDraft = { ...hireDraft, ...d }; store.set("hireDraft", hireDraft); },
     needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,

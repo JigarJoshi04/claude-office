@@ -3,6 +3,34 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.103.0] - 2026-10-19
+
+### Fixed
+- A long Bash command full of `<<` (C++'s `cout << x`, a shift in a Python one-liner) could freeze the office for
+  seconds to minutes: the heredoc regex backtracked. Heredocs are now taken out in one pass, shared by the desks'
+  screens, the risky-action watch and the token ledger (a 38 KB command: from minutes to 25 ms).
+- Share-safe: the Goodnight dialog showed what needs you word for word (and seat ids); News rows for questions, usage
+  limits and messages named the session; a lane event with no seat read "The office office lane news".
+- "For each": a single line left `{{item}}` in the title and brief; when hires failed it still said "0 lanes in the
+  backlog", played the hire sound, gave the badge and wiped the list. Failed lines now stay in the list.
+- Quests: a week that spans two months was stamped (and gifted) twice.
+- The director cam took the camera back after the CEO picked a person, a session or Zoom to fit.
+- Touch: after a long press, the next tap was swallowed; on Chrome for Android the room menu opened twice.
+- The backlog: older backlog lanes could drop out of the list (only the 40 most recent were listed), and "Nth in
+  line" counted within what was shown. Every unfinished lane stays listed, with its place from the server.
+- Failover walks: a lane whose old and new sessions changed in the same refresh got two workers; a worker already
+  walking out snapped back to the chair when the lane came back late.
+- Reminders from the palette: "in 48 hours" and a time that rolled to tomorrow showed no day; "at 5" at 6 pm meant
+  5 in the morning without saying so. A bare hour is the next one coming up, and the list shows the day.
+- The 7-day forecast called a stretch dry while a Codex seat, or a seat with no weekly reading, was on duty.
+- "OK (expected failures=1)" and "2 failed attempts" turned the desk's test light red.
+- "Move to the front" could undo a lane the scheduler had just started.
+- Goodnight and Lights on are in the menu (the hint pointed there); G before the first refresh no longer throws.
+- A reminder for PR #12 fired when another repository's #12 had merged long before.
+- "Fix the checks" briefs named `gh run view --log-failed` without a run id, which fails outside a terminal.
+- The palette's "hire …" replaced a draft's title without asking; it now asks and lands on the brief.
+- Copy: the capacity card's colours, and the seat bell (the plan back may be the week, not the 5-hour window).
+
 ## [3.102.0] - 2026-10-19
 
 ### Added

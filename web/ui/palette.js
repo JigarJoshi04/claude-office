@@ -67,8 +67,12 @@ export function paletteCommands(q, now = new Date()) {
     let h = +m[1]; const mi = +(m[2] || 0), ap = (m[3] || "").toLowerCase();
     if (ap === "pm" && h < 12) h += 12; if (ap === "am" && h === 12) h = 0;
     if (h < 24 && mi < 60) {
-      const d = new Date(now); d.setHours(h, mi, 0, 0); if (d <= now) d.setDate(d.getDate() + 1);
-      out.push({ kind: "remind", at: d.getTime() / 1000, text: m[4].trim(), when: `at ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` });
+      // A bare hour from 1 to 12 ("at 5") is the next 5 o'clock coming up, morning or evening.
+      const hours = !ap && h >= 1 && h <= 12 ? [h % 12, h % 12 + 12] : [h];
+      const next = (hh) => { const d = new Date(now); d.setHours(hh, mi, 0, 0); if (d <= now) d.setDate(d.getDate() + 1); return d; };
+      const d = hours.map(next).sort((x, y) => x - y)[0];
+      const tomorrow = d.toDateString() !== now.toDateString();
+      out.push({ kind: "remind", at: d.getTime() / 1000, text: m[4].trim(), when: `${tomorrow ? "tomorrow " : ""}at ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` });
     }
   }
   m = /^hire (?:a lane (?:to |for )?)?(.{3,80})$/i.exec(q);

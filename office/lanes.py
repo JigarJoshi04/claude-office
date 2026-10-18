@@ -157,7 +157,9 @@ def unfinished_lanes(statuses=UNFINISHED) -> list[dict]:
 def list_lanes() -> list[dict]:
     out = []
     d = lanes_dir()
-    dirs = sorted(d.iterdir() if d.is_dir() else [], key=lambda p: p.stat().st_mtime, reverse=True)[:40]
+    every = sorted(d.iterdir() if d.is_dir() else [], key=lambda p: p.stat().st_mtime, reverse=True)
+    # The 40 most recently changed, and every older lane still to finish (a long backlog must stay in view).
+    dirs = every[:40] + [p for p in every[40:440] if (load_lane(p.name) or {}).get("status") in UNFINISHED + ("interrupted",)]
     active = active_lane_units() if dirs else set()
     now, boot = time.time(), None
     for p in dirs:
@@ -182,6 +184,10 @@ def list_lanes() -> list[dict]:
             else:
                 lane["status"] = "stopped"   # the unit died without the runner recording why
         out.append(lane)
+    backlog = sorted((l for l in out if l.get("status") == "scheduled" and (l.get("schedule") or {}).get("backlog")),
+                     key=lambda l: ((l.get("schedule") or {}).get("order") or l.get("created_at") or 0, l.get("created_at") or 0))
+    for i, l in enumerate(backlog):                   # its place in line, in the order backlog_next starts them
+        l["backlog_pos"] = i
     return out
 
 
@@ -295,12 +301,13 @@ def backlog_next(lanes_now: list[dict], can_hire: bool, now: float) -> str | Non
 
 def to_front(lane_id: str) -> dict:
     """A backlog lane goes to the head of the queue."""
-    lane = load_lane(lane_id)
-    if not lane or not (lane.get("schedule") or {}).get("backlog") or lane.get("status") != "scheduled":
-        raise ValueError("That lane is not in the backlog")
-    first = min(((l.get("schedule") or {}).get("order") or 0) for l in unfinished_lanes(("scheduled",)) if (l.get("schedule") or {}).get("backlog"))
-    lane["schedule"]["order"] = first - 1
-    save_lane(lane)
+    with office_lock("schedule"):                        # the scheduler may be starting it right now
+        lane = load_lane(lane_id)
+        if not lane or not (lane.get("schedule") or {}).get("backlog") or lane.get("status") != "scheduled":
+            raise ValueError("That lane is not in the backlog")
+        first = min(((l.get("schedule") or {}).get("order") or 0) for l in unfinished_lanes(("scheduled",)) if (l.get("schedule") or {}).get("backlog"))
+        lane["schedule"]["order"] = first - 1
+        save_lane(lane)
     return lane
 
 
@@ -313,11 +320,12 @@ def start_scheduled(seats: list[dict], now: float | None = None, can_hire: bool 
     for lane in pending:
         if lane.get("status") == "scheduled" and ((lane.get("schedule") or {}).get("backlog") and lane["id"] == nxt
                                                   or not (lane.get("schedule") or {}).get("backlog") and due(lane, seats, now)):
-            full = load_lane(lane["id"])
-            if not full or full.get("status") != "scheduled":   # started by hand since the list was read
-                continue
-            full["status"] = "queued"
-            save_lane(full)
+            with office_lock("schedule"):                    # never between to_front's read and its save
+                full = load_lane(lane["id"])
+                if not full or full.get("status") != "scheduled":   # started by hand since the list was read
+                    continue
+                full["status"] = "queued"
+                save_lane(full)
             try:
                 start_unit(full["id"])
                 started.append(full)

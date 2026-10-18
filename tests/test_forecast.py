@@ -27,3 +27,16 @@ class ForecastTests(unittest.TestCase):
         self.assertEqual(cap["dry"], [[lo, start + WEEK]])               # from the last to run out to the first reset
         self.assertEqual(capacity([a, b, seat("c", 5, start + WEEK)], now, 90)["dry"], [])   # one seat lasts: never dry
         self.assertEqual(capacity([a, b, seat("c", 5, start + WEEK, enabled=False)], now, 90)["dry"], cap["dry"])   # holiday seats do not count
+
+
+class UnknownSeatTests(unittest.TestCase):
+    def test_no_dry_spell_while_a_seat_it_cannot_see_into_is_on_duty(self):
+        from office import forecast
+        now = 1_800_000_000.0
+        out = {"id": "a", "kind": "claude", "status": "ok", "usage": {"weekly": {"pct": 90, "resets_at": now + 5 * 86400}}}
+        self.assertTrue(forecast.capacity([out], now)["dry"])                          # alone: it runs dry
+        codex = {"id": "x", "kind": "codex", "status": "ok", "usage": {}}
+        blind = {"id": "b", "kind": "claude", "status": "ok", "usage": {}}
+        self.assertEqual(forecast.capacity([out, codex], now)["dry"], [])
+        self.assertEqual(forecast.capacity([out, blind], now)["dry"], [])
+        self.assertTrue(forecast.capacity([out, dict(codex, status="offline")], now)["dry"])
