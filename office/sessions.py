@@ -198,13 +198,26 @@ _TEST_CMD = re.compile(r"^(?:\w+=\S*\s+)*(?:(?:time|nice|timeout\s+\S+|uv run|po
                        r"|(?:npm|pnpm|yarn|bun) (?:run )?test\b|(?:go|cargo|dotnet|mix|swift) test\b|node --test\b|make (?:test|check)\b)")
 
 
+# A test run's output that says it failed, whatever the exit code (piped through tail, the exit code is tail's).
+_TEST_FAILED = re.compile(r"\bFAILED\b|\bfailures=[1-9]|\berrors=[1-9]|\b[1-9]\d* (?:failed|failing)\b|ℹ fail [1-9]|^# fail [1-9]|^not ok\b"
+                          r"|^Tests:.*\b[1-9]\d* failed|^--- FAIL|^FAIL\b", re.M)
+
+
+def _segments(cmd: str) -> list[str]:
+    """A shell command's simple commands, with quoted strings and heredoc bodies taken out first, so a commit message
+    or a script's text never reads as a command."""
+    cmd = re.sub(r"<<-?\s*['\"]?(\w+)['\"]?.*?\n.*?^\s*\1\s*$", "", cmd, flags=re.S | re.M)
+    cmd = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", cmd)
+    return [seg.strip() for seg in re.split(r"&&|\|\||[;|\n(]", cmd)]
+
+
 def screen_for(name: str, inp: dict) -> str | None:
     """What a desk's screen shows for a tool call: web, shell, test, mcp or publish (None: the pose decides)."""
     if name in ("WebFetch", "WebSearch"):
         return "web"
     if name == "Bash":
         cmd = str((inp if isinstance(inp, dict) else {}).get("command") or "")
-        return "test" if any(_TEST_CMD.match(seg.strip()) for seg in re.split(r"&&|\|\||[;|\n(]", cmd)) else "shell"
+        return "test" if any(_TEST_CMD.match(seg) for seg in _segments(cmd)) else "shell"
     if name.startswith("mcp__"):
         return "mcp"
     if name == "Artifact":
@@ -319,7 +332,9 @@ class TranscriptState:
         if t == "user" and not d.get("isSidechain") and self.test_id and isinstance(msg.get("content"), list):
             for c in msg["content"]:                # the last test run passed or failed: the desk's build light
                 if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") == self.test_id:
-                    self.test_ok, self.test_at, self.test_id = not c.get("is_error"), ts, None
+                    body = c.get("content")
+                    text = body if isinstance(body, str) else " ".join(x.get("text", "") for x in body if isinstance(x, dict)) if isinstance(body, list) else ""
+                    self.test_ok, self.test_at, self.test_id = not c.get("is_error") and not _TEST_FAILED.search(text[-20000:]), ts, None
         if t == "attachment" and self.helpers and isinstance(d.get("attachment"), dict) \
                 and d["attachment"].get("type") == "queued_command":   # a helper that finished while the session was busy
             self._helper_result(d["attachment"].get("prompt"))

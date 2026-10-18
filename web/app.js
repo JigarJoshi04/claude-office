@@ -660,7 +660,8 @@ function onNews(e) {
     }
     case "par": {                                      // a seat's weekly plan closed, scored like a round of golf
       const good = /: (Eagle|Birdie|Par) \(/.test(e.text);
-      if (good && e.seat) { fx.celebrate(e.seat, null, (/: (Eagle|Birdie|Par) \(/.exec(e.text) || [])[1] + "!"); teammateReacts(e, "par"); }
+      const grade = (/: (Eagle|Birdie|Par) \(/.exec(e.text) || [])[1];
+      if (good && e.seat) { fx.celebrate(e.seat, null, grade + "!"); teammateReacts(e, "par_" + grade.toLowerCase()); }
       if (prefs.game !== "off") toast(text, good ? "good" : "info", { ic: "flag", ms: 7000 });
       break;
     }
@@ -889,7 +890,7 @@ function openRemind(when = null, label = "", text = "") {
   $("dialogBody").innerHTML = `<div class="dh"><b>Remind me</b><button class="btn sm ghost" id="rmClose" aria-label="Close">${icon("x", 16)}</button></div>
     <div class="db"><label class="f">What<input type="text" id="rmText" maxlength="140" value="${esc(text)}" placeholder="Check the migration, reply to Vega…"></label>
       ${when ? `<p class="hint" style="margin-top:8px">${icon("bell", 13)} ${esc(label)}</p>`
-        : `<div class="seg-ctl" role="group" aria-label="When" style="margin-top:10px">${times.map(([m, l], i) => `<button data-rm-in="${m}" class="${i === 1 ? "on" : ""}">${l}</button>`).join("")}</div>
+        : `<div class="seg-ctl wrap" role="group" aria-label="When" style="margin-top:10px">${times.map(([m, l], i) => `<button data-rm-in="${m}" class="${i === 1 ? "on" : ""}">${l}</button>`).join("")}</div>
            <input id="rmAt" type="time" hidden style="margin-top:8px;width:auto">`}
       <div class="row" style="margin-top:12px;gap:8px"><button class="btn primary" id="rmGo">${icon("bell", 15)}Set the reminder</button></div></div>`;
   $("dialog").showModal();

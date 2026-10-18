@@ -21,3 +21,11 @@ class PresenceTests(unittest.TestCase):
     def test_a_locked_screen_is_away_and_unknown_desktops_say_nothing(self):
         self.assertFalse(Presence(reader=lambda: {"locked": True, "idle_s": None, "source": "gnome"}).tick(10.0)["present"])
         self.assertIsNone(Presence(reader=lambda: {"locked": None, "idle_s": None, "source": None}).tick(10.0)["present"])
+
+
+class GdbusTests(unittest.TestCase):
+    def test_idle_time_from_the_real_answer(self):
+        from office.presence import idle_from
+        self.assertEqual(idle_from("(uint64 596171,)"), 596.171)     # not the 64 of "uint64"
+        self.assertIsNone(idle_from(""))
+        self.assertIsNone(idle_from(None))

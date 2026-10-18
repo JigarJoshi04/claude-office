@@ -75,8 +75,14 @@ export function makePanels(app) {
   const result = (r, msg, lvl = "good") => toast(r && r.demo ? "Demo office: nothing was changed." : msg, r && r.demo ? "info" : lvl);
   let dragging = false;   // a divider handle is held: refreshes must not rebuild the panel under the pointer
 
+  // Share-safe: news whose words could be private (a reminder you wrote, a report, a session's or project's name) says
+  // only who and what kind, as the toasts do.
+  const PRIVATE_ROW = { reminder: "A reminder you set", report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "office lane news",
+    external: "has news", reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer" };
   function actRow(e) {
-    return `<div class="act ${tone(e.level)} ${e.seat ? "click" : ""}" ${e.seat ? `data-seat="${esc(e.seat)}"` : ""}>${icon(EVENT_ICON[e.kind] || "dot", 16)}<span>${esc(humanise(e.text))}</span><span class="when">${relTime(e.ts)}</span></div>`;
+    const s = e.seat && seatById(e.seat), said = app.privacy() && PRIVATE_ROW[e.kind]
+      ? (e.kind === "reminder" ? PRIVATE_ROW.reminder : `${s ? P(s).name : "The office"} ${PRIVATE_ROW[e.kind]}`) : humanise(e.text);
+    return `<div class="act ${tone(e.level)} ${e.seat ? "click" : ""}" ${e.seat ? `data-seat="${esc(e.seat)}"` : ""}>${icon(EVENT_ICON[e.kind] || "dot", 16)}<span>${esc(said)}</span><span class="when">${relTime(e.ts)}</span></div>`;
   }
   function memberRow(s) {
     const p = P(s), v = say(s), m = { mood: v.word, tone: v.tone, detail: v.line }, b = binding(s);
@@ -102,7 +108,7 @@ export function makePanels(app) {
     const a = app.away();
     if (!a) return "";
     const it = a.items, by = (k, pred = () => true) => it.filter(m => m.kind === k && pred(m)).length;
-    const hrs = Math.max(1, Math.round((S().now - a.since) / 3600));
+    const gone = S().now - a.since, hrs = gone < 3600 ? `${Math.max(1, Math.round(gone / 60))} min` : `${Math.round(gone / 3600)} h`;
     const say = (n, one, many) => n === 1 ? one : many;
     const chips = [[by("report", m => m.level === "good"), "report filed", "reports filed"], [by("levelup"), "level-up", "level-ups"],
       [by("achievement"), "trophy", "trophies"], [by("lane", m => m.level === "good"), "lane finished", "lanes finished"],
@@ -111,7 +117,7 @@ export function makePanels(app) {
     const rank = (m) => (m.level === "bad" ? 0 : m.level === "warn" ? 1 : { report: 2, levelup: 3, achievement: 4, lane: 5 }[m.kind] ?? 6);
     const top = [...it].sort((x, y) => rank(x) - rank(y) || y.ts - x.ts).slice(0, 6);
     return `<div class="away${awayOpen ? " open" : ""}">
-      <div class="away-top">${icon("sparkles", 18)}<div class="grow"><div class="eyebrow">While you were away · ${hrs} h</div>
+      <div class="away-top">${icon("sparkles", 18)}<div class="grow"><div class="eyebrow">While you were away · ${hrs}</div>
         <b>${it.length ? esc(chips.slice(0, 3).join(", ") || `${it.length} updates`) : "Quiet: nothing changed."}</b></div>
         ${it.length ? `<button class="btn sm ghost" data-away-toggle aria-expanded="${awayOpen}">${awayOpen ? "Hide" : "What happened"}${icon(awayOpen ? "chevronDown" : "chevronRight", 14)}</button>` : ""}
         <button class="btn sm ghost icon" data-dismiss-away aria-label="Dismiss" title="Dismiss">${icon("x", 16)}</button></div>
@@ -1257,7 +1263,7 @@ export function makePanels(app) {
     return { html: `${crumbs("Hiring desk")}
       <h2>Hire a lane</h2>
       <p class="lede">A lane is an agent that works in the background on one brief. It keeps notes, moves to another seat if its seat runs out of plan, and files a report when it is done.</p>
-      ${(() => { const nx = nextUp(); return nx.length ? section("Next up", `<div class="nextup">${nx.map((n, i) => `<span class="nx"><button data-next="${i}" title="${esc(n.why)}">${icon(n.ic, 16)}<span class="${app.privacy() ? "private" : ""}">${esc(n.title)}</span></button><button class="tpl-x" data-next-x="${esc(n.key)}" aria-label="Not now" title="Not now">${icon("x", 13)}</button></span>`).join("")}</div>
+      ${(() => { const nx = nextUp(); return nx.length ? section("Next up", `<div class="nextup">${nx.map((n, i) => `<span class="nx"><button data-next="${esc(n.key)}" title="${esc(app.privacy() ? "A suggestion from what the office saw" : n.why)}">${icon(n.ic, 16)}<span class="${app.privacy() ? "private" : ""}">${esc(n.title)}</span></button><button class="tpl-x" data-next-x="${esc(n.key)}" aria-label="Not now" title="Not now">${icon("x", 13)}</button></span>`).join("")}</div>
         <p class="hint">From what the office saw: blocked reports, lanes that failed and PRs whose checks fail. A click fills the form; nothing starts until you hire.</p>`) : ""; })()}
       ${section("Start from a template", `<div class="templates">${myTemplates().map((t, i) => `<span class="tpl-mine"><button data-mytpl="${i}" title="${esc(t.title)}">${icon("star", 16)}${esc(t.name)}</button><button class="tpl-x" data-mytpl-del="${i}" aria-label="Delete the template ${esc(t.name)}" title="Delete">${icon("x", 13)}</button></span>`).join("")}${TEMPLATES.map((t, i) => `<button data-tpl="${i}">${icon(t.ic, 16)}${esc(t.name)}</button>`).join("")}</div>`)}
       ${section("The brief", `
@@ -1329,7 +1335,8 @@ export function makePanels(app) {
           store.set("myTemplates", list.slice(0, 12)); app.rerender(true); toast(`Saved the template "${name}".`, "good");
         });
         root.querySelectorAll("[data-next]").forEach(b => b.addEventListener("click", () => {
-          const n = nextUp()[+b.dataset.next]; if (!n) return; save();
+          const n = nextUp().find(x => x.key === b.dataset.next);        // by key: the list may have changed since it was drawn
+          if (!n) { toast("That suggestion is gone now.", "info"); app.rerender(true); return; } save();
           if ((hireDraft.title.trim() || hireDraft.brief.trim()) && !confirm("Replace your title and brief with this suggestion?")) return;
           hireDraft = { ...hireDraft, title: n.title, brief: n.brief, workdir: n.workdir || hireDraft.workdir }; store.set("hireDraft", hireDraft); app.rerender(true);
           const ti = document.getElementById("hBrief"); if (ti) ti.focus();

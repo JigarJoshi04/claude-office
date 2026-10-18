@@ -443,7 +443,7 @@ test("goals follow the office's pace, fit its size, stay put for the day and rer
 
 test("teammates react in their own voice and banter about the day without repeating themselves", async () => {
   const { reaction, banter } = await import("../../web/ui/personas.js");
-  for (const kind of ["report", "levelup", "limit", "achievement", "reset", "shipped", "par"]) {
+  for (const kind of ["report", "levelup", "limit", "achievement", "reset", "shipped", "par_eagle", "par_birdie", "par_par"]) {
     const l = reaction(kind, "Vega", "The Builder");
     assert.ok(l && l.includes("Vega") && !l.includes("{name}"), kind);
   }

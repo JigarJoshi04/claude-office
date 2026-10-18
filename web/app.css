@@ -1662,3 +1662,4 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 /* One lane for each of a list (panels.js hire) */
 .fanout { margin-top: 10px; } .fanout summary { cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-2); }
 .fanout[open] summary { margin-bottom: 8px; }
+.seg-ctl.wrap { flex-wrap: wrap; height: auto; }

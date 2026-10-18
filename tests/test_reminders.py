@@ -24,12 +24,12 @@ class ReminderTests(unittest.TestCase):
             r.add("done?", {"kind": "session_end", "ref": "s1"}, now=now)
             r.add("lane", {"kind": "lane_end", "ref": "l1"}, now=now)
             r.add("merged", {"kind": "pr_merged", "ref": "482"}, now=now)
-            snap = lambda live, lane: {"seats": [{"id": "c2", "status": "limited", "sessions": [{"id": x, "live": True} for x in live]}],
-                                       "lanes": [{"id": "l1", "status": lane}]}
+            snap = lambda live, lane, st="limited": {"seats": [{"id": "c2", "status": st, "sessions": [{"id": x, "live": True} for x in live]}],
+                                                     "lanes": [{"id": "l1", "status": lane}]}
             self.assertEqual(r.check(snap(["s1"], "running"), now + 10), [])
             fired = r.check(snap(["s1"], "running"), now + 70)
             self.assertEqual([x["text"] for x in fired], ["stand up"])
-            fired = r.check(snap([], "done"), now + 600, [{"kind": "shipped", "text": "api: PR #482 merged"}])
+            fired = r.check(snap([], "done", "idle"), now + 600, [{"kind": "shipped", "text": "api: PR #482 merged"}])   # the seat is back
             self.assertEqual(sorted(x["text"] for x in fired), ["done?", "lane", "merged", "plan back"])
             self.assertTrue(next(x for x in fired if x["text"] == "plan back")["late"])          # the office was not looking at the time
             self.assertEqual(r.view(), [])
@@ -44,3 +44,27 @@ class ReminderTests(unittest.TestCase):
         self.assertEqual(r.items, [])
         with self.assertRaises(ValueError):
             r.add("   ", {"kind": "at", "at": now}, now=now)
+
+
+class ReminderFixTests(unittest.TestCase):
+    def test_session_and_seat_reminders_survive_a_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, now = Path(tmp) / "reminders.json", 1_000_000.0
+            r = Reminders(path)
+            r.add("done?", {"kind": "session_end", "ref": "s1"}, now=now, seen=True)          # the server saw it live
+            r.add("back", {"kind": "seat_reset", "ref": "c2"}, seat="c2", due=None, now=now, was_limited=True)
+            again = Reminders(path)                                                       # the office restarts
+            fired = again.check({"seats": [{"id": "c2", "status": "idle", "sessions": []}], "lanes": []}, now + 600)
+            self.assertEqual(sorted(x["text"] for x in fired), ["back", "done?"])
+
+    def test_a_seat_reminder_waits_until_the_seat_is_really_back(self):
+        r, now = Reminders(None), 1_000_000.0
+        r.add("back", {"kind": "seat_reset", "ref": "c2"}, seat="c2", due=now + 60, now=now)
+        out = lambda st: {"seats": [{"id": "c2", "status": st, "sessions": []}], "lanes": []}
+        self.assertEqual(r.check(out("limited"), now + 120), [])                         # its 5-hour reset passed, still out
+        self.assertEqual([x["text"] for x in r.check(out("idle"), now + 180)], ["back"])
+
+    def test_a_pr_seen_merged_on_the_shelf_fires(self):
+        r, now = Reminders(None), 1_000_000.0
+        r.add("merged", {"kind": "pr_merged", "ref": "482"}, now=now)
+        self.assertEqual([x["text"] for x in r.check({"seats": [], "lanes": []}, now + 5, [], [482])], ["merged"])

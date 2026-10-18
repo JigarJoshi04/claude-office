@@ -480,7 +480,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.91.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.92.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -516,7 +516,8 @@ class Office(LiveOffice):
         snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > now)
         snap["ceo"] = self.presence.get()                  # at the computer or away (presence.py)
         snap["capacity"] = forecast.capacity(snap["seats"], now, float((snap.get("divider") or {}).get("weekly_guard") or 95))   # the next 7 days
-        for r in self.reminders.check(snap, now, list(self.events)[-80:]):   # notes to yourself whose moment came
+        merged_prs = [p["number"] for d in list(self.prs.data.values()) for p in (d.get("prs") or []) if p.get("state") == "merged" and p.get("number")]
+        for r in self.reminders.check(snap, now, list(self.events)[-80:], merged_prs):   # notes to yourself whose moment came
             self.emit("reminder", ("Late: " if r["late"] else "") + r["text"], r.get("seat"), "warn")
         snap["reminders"] = self.reminders.view()
         snap["attention"] = [a for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) <= now]

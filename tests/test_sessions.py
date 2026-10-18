@@ -416,3 +416,17 @@ class ScreenTests(unittest.TestCase):
         st.feed_line(use("r1", "Read", {"file_path": "/a"}))
         self.assertIsNone(st.screen)
         self.assertIs(st.test_ok, True)                                        # the light stays until the next run
+
+
+class TestFlaskTests(unittest.TestCase):
+    def test_a_piped_run_that_failed_is_red_and_quoted_words_are_not_runs(self):
+        import json
+        f = sessions.screen_for
+        self.assertEqual(f("Bash", {"command": 'git commit -m "chore(pytest): bump"'}), "shell")
+        self.assertEqual(f("Bash", {"command": "cat <<EOF > x.sh\npytest\nEOF"}), "shell")
+        st = sessions.TranscriptState(Path("/x.jsonl"))
+        use = json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": "m1", "content": [
+            {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "pytest -q 2>&1 | tail -3"}}]}}).encode()
+        res = json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "2 failed, 40 passed in 3.1s", "is_error": False}]}}).encode()
+        st.feed_line(use); st.feed_line(res)
+        self.assertIs(st.test_ok, False)

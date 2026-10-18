@@ -91,7 +91,9 @@ const REACT = {
   achievement: { common: ["Trophy for {name}!", "{name}'s cabinet is filling up.", "Shiny, {name}."], "The Investigator": ["Evidence of greatness, {name}."] },
   reset: { common: ["Welcome back, {name}.", "{name}'s plan is fresh. Let's go.", "Look who's back: {name}."], "The Speedrunner": ["Respawned, {name}? Go go go."] },
   shipped: { common: ["Merged! That bell's for {name}.", "{name} lands another PR.", "Ding-ding, {name}."], "The Builder": ["Merged and green, {name}. Beautiful."] },
-  par: { common: ["{name} played the week perfectly.", "A birdie for {name}. Show-off."], "The Orchestrator": ["{name} paced that week just right."] },
+  par_eagle: { common: ["An eagle for {name}! Every drop of the plan.", "{name} used the whole week and never ran dry."] },
+  par_birdie: { common: ["A birdie for {name}. Show-off.", "{name} nearly emptied the week, cleanly."], "The Orchestrator": ["{name} paced that week just right."] },
+  par_par: { common: ["Par for {name}. Steady.", "{name} played the week just right."] },
 };
 export function reaction(kind, aboutName, role) {
   const k = REACT[kind] || {}, own = k[role] || [];

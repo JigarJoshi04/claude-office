@@ -58,7 +58,7 @@ class Reminders:
             pass
 
     def add(self, text: str, trigger: dict, seat: str | None = None, label: str | None = None, due: float | None = None,
-            now: float | None = None) -> dict:
+            now: float | None = None, seen: bool = False, was_limited: bool = False) -> dict:
         now = now or time.time()
         text = " ".join(str(text or "").split())[:MAX_TEXT]
         if not text:
@@ -67,7 +67,8 @@ class Reminders:
             if sum(1 for x in self.items if not x.get("fired_at")) >= MAX_OPEN:
                 raise ValueError(f"At most {MAX_OPEN} reminders at once")
             item = {"id": uuid.uuid4().hex[:10], "text": text, "trigger": trigger, "seat": seat, "label": (label or "")[:80] or None,
-                    "due": due if due is not None else trigger.get("at"), "created": now, "fired_at": None, "late": False}
+                    "due": due if due is not None else trigger.get("at"), "created": now, "fired_at": None, "late": False,
+                    "seen": seen, "was_limited": was_limited}   # what the trigger saw when it was set (kept across restarts)
             self.items.append(item)
             self._save()
         return dict(item)
@@ -79,13 +80,15 @@ class Reminders:
             self._save()
             return len(self.items) < n
 
-    def check(self, snap: dict, now: float, events=()) -> list[dict]:
-        """Fire every reminder whose moment has come, from the snapshot and the latest news; returns them."""
+    def check(self, snap: dict, now: float, events=(), merged_prs=()) -> list[dict]:
+        """Fire every reminder whose moment has come, from the snapshot, the latest news and the PR numbers seen
+        merged on the shelf; returns them."""
         live = {x.get("id") for s in snap.get("seats", []) for x in s.get("sessions", []) if x.get("live", True)}
         lanes = {l.get("id"): l.get("status") for l in snap.get("lanes", [])}
         seats = {s["id"]: s for s in snap.get("seats", [])}
         merged = {m.group(1) for e in events if e.get("kind") == "shipped" for m in [re.search(r"PR #(\d+) merged$", e.get("text") or "")] if m}
-        fired = []
+        merged |= {str(n) for n in merged_prs}
+        fired, flipped = [], False
         with self.lock:
             for x in self.items:
                 if x.get("fired_at"):
@@ -93,13 +96,16 @@ class Reminders:
                 t, hit = x["trigger"], False
                 if t["kind"] == "at":
                     hit = now >= t["at"]
-                elif t["kind"] == "seat_reset":
+                elif t["kind"] == "seat_reset":                # back: past its reset and not out any more
                     s = seats.get(t["ref"]) or {}
-                    hit = (x.get("due") and now >= x["due"]) or (s.get("status") not in (None, "limited") and x.get("was_limited"))
-                    x["was_limited"] = x.get("was_limited") or s.get("status") == "limited"
+                    back = s.get("status") not in (None, "limited")
+                    hit = back and (bool(x.get("due") and now >= x["due"]) or bool(x.get("was_limited")))
+                    if s.get("status") == "limited" and not x.get("was_limited"):
+                        x["was_limited"] = flipped = True
                 elif t["kind"] == "session_end":
                     hit = bool(x.get("seen")) and t["ref"] not in live
-                    x["seen"] = x.get("seen") or t["ref"] in live
+                    if not x.get("seen") and t["ref"] in live:
+                        x["seen"] = flipped = True
                 elif t["kind"] == "lane_end":
                     hit = lanes.get(t["ref"]) in _ENDED
                 elif t["kind"] == "pr_merged":
@@ -110,7 +116,7 @@ class Reminders:
                     fired.append(dict(x))
             before = len(self.items)
             self.items = [x for x in self.items if now - x["created"] < KEEP_S and not (x.get("fired_at") and now - x["fired_at"] > 86400)]
-            if fired or len(self.items) != before:
+            if fired or flipped or len(self.items) != before:
                 self._save()
         return fired
 

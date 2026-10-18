@@ -24,6 +24,12 @@ def _run(argv: list[str]) -> str | None:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
+def idle_from(gdbus_out: str | None) -> float | None:
+    """Seconds since the last input from Mutter's GetIdletime answer, "(uint64 596171,)" (milliseconds)."""
+    m = re.search(r"uint64 (\d+)", gdbus_out or "")
+    return int(m.group(1)) / 1000 if m else None
+
+
 def read() -> dict:
     """{"locked": bool|None, "idle_s": float|None, "source": "gnome"|"logind"|None} from the desktop, right now."""
     out = {"locked": None, "idle_s": None, "source": None}
@@ -34,9 +40,9 @@ def read() -> dict:
         if s:
             out.update(locked="true" in s, source="gnome")
         s = call("org.gnome.Mutter.IdleMonitor", "/org/gnome/Mutter/IdleMonitor/Core", "org.gnome.Mutter.IdleMonitor.GetIdletime")
-        m = re.search(r"(\d+)", s or "")
-        if m:
-            out.update(idle_s=int(m.group(1)) / 1000, source="gnome")
+        idle = idle_from(s)
+        if idle is not None:
+            out.update(idle_s=idle, source="gnome")
     if out["source"] is None and shutil.which("loginctl"):
         s = _run(["loginctl", "show-user", str(os.getuid()), "-p", "IdleHint", "-p", "IdleSinceHint"]) or ""
         hint, since = re.search(r"IdleHint=(\w+)", s), re.search(r"IdleSinceHint=(\d+)", s)

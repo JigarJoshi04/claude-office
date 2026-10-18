@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.91.0"
+    server_version = "ClaudeOffice/3.92.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -410,12 +410,16 @@ class Handler(BaseHTTPRequestHandler):
                     s = next((x for x in snap.get("seats", []) if x["id"] == trig["ref"]), None)
                     if not s:
                         raise ValueError("No such seat")
-                    seat, due = s["id"], ((s.get("usage") or {}).get("five_hour") or {}).get("resets_at")
+                    u = s.get("usage") or {}                     # out of its week: back at the weekly reset, not the 5-hour one
+                    wk = u.get("weekly") or {}
+                    seat, due = s["id"], (wk.get("resets_at") if (wk.get("pct") or 0) >= 99 else (u.get("five_hour") or {}).get("resets_at"))
+                    limited_now = s.get("status") == "limited"
                 if trig["kind"] == "session_end" and not any(x.get("id") == trig["ref"] and x.get("live", True) for s in snap.get("seats", []) for x in s.get("sessions", [])):
                     raise ValueError("That session has already finished")
                 if seat is not None and not isinstance(seat, str):
                     raise ValueError("seat must be a seat id")
-                item = rem.add(str(body.get("text", "")), trig, seat, body.get("label") if isinstance(body.get("label"), str) else None, due)
+                item = rem.add(str(body.get("text", "")), trig, seat, body.get("label") if isinstance(body.get("label"), str) else None, due,
+                               seen=trig["kind"] == "session_end", was_limited=trig["kind"] == "seat_reset" and limited_now)
                 self.office.build()
                 return self._json(200, {"ok": True, "reminder": item})
             if path in ("/api/dnd", "/api/snooze"):          # quiet: shared by every screen

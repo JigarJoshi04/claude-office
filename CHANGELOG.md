@@ -3,6 +3,23 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.92.0] - 2026-10-19
+
+### Fixed
+From an adversarial review of 3.69–3.81 (every finding reproduced first):
+- Presence reads idle time right on GNOME (it read the "64" of "uint64"), so five minutes without input is away,
+  not only a locked screen.
+- "When this session finishes" and "when its plan is back" reminders survive an office restart; a seat's reminder
+  waits until the seat is really back (out of its week, it counts from the weekly reset); a PR seen merged on the PR
+  shelf fires its reminder.
+- The test flask reads failures from the output too: a run piped through `tail` that failed is red, not green; a
+  commit message or heredoc mentioning pytest is not a test run.
+- A "Next up" chip fills in the suggestion you clicked, even when the list changed since it was drawn.
+- Share-safe mode: Office news says "A reminder you set" (and who and what kind for reports, PRs and sessions); the
+  project and Next-up tooltips leave out names and report text.
+- "While you were away" says minutes for an absence under an hour; the "Remind me" times wrap on a phone; teammates
+  cheer an eagle, a birdie and a par each in their own words.
+
 ## [3.91.0] - 2026-10-19
 
 ### Added
