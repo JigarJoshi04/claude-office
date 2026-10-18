@@ -29,10 +29,11 @@ const EVENT_ICON = { levelup: "star", achievement: "trophy", arrive: "play", lea
 export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
   let hireDraft = store.get("hireDraft", { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true });
-  let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false;
+  let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null;
   let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
   const sessTab = new Map();
   const chatFind = new Map();     // session id -> the text being searched for in its chat
+  const askAns = new Map();       // session id -> the last question asked about it and its answer (askabout.py)
   const openSteps = new Set();
 
   const S = () => app.snap();
@@ -257,6 +258,17 @@ export function makePanels(app) {
     const box = document.getElementById("chatBox");
     if (box && box.dataset.for === id) { box.value = app.draftFor(id); box.dispatchEvent(new Event("input")); box.focus(); }
     else app.go({ kind: "session", seat, id });
+  }
+  // Ask about a session without interrupting it: a question box over its chat, and the analyst's cited answer.
+  function askHtml(id) {
+    const a = askAns.get(id), priv = app.privacy();
+    const form = `<form class="chat-ask" id="askForm">${icon("sparkles", 15)}<input type="text" maxlength="300" placeholder="Ask about it: did it run the tests?" aria-label="Ask a question about this session" value="${esc(a ? a.q : "")}" autocomplete="off"><button class="btn sm" type="submit">Ask</button></form>`;
+    if (!a) return form;
+    const body = a.error ? `<p class="bad-t">${esc(a.error)}</p>${/Settings/.test(a.error) ? `<button class="btn sm" data-go="settings">${icon("settings", 14)}Settings</button>` : ""}`
+      : `<p>${priv ? "Answer hidden while share-safe is on." : esc(a.answer)}</p>${a.unsure ? `<p class="hint">Not sure: the transcript does not show it plainly.</p>` : ""}
+        ${!priv && (a.cites || []).length ? `<ul class="cites">${a.cites.map(c => `<li><b>${esc(c.who)}</b>${c.ts ? ` <small>${clock(Date.parse(c.ts) / 1000)}</small>` : ""} ${esc(c.text)}</li>`).join("")}</ul>` : ""}
+        <p class="hint">${a.demo ? "Demo answer: nothing was read." : `Read from its transcript by the analyst${a.cached ? " (from the cache)" : a.tokens ? `, ${fmtTok(a.tokens)} tokens` : ""}. The session was not told.`}</p>`;
+    return `${form}<div class="about-ans${a.error ? " err" : ""}"><button class="btn sm ghost icon" data-ask-x aria-label="Clear the answer">${icon("x", 14)}</button>${body}</div>`;
   }
   // One fix per kind of problem, so every item in Needs you has a next step.
   function needAction(a) {
@@ -589,8 +601,20 @@ export function makePanels(app) {
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
       ${tab === "chat" && conv ? `<div class="chat-find">${icon("search", 15)}<input type="search" id="chatFind" placeholder="Find in this conversation" aria-label="Find in this conversation" value="${esc(chatFind.get(v.id) || "")}" autocomplete="off"><span class="cf-n" aria-live="polite"></span></div>` : ""}
+      ${tab === "chat" && conv && s && s.kind === "claude" ? askHtml(v.id) : ""}
       ${tab === "chat" ? chatHtml(s, x, conv, talk) : overviewHtml(s, x)}`,
       bind(root) {
+        const askF = root.querySelector("#askForm");
+        if (askF) askF.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const inp = askF.querySelector("input"), btn = askF.querySelector("button"), q = inp.value.trim();
+          if (q.length < 3) return;
+          btn.disabled = true; btn.textContent = "Reading…"; inp.disabled = true;
+          try { askAns.set(v.id, { q, ...(await app.post("/api/ai/ask", { seat: v.seat, id: v.id, question: q })) }); }
+          catch (err) { askAns.set(v.id, { q, error: err.message }); }
+          app.rerender(true);
+        });
+        root.querySelectorAll("[data-ask-x]").forEach(b => b.addEventListener("click", () => { askAns.delete(v.id); app.rerender(true); }));
         root.querySelectorAll("[data-stab]").forEach(b => b.addEventListener("click", () => {
           sessTab.set(v.id, b.dataset.stab); app.rerender(true);
           if (b.dataset.stab === "chat") { const c = root.querySelector(".chat"); if (c && getComputedStyle(c).overflowY !== "visible") c.scrollTop = c.scrollHeight; else root.scrollTop = root.scrollHeight; }   // Chat opens at the newest
@@ -1540,6 +1564,7 @@ export function makePanels(app) {
   function settings() {
     if (!settingsData && !settingsLoading) {
       settingsLoading = true;
+      fetch("/api/ai").then(r => r.ok ? r.json() : null).then(j => { aiSpend = j && j.spent; }).catch(() => {});
       fetch("/api/settings").then(r => r.ok ? r.json() : null).then(j => { settingsData = j || { unavailable: true }; settingsLoading = false; app.rerender(true); })
         .catch(() => { settingsData = { unavailable: true }; settingsLoading = false; app.rerender(true); });
     }
@@ -1584,6 +1609,13 @@ export function makePanels(app) {
       ${section("Jarvis voice", `${row("Announce out loud", sd.voice_available ? "Speaks short alerts through jarvis-say. Off by default." : "jarvis-say was not found on this machine.", `<label class="switch"><input type="checkbox" id="setVoice" ${voice.enabled ? "checked" : ""} ${sd.voice_available ? "" : "disabled"} aria-label="Voice"><span></span></label>`)}
         <div class="row wrap" style="gap:6px;margin:10px 0">${VOICE.map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-vev="${k}" ${(voice.events || []).includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
         <div class="grid2"><label class="f">Quiet from (hour)<input type="number" min="0" max="23" id="setQ1" value="${(voice.quiet_hours || [23, 8])[0]}"></label><label class="f">Until (hour)<input type="number" min="0" max="23" id="setQ2" value="${(voice.quiet_hours || [23, 8])[1]}"></label></div>`)}
+      ${sd.ai ? section("Office analyst", `<p class="hint" style="margin-top:0">Small questions to Claude on one of your seats, such as asking a session's transcript whether it ran its tests. Off until you turn it on: it uses a little of a seat's plan, runs with no tools and nothing saved, and keeps to a daily budget.</p>
+        ${row("Turn on the analyst", "Runs claude -p on a seat with plan left (Haiku unless you pick Sonnet).", `<label class="switch"><input type="checkbox" id="setAi" ${sd.ai.enabled ? "checked" : ""} aria-label="Office analyst"><span></span></label>`)}
+        ${row("Let it read transcripts", "Needed for Ask about it. The transcript goes to the session's own seat, with credentials masked.", `<label class="switch"><input type="checkbox" id="setAiTx" ${sd.ai.allow_transcripts ? "checked" : ""} aria-label="Let the analyst read transcripts"><span></span></label>`)}
+        <div class="grid2"><label class="f">Model<select id="setAiModel">${["haiku", "sonnet"].map(m => `<option ${sd.ai.model === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+          <label class="f">Daily budget (tokens)<input type="number" id="setAiBudget" min="10000" max="10000000" step="10000" value="${sd.ai.daily_tokens}"></label></div>
+        ${aiSpend ? `<div class="hint">Today: ${aiSpend.calls} call${aiSpend.calls === 1 ? "" : "s"}, ${fmtTok(aiSpend.tokens)} of ${fmtTok(sd.ai.daily_tokens)} tokens.</div>
+          ${aiSpend.recent.length ? `<details class="ai-log"><summary>What was sent</summary><ul>${aiSpend.recent.map(r => `<li><small>${r.ts ? relTime(r.ts) : ""}</small> ${esc(r.kind || "")}${r.about && !app.privacy() ? `: ${esc(r.about)}` : ""} · ${r.cached ? "from the cache" : `${fmtTok(r.tokens || 0)} tokens on ${esc(nameOf(r.seat))}, ${(r.chars || 0).toLocaleString()} characters`}</li>`).join("")}</ul></details>` : ""}` : ""}`) : ""}
       ${sd.risk_watch ? section("Risky-action watch", `<p class="hint" style="margin-top:0">A session that does one of these shows up in Needs you within seconds, with the command. It warns after the fact; it cannot stop anything. Untick what your agents do on purpose.</p>
         <div class="row wrap" style="gap:6px;margin:10px 0">${Object.entries(sd.risk_watch.rules || {}).map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-rwatch="${esc(k)}" ${(sd.risk_watch.mute || []).includes(k) ? "" : "checked"}> ${esc(l)}</label>`).join("")}</div>`) : ""}
       <div class="row" style="margin-top:8px"><button class="btn primary" id="setSave">Save office settings</button></div>`}
@@ -1603,6 +1635,8 @@ export function makePanels(app) {
           const body = { office_name: root.querySelector("#setOffice").value.trim(), ceo_name: root.querySelector("#setCeo").value.trim(), seats: {},
             voice: { enabled: root.querySelector("#setVoice").checked, events: [...root.querySelectorAll("[data-vev]")].filter(c => c.checked).map(c => c.dataset.vev),
               quiet_hours: [+root.querySelector("#setQ1").value || 0, +root.querySelector("#setQ2").value || 0] } };
+          if (root.querySelector("#setAi")) body.ai = { enabled: root.querySelector("#setAi").checked, allow_transcripts: root.querySelector("#setAiTx").checked,
+            model: root.querySelector("#setAiModel").value, daily_tokens: Math.min(10000000, Math.max(10000, Math.round(+root.querySelector("#setAiBudget").value || 300000))) };
           if (root.querySelector("[data-rwatch]")) body.risk_watch = { mute: [...root.querySelectorAll("[data-rwatch]")].filter(c => !c.checked).map(c => c.dataset.rwatch) };
           const put = (id, k, val) => { body.seats[id] = { ...(body.seats[id] || {}), [k]: val }; };
           root.querySelectorAll("[data-nick]").forEach(i => put(i.dataset.nick, "nickname", i.value.trim()));

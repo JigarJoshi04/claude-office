@@ -16,7 +16,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, cabinet, checkpoint, config, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, weeks
+from . import asks, brain, cabinet, checkpoint, config, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, weeks
 from .career import CATALOGUE, Career
 from .presence import Presence
 from .reminders import Reminders
@@ -292,6 +292,7 @@ class Office(LiveOffice):
         self.cabinet = cabinet.Cabinet()
         self.quiet = Quiet(config.STATE_DIR / "quiet.json")
         self.risk_seen = risk.Seen(config.STATE_DIR / "risks-seen.json")
+        self.brain = brain.Brain(config.STATE_DIR / "ai")                 # the opt-in analyst (brain.py)
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -486,7 +487,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.100.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.101.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg)},

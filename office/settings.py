@@ -24,12 +24,18 @@ def view(cfg, seats):
                                        "plan_default": prices.plan_usd({"health": s.get("health")})} for s in seats},
                    "voice": {k: cfg.get("voice", {}).get(k, v) for k, v in VOICE_DEFAULTS.items()},
                    "risk_watch": {"mute": risk_mute(cfg), "rules": risk_rules()},
+                   "ai": ai_settings(cfg),
                    "voice_available": shutil.which("jarvis-say") is not None})
 
 
 def risk_rules():
     from .risk import RULES                  # (risk.py imports sessions, which this module need not load early)
     return RULES
+
+
+def ai_settings(cfg):
+    from .brain import settings as ai
+    return ai(cfg)
 
 
 def risk_mute(cfg):
@@ -101,6 +107,9 @@ def validate(body):
                 dest["color"] = entry["color"]
     if "ceo_look" in body:
         out.setdefault("ceo", {})["look"] = look(body["ceo_look"])
+    if "ai" in body:                                  # the opt-in analyst (brain.py)
+        from .brain import validate as ai_validate
+        out["ai"] = ai_validate(body["ai"])
     if "risk_watch" in body:                          # rules of the risky-action watch muted in this office
         rw = body["risk_watch"]
         mute = rw.get("mute") if isinstance(rw, dict) else None

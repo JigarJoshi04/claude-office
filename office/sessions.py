@@ -55,6 +55,14 @@ def proc_argv(pid: int) -> list[str]:
         return []
 
 
+def proc_is_brain(pid: int) -> bool:
+    """The office analyst's own `claude -p` (brain.py marks it CLAUDE_OFFICE_BRAIN=1): never a desk or a lane."""
+    try:
+        return b"CLAUDE_OFFICE_BRAIN=1" in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return False
+
+
 def proc_unit(pid: int) -> str | None:
     """The systemd unit (service or scope) a process runs in, from its cgroup path."""
     try:
@@ -645,7 +653,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
         except (OSError, ValueError, KeyError, TypeError):
             continue
         start = proc_start_ticks(pid)
-        if start is None or (s.get("procStart") and str(s["procStart"]) != start):
+        if start is None or (s.get("procStart") and str(s["procStart"]) != start) or proc_is_brain(pid):
             continue
         argv = proc_argv(pid)
         prompt = prompt_from_argv(argv)

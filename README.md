@@ -342,6 +342,10 @@ set -g status-right '#(curl -s 127.0.0.1:7420/api/status.txt?style=plain)'
   a `.env` file, `~/.ssh` or Claude Code's own settings shows up in Needs you within seconds, with the command
   (credentials masked). It reads transcripts after the fact: it warns, it cannot stop anything. Each kind can be
   muted in Settings; admin merges are watched only when you turn them on.
+- **Office analyst (off by default):** when you turn it on in Settings, a few features ask Claude small questions on
+  one of your seats (`claude -p` with Haiku, `--safe-mode`, no tools, nothing saved), within a daily token budget,
+  with a log of what was sent. Ask about it, on a session's Chat tab, also needs "Let it read transcripts": the
+  transcript goes to that session's own seat with credentials masked, and the session itself is never told.
 - **Demo mode:** reads no accounts, and every write does nothing.
 
 ## Uninstall

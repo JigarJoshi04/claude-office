@@ -3,6 +3,19 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.101.0] - 2026-10-19
+
+### Added
+- The office analyst: an opt-in engine for features that need reading rather than counting. Off by default; when on,
+  it runs `claude -p` on a seat with plan left (Haiku, or Sonnet if you pick it) with every customisation off
+  (`--safe-mode`), no tools and no saved session, so it can only answer. It keeps to a daily token budget (300k by
+  default), caches answers for a day, never runs on a seat past 85% of its 5-hour window, and Settings shows today's
+  spend and what was sent. Its processes never appear on the floor or count as lanes.
+- Ask about it: a question box on any Claude session's Chat tab ("did it run the tests?", "what did it change in
+  the API?"). The office reads the transcript into a numbered digest (prompts, replies, tool calls and the start and
+  end of each result, credentials masked), the analyst answers from that alone on the session's own seat, and the
+  answer cites the entries it relied on. The session is never told. Needs "Let it read transcripts" in Settings.
+
 ## [3.100.0] - 2026-10-19
 
 ### Added

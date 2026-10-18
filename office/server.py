@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import asks, checkpoint, config, divider, lanes, messaging, sessions, talk, settings, tokens
+from . import askabout, asks, brain, checkpoint, config, divider, lanes, messaging, sessions, talk, settings, tokens
 from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.100.0"
+    server_version = "ClaudeOffice/3.101.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -277,6 +277,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"days": self.office.samples.week(self.office.get(), days, list(self.office.events))})
             if url.path == "/api/settings":
                 return self._json(200, settings.view(self.office.cfg, self.office.get().get("seats", [])))
+            if url.path == "/api/ai":                       # the analyst: its settings and today's spend (brain.py)
+                b = getattr(self.office, "brain", None)
+                return self._json(200, {"settings": brain.settings(self.office.cfg), "spent": b.spent() if b else None, "demo": self.demo})
             if url.path == "/api/session":
                 return self._json(200, self._session_detail(q.get("seat", ""), q.get("id", "")))
             if url.path == "/api/lane":
@@ -396,6 +399,8 @@ class Handler(BaseHTTPRequestHandler):
                 settings.save(body)
                 self.office.build()
                 return self._json(200, dict(settings.view(self.office.cfg, self.office.get().get("seats", [])), ok=True))
+            if path == "/api/ai/ask":                     # a question about a session, answered by the analyst (askabout.py)
+                return self._json(200, askabout.ask(self.office, body, self.demo))
             if path == "/api/ask":                        # an agent's question for the CEO (python3 -m office ask)
                 return self._json(200, ask_question(self.office, body))
             if path in ("/api/ask/answer", "/api/ask/dismiss"):

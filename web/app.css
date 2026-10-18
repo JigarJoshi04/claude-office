@@ -1107,6 +1107,16 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .chat-find { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 0 12px; height: 38px; border-radius: 12px; background: var(--surface-2); color: var(--muted); }
 .chat-find input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 0; height: 100%; color: var(--text); font-size: 14px; }
 .chat-find input:focus { outline: none; }
+.chat-ask { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 0 6px 0 12px; height: 40px; border-radius: 12px; background: var(--surface-2); color: var(--accent); }
+.chat-ask input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 0; height: 100%; color: var(--text); font-size: 14px; }
+.chat-ask input:focus { outline: none; }
+.about-ans { position: relative; margin-top: 8px; padding: 12px 40px 10px 14px; border-radius: 12px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); font-size: 14px; line-height: 1.5; }
+.about-ans.err { box-shadow: inset 3px 0 0 var(--bad); }
+.about-ans p { margin: 0 0 6px; } .about-ans .bad-t { color: var(--text); }
+.about-ans [data-ask-x] { position: absolute; top: 6px; right: 6px; }
+.about-ans .cites { list-style: none; margin: 4px 0 6px; padding: 0; display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.about-ans .cites li { padding: 4px 8px; border-radius: 8px; background: var(--surface); overflow-wrap: anywhere; }
+.about-ans .cites b { color: var(--text); font-size: 11px; letter-spacing: .04em; }
 .chat-find:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--info) 50%, transparent); }
 .chat-find .cf-n { flex: none; font: 600 12px var(--mono); color: var(--faint); }
 .chat .msg.cf-out { opacity: .28; }
@@ -1673,3 +1683,5 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .burnwhy { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(110deg, rgba(255,140,50,.14), var(--surface-2) 70%); }
 .burnwhy b { display: flex; align-items: center; gap: 6px; font-size: 13.5px; } .burnwhy b .ic { color: #ff9b3d; }
 .burnwhy ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; } .burnwhy li small { display: block; color: var(--muted); font-size: 12px; }
+.ai-log { margin-top: 8px; font-size: 13px; color: var(--muted); } .ai-log summary { cursor: pointer; }
+.ai-log ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; overflow-wrap: anywhere; }
