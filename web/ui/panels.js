@@ -5,7 +5,7 @@ import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary, PERSONALITIES, weekPace } from "./personas.js";
 import { sound } from "./sound.js";
-import { goals, streak, weekly, localDay, canReroll, rerollGoals } from "./goals.js";
+import { goals, streak, weekly, localDay, canReroll, rerollGoals, quests, punch, PUNCH } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
@@ -140,17 +140,21 @@ export function makePanels(app) {
   }
   // The weekly challenge (goals.js weekly): beat last week's reports.
   function weeklyHtml() {
-    const w = weekly(app.weekCache());
+    const w = weekly(app.weekCache()), q = quests(app.weekCache());
     if (!w) return "";
     if (w.calibrating) return `<div class="weekly calib"><span class="wk-ic">${icon("flame", 18)}</span><div class="grow"><div class="wk-t"><b>Weekly challenge</b></div>
       <div class="hint">Starts once the office has a week on record: then the goal is to beat last week.</div></div></div>`;
+    if (q && q.quests && q.quests.length) {                // this week's three quests, and the month's punch card
+      const month = localDay().slice(0, 7), stamped = punch(store.get("questStamps", {}), month);
+      return `<div class="weekly quests"><span class="wk-ic">${icon("flame", 18)}</span><div class="grow"><div class="wk-t"><b>This week's quests</b><span>${q.daysLeft === 0 ? "last day" : q.daysLeft + " day" + (q.daysLeft === 1 ? "" : "s") + " left"}</span></div>
+        ${q.quests.map(x => `<div class="quest ${x.done ? "done" : ""}" title="Last week: ${x.last.toLocaleString()}">${icon(x.done ? "check" : x.icon, 14)}<span class="grow">${esc(x.label)}</span><em>${x.done ? "Done" : `${x.have.toLocaleString()} / ${x.target.toLocaleString()}`}</em><span class="wkc-bar"><i style="width:${Math.round(x.f * 100)}%"></i></span></div>`).join("")}
+        <div class="punch" title="Every finished quest stamps the month's card; ${PUNCH} stamps fill it, with an epic gift">${Array.from({ length: PUNCH }, (_, i) => `<i class="${i < stamped ? "on" : ""}"></i>`).join("")}<span>${stamped >= PUNCH ? "Punch card full this month" : `${stamped} of ${PUNCH} stamps this month`}</span></div></div></div>`;
+    }
     return `<div class="weekly ${w.done ? "done" : ""}"><span class="wk-ic">${icon(w.done ? "trophy" : "flame", 18)}</span>
       <div class="grow"><div class="wk-t"><b>${w.done ? "Record week!" : "Beat last week"}</b><span>${w.have} of ${w.target} reports${w.done ? "" : ` · ${w.daysLeft === 0 ? "last day" : w.daysLeft + " day" + (w.daysLeft === 1 ? "" : "s") + " left"}`}</span></div>
       <div class="wkc-bar"><i style="width:${Math.round(w.f * 100)}%"></i></div>
       <div class="hint">${w.done ? `Beat last week's ${w.last}. Keep going.` : `Last week: ${w.last} report${w.last === 1 ? "" : "s"}. ${w.target > Math.ceil(w.last * 1.1) ? `Every week aims for at least ${w.target}.` : "The target is 10% more."}`}</div></div></div>`;
   }
-  // A seat about to reset with a lot of its week unused: one quiet card per seat and window, with one-click work for it.
-  // It stays out of Needs you (nothing is wrong), and goes once dismissed or once the plan is used.
   // Set up your office: a checklist that ticks itself from what the office sees, until it is done or dismissed. An
   // office that is nearly set up the first time it shows never sees it.
   function setupSteps() {
@@ -190,6 +194,8 @@ export function makePanels(app) {
       ${rs.slice(0, 6).map(r => `<div class="rem-row"><span class="grow"><b class="${app.privacy() ? "private" : ""}">${esc(r.text)}</b><small>${esc(when(r))}</small></span>
         <button class="btn sm ghost icon" data-remind-del="${esc(r.id)}" title="Delete this reminder" aria-label="Delete this reminder">${icon("x", 14)}</button></div>`).join("")}</section>`;
   }
+  // A seat about to reset with a lot of its week unused: one quiet card per seat and window, with one-click work for it.
+  // It stays out of Needs you (nothing is wrong), and goes once dismissed or once the plan is used.
   function unusedHtml() {
     const snap = S(), seen = store.get("unusedSeen", {});
     const cards = snap.seats.filter(s => {

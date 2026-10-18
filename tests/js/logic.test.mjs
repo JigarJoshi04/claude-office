@@ -492,3 +492,20 @@ test("a lane worker's walk to another seat stays on corridors and doors, never v
   const same = pathBetween(L, L.pods[0], 0, L.pods[1], 0);
   if (L.pods[0].corr === L.pods[1].corr) assert.ok(!same.some(([x]) => x === SPINE_X), "same corridor: no detour by the spine");
 });
+
+test("the week's quests aim a little past last week, three different kinds, the same all week", async () => {
+  const { quests, punch, PUNCH } = await import("../../web/ui/goals.js");
+  const days = Array.from({ length: 15 }, (_, i) => ({ day: `2026-10-${String(5 + i).padStart(2, "0")}`, reports: 3, active_min: 200, tool_calls: 900, sessions: 6, lanes_hired: 0 }));
+  const q = quests(days);                                         // the 19th is a Monday: the week starts today
+  assert.equal(q.week, "2026-10-19");
+  assert.equal(q.quests.length, 3);
+  assert.equal(new Set(q.quests.map(x => x.kind)).size, 3);
+  assert.ok(!q.quests.some(x => x.kind === "lanes"), "no lane quest for an office that hires none");
+  const reports = quests(days.map(d => ({ ...d, reports: 10 }))).quests.find(x => x.kind === "reports");
+  if (reports) assert.equal(reports.target, 77);                    // 70 last week, 10% more
+  assert.deepEqual(quests(days).quests.map(x => x.id), q.quests.map(x => x.id));
+  assert.equal(quests(days.slice(0, 10)), null);
+  assert.ok(quests(days.map((d, i) => (i < 14 ? { ...d, reports: 0, active_min: 0, sessions: 0 } : d))).calibrating);
+  assert.equal(punch({ "2026-10": ["a", "b"] }, "2026-10"), 2);
+  assert.equal(PUNCH, 4);
+});

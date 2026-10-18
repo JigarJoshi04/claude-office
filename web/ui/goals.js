@@ -121,6 +121,41 @@ export function weekly(days) {
   return { week: thisWeek[0].day, have, target, last, f: Math.min(1, have / target), done: have >= target, daysLeft: 6 - dow };
 }
 
+// The week's quests: three a week, drawn from the week's start (the same for every tab), each aiming a little past
+// last week (10% more, at least a floor), so they follow the office's own pace. Beating last week's reports is one
+// kind. A finished quest stamps the month's punch card (game.js). `days` is /api/week's list, oldest first, ending today.
+const QUESTS = [
+  { kind: "reports", icon: "check", get: (d) => d.reports || 0, floor: 5, label: (n) => `File ${n} reports this week` },
+  { kind: "hours", icon: "clock", get: (d) => (d.active_min || 0) / 60, floor: 10, label: (n) => `${n} hours of agent work` },
+  { kind: "calls", icon: "tool", get: (d) => d.tool_calls || 0, floor: 3000, round: 500, label: (n) => `${n.toLocaleString()} tool calls` },
+  { kind: "sessions", icon: "users", get: (d) => d.sessions || 0, floor: 10, label: (n) => `Run ${n} sessions` },
+  { kind: "workdays", icon: "calendar", whole: true, label: (n) => `Work on ${n} days`, count: (xs) => xs.filter(d => d.sessions || d.active_min).length, fixed: 5 },
+  { kind: "lanes", icon: "briefcase", get: (d) => d.lanes_hired || 0, floor: 2, label: (n) => `Hire ${n} lanes`, needs: (last) => last > 0 },
+];
+export function quests(days) {
+  if (!Array.isArray(days) || days.length < 14) return null;
+  const today = new Date(days[days.length - 1].day + "T12:00:00"), dow = (today.getDay() + 6) % 7;   // Monday = 0
+  const thisWeek = days.slice(days.length - 1 - dow), lastWeek = days.slice(days.length - 8 - dow, days.length - 1 - dow);
+  if (lastWeek.filter(d => d.sessions || d.reports || d.active_min).length < 3) return { calibrating: true, week: thisWeek[0].day };
+  const sum = (xs, q) => (q.count ? q.count(xs) : xs.reduce((a, d) => a + q.get(d), 0));
+  const pool = QUESTS.map(q => {
+    const last = sum(lastWeek, q), round = q.round || 1;
+    if (q.needs && !q.needs(last)) return null;
+    const target = q.fixed || Math.max(q.floor, Math.ceil(last * 1.1 / round) * round);
+    return { ...q, last, target };
+  }).filter(Boolean);
+  let h = hashDay("quests|" + thisWeek[0].day);
+  const picked = [];
+  while (picked.length < 3 && pool.length) { picked.push(pool.splice(h % pool.length, 1)[0]); h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0; }
+  return { week: thisWeek[0].day, daysLeft: 6 - dow, quests: picked.map(q => {
+    const have = sum(thisWeek, q), shown = q.kind === "hours" ? Math.floor(have * 10) / 10 : Math.floor(have);
+    return { id: `${thisWeek[0].day}:${q.kind}`, kind: q.kind, icon: q.icon, label: q.label(q.target), have: shown, target: q.target, last: Math.round(q.last), f: Math.min(1, have / q.target), done: have >= q.target };
+  }) };
+}
+// The month's punch card: the quests stamped in a month ("YYYY-MM" -> quest ids), four for a full card.
+export const PUNCH = 4;
+export function punch(stamps, month) { return ((stamps || {})[month] || []).length; }
+
 // "YYYY-MM-DD" in local time (toISOString is UTC, a day off east of UTC+12 and west of UTC−12).
 export function localDay(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

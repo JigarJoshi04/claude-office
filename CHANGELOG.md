@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.89.0] - 2026-10-19
+
+### Added
+- This week's quests: three a week, drawn from six kinds (reports, agent hours, tool calls, sessions, days with work,
+  lanes for an office that hires them), each aiming 10% past last week. A finished quest stamps the month's punch
+  card with a rare gift; four stamps fill it, with an epic one. Beating last week's reports is one of the kinds.
+
 ## [3.88.0] - 2026-10-19
 
 ### Added

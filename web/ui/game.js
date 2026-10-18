@@ -4,7 +4,7 @@
 import { $, toast } from "./util.js";
 import { icon } from "./icons.js";
 import { sound } from "./sound.js";
-import { goals, streak, weekly } from "./goals.js";
+import { goals, streak, weekly, quests, PUNCH, localDay } from "./goals.js";
 import { award } from "./badges.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 
@@ -79,8 +79,28 @@ export function makeGame(ctx) {
     if (!b) return;
     setTimeout(() => { chime("achievement"); note(`Badge earned: ${b.name}. ${b.desc}`, "good", { ic: b.icon, ms: 6500 }); if (view().kind === "office") renderPanel(true); }, 900);
   }
+  // A quest finishing stamps the month's punch card (a rare gift each, an epic one with the card full); the reports
+  // quest, or beating last week's reports outside the quests, is a record week.
+  function cheerQuests() {
+    const q = quests(app.weekCache());
+    if (!q || !q.quests || DEMO) return;
+    const stamps = store.get("questStamps", {}), month = localDay().slice(0, 7), mine = stamps[month] || [];
+    for (const x of q.quests.filter(x => x.done && !mine.includes(x.id))) {
+      mine.push(x.id); stamps[month] = mine; store.set("questStamps", stamps);
+      const full = mine.length === PUNCH;
+      if (prefs.view === "floor") fxNow().banner(full ? "Punch card full!" : "Quest done!", full ? `${PUNCH} quests this month` : x.label, "#ff7a45");
+      chime(full ? "levelup" : "achievement");
+      note(full ? `Punch card full: ${PUNCH} quests done this month.` : `Quest done: ${x.label}.`, "good", { ic: "flame", ms: 7000 });
+      gifts.grant(null, "week", full ? "epic" : "rare");
+      if (x.kind === "reports") badge(award("record_week"));
+    }
+  }
   // The weekly challenge finishing: one celebration per week (per browser), never in the demo.
+  // (When beating last week's reports is one of this week's quests, the quest is that celebration.)
   function cheerWeekly() {
+    cheerQuests();
+    const q = quests(app.weekCache());
+    if (q && q.quests && q.quests.some(x => x.kind === "reports")) return;
     const w = weekly(app.weekCache());
     if (!w || w.calibrating || !w.done || DEMO) return;
     const seen = store.get("weeklyDone", "");
