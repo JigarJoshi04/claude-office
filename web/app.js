@@ -406,6 +406,7 @@ function go(v, fromHash, opt = {}) {
   if (!fromHash && !prefs.panel) { clearTimeout(revealT); if (opt.floor) revealT = setTimeout(() => setPref("panel", true), 420); else setPref("panel", true); }
   if (!fromHash && hashFor(v) !== (location.hash || "#")) history.pushState(null, "", hashFor(v) === "#" ? location.pathname + location.search : hashFor(v));
   view = v;
+  if (v.kind === "seat" && !fromHash && snap && !replay.active()) greet(v.seat);
   if (v.kind === "session") { loadDetail("s:" + v.seat + "/" + v.id, true); loadChat(v.seat, v.id, true); }
   if (v.kind === "lane") loadDetail("l:" + v.id, true);
   office.setSelected(v.kind === "seat" ? { seat: v.seat } : v.kind === "session" ? { seat: v.seat, session: v.id } : null);
@@ -422,6 +423,14 @@ function go(v, fromHash, opt = {}) {
   }
 }
 let panelScroll = 0;
+// Open a character and someone at their desk looks up and says hello, in that character's voice (once a minute each).
+const greeted = new Map();
+function greet(id) {
+  const s = snap.seats.find(x => x.id === id);
+  if (!s || ["limited", "offline"].includes(s.status) || !live(s).length || Date.now() - (greeted.get(id) || 0) < 60000) return;
+  greeted.set(id, Date.now());
+  setTimeout(() => office.sayAtSeat(id, line(panels.persona(s), "hello"), 4500), 350);
+}
 
 // ------------------------------------------------------------------------------------------------ data
 async function loadDetail(key, force) {

@@ -26,6 +26,7 @@ const COMMON = {
   reset: ["Fresh window. Let's go!", "Recharged.", "Back in business."],
   levelup: ["Level up!", "Moving up in the world.", "New title, same desk.", "Promotion! Drinks on me."],
   achievement: ["Achievement unlocked!", "Put that on my wall.", "Another one for the trophy shelf."],
+  hello: ["You rang, boss?", "Hey boss!", "Need something?", "Right here."],
 };
 // Status in each character's own voice, for every state the office knows. t = a reset time, n = sessions at work.
 const VOICE = {
