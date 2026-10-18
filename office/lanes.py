@@ -335,8 +335,10 @@ def start_scheduled(seats: list[dict], now: float | None = None, can_hire: bool 
 def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, permission_mode: str,
                 seat_ids: list[str], cfg: dict, launch: bool = True, allow_messages: bool = True,
                 resume_session: str | None = None, chain: list[dict] | None = None, chain_of: dict | None = None,
-                schedule: dict | None = None) -> dict:
+                schedule: dict | None = None, max_minutes: int | None = None) -> dict:
     title = " ".join(str(title).split())[:80]
+    if max_minutes is not None and (isinstance(max_minutes, bool) or not isinstance(max_minutes, int) or not 5 <= max_minutes <= 1440):
+        raise ValueError("A time limit is 5 to 1440 minutes")
     if not title or not str(brief).strip():
         raise ValueError("A lane needs a title and a brief")
     workdir = os.path.realpath(os.path.expanduser(workdir or cfg["default_workdir"]))
@@ -367,6 +369,7 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         "chain": chain or [],                                  # the stages still to come after this one
         "chain_of": chain_of or ({"step": 1, "of": 1 + len(chain), "first": lane_id} if chain else None),
         "schedule": schedule,
+        "max_minutes": max_minutes,                            # its time budget, from when it first starts (None: none)
     }
     if schedule:                                       # starts later: the office starts it when it is due
         lane["status"] = "scheduled"
@@ -456,6 +459,7 @@ def resume_lane(lane_id: str, seat: str | None, seat_ids: list[str]) -> dict:
             raise ValueError(f"Unknown seat {seat}")
         lane["seat_pref"] = seat
     lane["fails"] = 0
+    lane.pop("deadline", None); lane.pop("stopped_reason", None)   # resumed by hand: a fresh time budget
     if lane.get("status") == "scheduled":             # started early: off the schedule, so it never starts twice
         lane["status"] = "queued"
     save_lane(lane)
@@ -481,7 +485,11 @@ def build_prompt(lane: dict, seat_id: str, cfg: dict) -> str:
         f"dated line to it: what you did and what is next.\n"
         f"REPORT file: {d / 'REPORT.md'} - write it only when finished. First line exactly "
         f"`STATUS: DONE - <one line>` or `STATUS: BLOCKED - <reason>`, then a short summary of what changed "
-        f"and how you verified it.\n{pre}\n\nTHE BRIEF:\n{(d / 'brief.md').read_text()}"
+        f"and how you verified it.\n"
+        + (f"TIME BUDGET: finish and write the REPORT by {time.strftime('%H:%M', time.localtime(lane['deadline']))} local time "
+           f"(check the clock with `date` now and then). If you cannot finish by then, write a BLOCKED report saying how far "
+           f"you got and what is left; the lane is stopped a few minutes after.\n" if lane.get("deadline") else "")
+        + f"{pre}\n\nTHE BRIEF:\n{(d / 'brief.md').read_text()}"
     )
 
 
@@ -628,6 +636,27 @@ def _sleep_or_wake(lane_id: str, delay: float, step: float = 15.0) -> None:
             return
 
 
+OVERTIME_S = 300                 # how long past its deadline a lane may run before it is stopped
+
+
+def wait_with_budget(proc, deadline: float | None) -> tuple[bytes | None, int, bool]:
+    """The agent's output and exit code; with a deadline, stop it OVERTIME_S after it. (out, rc, over budget)."""
+    if not deadline:
+        out, _ = proc.communicate()
+        return out, proc.returncode, False
+    try:
+        out, _ = proc.communicate(timeout=max(1.0, deadline + OVERTIME_S - time.time()))
+        return out, proc.returncode, False
+    except subprocess.TimeoutExpired:
+        proc.terminate()
+        try:
+            out, _ = proc.communicate(timeout=20)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, _ = proc.communicate()
+        return out, proc.returncode, True
+
+
 def _wait_until_seated(seat: dict, proc, timeout: float = 30.0) -> str | None:
     """Block until the new agent shows up as a live session on its seat (or exits, or the timeout passes).
     Returns its Claude session id when it can be read, so the CEO can follow up on it later."""
@@ -684,6 +713,8 @@ def run_lane(lane_id: str) -> int:
                     seats[codex["id"]] = codex
                 seat = seats.get(seat_id)
             if seat:
+                if lane.get("max_minutes") and not lane.get("deadline"):   # the budget runs from its first start
+                    lane["deadline"] = time.time() + lane["max_minutes"] * 60
                 prompt = build_prompt(lane, seat_id, cfg)
                 lane.update(status="running", seat=seat_id, waiting_reason=None, last_pick_reason=why)
                 lane["runs"].append({"seat": seat_id, "started_at": time.time(), "why": why})
@@ -719,8 +750,16 @@ def run_lane(lane_id: str) -> int:
         try:
             if proc is None:
                 raise OSError("the agent did not start")
-            out, _ = proc.communicate()
-            rc = proc.returncode
+            out, rc, over = wait_with_budget(proc, lane.get("deadline"))
+            if over:                                       # past its time budget: stopped, its notes kept
+                if out:
+                    with open(d / "lane.log", "ab") as f:
+                        f.write(out)
+                lane = load_lane(lane_id) or lane
+                lane.update(status="stopped", stopped_reason="time budget", finished_at=time.time())
+                save_lane(lane)
+                _log(lane_id, f"stopped: over its time budget of {lane.get('max_minutes')} min")
+                return 0
         except OSError as e:
             rc, out = 127, None
             _log(lane_id, f"could not start: {e}")

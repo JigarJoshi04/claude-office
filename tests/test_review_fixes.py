@@ -370,3 +370,26 @@ class WakeTests(unittest.TestCase):
                 self.assertEqual(slept[:2], [15.0, 15.0])
                 self.assertEqual(slept[2], 5)                               # second in line: a short head start for the oldest
                 self.assertEqual(len(slept), 3)                             # not the whole 30 minutes
+
+
+class BudgetTests(unittest.TestCase):
+    def test_a_lane_past_its_time_budget_is_stopped(self):
+        import subprocess, time as _t
+        with patch.object(lanes, "OVERTIME_S", 0):
+            p = subprocess.Popen(["sleep", "30"], stdout=subprocess.PIPE)
+            t0 = _t.time()
+            out, rc, over = lanes.wait_with_budget(p, _t.time() + 0.5)
+            self.assertTrue(over); self.assertLess(_t.time() - t0, 10)
+            p2 = subprocess.Popen(["true"], stdout=subprocess.PIPE)
+            self.assertEqual(lanes.wait_with_budget(p2, _t.time() + 60), (b"", 0, False))
+            p3 = subprocess.Popen(["true"], stdout=subprocess.PIPE)
+            self.assertEqual(lanes.wait_with_budget(p3, None)[1:], (0, False))
+
+    def test_the_prompt_names_the_deadline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "lanes"; (root / "l1").mkdir(parents=True)
+            (root / "l1" / "brief.md").write_text("Do it")
+            with patch.object(lanes, "lanes_dir", return_value=root):
+                cfg = {"lane_defaults": {}}
+                self.assertNotIn("TIME BUDGET", lanes.build_prompt({"id": "l1", "title": "t", "workdir": "/w"}, "c", cfg))
+                self.assertIn("TIME BUDGET", lanes.build_prompt({"id": "l1", "title": "t", "workdir": "/w", "deadline": 1e9}, "c", cfg))

@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.95.0] - 2026-10-19
+
+### Added
+- A time limit for a lane (30 minutes to 4 hours, on the hiring desk): the budget runs from its first start, its
+  brief names the deadline so it wraps up and writes its report in time (or a BLOCKED one saying how far it got), and
+  five minutes past it the lane is stopped with its notes kept. The lane list shows "until 15:40", or "stopped at its
+  time limit"; resuming it by hand gives a fresh budget. `max_minutes` on `POST /api/lanes`.
+
 ## [3.94.0] - 2026-10-19
 
 ### Changed

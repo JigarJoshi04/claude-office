@@ -98,7 +98,7 @@ export function makePanels(app) {
     const backlog = (S().lanes || []).filter(x => x.status === "scheduled" && x.schedule && x.schedule.backlog).sort((a, b) => (a.schedule.order || 0) - (b.schedule.order || 0));
     const when = l.status === "scheduled" && l.schedule ? (l.schedule.backlog ? ` · in the backlog, ${ordinal(backlog.indexOf(l) + 1)} in line` : l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
     return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop", scheduled: "calendar", interrupted: "alert" }[l.status] || "briefcase", 16)}</span>
-      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status)}${when}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
+      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status === "stopped" && l.stopped_reason === "time budget" ? "stopped at its time limit" : l.status)}${when}${l.deadline && ["running", "starting", "waiting"].includes(l.status) ? ` · until ${esc(clock(l.deadline))}` : !l.deadline && l.max_minutes && l.status !== "stopped" ? ` · ${l.max_minutes} min limit` : ""}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
   }
 
   // ---------------------------------------------------------------------------------------- briefing
@@ -1288,6 +1288,7 @@ export function makePanels(app) {
           <option value="left" ${d.start === "left" ? "selected" : ""}>When a seat has 30% of its window left</option>
           <option value="backlog" ${d.start === "backlog" ? "selected" : ""}>Add to the backlog (oldest first, as seats free up)</option></select></label>
           ${d.start === "at" ? `<label class="f">At<input type="datetime-local" id="hStartAt" value="${esc(d.startAt || "")}"></label>` : "<span></span>"}</div>
+        <label class="f">Time limit<select id="hMax">${[["", "None"], ["30", "30 minutes"], ["60", "1 hour"], ["120", "2 hours"], ["240", "4 hours"]].map(([v, l]) => `<option value="${v}" ${String(d.max_minutes || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="f">Then, in the same folder<select id="hThen">
           <option value="" ${!d.chain ? "selected" : ""}>Nothing: it reports and stops</option>
           <option value="review" ${d.chain === "review" ? "selected" : ""}>A second lane reviews its work</option>
@@ -1302,13 +1303,14 @@ export function makePanels(app) {
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
         const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
-          start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "", each: q("hEach").value }; store.set("hireDraft", hireDraft); };
+          start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "", each: q("hEach").value, max_minutes: +q("hMax").value || null }; store.set("hireDraft", hireDraft); };
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen", "hEach"].forEach(id => q(id).addEventListener("input", save));
         const items = () => [...new Set(q("hEach").value.split("\n").map(x => x.trim()).filter(Boolean))];
         const goLabel = () => { const n = items().length; q("hGo").innerHTML = `${icon("briefcase", 16)}${n >= 2 ? `Hire ${Math.min(n, 20)} lanes into the backlog` : "Hire and start"}`; };
         q("hEach").addEventListener("input", goLabel); goLabel();
         q("hBrief").addEventListener("input", () => { q("hCheck").innerHTML = briefCheck(q("hBrief").value); });
         q("hMsg").addEventListener("change", save);
+        q("hMax").addEventListener("change", save);
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
         q("hStart").addEventListener("change", () => { save(); app.rerender(true); });
         if (q("hStartAt")) q("hStartAt").addEventListener("input", save);
