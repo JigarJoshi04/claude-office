@@ -10,7 +10,7 @@ from . import config, prices
 from .live import public
 
 VOICE_DEFAULTS = {"enabled": False, "events": ["report", "limit", "login", "lane"], "quiet_hours": [23, 8]}
-VOICE_EVENTS = {"report", "limit", "login", "lane", "usage", "stuck"}
+VOICE_EVENTS = {"report", "limit", "login", "lane", "usage", "stuck", "risk"}
 # A seat's personality (its voice and room style); the names match web/ui/personas.js ARCHETYPES.
 STYLES = {"The Orchestrator", "The Builder", "The Investigator", "The Perfectionist", "The Night Owl", "The Speedrunner", "The Contractor"}
 _LOCK = threading.Lock()
@@ -23,7 +23,18 @@ def view(cfg, seats):
                    "seats": {s["id"]: {**{k: s.get(k) for k in ("label", "nickname", "color", "role", "motto", "style", "plan_usd", "look")},
                                        "plan_default": prices.plan_usd({"health": s.get("health")})} for s in seats},
                    "voice": {k: cfg.get("voice", {}).get(k, v) for k, v in VOICE_DEFAULTS.items()},
+                   "risk_watch": {"mute": risk_mute(cfg), "rules": risk_rules()},
                    "voice_available": shutil.which("jarvis-say") is not None})
+
+
+def risk_rules():
+    from .risk import RULES                  # (risk.py imports sessions, which this module need not load early)
+    return RULES
+
+
+def risk_mute(cfg):
+    from .risk import mute_list
+    return mute_list(cfg)
 
 
 def look(value):
@@ -90,6 +101,12 @@ def validate(body):
                 dest["color"] = entry["color"]
     if "ceo_look" in body:
         out.setdefault("ceo", {})["look"] = look(body["ceo_look"])
+    if "risk_watch" in body:                          # rules of the risky-action watch muted in this office
+        rw = body["risk_watch"]
+        mute = rw.get("mute") if isinstance(rw, dict) else None
+        if not isinstance(mute, list) or any(not isinstance(x, str) or x not in risk_rules() for x in mute):
+            raise ValueError("risk_watch.mute must list rule ids")
+        out["risk_watch"] = {"mute": sorted(set(mute))}
     if "voice" in body:
         v = body["voice"]
         if not isinstance(v, dict):

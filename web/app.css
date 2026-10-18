@@ -416,6 +416,8 @@ body.resizing .stage, body.resizing .panel { pointer-events: none; }
 .g-need + .g-need { margin-top: 8px; }
 .g-need .t { display: block; font-size: 14.5px; font-weight: 550; line-height: 1.4; }
 .g-need .d { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; }
+.g-need code.cmd, .tasklist.risks code { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.tasklist.risks li.bad svg { color: var(--bad); } .tasklist.risks li.muted { opacity: .6; } .tasklist.risks small { white-space: nowrap; }
 .g-need .btn { flex: none; }
 .g-clear { display: flex; align-items: center; gap: 8px; margin-top: 22px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--good) 8%, var(--surface-2)); color: var(--good); font-size: 14px; font-weight: 550; }
 .crew { display: grid; gap: 8px; }

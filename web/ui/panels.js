@@ -286,7 +286,7 @@ export function makePanels(app) {
   function needs(snap) {
     const out = [], spent = new Map(), nearly = new Map();
     for (const a of snap.attention || []) {
-      if (a.ask || a.ci || a.review || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
+      if (a.ask || a.ci || a.review || a.risk || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
       const st = a.seat && seatById(a.seat);
       const planItem = /usage at \d+%|stopped by the usage limit|runs out of its/i.test(a.text);
       // A seat close to its limit says so once: "Orion has 1% of its 5-hour window left, out in ~2 min".
@@ -343,7 +343,8 @@ export function makePanels(app) {
       </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
       ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
-          <span class="grow"><span class="t">${esc(needText(a))}</span>${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify(a.keys || [a.key]))}" title="Snooze for an hour, on every screen" aria-label="Snooze for an hour">${icon("sleep", 14)}</button>` : ""}</div>`).join("")}
+          <span class="grow"><span class="t">${esc(needText(a))}</span>${a.cmd && !app.privacy() ? `<code class="d cmd">${esc(a.cmd)}</code>` : ""}${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? a.risk ? `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify([a.key]))}" data-snooze-min="1440" title="Seen: hide it on every screen" aria-label="Mark as seen">${icon("check", 14)}</button>`
+            : `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify(a.keys || [a.key]))}" title="Snooze for an hour, on every screen" aria-label="Snooze for an hour">${icon("sleep", 14)}</button>` : ""}</div>`).join("")}
           ${S().snoozed ? `<p class="hint">${S().snoozed} snoozed for now.</p>` : ""}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
@@ -372,7 +373,8 @@ export function makePanels(app) {
         const at = root.querySelector("[data-away-toggle]"); if (at) at.addEventListener("click", () => { awayOpen = !awayOpen; app.rerender(true); });
         root.querySelectorAll("[data-snooze]").forEach(b => b.addEventListener("click", async () => {
           b.disabled = true;
-          try { await app.post("/api/snooze", { keys: JSON.parse(b.dataset.snooze), minutes: 60 }); app.refresh(); toast("Snoozed for an hour.", "info"); }
+          const min = +(b.dataset.snoozeMin || 60);
+          try { await app.post("/api/snooze", { keys: JSON.parse(b.dataset.snooze), minutes: min }); app.refresh(); toast(min > 60 ? "Marked as seen." : "Snoozed for an hour.", "info"); }
           catch (e) { b.disabled = false; toast("Could not snooze: " + e.message, "bad"); }
         }));
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
@@ -768,6 +770,8 @@ export function makePanels(app) {
     const lane = (S().lanes || []).find(l => l.pid && l.pid === x.pid);
     return `${section("Right now", `<div class="now ${x.state}"><span class="caret"></span>${icon(KIND_ICON[x.activity_kind] || "dot", 18)}<span style="min-width:0;overflow-wrap:anywhere">${priv(x, x.activity)}</span></div>
         <div class="hint" style="margin-top:6px">${x.quiet_s != null ? `Last sign of life ${dur(x.quiet_s)} ago.` : ""}${x.limit_text ? " " + esc(x.limit_text) : ""}</div>`)}
+      ${(x.risks || []).length ? section(`Risky actions · ${x.risks.length}`, `<ul class="tasklist risks">${x.risks.slice().reverse().map(r => `<li class="${(S().office.risk_mute || []).includes(r.rule) ? "muted" : "bad"}">${icon("alert", 14)}<span><b>${esc(r.label || r.rule)}</b>${r.helper ? " (a helper)" : ""}${app.privacy() ? "" : `<code>${esc(r.text)}</code>`}</span>${r.ts ? `<small>${ago(r.ts)}</small>` : ""}</li>`).join("")}</ul>
+        <div class="hint">Read from its transcript after they ran: the office warns, it does not block. Mute a kind in Settings.</div>`) : ""}
       ${x.title || x.task ? section("Working on", `${x.title ? `<div style="font-weight:600;margin-bottom:8px">${priv(x, x.title)}</div>` : ""}${x.task ? `<div class="quote">${priv(x, x.task)}</div>` : ""}`) : ""}
       ${x.helpers && x.helpers.length ? section(`Helpers at work · ${x.helpers.length}`, `<ul class="tasklist">${x.helpers.map(h => `<li class="in_progress">${icon("bot", 14)}<span>${priv(x, h.desc)}</span>${h.since ? `<em>${esc(dur(S().now - h.since))}</em>` : ""}</li>`).join("")}</ul>
         <div class="hint">Each one is a drone orbiting its desk on the floor; it docks with a spark when its helper finishes.</div>`) : ""}
@@ -1540,7 +1544,7 @@ export function makePanels(app) {
         .catch(() => { settingsData = { unavailable: true }; settingsLoading = false; app.rerender(true); });
     }
     const p = app.prefs(), sd = settingsData && !settingsData.unavailable ? settingsData : null, voice = sd ? sd.voice || {} : {};
-    const VOICE = [["report", "Reports filed"], ["limit", "Usage limits"], ["login", "Logouts"], ["lane", "Office lanes finished"], ["usage", "A seat nearly empty"], ["stuck", "Quiet lanes"]];
+    const VOICE = [["report", "Reports filed"], ["limit", "Usage limits"], ["login", "Logouts"], ["lane", "Office lanes finished"], ["usage", "A seat nearly empty"], ["stuck", "Quiet lanes"], ["risk", "Risky actions"]];
     const row = (title, sub, ctl) => `<div class="setrow"><div class="grow">${title}<small>${sub}</small></div>${ctl}</div>`;
     const sw = (key, on, label) => `<label class="switch"><input type="checkbox" data-pref="${key}" ${on ? "checked" : ""} aria-label="${esc(label)}"><span></span></label>`;
     return { html: `${crumbs("Settings")}<h2>Settings</h2>
@@ -1580,6 +1584,8 @@ export function makePanels(app) {
       ${section("Jarvis voice", `${row("Announce out loud", sd.voice_available ? "Speaks short alerts through jarvis-say. Off by default." : "jarvis-say was not found on this machine.", `<label class="switch"><input type="checkbox" id="setVoice" ${voice.enabled ? "checked" : ""} ${sd.voice_available ? "" : "disabled"} aria-label="Voice"><span></span></label>`)}
         <div class="row wrap" style="gap:6px;margin:10px 0">${VOICE.map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-vev="${k}" ${(voice.events || []).includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
         <div class="grid2"><label class="f">Quiet from (hour)<input type="number" min="0" max="23" id="setQ1" value="${(voice.quiet_hours || [23, 8])[0]}"></label><label class="f">Until (hour)<input type="number" min="0" max="23" id="setQ2" value="${(voice.quiet_hours || [23, 8])[1]}"></label></div>`)}
+      ${sd.risk_watch ? section("Risky-action watch", `<p class="hint" style="margin-top:0">A session that does one of these shows up in Needs you within seconds, with the command. It warns after the fact; it cannot stop anything. Untick what your agents do on purpose.</p>
+        <div class="row wrap" style="gap:6px;margin:10px 0">${Object.entries(sd.risk_watch.rules || {}).map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-rwatch="${esc(k)}" ${(sd.risk_watch.mute || []).includes(k) ? "" : "checked"}> ${esc(l)}</label>`).join("")}</div>`) : ""}
       <div class="row" style="margin-top:8px"><button class="btn primary" id="setSave">Save office settings</button></div>`}
       ${section("Keyboard", `<dl class="facts">${[["Ctrl/⌘ K", "Search and commands"], ["Esc", "Back to the briefing"], ["F  T  B  S", "Floor, Timeline, Team, Today"], ["H", "Hire a lane"], ["D", "Load divider"], ["P", "Share-safe"], ["1 … 9", "Open a character"], ["\\", "Hide or show the inspector"], ["+  −  0", "Zoom in, out, fit"], ["Arrows", "Pan when zoomed in"]].map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join("")}</dl>`)}
       ${section("About", `<div class="hint">Claude Office ${esc(S().office.version || "")} · up ${S().office.started_at ? ago(S().office.started_at).replace(" ago", "") : "–"} · ${esc(app.liveMode())}</div>`)}`,
@@ -1597,6 +1603,7 @@ export function makePanels(app) {
           const body = { office_name: root.querySelector("#setOffice").value.trim(), ceo_name: root.querySelector("#setCeo").value.trim(), seats: {},
             voice: { enabled: root.querySelector("#setVoice").checked, events: [...root.querySelectorAll("[data-vev]")].filter(c => c.checked).map(c => c.dataset.vev),
               quiet_hours: [+root.querySelector("#setQ1").value || 0, +root.querySelector("#setQ2").value || 0] } };
+          if (root.querySelector("[data-rwatch]")) body.risk_watch = { mute: [...root.querySelectorAll("[data-rwatch]")].filter(c => !c.checked).map(c => c.dataset.rwatch) };
           const put = (id, k, val) => { body.seats[id] = { ...(body.seats[id] || {}), [k]: val }; };
           root.querySelectorAll("[data-nick]").forEach(i => put(i.dataset.nick, "nickname", i.value.trim()));
           root.querySelectorAll("[data-role]").forEach(i => put(i.dataset.role, "role", i.value.trim()));

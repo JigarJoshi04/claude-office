@@ -269,7 +269,7 @@ class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
                  "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context",
-                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at")
+                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at", "risks")
 
     def __init__(self, path: Path):
         self.path = path
@@ -305,6 +305,7 @@ class TranscriptState:
         self.test_id = None            # the last test run's tool_use id, until its result comes back
         self.test_ok = None            # whether the last test run passed (None: none seen yet)
         self.test_at = None
+        self.risks: list[dict] = []    # risky tool calls (risk.py): {"id", "ts", "rule", "text"}, the last 20
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -405,6 +406,11 @@ class TranscriptState:
                         while len(self.helpers) > 24:
                             self.helpers.pop(next(iter(self.helpers)))
                 self.tool_calls += 1
+                from .risk import RULES, check as risk_check     # (risk.py imports this module)
+                for rule, shown in risk_check(str(c.get("name") or ""), c.get("input")):
+                    self.risks.append({"id": f"{c.get('id') or mid}:{rule}", "ts": ts, "rule": rule, "label": RULES[rule], "text": shown,
+                                       "helper": bool(d.get("isSidechain"))})
+                    del self.risks[:-20]
                 text, kind = describe_tool(str(c.get("name") or ""), c.get("input") or {})
                 if d.get("isSidechain"):
                     text, kind = f"Helper: {text}", kind
@@ -700,6 +706,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "helpers_done": tr.helpers_done if tr else 0,
             "screen": tr.screen if tr else None,
             "test_ok": tr.test_ok if tr else None,
+            "risks": list(tr.risks[-5:]) if tr else [],
             "loop": {"text": redact(tr.repeat[2]), "count": tr.repeat[1], "since": tr.repeat[3]} if tr and tr.repeat and tr.repeat[1] >= 5 else None,
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,

@@ -3,6 +3,19 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.100.0] - 2026-10-19
+
+### Added
+- The risky-action watch. When any session force-pushes, runs `rm -r` on / , the home folder, a parent folder or an
+  absolute path outside the temp folders, applies or destroys infrastructure (terraform, kubectl delete, helm
+  uninstall), deletes cloud resources, drops a table through a database client, pipes a download into a shell, puts a
+  real credential on a command line, or writes a secrets file, `~/.ssh`, a shell start-up file or Claude Code's
+  settings, it lands in Needs you within seconds with the command (credentials masked), as bad news with a sound and
+  a voice line if voice is on. Seen hides it on every screen. The session's Overview lists its risky actions.
+- Settings has a toggle per kind; admin merges (`gh pr merge --admin`) are off until turned on. Calls already
+  announced are remembered across restarts, and ones that happened while the office was down are noted, not
+  announced. Commit messages, heredoc bodies and JSON payloads are not read as commands.
+
 ## [3.99.0] - 2026-10-19
 
 ### Added

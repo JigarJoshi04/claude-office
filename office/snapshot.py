@@ -16,7 +16,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, cabinet, checkpoint, config, divider, forecast, lanes, loose, prs, seats as seatmod, sessions, standup, weeks
+from . import asks, cabinet, checkpoint, config, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, weeks
 from .career import CATALOGUE, Career
 from .presence import Presence
 from .reminders import Reminders
@@ -44,6 +44,8 @@ def attention_key(a: dict) -> str:
         return f"lane:{a['lane']}:{a.get('status') or ''}"
     if a.get("unit"):
         return f"unit:{a['unit']}"
+    if a.get("risk"):                                     # a new risky call is a new item
+        return f"risk:{a['risk']}"
     kind = "ci" if a.get("ci") else "review" if a.get("review") else "ghost" if a.get("ghost") else "loop" if a.get("loop") else re.sub(r"[\d.,:%~]+", "#", a.get("text", ""))[:60]
     return f"{kind}:{a.get('seat') or ''}:{a.get('session') or ''}"
 
@@ -289,6 +291,7 @@ class Office(LiveOffice):
         self.asks = asks.Asks(config.STATE_DIR / "asks.json")
         self.cabinet = cabinet.Cabinet()
         self.quiet = Quiet(config.STATE_DIR / "quiet.json")
+        self.risk_seen = risk.Seen(config.STATE_DIR / "risks-seen.json")
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -483,7 +486,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.99.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.100.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg)},
@@ -496,6 +499,13 @@ class Office(LiveOffice):
             "suggested_weights": divider.suggest(seats_out, div),
         }
         self._ci_lamps(seats_out, now)
+        snap["office"]["risk_mute"] = mute = risk.mute_list(cfg)        # the risky-action watch (risk.py)
+        for s in seats_out:
+            for x in s.get("sessions", []):
+                for r in x.get("risks") or []:
+                    if self.risk_seen.first(r["id"]) and r.get("ts") and now - r["ts"] < risk.RECENT_S and r["rule"] not in mute:
+                        self.emit("risk", f"{x.get('name') or 'A session'} on {s['label']}: {risk.RULES[r['rule']]}: {r['text']}", s["id"], "bad")
+        self.risk_seen.save()
         for s in seats_out:                                # what each session and lane has cost so far (the ledger)
             for x in s.get("sessions", []):
                 x["spent"] = self.tokens.spent([x["id"]]) if s.get("kind") == "claude" else None
@@ -572,6 +582,7 @@ class Office(LiveOffice):
                 who = a.get("name") or a.get("where") or "An agent"
                 items.append({"level": "warn", "seat": a.get("seat"), "ask": a["id"],
                               "text": f"{who}{' on ' + labels[a['seat']] if a.get('seat') in labels else ''} asks: {a['text'][:140]}"})
+        mute = set((snap.get("office") or {}).get("risk_mute") or ())
         reviewed = set()                                     # one review item per PR, however many desks share its branch
         for s in snap["seats"]:
             label = s["label"]
@@ -592,6 +603,12 @@ class Office(LiveOffice):
                 if lp and lp["count"] >= 8 and x.get("live", True) and x.get("state") in ("working", "waiting"):
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"], "loop": True,
                                   "text": f"{x.get('name') or 'A session'} on {label} has made the same call {lp['count']} times in a row: {lp['text']}"})
+                rs = [r for r in x.get("risks") or [] if r.get("ts") and snap["now"] - r["ts"] < risk.WINDOW_S and r["rule"] not in mute]
+                if rs:                                           # it did something risky (risk.py): the latest, and how many
+                    r = rs[-1]
+                    items.append({"level": "bad", "seat": s["id"], "session": x["id"], "risk": r["id"], "rule": r["rule"], "cmd": r["text"],
+                                  "text": f"{x.get('name') or 'A session'} on {label}: {risk.RULES[r['rule']]}"
+                                          + (f" (and {len(rs) - 1} more)" if len(rs) > 1 else "")})
                 ci = x.get("ci")
                 if ci and ci.get("threads") and x.get("live", True) and ci["number"] not in reviewed:   # comments nobody resolved
                     reviewed.add(ci["number"])

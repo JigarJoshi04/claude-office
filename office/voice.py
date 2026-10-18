@@ -21,6 +21,7 @@ def phrase(event):
         "lane": "An office lane has good news." if event.get("level") == "good" else "An office lane needs attention.",
         "usage": f"{seat} is nearly out of usage.",
         "stuck": f"{seat} has a session that needs attention.",
+        "risk": f"{seat} has a session that did something risky.",
     }.get(kind)
 
 

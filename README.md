@@ -337,6 +337,11 @@ set -g status-right '#(curl -s 127.0.0.1:7420/api/status.txt?style=plain)'
 - **Lanes:** `lane_policy` in `config.json` sets the folders lanes may work under (`roots`) and whether they may
   have full trust (`allow_full_trust`). A full-trust lane is never started in `/` or your whole home folder. Each
   lane's systemd unit is capped at `memory_max` (default `50%` of RAM) and `tasks_max` processes (default 4096).
+- **Risky-action watch:** a session that force-pushes, deletes outside a temp folder, applies or destroys
+  infrastructure, drops a table, pipes a download into a shell, puts a credential on a command line, or writes a key,
+  a `.env` file, `~/.ssh` or Claude Code's own settings shows up in Needs you within seconds, with the command
+  (credentials masked). It reads transcripts after the fact: it warns, it cannot stop anything. Each kind can be
+  muted in Settings; admin merges are watched only when you turn them on.
 - **Demo mode:** reads no accounts, and every write does nothing.
 
 ## Uninstall
