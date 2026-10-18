@@ -54,7 +54,15 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "resume_cmd": f"CLAUDE_CONFIG_DIR=~/.{seat} claude --resume {sid}", "live": True,
         "cache": _demo_cache(sid, state, now),
         "tasks": _demo_tasks(sid, now),
+        "ci": DEMO_CI.get(sid),
     }
+
+
+DEMO_CI = {   # the desks' CI lamps: a PR's checks on the branch each lane has out
+    "l-rate": {"checks": "pending", "number": 482, "url": "https://github.com/example/apollo/pull/482", "state": "open", "review": "review_required"},
+    "l-bill": {"checks": "fail", "number": 479, "url": "https://github.com/example/apollo/pull/479", "state": "open", "review": None},
+    "c-docs": {"checks": "pass", "number": 481, "url": "https://github.com/example/apollo/pull/481", "state": "open", "review": "approved"},
+}
 
 
 DEMO_TASKS = {
@@ -166,6 +174,23 @@ def _demo_token_ledger() -> TokenLedger:
 
 class DemoOffice(LiveOffice):
     is_demo = True
+
+    def prs_view(self) -> dict:
+        """A made-up PR shelf: the demo never calls GitHub."""
+        now = time.time()
+        iso = lambda h: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - h * 3600))
+        pr = lambda n, title, state, branch, checks, review=None, h=1, desk=None: {
+            "number": n, "title": title, "state": state, "url": f"https://github.com/example/apollo/pull/{n}", "branch": branch,
+            "updated": iso(h), "merged": iso(h) if state == "merged" else None, "review": review, "checks": checks, "author": "you", "at_desk": desk}
+        prs = [pr(482, "Rate limiter: a token bucket per API key", "open", "lane/api-rate-limits", "pending", "review_required", 0.2, {"seat": "claude2", "session": "l-rate", "name": "api-rate-limits"}),
+               pr(481, "Docs: getting started, rewritten", "open", "lane/docs-refresh", "pass", "approved", 0.5, {"seat": "astra", "session": "c-docs", "name": "docs-refresh"}),
+               pr(479, "Billing: move invoices to the new schema", "open", "lane/billing-migration", "fail", None, 1.5, {"seat": "claude2", "session": "l-bill", "name": "billing-migration"}),
+               pr(478, "Search: index the archive nightly", "draft", "lane/search-index", None, None, 5),
+               pr(477, "Checkout: retry flaky payment webhooks", "merged", "lane/checkout-retry", "pass", "approved", 3),
+               pr(476, "Auth: shorter session cookies", "merged", "lane/auth-cookies", "pass", "approved", 7),
+               pr(475, "Dark mode for the dashboard", "merged", "lane/dark-mode", "pass", "approved", 20),
+               pr(470, "Spike: graph layout", "closed", "exp/graph-layout", None, None, 48)]
+        return {"available": True, "scanning": False, "repos": [{"repo": "example/apollo", "at": now - 90, "error": False, "prs": prs}]}
 
     def loose_view(self, force: bool = False) -> dict:
         """Made-up loose ends: the demo never runs git."""
@@ -369,7 +394,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.38.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.39.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

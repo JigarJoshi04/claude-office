@@ -15,7 +15,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import config, divider, lanes, loose, seats as seatmod, sessions
+from . import config, divider, lanes, loose, prs, seats as seatmod, sessions
 from .career import CATALOGUE, Career
 from .history import DayLedger, HistoryStore
 from .tokens import TokenLedger
@@ -229,6 +229,8 @@ class Office(LiveOffice):
         self.history = UsageHistory()
         self._ghost_said: dict = {}                 # seat -> when its ghost use last made news (once an hour)
         self.loose = loose.LooseEnds(config.STATE_DIR / "loose-roots.json")
+        self.prs = prs.PullRequests()
+        self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
         self._load_events()
@@ -407,7 +409,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.38.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.39.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -418,6 +420,7 @@ class Office(LiveOffice):
             "next_pick": {"seat": evaluation["pick"], "why": evaluation["why"], "ranking": evaluation["ranking"]},
             "suggested_weights": divider.suggest(seats_out, div),
         }
+        self._ci_lamps(seats_out, now)
         last = self.tokens.last_call() if self.tokens.scanned_at else None    # not before the first read of the transcripts
         for s in seats_out:                                # plan use that nothing on this machine made
             if s.get("kind") == "claude" and last is not None:
@@ -480,6 +483,11 @@ class Office(LiveOffice):
                         if left < 2 * 86400 else f"{round(left / 86400)} days"
                     items.append({"level": "bad" if left < 12 * 3600 else "warn", "seat": s["id"],
                                   "text": f"{label}'s login lapses in {when}: run /login on it", "lapses_at": rexp})
+            for x in s.get("sessions", []):
+                ci = x.get("ci")
+                if ci and ci.get("checks") == "fail" and x.get("live", True):
+                    items.append({"level": "warn", "seat": s["id"], "ci": True, "session": x["id"],
+                                  "text": f"PR #{ci['number']}'s checks failed: {x.get('name') or 'a session'} on {label}"})
             g = s.get("ghost")
             if g:
                 items.append({"level": "warn", "seat": s["id"], "ghost": True,
@@ -586,6 +594,43 @@ class Office(LiveOffice):
             except Exception:                         # the ledger is a nicety; never let it stop the office
                 pass
             self.stop.wait(60)
+
+    def _gh_repos(self, now: float) -> dict:
+        """Repository folder name -> owner/name on GitHub, for the repositories the office knows (a minute's cache)."""
+        if now - self._gh_map[0] > 60:
+            roots = self.loose.known(self.cfg.get("repos") or [])
+            self._gh_map = (now, {r.name: g for r in roots if (g := prs.github_repo(r))})
+        return self._gh_map[1]
+
+    def _ci_lamps(self, seats_out: list, now: float) -> None:
+        """Each session on a branch with an open PR gets its checks (the desk's CI lamp); fetched every few minutes."""
+        gh = self._gh_repos(now)
+        if not gh or not self.prs.available:
+            return
+        self.prs.view(list(self.loose.known(self.cfg.get("repos") or [])))      # refreshes in the background when stale
+        open_prs = self.prs.by_branch()
+        for s in seats_out:
+            for x in s.get("sessions", []):
+                g = x.get("git") or {}
+                p = open_prs.get((gh.get(g.get("repo")), g.get("branch"))) if g.get("branch") else None
+                if p:
+                    x["ci"] = {"checks": p["checks"], "number": p["number"], "url": p["url"], "state": p["state"], "review": p["review"]}
+
+    def prs_view(self) -> dict:
+        """The PR shelf: every repository's recent PRs, with the session working on each branch."""
+        snap = self.get() or {}
+        v = self.prs.view(list(self.loose.known(self.cfg.get("repos") or [])))
+        gh = {g: name for name, g in self._gh_repos(time.time()).items()}
+        on = {}
+        for s in snap.get("seats", []):
+            for x in s.get("sessions", []):
+                g = x.get("git") or {}
+                if g.get("branch") and x.get("live", True):
+                    on[(g.get("repo"), g["branch"])] = {"seat": s["id"], "session": x["id"], "name": x.get("name")}
+        for r in v["repos"]:
+            for p in r["prs"]:
+                p["at_desk"] = on.get((gh.get(r["repo"]), p.get("branch")))
+        return v
 
     def loose_view(self, force: bool = False) -> dict:
         """Loose ends in the repositories the office's sessions and lanes use (loose.py)."""

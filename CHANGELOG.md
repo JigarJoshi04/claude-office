@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.39.0] - 2026-10-18
+
+### Added
+- Pull requests: a shelf of the recent PRs in the repositories your sessions use (open, draft, merged, closed), with
+  their checks, reviews and the desk working on each branch, read with the GitHub CLI every few minutes. From the
+  briefing (with a count of open PRs whose checks failed), the palette or `GET /api/prs`.
+- A CI lamp on each desk whose branch has an open PR: green when the checks pass, amber while they run, red and
+  blinking when they fail; the session's page links the PR, and failed checks land in Needs you.
+
 ## [3.38.0] - 2026-10-18
 
 ### Added

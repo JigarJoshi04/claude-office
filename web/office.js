@@ -698,6 +698,13 @@ export function createOffice(stage, handlers) {
           if (a.sess.kind === "desk") { S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x, sp.seatY - 1, 10, 1, "#2a2d38"); }
         }
         S.drawMonitorBack(ctx, x - 3, pod.y + 31);
+        const ci = a && a.sess.ci;               // the CI lamp: its branch's PR checks, on the corner of the screen
+        if (ci && ci.checks) {
+          const blink = ci.checks !== "pass" && !reduced && Math.floor(t / 600) % 2;
+          S.rect(ctx, x + 10, pod.y + 30, 3, 3, "#0a0b10");
+          S.rect(ctx, x + 11, pod.y + 31, 1, 1, blink ? "#5b6378" : { pass: "#3ddc84", pending: "#ffc24b", fail: "#ff4d5e" }[ci.checks]);
+          if (ci.checks === "fail" && !blink) lights.push({ x: x + 11, y: pod.y + 31, r: 8, c: "#ff4d5e", i: 0.6 });
+        }
         const tk = a && a.sess.tasks;            // the session's task list as a strip across the back of its screen
         if (tk && tk.total) { S.rect(ctx, x - 1, pod.y + 33, 12, 2, "#5b6378"); S.rect(ctx, x - 1, pod.y + 33, Math.round(12 * tk.done / tk.total), 2, tk.done === tk.total ? "#ffd24a" : "#3ddc84"); }
         if (a && pose !== "sleep") S.drawHands(ctx, x, pod.y + 42, a.look, pose, t + slot * 333);

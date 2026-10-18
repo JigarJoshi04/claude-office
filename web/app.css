@@ -1487,3 +1487,15 @@ h5.lh { margin: 14px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .
 .numin { width: 84px; height: 32px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text); font: 600 13px var(--mono); }
 .numwrap .unit { font: 600 12px var(--mono); color: var(--muted); white-space: nowrap; }
 @media (max-width: 480px) { .numin { width: 70px; } }
+/* the PR shelf and the session's CI pill (3.39) */
+ul.prs li a { color: inherit; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+ul.prs li a:hover b, ul.prs li a:focus-visible b { text-decoration: underline; }
+ul.prs li.merged a { color: var(--text-2); } ul.prs li.closed a { color: var(--muted); }
+.ci-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--line-2); }
+.ci-dot.pass { background: var(--good); box-shadow: none; } .ci-dot.fail { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 22%, transparent); }
+.ci-dot.pending { background: var(--warn); box-shadow: none; animation: cachesoon 1.6s ease-in-out infinite; }
+button.lc { border: 0; cursor: pointer; }
+a.pill.ci { text-decoration: none; } a.pill.ci.pass { color: var(--good); } a.pill.ci.fail { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); } a.pill.ci.pending { color: var(--warn); }
+.b-links .count.bad { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+ul.prs li a b { display: inline; }
+ul.prs li a { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }

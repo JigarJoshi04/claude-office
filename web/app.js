@@ -35,6 +35,7 @@ const details = new Map(), histCache = new Map(), statsCache = new Map(), inflig
 const tokens = new Map();   // "range|seat" -> {data, at}
 let week = null;
 let loose = null;          // the last /api/loose answer and when it came
+let prsData = null;        // the last /api/prs answer and when it came
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
 const seenNews = new Set();
 let lastEventTs = 0;
@@ -106,6 +107,17 @@ const app = {
     return c ? c.data : null;
   },
   tokenMetric: () => prefs.tokenMetric || "all",
+  // Pull requests (/api/prs): asked for when the shelf or the briefing shows.
+  prsCache: () => {
+    if ((!prsData || Date.now() - prsData.at > (prsData.data && prsData.data.scanning ? 4000 : 90000)) && !inflight.has("prs")) {
+      inflight.add("prs");
+      fetch("/api/prs").then(r => r.ok ? r.json() : null).then(d => {
+        prsData = { data: d, at: Date.now() }; inflight.delete("prs");
+        if (view.kind === "prs" || view.kind === "ceo") renderPanel(true);
+      }).catch(() => { prsData = { data: null, at: Date.now() }; inflight.delete("prs"); });
+    }
+    return prsData ? prsData.data : null;
+  },
   // Loose ends (/api/loose): asked for when its page or the briefing shows; polled while a sweep runs.
   looseCache: (force = false) => {
     const stale = !loose || Date.now() - loose.at > (loose.data && loose.data.scanning ? 3000 : 60000);
@@ -335,7 +347,7 @@ function viewFromHash() {
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
-  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office", "loose"].includes(k) ? { kind: k } : { kind: "ceo" };
+  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office", "loose", "prs"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 let revealT = 0;
@@ -1047,6 +1059,7 @@ function paletteItems() {
     { icon: icon("settings", 16), label: "Settings", run: () => go({ kind: "settings" }) },
     { icon: icon("sliders", 16), label: "Keyboard shortcuts", hint: "?", keywords: "keys help hotkeys", run: shortcuts },
     { icon: icon("server", 16), label: "Server room", run: () => go({ kind: "services" }) },
+    { icon: icon("send", 16), label: "Pull requests", keywords: "pr github checks ci reviews", run: () => go({ kind: "prs" }) },
     { icon: icon("branch", 16), label: "Loose ends", keywords: "git worktrees uncommitted unpushed cleanup", run: () => go({ kind: "loose" }) },
   ];
   // Share-safe: a terminal session's topic never becomes a search keyword.

@@ -270,7 +270,7 @@ export function makePanels(app) {
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
         <button data-go="news">${icon("news", 16)}News</button><button data-go="trophies">${icon("trophy", 16)}Trophies</button>
-        <button data-go="services">${icon("server", 16)}Services</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
+        <button data-go="services">${icon("server", 16)}Services</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
@@ -291,6 +291,10 @@ export function makePanels(app) {
 
   // -------------------------------------------------------------------------------------------- seat
   // How many worktrees hold work that is nowhere else, for the briefing's link (asked for lazily).
+  function prsCount() {
+    const d = app.prsCache(), k = d && d.repos ? d.repos.reduce((a, r) => a + r.prs.filter(p => (p.state === "open" || p.state === "draft") && p.checks === "fail").length, 0) : 0;
+    return k ? `<span class="count bad">${k}</span>` : "";
+  }
   function looseCount() {
     const d = app.looseCache(), k = d && d.totals ? d.totals.work : 0;
     return k ? `<span class="count">${k}</span>` : "";
@@ -453,6 +457,7 @@ export function makePanels(app) {
           ${x && x.model ? pill(x.model.replace(/^claude-/, "")) : ""}
           ${x && x.git ? gitChip(x) : ""}
           ${x && x.cache && x.state !== "working" ? cachePill(x) : ""}
+          ${x && x.ci ? `<a class="pill ci ${esc(x.ci.checks || "")}" href="${esc(x.ci.url)}" target="_blank" rel="noopener noreferrer" title="Its branch's pull request on GitHub">${icon(x.ci.checks === "fail" ? "x" : x.ci.checks === "pass" ? "check" : "clock", 13)}PR #${x.ci.number}${x.ci.checks ? ` · ${CI_WORD[x.ci.checks]}` : ""}</a>` : ""}
           ${x && x.tasks ? `<span class="pill ${x.tasks.done === x.tasks.total ? "good" : ""}" title="Its task list: ${x.tasks.done} of ${x.tasks.total} done">${icon("check", 13)}${x.tasks.done}/${x.tasks.total} tasks</span>` : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
@@ -639,6 +644,32 @@ export function makePanels(app) {
     return { html: `${crumbs("Server room")}<h2>Server room</h2><p class="lede">Background services that keep lanes running: conductors, supervisors and the lanes themselves.</p>
       ${section(`Services · ${units.length}`, units.length ? units.map(u => `<div class="need ${u.active === "failed" ? "bad" : u.active === "active" ? "good" : "info"}"><span class="ico">${icon(u.active === "active" ? "play" : u.active === "failed" ? "alert" : "stop", 16)}</span>
         <div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(u.unit)}</div><div class="d">${esc(u.description)} · ${esc(u.active)}</div></div></div>`).join("") : `<div class="muted">No watched services. Add patterns to <code>watch_units</code> in the config.</div>`)}` };
+  }
+  // The PR shelf (office/prs.py): the repositories' recent pull requests, which desk works on each, and their checks.
+  const CI_WORD = { pass: "checks pass", pending: "checks running", fail: "checks failed" };
+  function prsPanel() {
+    const d = app.prsCache(), pv = app.privacy();
+    const head = `${crumbs("Pull requests")}<h2>Pull requests</h2><p class="lede">The recent pull requests in the repositories your sessions use, with their checks and reviews, and the desk working on each branch. Read with the GitHub CLI; the office never changes a PR.</p>`;
+    if (!d) return { html: head + `<div class="skeleton"></div><div class="skeleton" style="width:70%"></div>` };
+    if (!d.available) return { html: head + `<div class="muted">The GitHub CLI (<code>gh</code>) is not installed here, so there is nothing to show.</div>` };
+    if (!d.repos.length) return { html: head + `<div class="muted">${d.scanning ? "Asking GitHub…" : "No GitHub repositories yet: the office learns them from the folders its sessions work in."}</div>` };
+    const REVIEW = { approved: ["good", "approved"], changes_requested: ["bad", "changes requested"], review_required: ["", "needs review"] };
+    const row = (p) => {
+      const desk = p.at_desk && seatById(p.at_desk.seat);
+      return `<li class="pr ${esc(p.state)}"><span class="ci-dot ${esc(p.checks || "none")}" title="${p.checks ? "Checks " + CI_WORD[p.checks] : "No checks"}"></span>
+        <span class="grow"><a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer"><b>#${p.number}</b> <span class="${pv ? "private" : ""}">${esc(p.title)}</span></a>
+        <small>${esc(p.branch || "")}${p.updated ? " · " + esc(relTime(Date.parse(p.updated) / 1000)) : ""}</small></span>
+        <span class="lc-tags">${p.state === "draft" ? `<em class="lc">draft</em>` : ""}${p.review && REVIEW[p.review] ? `<em class="lc ${REVIEW[p.review][0]}">${REVIEW[p.review][1]}</em>` : ""}
+          ${desk ? `<button class="lc info" data-open-session="${esc(desk.id)}|${esc(p.at_desk.session)}" title="The session on this branch">${esc(P(desk).name)}'s desk</button>` : ""}</span></li>`; };
+    const repos = d.repos.map(r => {
+      const open = r.prs.filter(p => p.state === "open" || p.state === "draft"), merged = r.prs.filter(p => p.state === "merged"), closed = r.prs.filter(p => p.state === "closed");
+      const failing = open.filter(p => p.checks === "fail").length;
+      return section(`${esc(r.repo)}${r.error ? ` · <span class="hint">could not reach GitHub</span>` : ""}`, `
+        <h5 class="lh">Open · ${open.length}${failing ? ` · <span style="color:var(--bad)">${failing} failing</span>` : ""}</h5>${open.length ? `<ul class="loose prs">${open.map(row).join("")}</ul>` : `<div class="hint">No open pull requests.</div>`}
+        ${merged.length ? `<h5 class="lh">Merged · ${merged.length}</h5><ul class="loose prs">${merged.slice(0, 8).map(row).join("")}</ul>${merged.length > 8 ? `<p class="hint">and ${merged.length - 8} more of the last ${r.prs.length}.</p>` : ""}` : ""}
+        ${closed.length ? `<p class="hint">${closed.length} closed without merging.</p>` : ""}`); }).join("");
+    return { html: `${head}<p class="hint">${d.scanning ? "Asking GitHub…" : "Refreshed every few minutes."}</p>${repos}`,
+      bind(root) { root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); })); } };
   }
   // Loose ends (office/loose.py): work left in git that is nowhere else, and worktrees that are safe to remove.
   function loose() {
@@ -1117,6 +1148,6 @@ export function makePanels(app) {
   }
   return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
-    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, prs: prsPanel, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings" };
 }

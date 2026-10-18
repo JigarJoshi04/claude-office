@@ -23,3 +23,26 @@ class InboundEventTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PullRequestTests(unittest.TestCase):
+    def test_checks_and_summary(self):
+        from office import prs
+        self.assertIsNone(prs.checks([]))
+        self.assertEqual(prs.checks([{"conclusion": "SUCCESS"}, {"state": "SUCCESS"}]), "pass")
+        self.assertEqual(prs.checks([{"conclusion": "SUCCESS"}, {"status": "IN_PROGRESS", "conclusion": ""}]), "pending")
+        self.assertEqual(prs.checks([{"conclusion": "FAILURE"}, {"status": "IN_PROGRESS"}]), "fail")
+        p = prs.summarize({"number": 7, "title": "t", "state": "OPEN", "isDraft": True, "headRefName": "b", "reviewDecision": "APPROVED",
+                           "statusCheckRollup": [{"conclusion": "SUCCESS"}], "author": {"login": "me"}})
+        self.assertEqual((p["state"], p["review"], p["checks"], p["author"]), ("draft", "approved", "pass", "me"))
+
+    def test_github_repo_from_git_config(self):
+        import tempfile
+        from pathlib import Path
+        from office import prs
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ".git").mkdir()
+            (Path(tmp) / ".git" / "config").write_text('[core]\n\tbare = false\n[remote "origin"]\n\turl = git@github.com:acme/rocket.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
+            self.assertEqual(prs.github_repo(tmp), "acme/rocket")
+            (Path(tmp) / ".git" / "config").write_text('[remote "origin"]\n\turl = https://gitlab.com/acme/rocket.git\n')
+            self.assertIsNone(prs.github_repo(tmp))
