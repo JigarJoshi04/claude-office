@@ -520,7 +520,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.125.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.126.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
@@ -532,6 +532,15 @@ class DemoOffice(LiveOffice):
         snap["office"]["shipped_today"] = {"day": time.strftime("%Y-%m-%d"), "commits": c, "prs_opened": o, "prs_merged": m,
                                            "seats": {k: list(v) for k, v in self._ship_seats.items()}}
         snap["asks"] = self.asks.view(30)
+        snap["host"] = {"memory": {"seats": {"claude2": 3100, "claude3": 1400, "claude4": 900, "astra": 650, "claude": 420}, "total_mb": 6470,
+                                   "machine": {"total_mb": 32000, "available_mb": 14800},
+                                   "top": [{"seat": "claude2", "id": "l-rate", "name": "api-rate-limits", "mb": 1650}, {"seat": "claude3", "id": "l-bill", "name": "billing-migration", "mb": 980}]},
+                        "disk": {"bytes": 6_400_000_000, "fs": {"total": 512_000_000_000, "free": 210_000_000_000}, "parts": [
+                            {"key": "projects", "label": "Claude Code transcripts", "bytes": 5_600_000_000, "files": 4810},
+                            {"key": "codex", "label": "Codex rollouts", "bytes": 610_000_000, "files": 390},
+                            {"key": "file-history", "label": "File history (rewind)", "bytes": 140_000_000, "files": 2200},
+                            {"key": "office", "label": "Claude Office (state, lanes, checkpoints)", "bytes": 50_000_000, "files": 120}]},
+                        "days": [], "per_day": 180_000_000}
         snap["mine"] = {"review": [{"repo": "example/apollo", "number": 486, "title": "Stream rate-limit metrics to the dashboard", "url": "https://github.com/example/apollo/pull/486",
                                     "updated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - 2400)), "author": "maya-r", "draft": False, "workdir": "/home/you/work/apollo"}],
                         "authored": 7, "authored_recent": [], "at": now - 60}

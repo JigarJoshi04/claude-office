@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.126.0] - 2026-10-19
+
+### Added
+- Utilities, in the Server room: the memory the AI team uses right now (each live session with everything it started,
+  per character, against what the machine has free), and its files on disk by kind (Claude Code transcripts counted
+  once however many seats share them, Codex rollouts, file history, the office's own state) with the free space and
+  how fast it grows a day over the last month. Memory is read every half minute, disk every ten minutes on a
+  low-priority thread. Read only: the page points at Claude Code's `cleanupPeriodDays` rather than deleting anything.
+
 ## [3.125.0] - 2026-10-19
 
 ### Fixed

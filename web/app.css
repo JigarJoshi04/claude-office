@@ -1762,3 +1762,11 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .help-t { border-radius: 12px; background: var(--surface-2); padding: 0 14px; } .help-t + .help-t { margin-top: 8px; }
 .help-t summary { display: flex; align-items: center; gap: 10px; padding: 12px 0; cursor: pointer; list-style: none; } .help-t summary::-webkit-details-marker { display: none; }
 .help-t summary svg { color: var(--accent); flex: none; } .help-t p { margin: 0 0 10px; line-height: 1.55; color: var(--text-2, var(--text)); } .help-t .btn { margin-bottom: 12px; }
+/* The utilities (office/utilities.py). */
+.ut-row { display: grid; grid-template-columns: 64px minmax(80px, 160px) 1fr; align-items: center; gap: 10px; margin: 8px 0; font-size: 13.5px; }
+.ut-row span:last-child { color: var(--muted); }
+.ut-bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; } .ut-bar i { display: block; height: 100%; background: var(--accent); }
+.ut-bar.warn i { background: var(--warn); }
+.ut-seats { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; font-size: 13px; }
+.ut-seats span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; background: var(--surface-2); } .ut-seats i { width: 8px; height: 8px; border-radius: 50%; background: var(--seat); }
+@container panel (max-width: 420px) { .ut-row { grid-template-columns: 56px 1fr; } .ut-row span:last-child { grid-column: 1 / -1; } }

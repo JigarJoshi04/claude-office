@@ -867,8 +867,22 @@ export function makePanels(app) {
     const rank = (u) => u.active === "failed" ? 0 : u.active === "active" ? 2 : 1;   // failures first, like the racks on the floor
     const units = [...(S().units || [])].sort((a, b) => rank(a) - rank(b));
     return { html: `${crumbs("Server room")}<h2>Server room</h2><p class="lede">Background services that keep lanes running: conductors, supervisors and the lanes themselves.</p>
+      ${utilitiesHtml(S().host)}
       ${section(`Services · ${units.length}`, units.length ? units.map(u => `<div class="need ${u.active === "failed" ? "bad" : u.active === "active" ? "good" : "info"}"><span class="ico">${icon(u.active === "active" ? "play" : u.active === "failed" ? "alert" : "stop", 16)}</span>
         <div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(u.unit)}</div><div class="d">${esc(u.description)} · ${esc(u.active)}</div></div></div>`).join("") : `<div class="muted">No watched services. Add patterns to <code>watch_units</code> in the config.</div>`)}` };
+  }
+  // The building's utilities (office/utilities.py): the AI team's memory now and its files on disk, read only.
+  function utilitiesHtml(h) {
+    if (!h || (!h.disk && !h.memory)) return "";
+    const gb = (b) => b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : Math.round(b / 1e6) + " MB", m = h.memory, d = h.disk;
+    const bar = (f, cls = "") => `<span class="ut-bar ${cls}"><i style="width:${Math.max(1, Math.min(100, f * 100)).toFixed(1)}%"></i></span>`;
+    const mem = m && m.machine ? `<div class="ut-row"><b>Memory</b>${bar(m.total_mb / m.machine.total_mb, m.total_mb / m.machine.total_mb > 0.5 ? "warn" : "")}<span>${gb(m.total_mb * 1e6)} for the AI team, ${gb(m.machine.available_mb * 1e6)} free of ${gb(m.machine.total_mb * 1e6)}</span></div>
+      ${Object.keys(m.seats).length ? `<div class="ut-seats">${Object.entries(m.seats).sort((a, b) => b[1] - a[1]).map(([sid, mb]) => { const st = seatById(sid); return `<span style="--seat:${esc(st ? st.color : "#888")}"><i></i>${esc(nameOf(sid))} ${gb(mb * 1e6)}</span>`; }).join("")}</div>` : ""}
+      ${(m.top || []).length ? `<p class="hint">Heaviest: ${m.top.slice(0, 3).map(t => `${app.privacy() ? "a session" : esc(t.name || "a session")} ${gb(t.mb * 1e6)}`).join(" · ")} (each with what it started).</p>` : ""}` : "";
+    const dsk = d ? `<div class="ut-row"><b>Disk</b>${d.fs ? bar(d.bytes / d.fs.total) : ""}<span>${gb(d.bytes)} of agent files${d.fs ? `, ${gb(d.fs.free)} free` : ""}${h.per_day != null ? ` · ${h.per_day >= 0 ? "+" : "−"}${gb(Math.abs(h.per_day))} a day` : ""}</span></div>
+      <dl class="facts">${d.parts.filter(x => x.bytes > 0).map(x => `<dt>${esc(x.label)}</dt><dd>${gb(x.bytes)} · ${x.files.toLocaleString()} files</dd>`).join("")}</dl>
+      <p class="hint">Read only: the office never deletes them. Claude Code keeps transcripts for <code>cleanupPeriodDays</code> (30 by default) in its settings.json; a smaller number keeps less, and resume and the chat history go with them.</p>` : `<p class="hint">Measuring the disk…</p>`;
+    return section("Utilities", mem + dsk);
   }
   // The office doctor (office/doctor.py): health checks, each with what to do about it.
   let doctorData = null, doctorAt = 0;
