@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.96.0] - 2026-10-19
+
+### Added
+- Why is it burning? A session that burned 5 M tokens or more in the last hour says so on its Overview, against its
+  usual pace, with the likely causes from what the office sees (a big context read again on every call, helpers
+  fanning out, the same call over and over, the prompt cache missing, many turns) and what to do about each.
+
 ## [3.95.0] - 2026-10-19
 
 ### Added

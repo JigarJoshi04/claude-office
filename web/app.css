@@ -1663,3 +1663,7 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .fanout { margin-top: 10px; } .fanout summary { cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-2); }
 .fanout[open] summary { margin-bottom: 8px; }
 .seg-ctl.wrap { flex-wrap: wrap; height: auto; }
+/* Why is it burning? (panels.js burnWhyHtml) */
+.burnwhy { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(110deg, rgba(255,140,50,.14), var(--surface-2) 70%); }
+.burnwhy b { display: flex; align-items: center; gap: 6px; font-size: 13.5px; } .burnwhy b .ic { color: #ff9b3d; }
+.burnwhy ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; } .burnwhy li small { display: block; color: var(--muted); font-size: 12px; }

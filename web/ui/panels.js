@@ -717,6 +717,29 @@ export function makePanels(app) {
         <div class="hint">${icon(hint[0], 14)}<span>${hint[1]}</span></div></div>`;
   }
 
+  // Why is it burning? When a session burns hard (all tokens in the last hour, cache reads included), the likely causes
+  // from what the office sees: a big context re-read on every call, helpers fanning out, the same call over and over,
+  // the prompt cache missing, many turns. With what to do about each. Nothing leaves the machine.
+  function burnWhy(x, now = S().now) {
+    const t1 = x.tokens_1h || {}, all = (t1.fresh || 0) + (t1.cached || 0);
+    if (all < 5e6) return null;
+    const hours = x.started_at ? Math.max(1, (now - x.started_at) / 3600) : null, lifetime = x.spent && x.spent.tokens;
+    const usual = hours && lifetime ? lifetime / hours : null;
+    const why = [], ctx = x.cache && x.cache.context;
+    if (ctx >= 150000) why.push([`Its context is ${fmtTok(ctx)} tokens, read again on every call.`, "Ask it to /compact, or to finish this part and start a fresh session."]);
+    if ((x.helpers || []).length >= 3) why.push([`${x.helpers.length} helpers are at work at once, each with its own context.`, "Fewer helpers at a time, or smaller jobs for each."]);
+    if (x.loop && x.loop.count >= 5) why.push([`It has made the same call ${x.loop.count} times in a row.`, "It may be stuck: open the chat and point it another way."]);
+    if (t1.fresh && all && t1.fresh / all > 0.3) why.push([`${Math.round(t1.fresh / all * 100)}% of the hour was fresh tokens: the prompt cache keeps missing.`, "Long pauses let the cache expire; steadier work keeps it warm."]);
+    if (t1.turns >= 120) why.push([`${t1.turns} turns in the hour.`, "Many small steps: a clearer plan in the brief means fewer."]);
+    return { all, usual, ratio: usual ? all / usual : null, why };
+  }
+  function burnWhyHtml(x) {
+    const b = burnWhy(x);
+    if (!b) return "";
+    const pace = b.ratio && b.ratio >= 1.5 ? `, ${b.ratio.toFixed(1)}× its usual pace` : "";
+    return `<div class="burnwhy"><b>${icon("flame", 15)}${fmtTok(b.all)} tokens in the last hour${pace}.</b>
+      ${b.why.length ? `<ul>${b.why.map(([w, fix]) => `<li><span>${esc(w)}</span><small>${esc(fix)}</small></li>`).join("")}</ul>` : `<p class="hint">Nothing unusual in how it works: it is simply busy.</p>`}</div>`;
+  }
   function overviewHtml(s, x) {
     if (!x) return section("Overview", `<div class="muted">This session has ended. Its conversation is in the Chat tab.</div>`);
     const d = app.detailFor("s:" + s.id + "/" + x.id);
@@ -733,7 +756,8 @@ export function makePanels(app) {
       ${x.state_file ? section("Progress notes", d && d.state_tail ? `<pre class="pre">${esc(d.state_tail)}</pre>` : `<div class="hint">${d ? "Empty so far." : "Loading…"}</div>`) : ""}
       ${x.report_status ? section("Report", d && d.report ? `<div class="doc md">${md(d.report)}</div>` : `<div class="quote">${esc(x.report_status)}</div>`, d && d.report ? `<button class="btn sm ghost" data-copy="${esc(d.report)}">${icon("copy", 14)}Copy</button>` : "") : ""}
       ${section("Burn", `<div class="tiles"><div class="tile"><div class="v">${fmtTok(t1.fresh)}</div><div class="tk">fresh tokens, last hour</div></div>
-        <div class="tile"><div class="v">${fmtTok(t5.fresh)}</div><div class="tk">last 5 hours</div></div><div class="tile"><div class="v">${x.tool_calls ?? "–"}</div><div class="tk">tool calls</div></div></div>`)}
+        <div class="tile"><div class="v">${fmtTok(t5.fresh)}</div><div class="tk">last 5 hours</div></div><div class="tile"><div class="v">${x.tool_calls ?? "–"}</div><div class="tk">tool calls</div></div></div>
+        ${burnWhyHtml(x)}`)}
       ${section("Details", `<dl class="facts">
         <dt>Seat</dt><dd>${esc(P(s).name)} (${esc(s.label)})</dd>
         <dt>Started</dt><dd>${x.started_at ? `${dayTime(x.started_at)} (${relTime(x.started_at)})` : "–"}</dd>
