@@ -363,8 +363,10 @@ class TokenLedger:
                     g[i] += x
             changed = True
             at = _epoch(self._ts)
-            if self.scans and (v[2] or v[3]) and at and time.time() - at < 900:     # fresh PR news, never from the first read
-                self.events.append({"session": sid, "kind": "pr_merged" if v[3] else "pr_opened", "pr": pr_number(kinds if v[3] else {"pr_open"}, cmd, text), "at": at})
+            if self.scans and at and time.time() - at < 900:     # fresh work makes news and XP, never from the first read
+                kind = "pr_merged" if v[3] else "pr_opened" if v[2] else "commit" if v[0] else "push"
+                pr = pr_number(kinds if v[3] else {"pr_open"}, cmd, text) if v[2] or v[3] else None
+                self.events.append({"session": sid, "kind": kind, "v": v[:4], "pr": pr, "at": at})
         return changed
 
     def _cost(self, raw: bytes, sid: str) -> bool:
@@ -392,7 +394,8 @@ class TokenLedger:
         return True
 
     def take_events(self) -> list:
-        """PRs opened or merged since the last call (from scans after the first), for the office's news."""
+        """Work shipped since the last call (from scans after the first): commits, pushes, PRs opened or merged, each
+        {"session", "kind", "v": [commits, pushes, prs opened, prs merged], "pr", "at"}, for news and XP."""
         with self.lock:
             out, self.events = self.events, []
         return out
@@ -491,6 +494,19 @@ class TokenLedger:
             return False
         self.data["codex"][key] = [pos, t0, c0, o0]
         return changed
+
+    def shipped_by_seat(self, known: set, codex: str | None = None) -> dict:
+        """All-time (commits, PRs merged) per seat, for the shipping achievements."""
+        out: dict = {}
+        with self.lock:
+            for r in self.data["sessions"].values():
+                k = codex if r.get("s") == "@codex" else r.get("s")
+                if k not in known or not r.get("g"):
+                    continue
+                x = out.setdefault(k, [0, 0])
+                for v in r["g"].values():
+                    x[0] += v[0]; x[1] += v[3]
+        return {k: tuple(v) for k, v in out.items()}
 
     def run(self, stop: threading.Event, live=lambda: {}, every: float = 120) -> None:
         """Scan now, then every `every` seconds, until stop."""

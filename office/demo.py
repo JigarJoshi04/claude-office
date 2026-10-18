@@ -264,6 +264,13 @@ class DemoOffice(LiveOffice):
                 self.emit("report", "visitor-lane filed its report: STATUS: DONE - docs fixed", "claude4", "good")
                 self.emit("leave", "visitor-lane left claude4", "claude4")
         self._visiting = visiting
+        # Commits land now and then (a real office reads them from the transcripts every minute).
+        beat = int(now // 20)
+        if getattr(self, "_commit_beat", beat) != beat and beat % 3 == 0:
+            who, proj = [("claude2", "api-gateway"), ("claude3", "billing-service"), ("claude", "infra-terraform")][beat // 3 % 3]
+            n = 1 + beat % 3
+            self.emit("commit", f"{proj}: {n} commit{'' if n == 1 else 's'}", who, "good")
+        self._commit_beat = beat
         for s in seats:
             sc = div["seats"][s["id"]]
             s["divider"] = sc
@@ -313,7 +320,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.30.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.31.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

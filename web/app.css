@@ -1449,3 +1449,4 @@ table.ship small { color: var(--muted); }
 .tok-parts .tok-usd { color: #ffd27a; } :root[data-theme="light"] .tok-parts .tok-usd { color: #8a5a00; }
 .tp-valuecard td.num, .tp-valuecard th.num { white-space: nowrap; } .tp-valuecard table.ship .who { gap: 6px; }
 @media (max-width: 480px) { .tp-valuecard th:nth-child(2), .tp-valuecard td:nth-child(2) { display: none; } }   /* a phone keeps value and payback */
+.pop.ship { color: #7df0ad; background: rgba(13,43,24,.85); font-size: max(10px, calc(6px * var(--f))); padding: calc(.6px * var(--f)) calc(2px * var(--f)); border-radius: calc(2px * var(--f)); box-shadow: 0 0 0 calc(.4px * var(--f)) rgba(61,220,132,.6); }

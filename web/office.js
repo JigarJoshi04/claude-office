@@ -1271,6 +1271,12 @@ export function createOffice(stage, handlers) {
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },
     // Confetti where a gift was, as it opens.
+    // "+3 commits" rises from a seat's desk: shipped work, quieter than a celebration (commits come often).
+    shipPop(seatId, text) {
+      if (!L || reduced || game !== "full") return;
+      const p = L.pods.find(x => x.seat.id === seatId);
+      if (p) pops.push({ el: div("pop ship", text, p.x + POD_W / 2 - 16, p.y + 70), until: performance.now() + 2800 });
+    },
     unwrap(id) { const p = L && giftSpots().find(x => x.g.id === id); if (p && !reduced && game === "full") burst(p.x + 6, p.y + 4, 40, "confetti"); },
     season: () => (seasonal ? seasonFor(new Date()) : null),
     setClock(ts) { clockAt = ts || null; },

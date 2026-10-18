@@ -386,7 +386,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.30.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.31.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -529,11 +529,26 @@ class Office(LiveOffice):
             live = {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
             try:
                 self.tokens.scan(live)
+                seats = {s["id"]: s for s in snap.get("seats", [])}
+                labels = {k: s.get("label", k) for k, s in seats.items()}
+                commits: dict = {}
                 for e in self.tokens.take_events():
                     rec = self.tokens.data["sessions"].get(e["session"]) or {}
-                    seat = rec.get("s") if rec.get("s") in {s["id"] for s in snap.get("seats", [])} else None
-                    what = f"PR #{e['pr']}" if e.get("pr") else "a PR"
-                    self.emit("shipped", f"{rec.get('p') or 'A session'}: {what} {'merged' if e['kind'] == 'pr_merged' else 'opened'}", seat, "good")
+                    codex = next((k for k, s in seats.items() if s.get("kind") == "codex"), None)
+                    seat = codex if rec.get("s") == "@codex" else rec.get("s") if rec.get("s") in seats else None
+                    if seat:                                     # shipped work is XP (career.py)
+                        for sid, kind, text in self.career.credit_shipped(seat, labels[seat], e.get("v") or []):
+                            self.emit(kind, text, sid, "good")
+                    if e["kind"] in ("pr_merged", "pr_opened"):
+                        what = f"PR #{e['pr']}" if e.get("pr") else "a PR"
+                        self.emit("shipped", f"{rec.get('p') or 'A session'}: {what} {'merged' if e['kind'] == 'pr_merged' else 'opened'}", seat, "good")
+                    elif e["kind"] == "commit":                  # commits come often: one line per seat and project a read
+                        key = (seat, rec.get("p") or "A session")
+                        commits[key] = commits.get(key, 0) + (e.get("v") or [0])[0]
+                for (seat, proj), n in commits.items():
+                    self.emit("commit", f"{proj}: {n} commit{'' if n == 1 else 's'}", seat, "good")
+                for sid, kind, text in self.career.shipped_totals(self.tokens.shipped_by_seat(set(seats), next((k for k, s in seats.items() if s.get("kind") == "codex"), None)), labels):
+                    self.emit(kind, text, sid, "good")
             except Exception:                         # the ledger is a nicety; never let it stop the office
                 pass
             self.stop.wait(60)

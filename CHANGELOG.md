@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.31.0] - 2026-10-18
+
+### Added
+- Shipped work is game currency: a commit earns 25 XP, a push 5, an opened pull request 50 and a merged one 150,
+  from now on (no back pay, so levels keep their meaning). Commits rise from the desk as "+3 commits" and land in the
+  news as one line per seat and project a read; PRs keep their celebration, combo step and gift.
+- Five shipping achievements: Shipped it (a first commit), Committer (100), Prolific (1,000), Merged (a first PR
+  merged) and Release train (50 merged). History unlocks them quietly on the first read.
+
 ## [3.30.0] - 2026-10-18
 
 ### Added

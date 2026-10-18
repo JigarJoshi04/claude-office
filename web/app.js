@@ -464,7 +464,7 @@ setInterval(() => {
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
 }, 45000);
 
-const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {} };
+const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {} };
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
 function safeNews(e) { try { onNews(e); } catch (err) { console.error("office news:", err); } }
 function onNews(e) {
@@ -485,6 +485,12 @@ function onNews(e) {
       if (ok) { lastReport = Date.now(); lastReportSeat = e.seat; fx.celebrate(e.seat, sid, "Shipped!"); if (who) fx.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); game.comboHit(e); giftBox.earn(e.seat, "report"); }
       else sound.play("bad");
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
+      break;
+    }
+    case "commit": {                                   // commits read from a session's transcript, one line per read
+      const n = +(/: (\d+) commits?$/.exec(e.text) || [])[1] || 1;
+      fx.shipPop(e.seat, `+${n} commit${n === 1 ? "" : "s"}`);
+      if (who && n >= 3) fx.sayAtSeat(e.seat, `${n} commits in a minute. On a roll.`, 5000);
       break;
     }
     case "limit": fx.alarm(e.seat, "Out of plan"); if (who) fx.sayAtSeat(e.seat, line(who, "limit"), 8000); teammateReacts(e, "limit"); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;

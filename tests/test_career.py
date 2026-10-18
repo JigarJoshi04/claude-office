@@ -74,6 +74,20 @@ class CareerTests(unittest.TestCase):
         again.observe(snap(100, tools=50))   # the same session again: no second credit
         self.assertEqual(again.view("a")["xp"], 60)
 
+    def test_shipped_work_earns_xp_and_achievements(self):
+        c = career.Career(self.path, clock=lambda: 1000.0)
+        self.assertEqual(c.credit_shipped("a", "Atlas", [2, 1, 0, 0]), [])          # 2 commits and a push
+        self.assertEqual(c.view("a")["xp"], 2 * 25 + 5)
+        news = c.credit_shipped("a", "Atlas", [0, 0, 1, 1])                         # a PR opened and merged: level 2
+        self.assertEqual(c.view("a")["xp"], 55 + 50 + 150)
+        self.assertEqual(news, [("a", "levelup", "Atlas reached level 2: Intern")])
+        self.assertEqual(c.shipped_totals({"a": (120, 3)}, {"a": "Atlas"}), [])     # history unlocks quietly
+        self.assertTrue({"first_commit", "commits_100", "first_merge"} <= set(c.view("a")["unlocked"]))
+        self.assertNotIn("commits_1k", c.view("a")["unlocked"])
+        news = c.shipped_totals({"a": (1000, 3)}, {"a": "Atlas"})
+        self.assertEqual(news, [("a", "achievement", "Atlas unlocked Prolific")])
+        self.assertEqual(c.shipped_totals({"a": (1001, 3)}, {"a": "Atlas"}), [])    # once
+
     def test_catalogue_icons_and_names_are_complete(self):
         self.assertEqual(len({a["id"] for a in career.CATALOGUE}), len(career.CATALOGUE))
         icons = Path(__file__).resolve().parent.parent.joinpath("web/ui/icons.js").read_text()
