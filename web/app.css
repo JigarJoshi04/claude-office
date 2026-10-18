@@ -364,6 +364,7 @@ body.resizing .stage, body.resizing .panel { pointer-events: none; }
 .hero .role { color: var(--muted); font-size: 13.5px; margin: 2px 0 6px; }
 .hero .m-word { font-size: 14px; }
 .hero .h-find { position: absolute; top: 12px; right: 12px; }
+.hero .h-card { position: absolute; top: 12px; right: 50px; color: #ffd24a; }
 .hero h2 { padding-right: 34px; }
 .hero .voice { margin: 16px 0 0; padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,.18); font-size: 15px; line-height: 1.45; color: var(--text); }
 :root[data-theme="light"] .hero .voice { background: rgba(255,255,255,.6); }
@@ -1275,3 +1276,20 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .almost .al-bar i, .ol-prog i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #e0a92a, #ffd24a); }
 .almost em { font: 700 12.5px var(--mono); font-style: normal; color: var(--muted); }
 .ol-card .ol-pn { font: 600 11.5px var(--mono); font-style: normal; color: var(--muted); }
+
+/* ------------------------------------------------------------------ character cards (3.17) */
+#dialog.card-view { width: min(460px, calc(100vw - 24px)); background: radial-gradient(120% 80% at 50% 0%, #2a2348, #120f22 70%); color: #fff; overflow: visible; }
+.ccv { position: relative; display: grid; gap: 12px; padding: 18px 18px 16px; }
+.ccv-x { position: absolute; top: 6px; right: 6px; color: #fff; z-index: 2; }
+.ccv-stage { perspective: 900px; display: grid; place-items: center; padding-top: 6px; }
+.ccv-card { position: relative; width: min(340px, 100%); border-radius: 22px; transition: transform .18s ease-out; transform-style: preserve-3d; box-shadow: 0 24px 60px rgba(0,0,0,.55); }
+.ccv-card img { display: block; width: 100%; height: auto; border-radius: 22px; }
+.ccv-glare { position: absolute; inset: 0; border-radius: 22px; pointer-events: none; mix-blend-mode: soft-light;
+  background: radial-gradient(circle at var(--gx, 30%) var(--gy, 20%), rgba(255,255,255,.55), rgba(255,255,255,0) 55%); }
+.ccv-card.t-holo .ccv-glare { mix-blend-mode: color-dodge; background: radial-gradient(circle at var(--gx, 30%) var(--gy, 20%), rgba(255,255,255,.35), transparent 50%),
+  linear-gradient(115deg, transparent 20%, rgba(255,79,216,.22) 35%, rgba(255,210,74,.2) 45%, rgba(56,224,123,.2) 55%, rgba(91,141,239,.22) 65%, transparent 80%); background-size: 100% 100%, 250% 250%;
+  background-position: center, var(--gx, 30%) var(--gy, 20%); }
+.ccv-nav { display: flex; align-items: center; gap: 8px; font-weight: 650; text-align: center; }
+.ccv-nav .btn { color: #fff; }
+.ccv-act { display: flex; justify-content: center; gap: 8px; }
+:root[data-motion="reduced"] .ccv-card { transition: none; }

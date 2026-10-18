@@ -103,7 +103,7 @@ export function makeFloor(ctx) {
     const p = panels.persona(s), duty = s.divider ? s.divider.enabled !== false : s.status !== "benched";
     const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || "codex -C <folder>";
     const items = [
-      ["open", "users", `Open ${p.name}`], ["zoom", "target", "Zoom in on the room"], ["hire", "plus", `Hire a lane for ${p.name}`],
+      ["open", "users", `Open ${p.name}`], ["card", "star", `${p.name}'s card`], ["zoom", "target", "Zoom in on the room"], ["hire", "plus", `Hire a lane for ${p.name}`],
       ["duty", duty ? "sun" : "briefcase", duty ? "Send on holiday" : "Back on duty"], ["copy", "copy", s.kind === "claude" ? "Copy the terminal command" : "Copy the Codex command"],
     ];
     const m = document.createElement("div");
@@ -125,6 +125,7 @@ export function makeFloor(ctx) {
     m.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => {
       const k = b.dataset.rm; closeRoomMenu();
       if (k === "open") go({ kind: "seat", seat: id });
+      else if (k === "card") app.openCard(id);
       else if (k === "zoom") { setView("floor"); office.focusSeat(id); }
       else if (k === "hire") { panels.hireFor(id); go({ kind: "hire" }); }
       else if (k === "duty") panels.setDuty(id, !duty);

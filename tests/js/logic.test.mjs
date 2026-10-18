@@ -293,3 +293,9 @@ test("the next badge is the unearned one closest to done, from a third of the wa
   assert.equal(nextBadge({ talker: [7, 10], collector: [11, 12] }, { collector: 1 }).badge.id, "talker");
   assert.equal(nextBadge({ talker: [10, 10] }, {}), null);                                  // done, waiting to be awarded
 });
+
+test("character card tiers by level", async () => {
+  const { tierFor } = await import("../../web/ui/charcard.js");
+  assert.deepEqual([1, 4, 5, 9, 10, 15, 19, 20, 40].map(l => tierFor(l).name), ["Rookie", "Rookie", "Bronze", "Bronze", "Silver", "Gold", "Gold", "Holo", "Holo"]);
+  assert.equal(tierFor(undefined).name, "Rookie");
+});

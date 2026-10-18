@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.17.0] - 2026-10-18
+
+### Added
+- Character cards: a collectible card for each character, framed by level (Rookie, Bronze, Silver, Gold, and Holo
+  from level 20), with the portrait, title, motto, hours, reports, tool calls, sessions and latest achievements. It
+  tilts toward the pointer, flips through the team, and saves or copies as a picture. Open it from the star on a
+  character's page, the room menu or the palette.
+
 ## [3.16.0] - 2026-10-18
 
 ### Added

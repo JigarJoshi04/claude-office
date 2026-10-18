@@ -308,6 +308,7 @@ export function makePanels(app) {
     return { html: `${crumbs(esc(p.name))}
       <div class="hero st-${vo.state}" style="--seat:${esc(s.color)}">
         <button class="btn sm ghost icon h-find" data-focus-seat="${esc(s.id)}" title="Show on the floor" aria-label="Show on the floor">${icon("target", 16)}</button>
+        <button class="btn sm ghost icon h-card" data-card="${esc(s.id)}" title="${esc(p.name)}'s card" aria-label="${esc(p.name)}'s character card">${icon("star", 16)}</button>
         <div class="h-top">${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0), "big")}
           <div class="grow"><h2>${esc(p.name)}</h2><div class="role">${esc(p.role)}${s.career ? ` · Level ${s.career.level} ${esc(s.career.title)}` : ""}</div>
           <span class="m-word ${vo.tone}"><i></i>${esc(vo.word)}</span></div></div>
