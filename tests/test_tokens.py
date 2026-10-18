@@ -433,3 +433,19 @@ class ProjectViewTests(unittest.TestCase):
         self.assertEqual(v["models"], [{"model": "claude-opus-5-5", "all": 1100}])
         self.assertEqual((v["sessions"][0]["seat"], v["shipped"]["commits"], v["shipped"]["prs_merged"]), ("claude2", 2, 1))
         self.assertEqual(led.view_project("nothing", seats, today="2026-10-19")["all_time"]["sessions"], 0)
+
+
+class ShipItemsTests(unittest.TestCase):
+    """What shipped, item by item: each commit's subject, a PR opened with its title, a PR merged."""
+
+    def test_items_from_command_output(self):
+        from office.tokens import ship_items, ship_kinds, shipped
+        cmd = 'git add -A && git commit -qm "Fix it" && git push'
+        text = "[main 7e416a1] 3.126.0: utilities\n[main 1b2c3d4] Second one\n 2 files changed, 3 insertions(+)\n"
+        k = ship_kinds(cmd)
+        items = ship_items(k, cmd, text, shipped(k, text))
+        self.assertEqual([(i["k"], i["sha"], i["sub"], i["b"]) for i in items], [("c", "7e416a1", "3.126.0: utilities", "main"), ("c", "1b2c3d4", "Second one", "main")])
+        cmd = "gh pr create --title 'Smooth bursts' --body x"
+        k = ship_kinds(cmd)
+        self.assertEqual(ship_items(k, cmd, "https://github.com/a/b/pull/482\n", shipped(k, "https://github.com/a/b/pull/482\n")),
+                         [{"k": "po", "n": 482, "sub": "Smooth bursts"}])

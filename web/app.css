@@ -1770,3 +1770,10 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .ut-seats { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; font-size: 13px; }
 .ut-seats span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; background: var(--surface-2); } .ut-seats i { width: 8px; height: 8px; border-radius: 50%; background: var(--seat); }
 @container panel (max-width: 420px) { .ut-row { grid-template-columns: 56px 1fr; } .ut-row span:last-child { grid-column: 1 / -1; } }
+/* Shipped (views.js shippedCard). */
+.sh-card h4 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.sh-proj { margin-top: 10px; } .sh-proj > b { font-size: 13px; color: var(--muted); letter-spacing: .02em; }
+.sh-proj ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.sh-proj li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; font-size: 13.5px; }
+.sh-proj li code { font-size: 12px; color: var(--accent-2); } .sh-proj li span:nth-child(2) { overflow-wrap: anywhere; }
+.sh-who { color: var(--muted); font-size: 12px; white-space: nowrap; } .sh-pr { font-size: 12.5px; } .good-t { color: var(--good); }

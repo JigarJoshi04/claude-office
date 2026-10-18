@@ -290,6 +290,15 @@ class DemoOffice(LiveOffice):
             self._tokens = _demo_token_ledger()
         return self._tokens.view(self.get().get("seats", []), rng=rng, seat=seat, all_sessions=all_sessions)
 
+    def shipped_list(self, day):
+        now = time.time()
+        items = [{"k": "c", "sha": "3f9a1c2", "sub": "Token bucket refills from elapsed time", "b": "lane/api-rate-limits", "seat": "claude2", "project": "apollo", "at": now - 9000},
+                 {"k": "c", "sha": "b71e004", "sub": "Test two clients sharing one key", "b": "lane/api-rate-limits", "seat": "claude2", "project": "apollo", "at": now - 8200},
+                 {"k": "po", "n": 482, "sub": "Smooth bursts with a token bucket", "seat": "claude2", "project": "apollo", "at": now - 8000},
+                 {"k": "c", "sha": "0c1d9e7", "sub": "Regenerate the API reference", "b": "docs-refresh", "seat": "astra", "project": "docs", "at": now - 5000},
+                 {"k": "pm", "n": 477, "seat": "claude4", "project": "apollo", "at": now - 3000}]
+        return {"day": day, "items": items}
+
     def standup(self) -> dict:
         from . import standup
         y = time.time() - 86400
@@ -520,7 +529,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.126.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.127.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},

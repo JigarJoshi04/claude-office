@@ -90,6 +90,7 @@ export function renderStats(el, app) {
         <div class="tile"><div class="v">${o.lanes_hired ?? 0}</div><div class="tk">lanes hired here</div></div>
       </div>
     </div>
+    ${shippedCard(app, st.day || todayStr, nameOf)}
     ${weekCard(app, st.day || todayStr)}
     ${parCard(app)}
     ${capacityCard(app)}
@@ -151,6 +152,21 @@ const WEEK_METRICS = { reports: ["Reports", (d) => d.reports, (v) => String(v)],
 // this one so far, with the season total. Using most of the plan without running out is the good round.
 const PAR_TONE = { "-2": "eagle", "-1": "birdie", "0": "par", "1": "bogey", "2": "double" };
 export const parMark = (score) => (score == null ? "–" : score === 0 ? "E" : score < 0 ? "−" + Math.abs(score) : "+" + score);
+// What shipped that day, item by item (tokens.shipped_list): each project's commits with their subjects, the PRs opened
+// and merged, and who did them. Share-safe keeps to counts.
+function shippedCard(app, day, nameOf) {
+  const d = app.shippedCache(day);
+  if (!d || !d.items || !d.items.length) return "";
+  const priv = app.privacy(), by = new Map();
+  for (const it of d.items) { const k = it.project || "elsewhere"; if (!by.has(k)) by.set(k, []); by.get(k).push(it); }
+  const n = (k) => d.items.filter(x => x.k === k).length;
+  const who = (it) => it.seat ? `<span class="sh-who">${esc(nameOf(it.seat))}</span>` : "";
+  const row = (it) => it.k === "c" ? `<li><code>${esc(it.sha)}</code><span>${priv ? "a commit" : esc(it.sub)}</span>${who(it)}</li>`
+    : it.k === "po" ? `<li><b class="sh-pr">PR #${it.n || "?"}</b><span>opened${!priv && it.sub ? ": " + esc(it.sub) : ""}</span>${who(it)}</li>`
+    : `<li><b class="sh-pr good-t">PR #${it.n || "?"}</b><span>merged</span>${who(it)}</li>`;
+  return `<div class="view-card sh-card"><div class="row between"><h4>${icon("send", 16)}Shipped</h4><span class="hint">${n("c")} commit${n("c") === 1 ? "" : "s"} · ${n("po")} PR${n("po") === 1 ? "" : "s"} opened · ${n("pm")} merged</span></div>
+    ${[...by.entries()].map(([proj, items], i) => `<div class="sh-proj"><b>${priv ? `Project ${i + 1}` : esc(proj)}</b><ul>${items.slice(-12).map(row).join("")}</ul>${items.length > 12 ? `<p class="hint">and ${items.length - 12} earlier.</p>` : ""}</div>`).join("")}</div>`;
+}
 function parCard(app) {
   const snap = app.snap(), seats = snap.seats.filter(s => s.par && (s.par.past.length || s.par.now));
   if (!seats.length) return "";

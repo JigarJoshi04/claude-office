@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.127.0] - 2026-10-19
+
+### Added
+- Shipped, item by item: the Today view lists what the agents shipped that day, per project: each commit's short sha
+  and subject, each PR opened with its title, each PR merged, and who did it (read from the transcripts, as the
+  counts are). Share-safe keeps to counts. `GET /api/shipped?day=YYYY-MM-DD`. The ledger reads its transcripts again
+  once to fill in the days still on disk.
+
 ## [3.126.0] - 2026-10-19
 
 ### Added

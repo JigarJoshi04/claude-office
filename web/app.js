@@ -47,6 +47,7 @@ let loose = null;          // the last /api/loose answer and when it came
 let prsData = null;        // the last /api/prs answer and when it came
 const cabinet = new Map();   // "q|seat|offset" -> {data, at}: the filing cabinet's searches
 const projects = new Map();  // "name|days" -> {data, at}: project drill-downs
+const shippedDays = new Map();     // day -> {data, at}: what shipped (app.shippedCache)
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
 const seenNews = new Set();
 let lastEventTs = 0;
@@ -148,6 +149,18 @@ const app = {
         if (cabinet.size > 40) cabinet.delete(cabinet.keys().next().value);
         if (view.kind === "cabinet") renderPanel(true);
       }).catch(() => { cabinet.set(k, { data: null, at: Date.now() }); inflight.delete("cab" + k); });
+    }
+    return c ? c.data : null;
+  },
+  // A day's shipped items (/api/shipped), for the Today view.
+  shippedCache: (day) => {
+    const k = day || localDay(), c = shippedDays.get(k);
+    if ((!c || Date.now() - c.at > 60000) && !inflight.has("shp" + k)) {
+      inflight.add("shp" + k);
+      fetch(`/api/shipped?day=${encodeURIComponent(k)}`).then(r => r.ok ? r.json() : null).then(d => {
+        shippedDays.set(k, { data: d, at: Date.now() }); inflight.delete("shp" + k);
+        if (prefs.view === "stats") renderMain();
+      }).catch(() => { shippedDays.set(k, { data: null, at: Date.now() }); inflight.delete("shp" + k); });
     }
     return c ? c.data : null;
   },

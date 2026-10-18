@@ -539,7 +539,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.126.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.127.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -924,6 +924,13 @@ class Office(LiveOffice):
     def tokens_view(self, rng: str = "all", seat: str | None = None, all_sessions: bool = False) -> dict:
         snap = self.get() or {}
         return self.tokens.view(snap.get("seats", []), rng=rng, seat=seat, all_sessions=all_sessions)
+
+    def shipped_list(self, day: str) -> dict:
+        """A day's shipped items (tokens.shipped_list): commits with their subjects, PRs opened and merged."""
+        seats = (self.get() or {}).get("seats", [])
+        items = self.tokens.shipped_list(day, {s["id"] for s in seats}, next((s["id"] for s in seats if s.get("kind") == "codex"), None)) \
+            if self.tokens.scanned_at else None
+        return {"day": day, "items": items, "scanning": not self.tokens.scanned_at}
 
     def standup(self) -> dict:
         """This morning's standup (standup.py): yesterday from the news and the ledger, today and blockers from now."""

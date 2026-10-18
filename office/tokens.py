@@ -30,7 +30,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 7                # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 8                # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -113,6 +113,25 @@ def shipped(kinds: set, text: str) -> list:
             _MERGE_YES.search(low) or ("pr_auto" not in kinds and not _MERGE_ERR.search(low))):
         v[3] = 1
     return v
+
+
+_COMMIT_ITEM = re.compile(r"^\[([^\]\n]+?) ([0-9a-f]{7,40})\] (.+)$", re.M)
+_PR_TITLE = re.compile(r"--title[ =](?:\"((?:\\.|[^\"\\])*)\"|'([^']*)'|(\S+))")
+
+
+def ship_items(kinds: set, cmd: str, text: str, v: list) -> list[dict]:
+    """What a command shipped, item by item, for "Shipped today": each commit's short sha and subject, a PR opened
+    with its title, a PR merged."""
+    out = []
+    if v[0]:
+        for m in _COMMIT_ITEM.finditer(text):
+            out.append({"k": "c", "sha": m.group(2)[:9], "sub": " ".join(m.group(3).split())[:120], "b": m.group(1).split()[-1][:60]})
+    if v[2]:
+        t = _PR_TITLE.search(cmd)
+        out.append({"k": "po", "n": pr_number({"pr_open"}, cmd, text), "sub": " ".join((next((g for g in t.groups() if g), "") if t else "").split())[:120]})
+    if v[3]:
+        out.append({"k": "pm", "n": pr_number(kinds, cmd, text)})
+    return out
 
 
 def pr_number(kinds: set, cmd: str, text: str) -> int | None:
@@ -238,7 +257,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
-                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web") if k in r}
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
@@ -484,6 +503,12 @@ class TokenLedger:
                 g = s.setdefault("g", {}).setdefault(day or "?", [0] * len(SHIP))
                 for i, x in enumerate(v):
                     g[i] += x
+                if v[0] or v[2] or v[3]:                        # the items themselves, for "Shipped today"
+                    lst = s.setdefault("sl", {}).setdefault(day or "?", [])
+                    have = {x.get("sha") for x in lst if x.get("sha")}
+                    for it in ship_items(kinds, cmd, text, v):
+                        if len(lst) < 40 and not (it.get("sha") and it["sha"] in have):
+                            lst.append(dict(it, at=_epoch(self._ts)))
             changed = True
             at = _epoch(self._ts)
             if self.scans and at and time.time() - at < 900:     # fresh work makes news and XP, never from the first read
@@ -773,6 +798,16 @@ class TokenLedger:
                 for v in r["g"].values():
                     x[0] += v[0]; x[1] += v[3]
         return {k: tuple(v) for k, v in out.items()}
+
+    def shipped_list(self, day: str, known: set, codex: str | None = None) -> list[dict]:
+        """One day's shipped items across the office, oldest first: {k, sha|n, sub, b, at, seat, project, session}."""
+        out = []
+        with self.lock:
+            for sid, r in (self._serve or self.data)["sessions"].items():
+                for it in ((r.get("sl") or {}).get(day) or []):
+                    k = codex if r.get("s") == "@codex" else r.get("s")
+                    out.append(dict(it, seat=k if k in known else None, project=r.get("p"), session=sid))
+        return sorted(out, key=lambda x: x.get("at") or 0)
 
     def shipped_on(self, day: str, known: set, codex: str | None = None) -> dict:
         """One day's commits, PRs opened and PRs merged, for the office and per seat (the lobby's ship board)."""
