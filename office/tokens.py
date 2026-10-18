@@ -24,26 +24,38 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 VERSION = 2
+SHIP_RULES = 2                # bumped when the rules for shipped work change: every transcript's commands are read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
 _STAT = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?")
 _PUSHED = re.compile(r"\b[0-9a-f]{7,40}\.\.[0-9a-f]{7,40}\s+\S+ -> \S+|\* \[new branch\]")
 _PR_URL = re.compile(r"/pull/(\d+)")
-_GIT = r"(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*git\b(?:\s+-[-\w]+(?:[ =][^\s;&|]+)?)*\s+"   # git starting a command
+_START = r"(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*"                 # a command's start, after any VAR=value
+_GIT = _START + r"git\b(?:\s+-[-\w]+(?:[ =][^\s;&|]+)?)*\s+"
+_GH = _START + r"gh\s+pr\s+"
+_MERGE_ARGS = re.compile(_GH + r"merge\b([^;&|\n]*)")
+_MERGE_NO = re.compile(r"already merged|not mergeable|automatically merged|merge queue|auto-merge")   # nothing merged now
+_MERGE_YES = re.compile(r"\bmerged pull request\b|\"state\":\s*\"merged\"|^merged\b", re.M)          # gh's words, or a gh pr view
+_MERGE_ERR = re.compile(r"graphql|is expected|could not|^x |^! |^error|^fatal", re.M)
+_COMMIT_LINE = re.compile(r"^\[[^\]\n]+ [0-9a-f]{7,40}\]", re.M)
+_COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|^(?:error|fatal):|aborting commit", re.M)
 
 
 def ship_kinds(cmd: str) -> set:
-    """What a shell command would ship if it succeeds: commit, push, pr_open, pr_merge."""
+    """What a shell command would ship if it succeeds: commit, push, pr_open, pr_merge (pr_auto: an auto-merge)."""
     out = set()
     if re.search(_GIT + r"commit\b", cmd):
         out.add("commit")
     if re.search(_GIT + r"push\b", cmd):
         out.add("push")
-    if re.search(r"(?:^|[;&|(\n])\s*gh\s+pr\s+create\b", cmd):
+    if re.search(_GH + r"create\b", cmd):
         out.add("pr_open")
-    if re.search(r"(?:^|[;&|(\n])\s*gh\s+pr\s+merge\b", cmd):
+    m = _MERGE_ARGS.search(cmd)
+    if m and "--disable-auto" not in m.group(1):
         out.add("pr_merge")
+        if re.search(r"--auto\b", m.group(1)):
+            out.add("pr_auto")
     return out
 
 
@@ -51,18 +63,41 @@ def shipped(kinds: set, text: str) -> list:
     """[commits, pushes, prs_opened, prs_merged, insertions, deletions] that a successful command's output shows."""
     v = [0, 0, 0, 0, 0, 0]
     low = text.lower()
-    if "commit" in kinds and "nothing to commit" not in low and "no changes added" not in low:
-        v[0] = max(1, len(re.findall(r"^\[[^\]\n]+ [0-9a-f]{7,40}\]", text, re.M)))   # `git commit -q` prints nothing
-        for m in _STAT.finditer(text):
-            v[4] += int(m.group(2) or 0)
-            v[5] += int(m.group(3) or 0)
-    if "push" in kinds and "rejected" not in low and "everything up-to-date" not in low and (_PUSHED.search(text) or not text.strip()):
+    if "commit" in kinds:
+        lines = len(_COMMIT_LINE.findall(text))
+        if lines or not _COMMIT_NO.search(low):                # `git commit -q` prints nothing
+            v[0] = max(1, lines)
+            for m in _STAT.finditer(text):
+                v[4] += int(m.group(2) or 0)
+                v[5] += int(m.group(3) or 0)
+    if "push" in kinds and (_PUSHED.search(text) or not text.strip()):
         v[1] = 1
     if "pr_open" in kinds and _PR_URL.search(text):
         v[2] = 1
-    if "pr_merge" in kinds and "not mergeable" not in low and "failed" not in low:
+    # gh prints nothing when it merges without a terminal; the cleanup after a merge can fail without undoing it
+    if "pr_merge" in kinds and not _MERGE_NO.search(low) and (
+            _MERGE_YES.search(low) or ("pr_auto" not in kinds and not _MERGE_ERR.search(low))):
         v[3] = 1
     return v
+
+
+def pr_number(kinds: set, cmd: str, text: str) -> int | None:
+    """The PR a command opened or merged: from a /pull/N link, gh's "owner/repo#N", or the merge command's argument."""
+    if "pr_merge" in kinds:
+        m = (re.search(_GH + r"merge\s+(?:\S*/pull/|#)?(\d+)\b", cmd) or re.search(r"pull request (?:[\w.-]+/[\w.-]+)?#(\d+)", text, re.I))
+        if m:
+            return int(m.group(1))
+    m = _PR_URL.search(text)
+    return int(m.group(1)) if m else None
+
+
+def short_id(sid: str) -> str:
+    """A session id short enough for a table: a Claude session's first 8 characters; a Codex rollout's last 8 hex
+    digits (its stem starts with the date, and new ids share a time prefix)."""
+    if sid.startswith("codex:"):
+        m = re.search(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", sid)
+        return m.group(1)[-8:] if m else sid[-8:]
+    return sid[:8]
 MAX_SESSIONS = 20000          # far beyond a busy year; the oldest drop off first
 
 
@@ -116,7 +151,7 @@ class TokenLedger:
 
     # -- state ----------------------------------------------------------------------------------------------------
     def _empty(self) -> dict:
-        return {"v": VERSION, "files": {}, "files_out": {}, "codex": {}, "sessions": {}, "days": {}, "models": {}}
+        return {"v": VERSION, "sr": SHIP_RULES, "files": {}, "files_out": {}, "codex": {}, "sessions": {}, "days": {}, "models": {}}
 
     def _load(self) -> dict:
         try:
@@ -125,6 +160,11 @@ class TokenLedger:
                 self._legacy = d
                 return self._empty()
             if d.get("v") == VERSION:
+                if d.get("sr") != SHIP_RULES:          # recount shipped work from the transcripts still on disk
+                    d["files_out"] = {}
+                    for r in (d.get("sessions") or {}).values():
+                        r.pop("g", None)
+                    d["sr"] = SHIP_RULES
                 for k, v in self._empty().items():
                     d.setdefault(k, v)
                 return d
@@ -272,7 +312,7 @@ class TokenLedger:
 
     def _ship(self, raw: bytes, sid: str) -> bool:
         """Bash calls that commit, push, or open or merge a PR, counted when their result comes back without an error."""
-        m = re.search(rb'"timestamp":"([^"]+)"', raw)
+        m = re.search(rb'"timestamp":\s*"([^"]+)"', raw)
         if m:
             self._ts = m.group(1).decode()
         if b'"tool_use"' in raw and b'"Bash"' in raw and (b"git" in raw or b"gh " in raw):
@@ -283,9 +323,10 @@ class TokenLedger:
             content = (d.get("message") or {}).get("content") if isinstance(d, dict) else None
             for c in content if isinstance(content, list) else []:
                 if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Bash":
-                    kinds = ship_kinds(str((c.get("input") or {}).get("command") or ""))
+                    cmd = str((c.get("input") or {}).get("command") or "")
+                    kinds = ship_kinds(cmd)
                     if kinds:
-                        self._pending[c.get("id")] = kinds
+                        self._pending[c.get("id")] = (kinds, cmd)
                         if len(self._pending) > 500:
                             self._pending.pop(next(iter(self._pending)))
             return False
@@ -300,7 +341,7 @@ class TokenLedger:
         for c in content if isinstance(content, list) else []:
             if not isinstance(c, dict) or c.get("type") != "tool_result" or c.get("tool_use_id") not in self._pending:
                 continue
-            kinds = self._pending.pop(c["tool_use_id"])
+            kinds, cmd = self._pending.pop(c["tool_use_id"])
             if c.get("is_error"):
                 continue
             body = c.get("content")
@@ -317,8 +358,7 @@ class TokenLedger:
             changed = True
             at = _epoch(self._ts)
             if self.scans and (v[2] or v[3]) and at and time.time() - at < 900:     # fresh PR news, never from the first read
-                pr = _PR_URL.search(text)
-                self.events.append({"session": sid, "kind": "pr_merged" if v[3] else "pr_opened", "pr": int(pr.group(1)) if pr else None, "at": at})
+                self.events.append({"session": sid, "kind": "pr_merged" if v[3] else "pr_opened", "pr": pr_number(kinds if v[3] else {"pr_open"}, cmd, text), "at": at})
         return changed
 
     def take_events(self) -> list:
@@ -448,12 +488,12 @@ class TokenLedger:
             before = datetime(y - (mo == 1), (mo - 2) % 12 + 1, 1).date()
             cur = {(first + timedelta(days=i)).isoformat() for i in range((nxt - first).days)}
             prev = {(before + timedelta(days=i)).isoformat() for i in range((first - before).days)}
-            n = len(cur)
+            length = len(cur)
         else:
             rng = rng if rng in RANGES else "all"
-            n = RANGES[rng]
-            cur = span(0, n) if n else None
-            prev = span(n, n) if n else None
+            length = RANGES[rng]
+            cur = span(0, length) if length else None
+            prev = span(length, length) if length else None
         codex = next((x["id"] for x in seats if x.get("kind") == "codex"), None)
         known = {x["id"] for x in seats}
         with self.lock:
@@ -494,9 +534,11 @@ class TokenLedger:
                 ps = prev_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0})
                 ps["all"] += pf + pc; ps["fresh"] += pf; ps["output"] += po
             if f + c:
-                st = per_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0, "sessions": 0, "today": 0, "m": {}})
+                st = per_seat.setdefault(k, {"all": 0, "fresh": 0, "output": 0, "sessions": 0, "today": 0, "today_by": [0, 0, 0], "m": {}})
                 st["all"] += f + c; st["fresh"] += f; st["output"] += o; st["sessions"] += 1
-                st["today"] += sum(trip((r.get("d") or {}).get(today, [0, 0, 0]))[:2])
+                td = trip((r.get("d") or {}).get(today, [0, 0, 0]))
+                st["today"] += td[0] + td[1]
+                st["today_by"] = [a + b for a, b in zip(st["today_by"], td)]
                 for m, v in (r.get("m") or {}).items():
                     st["m"][m] = st["m"].get(m, 0) + v
             if sid not in mine or not f + c:
@@ -529,12 +571,13 @@ class TokenLedger:
                 for d, v in (r.get("d") or {}).items():
                     v = trip(v); x = series.setdefault(d, [0, 0, 0]); x[0] += v[0]; x[1] += v[1]; x[2] += v[2]
         row = lambda d, v: {"day": d, "all": v[0] + v[1], "fresh": v[0], "output": v[2]}
+        by = lambda v: {"all": v[0] + v[1], "fresh": v[0], "output": v[2]}               # one day, every measure
         in_range = {d: v for d, v in series.items() if cur is None or d in cur}
         tot = [sum(v[i] for v in in_range.values()) for i in range(3)]
         months: dict = {}
         for d, v in series.items():
             m = months.setdefault(d[:7], [0, 0, 0]); m[0] += v[0]; m[1] += v[1]; m[2] += v[2]
-        board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")},
+        board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")}, "today_by": by(v["today_by"]),
                          "top_model": max(v["m"], key=v["m"].get) if v["m"] else None,
                          **dict(zip(SHIP, shipped_by.get(k, [0] * len(SHIP))))} for k, v in per_seat.items()), key=lambda x: -x["all"])
         if prev is not None:
@@ -559,12 +602,12 @@ class TokenLedger:
             records["longest_run"] = {"days": best, "until": best_end}
         if mine:
             hs = max(mine.items(), key=lambda kv: kv[1].get("f", 0) + kv[1].get("c", 0))
-            records["hungriest_session"] = {"id": hs[0].split(":")[-1][:8], "project": hs[1].get("p"), "seat": seat_of(hs[1]),
+            records["hungriest_session"] = {"id": short_id(hs[0]), "project": hs[1].get("p"), "seat": seat_of(hs[1]),
                                             "all": hs[1].get("f", 0) + hs[1].get("c", 0)}
         if heat:
             wh = max(heat, key=heat.get)
             records["busiest_hour"] = {"weekday": int(wh.split("-")[0]), "hour": int(wh.split("-")[1])}
-        cal_from = (t.date() - timedelta(days=7 * 26 - 1 + t.date().weekday())).isoformat()
+        cal_from = (t.date() - timedelta(days=7 * 25 + t.date().weekday())).isoformat()    # a Monday, 26 columns
         # the last 8 weeks, Monday to Sunday, per seat (for the Burner Belt): the last entry is this week so far
         monday = t.date() - timedelta(days=t.date().weekday())
         weeks = []
@@ -577,9 +620,9 @@ class TokenLedger:
                 k = seat_of(r)
                 if f + c and k:
                     per[k] = per.get(k, 0) + f + c
-                n = ship_sum(r, keep)[0]
-                if n and k:
-                    commits[k] = commits.get(k, 0) + n
+                nc = ship_sum(r, keep)[0]
+                if nc and k:
+                    commits[k] = commits.get(k, 0) + nc
             weeks.append({"week": start.isoformat(), "seats": dict(sorted(per.items(), key=lambda kv: -kv[1])), "commits": commits})
         # milestones: the first day the office's running total crossed 1, 2 and 5 times each power of ten from a million
         milestones, run_total, rung = [], 0, 1_000_000
@@ -597,10 +640,11 @@ class TokenLedger:
                       "sessions": len(listed)},
             "prev_total": ({"all": sum(sum(series.get(d, [0, 0, 0])[:2]) for d in prev)} if prev is not None else None),
             "today": sum(series.get(today, [0, 0, 0])[:2]),
+            "today_by": by(series.get(today, [0, 0, 0])),
             "seats": board,
             "days": [row(d, series[d]) for d in sorted(series)[-days:]] if cur is None else
                     [row(d, series.get(d, [0, 0, 0])) for d in sorted(cur)] if month else
-                    [row(d, series.get(d, [0, 0, 0])) for d in sorted(span(0, max(n, 7)))][-max(n, 7):],
+                    [row(d, series.get(d, [0, 0, 0])) for d in sorted(span(0, max(length, 7)))],
             "calendar": [row(d, v) for d, v in sorted(series.items()) if d >= cal_from],
             "heat": {k: round(v) for k, v in heat.items()},
             "months": [{"month": m, "all": v[0] + v[1], "fresh": v[0], "output": v[2]} for m, v in sorted(months.items())],
@@ -608,7 +652,7 @@ class TokenLedger:
             "projects": sorted(({"project": p, "all": v["all"], "fresh": v["fresh"], "output": v["output"], "sessions": v["sessions"],
                                  "top_seat": max(v["seats"], key=v["seats"].get) if v["seats"] else None}
                                 for p, v in projects.items()), key=lambda x: -x["all"])[:12],
-            "sessions": [{"id": sid.split(":")[-1][:8], "project": r.get("p"), "seat": k, "all": f + c, "fresh": f, "cache": c, "output": o,
+            "sessions": [{"id": short_id(sid), "project": r.get("p"), "seat": k, "all": f + c, "fresh": f, "cache": c, "output": o,
                           "messages": r.get("n", 0), "first": r.get("fi"), "last": r.get("l")}
                          for sid, r, f, c, o, k in (top if all_sessions else top[:12])],
             "records": records,

@@ -266,16 +266,24 @@ if (prefs.radio) {
   addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 }
 const cards = makeCards({ app, panels, prefs });
-const burn = makeBurn({ app, office, panels, store, DEMO, prefs, giftBox, toast, sound });
+const burn = makeBurn({ app, office, panels, store, DEMO, prefs, giftBox, toast, sound, replay });
 app.openCard = (id) => cards.open(id);
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
 // "Your office", scrolled to the sticker album.
 function openAlbum() { if (floor.tv()) floor.setTv(false); go({ kind: "office" }, false, { anchor: "album" }); }
 
 // ------------------------------------------------------------------------------------------------ prefs
+// ?theme= and ?game= last for the visit: what was saved before them is what gets saved, until set by hand.
+const qsOver = {};
+const savePrefs = () => store.set("prefs", { ...prefs, ...qsOver });
+// System follows the OS: the page wears "light" or "dark", so every light-theme rule applies to it too.
+const lightOs = window.matchMedia ? matchMedia("(prefers-color-scheme: light)") : null;
+function applyTheme() { document.documentElement.dataset.theme = prefs.theme === "system" ? (lightOs && lightOs.matches ? "light" : "dark") : prefs.theme; }
+if (lightOs) lightOs.addEventListener("change", () => { if (prefs.theme === "system") applyTheme(); });
 function setPref(k, v) {
-  prefs[k] = v; store.set("prefs", prefs);
-  if (k === "theme") document.documentElement.dataset.theme = v;
+  delete qsOver[k];
+  prefs[k] = v; savePrefs();
+  if (k === "theme") applyTheme();
   if (k === "motion") { document.documentElement.dataset.motion = v; office.setReducedMotion(v === "reduced"); }
   if (k === "sound") sound.set(v);
   if (k === "textSize") { applyTextSize(); if (view.kind === "settings") renderPanel(true); }
@@ -286,7 +294,7 @@ function setPref(k, v) {
   if (k === "notify" && v) {
     // The switch only stays on if the browser really lets the office notify.
     const refuse = (why, later) => {
-      prefs.notify = false; store.set("prefs", prefs); toast(why, "warn");
+      prefs.notify = false; savePrefs(); toast(why, "warn");
       if (later && document.querySelector(".menu")) { document.querySelector(".menu").remove(); openMenu("notify"); }   // redraw an open menu
       if (view.kind === "settings") renderPanel(true);
     };
@@ -888,6 +896,7 @@ function renderPanel(force, keepScroll) {
   if (!force || keepScroll) p.scrollTop = k === "session" && atBottom ? p.scrollHeight : top;
   const back = activeSel && p.querySelector(activeSel);
   if (back) { back.focus({ preventScroll: true }); if (caret) back.setSelectionRange(caret[0], caret[1]); }   // keep focus and the caret where they were
+  else if (ae && !p.contains(document.activeElement)) p.focus({ preventScroll: true });   // its control went away: stay in the inspector
 }
 function bindCommon(p) {
   p.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => go({ kind: b.dataset.go })));
@@ -1050,7 +1059,7 @@ document.addEventListener("keydown", (e) => {
   office.setHappy(true);
   for (const s of snap.seats) office.celebrate(s.id, null, "Party!");
   office.banner("Old school!", "↑ ↑ ↓ ↓ ← → ← → B A", "#ff4fd8");
-  sound.play("happy");
+  if ((prefs.game || "full") === "full") sound.play("happy");          // the horn is a game chime
   if (!DEMO) badge(award("old_school"));
   setTimeout(() => office.setHappy(giftBox.happy()), 20000);   // back to normal (or to the real happy hour)
 });
@@ -1098,11 +1107,11 @@ setInterval(() => { if (snap && view.kind === "session" && !document.hidden) app
 
 drawLogo($("logo"));
 const qTheme = QS.get("theme");
-if (["dark", "light", "system"].includes(qTheme)) prefs.theme = qTheme;
-document.documentElement.dataset.theme = prefs.theme;
+if (["dark", "light", "system"].includes(qTheme)) { qsOver.theme = prefs.theme; prefs.theme = qTheme; }
+applyTheme();
 document.documentElement.dataset.motion = prefs.motion;
 office.setReducedMotion(prefs.motion === "reduced");
-if (["full", "calm", "off"].includes(QS.get("game"))) prefs.game = QS.get("game");   // ?game=calm for a screen share
+if (["full", "calm", "off"].includes(QS.get("game"))) { qsOver.game = prefs.game; prefs.game = QS.get("game"); }   // ?game=calm for a screen share
 applyGame(true);
 office.setPrivacy(prefs.privacy);
 office.setSeasonal(prefs.seasonal);

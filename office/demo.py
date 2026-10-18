@@ -116,7 +116,7 @@ def _demo_token_ledger() -> TokenLedger:
                     continue
                 size = w * (0.35 + 0.65 * (120 - back) / 120) * (0.3 + rnd("s", d, seat, k)) * 140e6
                 c = int(size); f = c // 40; o = c // 400; mo = model[seat]
-                sid = f"demo-{seat}-{d}-{k}"
+                sid = hashlib.sha256(f"{seat}|{d}|{k}".encode()).hexdigest()[:8] + f"-demo-{seat}-{d}-{k}"   # short ids differ
                 proj = projects[seat][int(rnd("p", d, seat, k) * len(projects[seat]))]
                 start = datetime(d.year, d.month, d.day, 9 + int(rnd("h", d, seat, k) * 11)).timestamp()
                 hours = {f"{d.weekday()}-{h}": (f + c) // 2 for h in (int(9 + rnd("h", d, seat, k) * 11), int(9 + rnd("h", d, seat, k) * 11) + 1) if h < 24}
@@ -308,7 +308,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.28.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.29.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

@@ -120,7 +120,7 @@ export function makePanels(app) {
       const y = wk && wk.length >= 2 ? wk[wk.length - 2] : null;
       const recap = y && (y.reports || y.active_min) ? `Yesterday: ${y.reports} report${y.reports === 1 ? "" : "s"} and ${hrs(y.active_min)} of agent work.` : "A fresh day.";
       return `<div class="rhythm am">${icon("sun", 20)}<div class="grow"><b>Good morning${ceo && ceo !== "CEO" ? ", " + esc(ceo) : ""}.</b>
-        <span>${esc(recap)} Today's goals: ${goalsFor(st.day).map(g => esc(g.label.toLowerCase())).join(", ")}.${(() => { const w = weekly(wk); return w && !w.calibrating && !w.done ? ` This week: ${w.have} of ${w.target} reports, ${w.daysLeft + 1} day${w.daysLeft ? "s" : ""} to go.` : ""; })()}${app.gifts && app.gifts.waiting().some(g => g.from === "daily") ? ` <button class="linkish" data-gift-seek>${icon("gift", 13)}Your delivery is at the desk</button>` : ""}</span></div>
+        <span>${esc(recap)}${app.prefs().game === "off" ? "" : ` Today's goals: ${goalsFor(st.day).map(g => esc(g.label.toLowerCase())).join(", ")}.`}${app.prefs().game === "off" ? "" : (() => { const w = weekly(wk); return w && !w.calibrating && !w.done ? ` This week: ${w.have} of ${w.target} reports, ${w.daysLeft + 1} day${w.daysLeft ? "s" : ""} to go.` : ""; })()}${app.gifts && app.gifts.waiting().some(g => g.from === "daily") ? ` <button class="linkish" data-gift-seek>${icon("gift", 13)}Your delivery is at the desk</button>` : ""}</span></div>
         <button class="btn sm ghost icon" data-rhythm="am-${esc(st.day)}" aria-label="Dismiss" title="Dismiss">${icon("x", 15)}</button></div>`;
     }
     if (h >= 18 && !seen["pm-" + st.day] && ((st.office || {}).reports || sum(st, "active_min"))) {
@@ -259,7 +259,7 @@ export function makePanels(app) {
       </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
       ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
-          <span class="grow"><span class="t">${esc(humanise(a.text))}</span>${a.resets_at ? `<span class="d">${a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at)} · ${inWords(a.resets_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
+          <span class="grow"><span class="t">${esc(humanise(a.text))}</span>${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
       ${unusedHtml()}
@@ -384,7 +384,7 @@ export function makePanels(app) {
     const rows = t && t.seats ? t.seats.filter(x => x.seat && x.all > 0) : [], i = rows.findIndex(x => x.seat === s.id);
     if (i < 0) return "";
     const r = rows[i], b = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + " B" : n >= 1e6 ? (n / 1e6).toFixed(1) + " M" : fmtTok(n));
-    return `<button class="alltok ${i === 0 ? "top" : ""}" data-view-go="stats" data-anchor="tokens" title="All-time tokens in the Today view">${icon("flame", 15)}
+    return `<button class="alltok ${i === 0 ? "first" : ""}" data-view-go="stats" data-anchor="tokens" title="All-time tokens in the Today view">${icon("flame", 15)}
       <span class="grow"><b>${b(r.all)} tokens all time</b><span>#${i + 1} of ${rows.length}${i === 0 ? ", the office's top burner" : ""} · ${b(r.output)} written · ${r.sessions} sessions</span></span>${icon("chevronRight", 14)}</button>`;
   }
   function careerHtml(s) {
@@ -1001,13 +1001,13 @@ export function makePanels(app) {
     const sw = (key, on, label) => `<label class="switch"><input type="checkbox" data-pref="${key}" ${on ? "checked" : ""} aria-label="${esc(label)}"><span></span></label>`;
     return { html: `${crumbs("Settings")}<h2>Settings</h2>
       ${section("This screen", [
-        row("Theme", "Night is the default.", `<div class="seg-ctl">${[["dark", "Night"], ["light", "Day"], ["system", "System"]].map(([t, l]) => `<button data-theme-set="${t}" class="${p.theme === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
+        row("Theme", "Night is the default.", `<div class="seg-ctl" role="group" aria-label="Theme">${[["dark", "Night"], ["light", "Day"], ["system", "System"]].map(([t, l]) => `<button data-theme-set="${t}" class="${p.theme === t ? "on" : ""}" aria-pressed="${p.theme === t}">${l}</button>`).join("")}</div>`),
         row("Text size", (() => { const ts = app.textSize(); return ts.pref === "auto" ? `Auto shows text at ${Math.round(ts.zoom * 100)}% on this screen.` : "Bigger text for big or far-away screens."; })(),
-          `<div class="seg-ctl">${[["auto", "Auto"], ["s", "S"], ["m", "M"], ["l", "L"], ["xl", "XL"]].map(([t, l]) => `<button data-text-set="${t}" class="${(p.textSize || "auto") === t ? "on" : ""}" aria-label="${esc(app.textSize().label[t])}">${l}</button>`).join("")}</div>`),
+          `<div class="seg-ctl" role="group" aria-label="Text size">${[["auto", "Auto"], ["s", "S"], ["m", "M"], ["l", "L"], ["xl", "XL"]].map(([t, l]) => `<button data-text-set="${t}" class="${(p.textSize || "auto") === t ? "on" : ""}" aria-pressed="${(p.textSize || "auto") === t}" aria-label="${esc(app.textSize().label[t])}">${l}</button>`).join("")}</div>`),
         row("Game", "Full: gifts, banners and banter. Calm: no banners, confetti or chatter. Off: no game at all. Alerts stay at every level. Z cycles.",
-          `<div class="seg-ctl">${[["full", "Full"], ["calm", "Calm"], ["off", "Off"]].map(([t, l]) => `<button data-game-set="${t}" class="${(p.game || "full") === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
+          `<div class="seg-ctl" role="group" aria-label="Game">${[["full", "Full"], ["calm", "Calm"], ["off", "Off"]].map(([t, l]) => `<button data-game-set="${t}" class="${(p.game || "full") === t ? "on" : ""}" aria-pressed="${(p.game || "full") === t}">${l}</button>`).join("")}</div>`),
         row("Seasonal decorations", "Pumpkins for Halloween, lamps for Diwali, a tree and snow in December.", sw("seasonal", p.seasonal !== false, "Seasonal decorations")),
-        row("Motion", "Reduced stops walking, confetti and fades.", `<div class="seg-ctl">${[["full", "Full"], ["reduced", "Reduced"]].map(([t, l]) => `<button data-motion-set="${t}" class="${p.motion === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
+        row("Motion", "Reduced stops walking, confetti and fades.", `<div class="seg-ctl" role="group" aria-label="Motion">${[["full", "Full"], ["reduced", "Reduced"]].map(([t, l]) => `<button data-motion-set="${t}" class="${p.motion === t ? "on" : ""}" aria-pressed="${p.motion === t}">${l}</button>`).join("")}</div>`),
         row("Sound effects", "Little chimes for arrivals, reports and limits.", `<button class="btn sm ghost" data-test-sound>Play</button>${sw("sound", p.sound, "Sound effects")}`),
         row("Desktop notifications", "Reports, limits and logouts while this tab is in the background.", sw("notify", p.notify, "Desktop notifications")),
         row("Share-safe", "Blur what terminal sessions are about, and account emails.", sw("privacy", app.privacy(), "Share-safe")),

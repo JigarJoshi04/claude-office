@@ -50,6 +50,7 @@ export function makeGiftBox(ctx) {
     if (chip.dataset.html !== html) { chip.innerHTML = html; chip.dataset.html = html; }
     chip.title = (n ? (n === 1 ? "A gift is waiting on the floor." : `${n} gifts are waiting on the floor.`) : "") + (on ? ` Happy hour: gifts are twice as likely${forceHappy ? "" : ` for ${h.left} more minutes`}.` : "");
     chip.setAttribute("aria-label", chip.title.trim());
+    document.dispatchEvent(new Event("office:gifts"));     // TV mode's strip shows the same count
   }
   // Happy hour starts once a day at a time picked for that day: party lights on the floor, a banner if the office is
   // open, and twice the chance of a gift for half an hour.
@@ -105,7 +106,7 @@ export function makeGiftBox(ctx) {
     const done = [...setsDone(gifts.album())].filter(k => !before.has(k));
     // The confetti gets a moment on the floor before the reveal dims it.
     opening = true;
-    setTimeout(() => { opening = false; reveal(res, done); }, prefs.motion === "reduced" ? 0 : 520);
+    setTimeout(() => { opening = false; reveal(res, done); }, prefs.motion === "reduced" || (prefs.game || "full") !== "full" ? 0 : 520);   // the wait is for the confetti
     if (!DEMO) {
       if (res.have >= 12) badge(award("collector"));
       if (res.sticker.rarity === "legendary") badge(award("golden"));
@@ -174,14 +175,17 @@ export function makeGiftBox(ctx) {
     if (!g) return;
     setView("floor");
     if (g.seat && app.snap().seats.some(s => s.id === g.seat)) office.focusSeat(g.seat); else office.fit();
-    setTimeout(() => {
+    // A courier may still be carrying it: wait for the box to land (a walk takes a few seconds), then show it.
+    let tries = 0;
+    const find = () => {
       const b = document.querySelector(`.hot.gift[data-k="gift:${CSS.escape(g.id)}"]`);
-      if (!b) return;
+      if (!b) { if (++tries < 40 && gifts.waiting().some(x => x.id === g.id)) setTimeout(find, 150); return; }
       // On a phone or a narrow window the floor scrolls with the page (and sideways): bring the box on screen.
       const r = b.getBoundingClientRect();
       if (r.top < 60 || r.bottom > innerHeight - 20 || r.left < 0 || r.right > innerWidth) b.scrollIntoView({ block: "center", inline: "center", behavior: prefs.motion === "reduced" ? "auto" : "smooth" });
       b.focus({ preventScroll: true });
-    }, 450);
+    };
+    setTimeout(find, 450);
   }
   const chip = $("giftChip");
   if (chip) chip.addEventListener("click", seek);

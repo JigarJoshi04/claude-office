@@ -3,6 +3,44 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.29.0] - 2026-10-18
+
+### Added
+- The token picture follows the character you picked on the Tokens tab: their total, shipped work and models, their
+  row lit in the ranking, and their place ("rank #3 of 5").
+- `today_by` on `/api/tokens` (and on each leaderboard row): today in every measure, so the "today" chip follows Fresh
+  and Output too.
+
+### Changed
+- Shipped work reads gh's own words: `gh pr merge` with no output (no terminal) or a failed branch clean-up after the
+  merge counts as merged; `--auto` counts only once the PR shows as merged; a PR title with "failed" in it, a branch
+  named "…rejected…" or a commit message saying "nothing to commit" no longer hide real work. The rules have a version,
+  and a new version recounts shipped work from the transcripts still on disk.
+- PR news carries its number from the merge command or gh's "owner/repo#N" when there is no link.
+- Codex sessions get distinct short ids in the CSV; its first, last and responses columns are named `session_*`
+  because they cover the whole session whatever the range.
+- System theme follows the OS for every light-theme rule (the page wears "light" or "dark"), and `?theme=` and
+  `?game=` last for the visit instead of being saved.
+- The weekly pace line only goes red when a seat is ahead of pace and runs out well before the reset; a projection
+  close to the reset says "runs out about the reset"; a spent week says "Out of plan for the week".
+- Ceremonies (Burner Belt, milestones, records) bring their toast with their banner, skip the floor when it is hidden or
+  replaying, and keep no state in the demo. A milestone gift that finds no room comes later instead of being lost.
+- The lobby odometer reads at 8 px or more and rolls in only for a new number; nameplates shrink the name, never the
+  Top burner flame, Burner Belt or Lean ribbon, and say them to screen readers.
+
+### Fixed
+- The Tokens tab's 30 and 90 day ranges showed only 7 days whenever someone had committed this week.
+- The 26-week calendar put every Monday in the week before's column.
+- The Tokens tab overflowed a phone sideways, and the #1 leaderboard row picked up the header's sticky styles.
+- Text size now applies to the Tokens tab; keyboard focus stays on the control you used there and on the Today card.
+- At Calm and Off: no XP floaters, gift confetti, arrival lines, secret-code horn, or Belt and Lean on the Tokens tab;
+  the morning card leaves out goals at Off; queued banners no longer hide speech bubbles after switching to Calm.
+- Login lapses say "Lapses" (not "Resets") with "17 min", "1 hour" and "6 hours".
+- Light theme contrast on the Today card's chip and the green deltas; the TV strip's gift count stays light.
+- TV mode's gift count updates at once, and the room peek card hides when a replay starts.
+- "Your delivery is at the desk" waits for the courier to land before showing the box.
+- Settings toggles expose which option is on; focus stays in the inspector when a card's button goes away.
+
 ## [3.28.0] - 2026-10-18
 
 ### Added

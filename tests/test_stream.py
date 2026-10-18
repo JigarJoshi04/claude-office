@@ -180,7 +180,7 @@ class StreamTests(unittest.TestCase):
             self.office.emit("report", "Demo report")
             self.office.build()
         self.assertEqual(self.office.get()["office"]["started_at"], before)
-        self.assertEqual(self.office.get()["office"]["version"], "3.28.0")
+        self.assertEqual(self.office.get()["office"]["version"], "3.29.0")
 
 
 class StatusLineTests(unittest.TestCase):
@@ -208,3 +208,8 @@ class LoginExpiryTests(unittest.TestCase):
         self.assertIn("lapses in 2 days", items["b"]["text"])
         self.assertIn("lapses in 6 hours", items["c"]["text"])
         self.assertEqual(items["c"]["level"], "bad")
+        self.assertEqual(items["c"]["lapses_at"], now + 6 * 3600)
+        self.assertNotIn("resets_at", items["c"])                    # a lapse is not a usage reset
+        for left, words in ((1000, "17 min"), (20, "1 min"), (3600, "1 hour"), (5000, "1 hour"), (5500, "2 hours")):
+            snap["seats"] = [seat("e", left)]
+            self.assertIn(f"lapses in {words}:", Office._attention(snap)[0]["text"])

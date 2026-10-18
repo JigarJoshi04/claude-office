@@ -86,6 +86,65 @@ class ShippingTests(unittest.TestCase):
         self.assertEqual(shipped({"push"}, "Everything up-to-date"), [0] * 6)
         self.assertEqual(shipped({"pr_open"}, "https://github.com/a/b/pull/42"), [0, 0, 1, 0, 0, 0])
 
+    def test_merges_pushes_and_commits_read_the_right_words(self):
+        from office.tokens import ship_kinds, shipped, pr_number, short_id
+        self.assertEqual(ship_kinds("GH_TOKEN=x gh pr create --fill"), {"pr_open"})
+        self.assertEqual(ship_kinds("gh pr merge 44 --squash --auto"), {"pr_merge", "pr_auto"})
+        self.assertEqual(ship_kinds("gh pr merge 44 --disable-auto"), set())
+        merge, auto = {"pr_merge"}, {"pr_merge", "pr_auto"}
+        self.assertEqual(shipped(merge, "")[3], 1)                                             # no terminal: gh prints nothing
+        self.assertEqual(shipped(merge, "✓ Squashed and merged pull request o/r#43 (Retry failed uploads)")[3], 1)
+        self.assertEqual(shipped(merge, "failed to delete local branch fix-1: failed to run git: error: cannot delete branch\n{\"state\":\"MERGED\"}")[3], 1)
+        self.assertEqual(shipped(merge, "failed to run git: fatal: 'main' is already used by worktree at '/w'")[3], 1)
+        self.assertEqual(shipped(auto, "✓ Pull request o/r#44 will be automatically merged via squash when all requirements are met")[3], 0)
+        self.assertEqual(shipped(auto, "")[3], 0)
+        self.assertEqual(shipped(auto, "MERGED\tabc123")[3], 1)                              # merged right away, and shown
+        self.assertEqual(shipped(merge, "X Pull request o/r#12 is not mergeable: the merge commit cannot be cleanly created")[3], 0)
+        self.assertEqual(shipped(merge, "! Pull request o/r#12 was already merged")[3], 0)
+        self.assertEqual(shipped(merge, "GraphQL: Base branch was modified")[3], 0)
+        self.assertEqual(shipped({"push"}, "To github.com:a/b.git\n   07f8f8d..88b4ddb  fix-rejected-uploads -> fix-rejected-uploads")[1], 1)
+        self.assertEqual(shipped({"push"}, " ! [rejected]        main -> main (fetch first)")[1], 0)
+        self.assertEqual(shipped({"commit"}, "[main abc1234] say nothing to commit when clean\n 1 file changed, 2 insertions(+)")[0], 1)
+        self.assertEqual(shipped({"commit"}, "On branch main\nnothing added to commit but untracked files present")[0], 0)
+        self.assertEqual(pr_number(merge, "gh pr merge 1710 --squash --admin", ""), 1710)
+        self.assertEqual(pr_number(merge, "gh pr merge --squash", "✓ Squashed and merged pull request o/r#43 (x)"), 43)
+        self.assertEqual(pr_number({"pr_open"}, "gh pr create --fill", "https://github.com/a/b/pull/42"), 42)
+        self.assertIsNone(pr_number(merge, "gh pr merge --squash", ""))
+        self.assertEqual(short_id("codex:rollout-2026-09-08T15-00-44-01a0805b-07db-7a50-a1bb-2b9283ee4e3c"), "83ee4e3c")
+        self.assertEqual(short_id("6be0cfa4-fe3c-4861-be8f-f0573597b48f"), "6be0cfa4")
+
+    def test_fresh_merges_make_news_with_their_number(self):
+        import time
+        from datetime import datetime, timezone
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proj = root / ".claude" / "projects" / "-w"
+            proj.mkdir(parents=True)
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            compact = lambda d: json.dumps(d, separators=(",", ":")) + "\n"                 # as Claude Code writes them
+            use = lambda i, cmd: compact({"type": "assistant", "timestamp": ts, "message": {"id": "m" + i, "content": [
+                {"type": "tool_use", "id": "t" + i, "name": "Bash", "input": {"command": cmd}}]}})
+            res = lambda i, out: compact({"type": "user", "timestamp": ts, "message": {"content": [{"type": "tool_result", "tool_use_id": "t" + i, "content": out}]}})
+            led = TokenLedger(root / "tokens.json", [("claude", root / ".claude")])
+            (proj / "s1.jsonl").write_text("")
+            led.scan()
+            with open(proj / "s1.jsonl", "a") as fh:
+                fh.write(use("1", "gh pr merge 1710 --squash --admin --delete-branch") + res("1", "failed to delete local branch b: cannot delete"))
+            led.scan()
+            ev = led.take_events()
+            self.assertEqual([(e["kind"], e["pr"]) for e in ev], [("pr_merged", 1710)])
+            self.assertLess(abs(ev[0]["at"] - time.time()), 60)
+
+    def test_new_rules_recount_shipped_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "tokens.json"
+            p.write_text(json.dumps({"v": 2, "files": {"/x.jsonl": [10, None]}, "files_out": {"/x.jsonl": 10}, "codex": {}, "days": {}, "models": {},
+                                     "sessions": {"s": {"p": "a", "s": "claude", "d": {}, "g": {"2026-10-01": [9, 0, 0, 0, 0, 0]}}}}))
+            led = TokenLedger(p, [])
+            self.assertEqual(led.data["files_out"], {})
+            self.assertNotIn("g", led.data["sessions"]["s"])
+            self.assertEqual(led.data["files"], {"/x.jsonl": [10, None]})                     # token counts are kept
+
     def test_scan_counts_successful_commands_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -124,6 +183,35 @@ class TokenViewTests(unittest.TestCase):
         self.assertEqual(len(led.view(seats, rng="all", all_sessions=True)["sessions"]), len(led.data["sessions"]))
         self.assertTrue(set(all_time["heat"]) <= {f"{d}-{h}" for d in range(7) for h in range(24)})
         self.assertIn("biggest_day", all_time["records"])
+
+    def test_every_range_keeps_its_days_and_the_calendar_starts_on_a_monday(self):
+        from datetime import date, timedelta
+        from office.demo import _demo_token_ledger
+        led = _demo_token_ledger()
+        seats = [{"id": i, "kind": "codex" if i == "astra" else "claude"} for i in ("claude", "claude2", "claude3", "claude4", "astra")]
+        for rng, n in (("today", 7), ("7", 7), ("30", 30), ("90", 90)):
+            v = led.view(seats, rng=rng)
+            self.assertEqual(len(v["days"]), n, rng)                       # not cut short by a week's commit count
+            self.assertEqual(v["days"][-1]["day"], date.today().isoformat())
+        today = date.today()
+        old = (today - timedelta(days=300)).isoformat()
+        led.data["sessions"]["old"] = {"p": "x", "s": "claude", "d": {old: [1, 1, 1]}, "h": {}, "m": {}}
+        led.data["days"][old] = {"f": 1, "c": 1, "o": 1}
+        for back in range(7 * 27):
+            d = (today - timedelta(days=back)).isoformat()
+            led.data["days"].setdefault(d, {"f": 1, "c": 0, "o": 0})
+        cal = led.view(seats)["calendar"]
+        self.assertEqual(date.fromisoformat(cal[0]["day"]).weekday(), 0)
+        self.assertEqual(len({(date.fromisoformat(d["day"]) - date.fromisoformat(cal[0]["day"])).days // 7 for d in cal}), 26)
+
+    def test_today_by_measure(self):
+        from office.demo import _demo_token_ledger
+        led = _demo_token_ledger()
+        v = led.view([{"id": "claude2", "kind": "claude"}], rng="30")
+        self.assertEqual(v["today_by"]["all"], v["today"])
+        self.assertLess(v["today_by"]["output"], v["today_by"]["fresh"])
+        b = v["seats"][0]
+        self.assertEqual(b["today_by"]["all"], b["today"])
 
     def test_v1_sessions_without_transcripts_keep_their_totals(self):
         with tempfile.TemporaryDirectory() as tmp:

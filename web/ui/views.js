@@ -4,7 +4,7 @@ import { timeline, bindTips } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, leftOf, voice, diary } from "./personas.js";
 import { localDay } from "./goals.js";
-import { tokensCard, bindTokens } from "./tokens.js";
+import { tokensCard, bindTokens, focusKey, refocus as refocusTokens } from "./tokens.js";
 
 export function renderTimeline(el, app) {
   const hours = app.prefs().tlHours || 6;
@@ -107,7 +107,7 @@ export function renderStats(el, app) {
   </div>`;
   hydratePortraits(el, 4);
   bindWeek(el, app);
-  bindTokens(el, app, () => renderStats(el, app));
+  bindTokens(el, app, () => { const f = focusKey(el); renderStats(el, app); refocusTokens(el, f); });
   if (!day) app.tokensCache("today");                 // warm, for Copy as text
   const cp = el.querySelector("[data-copy-day]");
   if (cp) cp.addEventListener("click", () => {

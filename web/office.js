@@ -73,6 +73,7 @@ export function createOffice(stage, handlers) {
   let radioOn = false;
   let burner = null;                   // the seat with the most tokens of all time: a flame on its nameplate
   let odometer = null;                 // the office's all-time tokens, on the lobby wall under the neon
+  let odoShown = null;                 // the number the odometer last rolled in
   let belt = null;                     // last week's heaviest burner: a belt on its nameplate
   let lean = null;                     // last week's fewest tokens per commit: a green ribbon on its nameplate
   let game = "full";                   // game intensity: "full", "calm" (no banners, confetti, banter or party) or "off"                 // the office radio is playing: notes rise from the boombox on the CEO desk
@@ -124,7 +125,7 @@ export function createOffice(stage, handlers) {
           if (!first && !reduced) {      // a new arrival walks in from the elevator
             const p = pathTo(L, pod, slot);
             a.mode = "walking"; a.x = p[0][0]; a.y = p[0][1]; a.path = p.slice(1); openElevator();
-            if (persona) said.set(x.id, { text: persona(pod.seat).lines.arrive, until: performance.now() + 9000, at: performance.now() });
+            if (persona && game === "full") said.set(x.id, { text: persona(pod.seat).lines.arrive, until: performance.now() + 9000, at: performance.now() });
           }
           agents.set(x.id, a);
         } else { Object.assign(a, { slot, pod, seatId: pod.seat.id, sess: x, look, mode: "seated", path: [] }); }
@@ -789,7 +790,11 @@ export function createOffice(stage, handlers) {
     for (const o of L.open) div("room-label", "GARDEN", o.x + 8, o.y + BACK_LABEL);
 
     const neon = div("neon" + (has("neon") ? " show" : ""), snap.office.name || "Claude Office", 6, 8); place(neon, 6, 8, 70, 22);
-    if (odometer) { const od = div("odometer", null, 6, 31); od.innerHTML = `<b>${esc(odometer)}</b> tokens`; od.title = `The office has processed ${odometer} tokens (the Tokens tab has the story)`; place(od, 6, 31, 70, 7); }
+    if (odometer) {
+      const od = div("odometer", null, 6, 31);
+      od.innerHTML = `<b class="${odometer !== odoShown ? "roll" : ""}">${esc(odometer)}</b> tokens`; odoShown = odometer;   // rolls in once per number
+      od.title = `The office has processed ${odometer} tokens (the Tokens tab has the story)`; place(od, 6, 31, 70, null);
+    }
     overlay.classList.toggle("gold-plates", has("goldplates"));
     if (mvp) place(div("mvp-tag", "MVP", 172, 36), 172, 36, 24, null);
     const closet = closetUnits();
@@ -821,10 +826,11 @@ export function createOffice(stage, handlers) {
       + (lean === s.id && game !== "off" ? `<em class="pl-lean" title="Lean ribbon: the fewest tokens per commit last week">${icon("check", 11)}</em>` : "");
     const need = handlers.needsFor ? handlers.needsFor(s.id) : (snap.attention || []).filter(a => a.seat === s.id).length;   // as Needs you groups them
     if (need) plate.classList.add("needs");
-    plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span class="pl-chip ${line.tone}">${esc(line.main)}</span></span>` +
+    plate.innerHTML = `<span class="pl-line"><b><i></i><span class="pl-name">${esc(who.name)}</span>${lv}</b><span class="pl-chip ${line.tone}">${esc(line.main)}</span></span>` +
       `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : line.left != null && line.left < 35 ? "mid" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>` +
       (need ? `<span class="pl-need" title="${need} thing${need === 1 ? "" : "s"} in Needs you">${need}</span>` : "");
-    plate.setAttribute("aria-label", `${who.name}${s.career ? `, level ${s.career.level}` : ""}: ${line.main}, ${line.side}`);
+    const honours = [burner === s.id && "top burner", belt === s.id && game !== "off" && "holds the Burner Belt", lean === s.id && game !== "off" && "holds the Lean ribbon"].filter(Boolean);
+    plate.setAttribute("aria-label", `${who.name}${s.career ? `, level ${s.career.level}` : ""}${honours.length ? ", " + honours.join(", ") : ""}: ${line.main}, ${line.side}`);
     plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; peek(null); if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); focusSeat(s.id); return; } handlers.openSeat(s.id); });
     plate.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(plate);
@@ -1169,7 +1175,6 @@ export function createOffice(stage, handlers) {
 
   // "+12 XP" rises from a desk as its people work: at most one every 20 seconds per desk, so it stays a nicety.
   function floatXp(t) {
-    if (game !== "full") { for (const s of snap.seats) { const st = xpSeen.get(s.id); if (st) st.pending = 0; } }
     for (const s of snap.seats) {
       const xp = s.career && s.career.xp;
       if (xp == null) continue;
@@ -1177,6 +1182,7 @@ export function createOffice(stage, handlers) {
       if (!st) { xpSeen.set(s.id, { xp, pending: 0, at: t }); continue; }
       if (xp > st.xp) st.pending += xp - st.xp;
       st.xp = xp;
+      if (game !== "full") { st.pending = 0; continue; }       // tracked, so Full later floats only what is new
       if (st.pending < 5 || t - st.at < 20000 || reduced || document.hidden) continue;
       const p = L && L.pods.find(p => p.seat.id === s.id);
       if (p) { const el = div("pop xp", `+${st.pending} XP`, p.x + POD_W - 26, p.y + 94); el.style.setProperty("--seat", s.color); pops.push({ el, until: t + 2600 }); }
@@ -1186,17 +1192,23 @@ export function createOffice(stage, handlers) {
 
   // A full-width "LEVEL UP" banner over the visible floor (on a phone the stage is wider than the screen). Banners that
   // arrive while one shows wait their turn, so a busy moment (a level up during a happy hour) shows each in full.
+  // onShow runs when the banner appears (at once when banners are off), so a toast can arrive with its banner.
   const bannerQ = [];
-  function banner(title, sub, color) {
-    if (reduced || game !== "full") return;
+  function dropBanners() {
+    while (bannerQ.length) { const q = bannerQ.shift(); if (q[3]) q[3](); }
+    if (!(stage.closest(".floor-frame") || stage).querySelector(".lvl-banner")) stage.classList.remove("bannering");
+  }
+  function banner(title, sub, color, onShow) {
+    if (reduced || game !== "full") { dropBanners(); if (onShow) onShow(); return; }
     const host = stage.closest(".floor-frame") || stage;
-    if (host.querySelector(".lvl-banner")) { if (bannerQ.length < 3) bannerQ.push([title, sub, color]); return; }
+    if (host.querySelector(".lvl-banner")) { if (bannerQ.length < 3) bannerQ.push([title, sub, color, onShow]); else if (onShow) onShow(); return; }
     const b = document.createElement("div");
     b.className = "lvl-banner"; b.setAttribute("aria-hidden", "true");
     b.style.setProperty("--seat", color || "#ffd24a");
     b.innerHTML = `<div class="lb-in"><span class="lb-stars">✦ ✦ ✦</span><b>${esc(title)}</b><span class="lb-sub">${esc(sub)}</span></div>`;
     host.appendChild(b);
     stage.classList.add("bannering");
+    if (onShow) onShow();
     setTimeout(() => {
       b.remove();
       if (bannerQ.length) banner(...bannerQ.shift());
@@ -1222,7 +1234,7 @@ export function createOffice(stage, handlers) {
     update,
     setSelected(sel) { selected = sel; ovKey = ""; renderOverlay(); },
     setPrivacy(on) { privacy = on; ovKey = ""; renderOverlay(); },
-    setReducedMotion(on) { reduced = on; },
+    setReducedMotion(on) { reduced = on; if (on) dropBanners(); },
     setMvp(m) { mvp = m && m.seat ? m : null; ovKey = ""; renderOverlay(); },
     setPersonas(fn) { persona = fn; staticKey = ""; ovKey = ""; if (snap) update(snap); },
     say(sessionId, text, ms = 6000) { if (!sessionId || !text || game !== "full") return; said.set(sessionId, { text, until: performance.now() + ms, at: performance.now() }); renderBubbles(); },
@@ -1246,7 +1258,11 @@ export function createOffice(stage, handlers) {
     setHappy(on) { happy = !!on && game === "full"; },
     // Full: everything. Calm: no banners, confetti, character lines, party lights or XP floaters (real alerts stay).
     // Off: also no gifts, level-up pops or game chrome.
-    setGameLevel(level) { game = ["full", "calm", "off"].includes(level) ? level : "full"; if (game !== "full") happy = false; ovKey = ""; renderOverlay(); },
+    setGameLevel(level) {
+      game = ["full", "calm", "off"].includes(level) ? level : "full";
+      if (game !== "full") { happy = false; dropBanners(); said.clear(); renderBubbles(); }       // speech is a Full-only thing
+      ovKey = ""; renderOverlay();
+    },
     gameLevel: () => game,
     setOdometer(text) { if (text !== odometer) { odometer = text || null; ovKey = ""; renderOverlay(); } },
     setLean(id) { if (id !== lean) { lean = id || null; ovKey = ""; renderOverlay(); } },
@@ -1255,7 +1271,7 @@ export function createOffice(stage, handlers) {
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },
     // Confetti where a gift was, as it opens.
-    unwrap(id) { const p = L && giftSpots().find(x => x.g.id === id); if (p && !reduced) burst(p.x + 6, p.y + 4, 40, "confetti"); },
+    unwrap(id) { const p = L && giftSpots().find(x => x.g.id === id); if (p && !reduced && game === "full") burst(p.x + 6, p.y + 4, 40, "confetti"); },
     season: () => (seasonal ? seasonFor(new Date()) : null),
     setClock(ts) { clockAt = ts || null; },
     setWalkBoost(k) { walkBoost = Math.max(1, Math.min(8, k || 1)); },

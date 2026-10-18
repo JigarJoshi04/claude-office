@@ -61,11 +61,12 @@ export function makeFloor(ctx) {
   function tvExtra() {
     const el = document.querySelector(".tv-hud .tv-extra"), g = app.gifts;
     if (!el || !g) return;
-    const n = g.waiting().length, on = g.happy();
+    const offNow = (prefs.game || "full") === "off", n = offNow ? 0 : g.waiting().length, on = !offNow && g.happy();
     el.hidden = !n && !on;
     el.classList.toggle("happy", on);
     el.innerHTML = `${n ? `${icon("gift", 14)}${n}` : ""}${on ? `<span>Happy hour</span>` : ""}`;
   }
+  document.addEventListener("office:gifts", tvExtra);      // the gift box changed: the strip follows at once
   // TV mode's news ticker: the latest news scrolls along the bottom, in plain words, with when it happened.
   function tvTicker() {
     const snap = app.snap();

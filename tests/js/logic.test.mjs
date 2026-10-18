@@ -322,6 +322,18 @@ test("weekly pace: ahead, behind, running out before the reset", async () => {
   const slow = weekPace(seat(20, 3.5), now, fmt);
   assert.match(slow.text, /30% behind pace/); assert.match(slow.text, /about 60% left/);
   assert.match(weekPace(seat(2, 6.9), now, fmt).text, /fresh week/);
+  const nearly = weekPace(seat(51.5, 3.5), now, fmt);             // a hair ahead: out about the reset, not an alarm
+  assert.equal(nearly.tone, "good"); assert.match(nearly.text, /^On pace this week: runs out about the reset/);
+  const brisk = weekPace(seat(55, 3.5), now, fmt);                // out about 15 hours early: a warning
+  assert.equal(brisk.tone, "warn"); assert.match(brisk.text, /^5% ahead of pace this week: runs out/);
+  assert.equal(weekPace(seat(62, 3.5), now, fmt).tone, "bad");
+  const spent = weekPace(seat(100, 2), now, fmt);                 // nothing left: no "runs out <now>"
+  assert.equal(spent.tone, "bad"); assert.match(spent.text, /^Out of plan for the week: back at the reset/);
+  assert.match(weekPace(seat(100, 6.99), now, fmt).text, /^Out of plan/);
+  for (let pct = 0; pct < 100; pct += 0.5) for (const d of [0.5, 2, 3.5, 5, 6.5]) {   // "On pace" never comes in red
+    const r = weekPace(seat(pct, d), now, fmt);
+    if (r && /^On pace/.test(r.text)) assert.notEqual(r.tone, "bad", `${pct}% with ${d} days left`);
+  }
 });
 
 test("the Burner Belt goes to last week's top seat; milestones climb 1-2-5", async () => {

@@ -127,18 +127,24 @@ export function leftOf(seat, key) {
 }
 
 // Where a seat's week stands against an even pace from reset to reset: "12% ahead of pace · runs out Thu 14:00".
-// tone: good (on or behind pace), warn (well ahead), bad (runs out before the reset). Null without a weekly reading.
+// tone: good (on pace, behind it, or out about the reset), warn (well ahead, or out a little early), bad (ahead of pace
+// and out well before the reset, or already out). Null without a weekly reading.
 export function weekPace(seat, now, fmt = (t) => new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })) {
-  const w = (seat.usage || {}).weekly, WEEK = 7 * 86400;
+  const w = (seat.usage || {}).weekly, WEEK = 7 * 86400, H = 3600;
   if (!w || w.pct == null || !w.resets_at || w.resets_at <= now) return null;
+  if (w.pct >= 100) return { tone: "bad", pace: 100, out: now, text: `Out of plan for the week: back at the reset ${fmt(w.resets_at)}.` };
   const elapsed = Math.min(1, Math.max(0, 1 - (w.resets_at - now) / WEEK));
   if (elapsed < 0.04) return { tone: "good", pace: 0, text: `A fresh week: ${Math.round(w.pct)}% used so far.` };
-  const pace = w.pct - elapsed * 100, rate = w.pct / (elapsed * WEEK);
-  const out = rate > 0 ? now + (100 - w.pct) / rate : null;
+  const pace = w.pct - elapsed * 100, rate = w.pct / (elapsed * WEEK), left = w.resets_at - now;
+  const out = rate > 0 ? now + (100 - w.pct) / rate : null, early = out ? w.resets_at - out : -Infinity;   // seconds before the reset
   const where = Math.abs(pace) < 3 ? "On pace" : `${Math.round(Math.abs(pace))}% ${pace > 0 ? "ahead of" : "behind"} pace`;
-  if (out && out < w.resets_at) return { tone: "bad", pace, out, text: `${where} this week: runs out ${fmt(out)}, before the reset ${fmt(w.resets_at)}.` };
-  const endLeft = Math.max(0, Math.round(100 - (w.pct + rate * (w.resets_at - now))));
-  return { tone: pace > 10 ? "warn" : "good", pace, text: `${where} this week: about ${endLeft}% left at the reset ${fmt(w.resets_at)}.` };
+  const near = Math.max(H, left * 0.08);                 // a projection this close to the reset is "about the reset"
+  const tone = pace >= 3 && early > Math.max(12 * H, left / 4) ? "bad" : pace > 10 || early > near ? "warn" : "good";
+  const endLeft = Math.max(0, Math.round(100 - (w.pct + rate * left)));
+  const text = early > near ? `${where} this week: runs out ${fmt(out)}, before the reset ${fmt(w.resets_at)}.`
+    : early > 0 || endLeft <= 2 ? `${where} this week: runs out about the reset ${fmt(w.resets_at)}.`
+    : `${where} this week: about ${endLeft}% left at the reset ${fmt(w.resets_at)}.`;
+  return early > 0 ? { tone, pace, out, text } : { tone, pace, text };
 }
 
 // The tighter of the two plan windows: what actually limits this seat right now.
