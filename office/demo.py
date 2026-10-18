@@ -52,7 +52,16 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "cpu_s": 312.0, "state_file": "/home/you/work/handover/L12-STATE.md" if kind == "lane" else None,
         "report_file": None, "report_status": report, "transcript": None,
         "resume_cmd": f"CLAUDE_CONFIG_DIR=~/.{seat} claude --resume {sid}", "live": True,
+        "cache": _demo_cache(sid, state, now),
     }
+
+
+def _demo_cache(sid, state, now):
+    """A made-up prompt cache: warm while working; an idle one cools and warms again every six minutes."""
+    context = 180_000 + hash(sid) % 400_000
+    until = now + 290 if state == "working" else now - (now % 360) + 300
+    p = prices.rates("claude-opus-5-5")
+    return {"until": until, "ttl": 300, "context": context, "saves_usd": round(context * (p[1] - p[3]) / 1e6, 2)}
 
 
 class _NoPoll:
@@ -320,7 +329,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.31.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.32.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

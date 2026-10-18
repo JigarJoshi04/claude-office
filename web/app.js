@@ -1,6 +1,6 @@
 // Claude Office: the controller. Live data in; floor, inspector and views out.
 import { createOffice } from "./office.js";
-import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok } from "./ui/util.js";
+import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss } from "./ui/util.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
@@ -625,6 +625,18 @@ function paintLatest() {
   el.querySelector("[data-replay]").addEventListener("click", () => { setView("floor"); replay.open(6); });
 }
 setInterval(() => { if (snap && prefs.motion !== "reduced") { latestIdx++; paintLatest(); } }, 7000);
+
+// Prompt cache countdowns on the session page tick every second; when one cools, the page redraws it as cooled.
+setInterval(() => {
+  let cooled = false;
+  document.querySelectorAll("[data-cache-until]").forEach(el => {
+    const left = +el.dataset.cacheUntil - Date.now() / 1000, b = el.querySelector("b");
+    if (left <= 0) { el.removeAttribute("data-cache-until"); cooled = true; return; }
+    if (b) b.textContent = mmss(left);
+    el.classList.toggle("soon", left < 60);
+  });
+  if (cooled) renderPanel(true);
+}, 1000);
 
 let rnSig = "";
 // The dock under the floor: one card per agent that is working or stopped, newest first. The card says who, what it is

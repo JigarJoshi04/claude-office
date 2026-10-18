@@ -91,6 +91,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   ran each session.
 - **Shipped work earns XP**: commits (25), pushes (5), opened (50) and merged (150) pull requests, read from the
   transcripts, with "+3 commits" rising from the desk and five shipping achievements.
+- **Prompt cache countdown**: a waiting session shows how long its prompt cache stays warm ("Cache warm 4:12") and
+  what a reply saves before it cools; its mug steams on the floor until then.
 - **API value**: every response priced at Anthropic's and OpenAI's list prices (5-minute and 1-hour cache writes,
   cache reads, output, fast mode), per character, model, project, day and month, against what the plans cost for the
   same days: "$9,030 at API list prices, 15× what the plans cost". A plan is priced by its tier (Pro, Max 5x, Max 20x)

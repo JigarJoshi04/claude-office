@@ -36,6 +36,8 @@ export function until(ts) {
   if (s < 86400) return Math.floor(s / 3600) + "h" + String(Math.floor((s % 3600) / 60)).padStart(2, "0");
   return Math.floor(s / 86400) + "d " + Math.floor((s % 86400) / 3600) + "h";
 }
+// A countdown: "4:07", or "52:10" (minutes and seconds); never negative.
+export const mmss = (sec) => { const s = Math.max(0, Math.round(sec)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 export function clock(ts) { return new Date(ts * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
 export function dur(sec) {
   if (sec == null) return "–";

@@ -1,6 +1,6 @@
 // The inspector: one renderer per view. Each returns { html, bind(root) }. Plain words first, numbers second.
 import { esc, fmtTok, ago, until, clock, dur, pct, live, store, toast, debounce, avatar, relTime, inWords, dayTime,
-  STATE_LABEL, SEAT_LABEL } from "./util.js";
+  STATE_LABEL, SEAT_LABEL, mmss } from "./util.js";
 import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary, PERSONALITIES, weekPace } from "./personas.js";
@@ -422,6 +422,13 @@ export function makePanels(app) {
   }
 
   // ----------------------------------------------------------------------------------------- session
+  // A session's prompt cache: how long a reply still reads its context cheaply (app.js ticks the countdown).
+  function cachePill(x) {
+    const c = x.cache, left = c.until - Date.now() / 1000, ctx = fmtTok(c.context);
+    const extra = c.saves_usd ? `about ${money(c.saves_usd)} more at API prices` : "more";
+    if (left > 0) return `<span class="pill cache warm ${left < 60 ? "soon" : ""}" data-cache-until="${c.until}" title="The prompt cache holds this session's ${ctx}-token context until ${esc(clock(c.until))}. A reply before then reads it back cheaply; after, the context is written to the cache again (${extra}). Its mug steams on the floor while it is warm.">${icon("coffee", 13)}Cache warm <b>${mmss(left)}</b></span>`;
+    return `<span class="pill cache cold" title="The prompt cache cooled at ${esc(clock(c.until))}. The next reply writes the ${ctx}-token context to the cache again (${extra} than while it was warm).">${icon("coffee", 13)}Cache cooled · ${ctx}</span>`;
+  }
   function session(v) {
     const s = seatById(v.seat), x = s && s.sessions.find(z => z.id === v.id);
     const conv = app.chatFor(v.seat, v.id);
@@ -438,6 +445,7 @@ export function makePanels(app) {
           ${x ? pill(x.kind === "lane" ? "Lane" : "Terminal") : ""}
           ${x && x.model ? pill(x.model.replace(/^claude-/, "")) : ""}
           ${x && x.git ? gitChip(x) : ""}
+          ${x && x.cache && x.state !== "working" ? cachePill(x) : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
       ${tab === "chat" && conv ? `<div class="chat-find">${icon("search", 15)}<input type="search" id="chatFind" placeholder="Find in this conversation" aria-label="Find in this conversation" value="${esc(chatFind.get(v.id) || "")}" autocomplete="off"><span class="cf-n" aria-live="polite"></span></div>` : ""}

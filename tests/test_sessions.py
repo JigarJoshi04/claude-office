@@ -287,3 +287,24 @@ class ListSessionsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PromptCacheTests(unittest.TestCase):
+    def test_the_main_chain_sets_how_long_the_cache_stays_warm(self):
+        import json
+        st = sessions.TranscriptState(Path("/x.jsonl"))
+        line = lambda mid, ts, w5=0, w1=0, side=False: json.dumps({"type": "assistant", "timestamp": ts, "isSidechain": side, "message": {
+            "id": mid, "model": "claude-opus-5-5", "content": [], "usage": {"input_tokens": 10, "output_tokens": 5, "cache_read_input_tokens": 400_000,
+            "cache_creation_input_tokens": w5 + w1, "cache_creation": {"ephemeral_5m_input_tokens": w5, "ephemeral_1h_input_tokens": w1}}}}).encode()
+        self.assertIsNone(sessions.cache_view(st))
+        st.feed_line(line("m1", "2026-10-18T10:00:00Z", w5=2000))
+        c = sessions.cache_view(st)
+        start = sessions._ts("2026-10-18T10:00:00Z")
+        self.assertEqual((c["until"], c["ttl"], c["context"]), (start + 300, 300, 402_010))
+        self.assertAlmostEqual(c["saves_usd"], round(402_010 * (5 - 0.2) / 1e6, 2))
+        st.feed_line(line("m2", "2026-10-18T10:20:00Z", side=True))             # a helper's response leaves it alone
+        self.assertEqual(sessions.cache_view(st)["until"], start + 300)
+        st.feed_line(line("m3", "2026-10-18T10:01:00Z", w1=3000))               # 1-hour writes: an hour from the last use
+        c = sessions.cache_view(st)
+        self.assertEqual((c["until"], c["ttl"]), (start + 60 + 3600, 3600))
+        self.assertAlmostEqual(c["saves_usd"], round(403_010 * (8 - 0.2) / 1e6, 2))

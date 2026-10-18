@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.32.0] - 2026-10-18
+
+### Added
+- Prompt cache countdown: a session that is not working shows "Cache warm 4:12" on its page, ticking every second
+  and urging in the last minute, then "Cache cooled · 395k". The title says what a reply saves while it is warm (the
+  context read back at the cache-read price instead of written again: "about $1.90 at API prices"). On the floor, an
+  idle desk's mug steams while its cache is warm.
+- Sessions carry `cache` (`until`, `ttl`, `context`, `saves_usd`), from the main chain's last response: 5 minutes,
+  or an hour once the session writes 1-hour cache entries.
+
 ## [3.31.0] - 2026-10-18
 
 ### Added

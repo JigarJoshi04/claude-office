@@ -644,7 +644,8 @@ export function createOffice(stage, handlers) {
         S.drawMonitorBack(ctx, x - 3, pod.y + 31);
         if (a && pose !== "sleep") S.drawHands(ctx, x, pod.y + 42, a.look, pose, t + slot * 333);
         if (a && pose === "sleep") S.drawZ(ctx, x + 8, sp.seatY - 6, t + slot * 500);
-        if (a && (pose === "idle" || pose === "wait")) S.drawMug(ctx, x + 12, pod.y + 43, t, pose === "wait");
+        // The mug steams while its owner waits on a long tool, or while an idle session's prompt cache is still warm.
+        if (a && (pose === "idle" || pose === "wait")) S.drawMug(ctx, x + 12, pod.y + 43, t, pose === "wait" || !!(a.sess.cache && a.sess.cache.until > Date.now() / 1000));
         if (a && pose === "stuck") S.drawMark(ctx, x + 3, sp.seatY - 9, "?", t);
         if (a && pose === "think") S.drawThought(ctx, x + 8, sp.seatY - 8, t);
         if (a && pose !== "sleep" && !off) lights.push({ x: x + 5, y: pod.y + 30, r: 12, c: "#9fd0ff", i: 0.35 });

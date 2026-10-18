@@ -14,6 +14,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from . import prices
+
 HEAD_BYTES = 256 * 1024
 TAIL_BYTES = 3 * 1024 * 1024
 LEDGER_SECONDS = 6 * 3600
@@ -206,10 +208,20 @@ def _user_text(content) -> str | None:
     return t
 
 
+def cache_view(tr) -> dict | None:
+    """The session's prompt cache: until when it is warm, the context it holds, and what a reply saves while it is
+    warm (a cooled cache is written again at the cache-write price instead of read at the cache-read price)."""
+    if not tr or not tr.cache_at or not tr.context:
+        return None
+    p = prices.rates(tr.model)
+    saves = round(tr.context * ((p[2] if tr.cache_ttl == 3600 else p[1]) - p[3]) / 1e6, 2) if p else None
+    return {"until": tr.cache_at + tr.cache_ttl, "ttl": tr.cache_ttl, "context": tr.context, "saves_usd": saves}
+
+
 class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
-                 "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total")
+                 "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context")
 
     def __init__(self, path: Path):
         self.path = path
@@ -233,6 +245,9 @@ class TranscriptState:
         self.last_text = None
         self.partial = b""
         self.ino = None
+        self.cache_at = None        # the main chain's last API response: its prompt cache lives until cache_at + cache_ttl
+        self.cache_ttl = 300        # 5 minutes, or an hour once the session writes 1-hour cache entries
+        self.context = 0            # that response's prompt: input, cache reads and cache writes
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -290,6 +305,15 @@ class TranscriptState:
             self.fresh_total += fresh
             if ts:
                 self.ledger.append((ts, fresh, int(usage.get("cache_read_input_tokens") or 0)))
+            if ts and not d.get("isSidechain"):
+                cc = usage.get("cache_creation") if isinstance(usage.get("cache_creation"), dict) else {}
+                if int(cc.get("ephemeral_1h_input_tokens") or 0) > 0:
+                    self.cache_ttl = 3600
+                elif int(cc.get("ephemeral_5m_input_tokens") or 0) > 0:
+                    self.cache_ttl = 300
+                self.cache_at = max(self.cache_at or 0, ts)
+                self.context = int(usage.get("input_tokens") or 0) + int(usage.get("cache_read_input_tokens") or 0) \
+                    + int(usage.get("cache_creation_input_tokens") or 0)
         for c in content:
             if not isinstance(c, dict):
                 continue
@@ -484,6 +508,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "tokens_total": tr.fresh_total if tr else 0,
             "tokens_1h": tr.tokens(now - 3600) if tr else None,
             "tokens_5h": tr.tokens(now - 5 * 3600) if tr else None,
+            "cache": cache_view(tr),
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,
             "report_file": report_file,

@@ -1450,3 +1450,10 @@ table.ship small { color: var(--muted); }
 .tp-valuecard td.num, .tp-valuecard th.num { white-space: nowrap; } .tp-valuecard table.ship .who { gap: 6px; }
 @media (max-width: 480px) { .tp-valuecard th:nth-child(2), .tp-valuecard td:nth-child(2) { display: none; } }   /* a phone keeps value and payback */
 .pop.ship { color: #7df0ad; background: rgba(13,43,24,.85); font-size: max(10px, calc(6px * var(--f))); padding: calc(.6px * var(--f)) calc(2px * var(--f)); border-radius: calc(2px * var(--f)); box-shadow: 0 0 0 calc(.4px * var(--f)) rgba(61,220,132,.6); }
+/* a session's prompt cache: warm (a reply reads it back cheaply), soon cold, cooled (3.32) */
+.pill.cache.warm { color: #ffb36b; background: rgba(255,150,60,.12); } .pill.cache.warm b { font: 700 12px var(--mono); }
+.pill.cache.warm.soon { color: #ff8a5c; box-shadow: inset 0 0 0 1px rgba(255,120,70,.5); animation: cachesoon 1.6s ease-in-out infinite; }
+@keyframes cachesoon { 50% { box-shadow: inset 0 0 0 1px rgba(255,120,70,.15); } }
+:root[data-motion="reduced"] .pill.cache.warm.soon { animation: none; }
+.pill.cache.cold { color: #8fb6ff; background: rgba(122,168,255,.12); }
+:root[data-theme="light"] .pill.cache.warm { color: #9a4a00; } :root[data-theme="light"] .pill.cache.warm.soon { color: #a8350d; } :root[data-theme="light"] .pill.cache.cold { color: #2f5bb8; }
