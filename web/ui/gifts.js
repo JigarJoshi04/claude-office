@@ -7,7 +7,7 @@ import { STICKERS, RARITY, rollSticker } from "../engine/stickers.js";
 
 export const MAX_WAITING = 3;          // more than this on the floor is clutter: later gifts wait in the mailroom
 export const KEEP_S = 24 * 3600;       // an unopened gift goes to the mailroom after a day
-export const MAILROOM = 20;            // the mailroom's pigeonholes (past this, the oldest gift there goes back)
+export const MAILROOM = 30;            // the mailroom's pigeonholes (past this, the oldest plain gift there goes back)
 export const LOG = 50;                 // openings remembered
 export const CHANCE = 0.45;            // a report's chance of a gift…
 export const PITY = 3;                 // …but never three reports in a row without one
@@ -47,7 +47,12 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
   const get = (k, d) => (demo ? (mem.has(k) ? mem.get(k) : d) : store.get(k, d));
   const set = (k, v) => (demo ? mem.set(k, v) : store.set(k, v));
   const mailroom = () => get("mailroom", []);
-  const toMail = (list) => { const m = [...mailroom(), ...list]; set("mailroom", m.slice(-MAILROOM)); };
+  // Over the cap the oldest plain gift goes; one that promises something (a swap, a rarity) never does.
+  const toMail = (list) => {
+    const m = [...mailroom(), ...list];
+    while (m.length > MAILROOM) { const i = m.findIndex(g => !g.min && g.from !== "swap"); if (i < 0) break; m.splice(i, 1); }
+    set("mailroom", m.slice(-2 * MAILROOM));          // and a hard stop, however many promises
+  };
   // The floor's gifts; any that waited a day unopened move to the mailroom.
   const waiting = () => {
     const all = get("gifts", []), fresh = all.filter(g => now() - g.at < KEEP_S);

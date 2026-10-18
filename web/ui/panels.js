@@ -192,7 +192,7 @@ export function makePanels(app) {
   function needAction(a) {
     const st = a.seat && seatById(a.seat);
     if (a.ask) return `<button class="btn sm primary" data-go="inbox">${icon("reply", 14)}Answer</button>`;
-    if (a.interrupted) return `<button class="btn sm primary" data-resume-all>${icon("play", 14)}Resume ${a.interrupted.length > 1 ? "all" : "it"}</button>`;
+    if (a.interrupted) return `<button class="btn sm primary" data-resume-all="${esc(JSON.stringify(a.interrupted))}">${icon("play", 14)}Resume ${a.interrupted.length > 1 ? "all" : "it"}</button>`;
     if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
     if (a.session) return `<button class="btn sm" data-open-session="${esc(a.seat)}|${esc(a.session)}">${icon("chat", 14)}Open</button>`;
     if (a.lane) return `<button class="btn sm" data-lane-go="${esc(a.lane)}">${icon("briefcase", 14)}Open</button>`;
@@ -303,7 +303,7 @@ export function makePanels(app) {
         root.querySelectorAll("[data-resume-all]").forEach(b => b.addEventListener("click", async () => {
           b.disabled = true;
           try {
-            const r = await app.post("/api/lanes/resume-interrupted", {});
+            const r = await app.post("/api/lanes/resume-interrupted", { ids: JSON.parse(b.dataset.resumeAll || "[]") });
             toast(r.demo ? "Demo office: nothing was resumed." : `Resuming ${r.resuming.length} lane${r.resuming.length === 1 ? "" : "s"}, one after another. Each picks up from its notes.`, r.demo ? "info" : "good");
             app.refresh();
           } catch (e) { b.disabled = false; toast("Could not resume: " + e.message, "bad"); }
@@ -1016,7 +1016,7 @@ export function makePanels(app) {
       ${l.waiting_reason ? `<div class="need warn" style="margin-top:12px"><span class="ico">${icon("clock", 16)}</span><div class="grow"><div class="t">Waiting for a seat</div><div class="d">${esc(humanise(l.waiting_reason))}</div></div></div>` : ""}
       <div class="row wrap" style="gap:8px;margin-top:16px">
         ${sid && l.seat ? `<button class="btn sm primary" data-chat-session="${esc(l.seat)}|${esc(sid)}">${icon("chat", 15)}${running ? "Chat with it" : "Follow up"}</button>` : ""}
-        ${running || scheduled ? `<button class="btn sm danger" id="lStop">${icon("stop", 15)}${scheduled ? "Cancel" : "Stop"}</button>` : ""}
+        ${running || scheduled || l.status === "interrupted" ? `<button class="btn sm danger" id="lStop">${icon("stop", 15)}${scheduled ? "Cancel" : l.status === "interrupted" ? "Dismiss" : "Stop"}</button>` : ""}
         ${!running ? `<button class="btn sm" id="lResume">${icon("play", 15)}${scheduled ? "Start now" : "Resume"}</button>` : ""}
         <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">As before</option><option value="auto">Let the divider pick</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
@@ -1272,7 +1272,7 @@ export function makePanels(app) {
         });
       } };
   }
-  const UNFINISHED = ["scheduled", "queued", "starting", "running", "waiting"];   // as lanes.UNFINISHED
+  const UNFINISHED = ["scheduled", "queued", "starting", "running", "waiting", "interrupted"];   // lanes.UNFINISHED, and the cut-off ones
   function laneListHtml() {
     const active = S().lanes.filter(l => UNFINISHED.includes(l.status)).length;
     return (active > 1 ? `<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn sm danger" data-stop-all>${icon("stop", 14)}Stop all ${active}</button></div>` : "")
@@ -1284,7 +1284,7 @@ export function makePanels(app) {
     if (!active) { toast("No office lane is running.", "info"); return; }
     if (!confirm(`Stop all ${active} office lane${active === 1 ? "" : "s"}? Each one keeps its notes and can be resumed. Sessions in your own terminals are not touched.`)) return;
     try {
-      const r = await app.post("/api/lanes/stop-all", {});
+      const r = await app.post("/api/lanes/stop-all", { ids: S().lanes.filter(l => UNFINISHED.includes(l.status)).map(l => l.id) });
       toast(r.demo ? "Demo office: nothing was stopped." : `Stopped ${r.stopped.length} lane${r.stopped.length === 1 ? "" : "s"}.`, r.demo ? "info" : "warn");
       app.refresh();
     } catch (e) { toast("Could not stop them: " + e.message, "bad"); }

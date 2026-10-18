@@ -38,7 +38,8 @@ SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletion
 WAIT_EDGES = (10, 20, 30, 45, 60, 90, 120, 180, 240, 300, 420, 600, 900, 1200, 1800, 2400, 3600, 5400, 7200)
 _STOP = re.compile(rb'"stop_reason":\s*"(\w+)"')
 _ASST, _USER = re.compile(rb'"type":\s*"assistant"'), re.compile(rb'"type":\s*"user"')
-_SIDE, _META, _TYPED = re.compile(rb'"isSidechain":\s*true'), re.compile(rb'"isMeta":\s*true'), re.compile(rb'"promptSource":\s*"typed"')
+_SIDE, _META = re.compile(rb'"isSidechain":\s*true'), re.compile(rb'"isMeta":\s*true')
+_TYPED = re.compile(rb'"promptSource":\s*"typed"|"origin":\s*\{\s*"kind":\s*"human"')   # typed, or a suggestion accepted
 _STAT = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?")
 _PUSHED = re.compile(r"\b[0-9a-f]{7,40}\.{2,3}[0-9a-f]{7,40}\s+\S+ -> \S+|\* \[new branch\]")   # "..." is a forced update
 _PUSH_FAIL = re.compile(r"! \[(?:remote )?rejected\]|error: failed to push|^fatal:", re.M)
@@ -521,7 +522,7 @@ class TokenLedger:
         if _ASST.search(raw):
             m = _STOP.search(raw)
             if m:                                          # null while a response is still being written
-                self._wait_end = _epoch(self._ts) if m.group(1) == b"end_turn" else None
+                self._wait_end = None if m.group(1) == b"tool_use" else _epoch(self._ts)   # end_turn, stop_sequence: its turn is over
             return False
         if not _USER.search(raw) or b'"tool_result"' in raw or _META.search(raw):
             return False

@@ -170,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.77.0"
+    server_version = "ClaudeOffice/3.78.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -465,15 +465,22 @@ class Handler(BaseHTTPRequestHandler):
                 self.office.emit("lane", f"CEO hired office lane '{lane['title']}' ({lane['seat_pref']})" + (" to start later" if lane.get("schedule") else ""), level="good")
                 return self._json(200, {"ok": True, "lane": lane})
             if path == "/api/lanes/stop-all":               # the panic button: every office lane that is not finished
-                stopped = [lanes.stop_lane(l["id"])["id"] for l in lanes.unfinished_lanes()]
+                want = body.get("ids")                       # the lanes the page shows (and counted in its question)
+                if want is not None and (not isinstance(want, list) or not all(isinstance(x, str) for x in want)):
+                    raise ValueError("ids must be a list of lane ids")
+                stopped = [lanes.stop_lane(l["id"])["id"] for l in lanes.unfinished_lanes(lanes.UNFINISHED + ("interrupted",))
+                           if want is None or l["id"] in want]
                 if stopped:
                     self.office.emit("lane", f"CEO stopped every office lane ({len(stopped)})", None, "warn")
                 self.office.build()
                 return self._json(200, {"ok": True, "stopped": stopped})
-            if path == "/api/lanes/resume-interrupted":     # after a restart: every lane that was cut off, one after another
-                ids = [l["id"] for l in lanes.interrupted_lanes()]
+            if path == "/api/lanes/resume-interrupted":     # after a restart: the lanes cut off that the page shows, one after another
+                want = body.get("ids")
+                if want is not None and (not isinstance(want, list) or not all(isinstance(x, str) for x in want)):
+                    raise ValueError("ids must be a list of lane ids")
+                ids = [l["id"] for l in lanes.interrupted_lanes() if want is None or l["id"] in want]
                 if ids:
-                    threading.Thread(target=lanes.resume_interrupted, args=(seat_ids,), daemon=True, name="resume-interrupted").start()
+                    threading.Thread(target=lanes.resume_interrupted, args=(seat_ids, 3.0, ids), daemon=True, name="resume-interrupted").start()
                     self.office.emit("lane", f"CEO resumed {len(ids)} interrupted lane{'s' if len(ids) > 1 else ''}", None, "good")
                 return self._json(200, {"ok": True, "resuming": ids})
             if path == "/api/lanes/stop":

@@ -462,3 +462,20 @@ test("teammates react in their own voice and banter about the day without repeat
   assert.equal(new Set(firsts).size, 6);                                  // nothing said twice in a row of six
   assert.ok(s2.size <= 8);
 });
+
+test("the mailroom keeps promised gifts over its cap, and waits read in whole minutes", async () => {
+  const { makeGifts, MAX_WAITING, MAILROOM, SWAP } = await import("../../web/ui/gifts.js");
+  const { waitFor } = await import("../../web/ui/tokens.js");
+  const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? mem.get(k) : d), set: (k, v) => mem.set(k, v) };
+  const g = makeGifts({ store, rand: () => 0 });
+  while (g.waiting().length < MAX_WAITING + 2) g.grant("s1", "goals");
+  store.set("album", { rocket: { n: SWAP + 1, first: 0 } });
+  const swap = g.swap();
+  assert.ok(swap.mail);
+  for (let i = 0; i < MAILROOM + 10; i++) g.grant("s1", "levelup");
+  assert.equal(g.mailroom().length, MAILROOM);
+  assert.ok(g.mailroom().some(x => x.id === swap.id), "a swapped gift is never dropped");
+  assert.equal(waitFor(3599), "1 h 00 min");
+  assert.equal(waitFor(7170), "2 h 00 min");                              // never "1 h 60 min"
+  assert.equal(waitFor(45), "45 s");
+});

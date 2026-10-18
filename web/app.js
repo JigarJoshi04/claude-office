@@ -546,6 +546,9 @@ setInterval(() => {
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
 }, 45000);
 
+// In share-safe mode, news whose words could name a session, a project or a report says only who and what kind.
+const PRIVATE_NEWS = { report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news", external: "has news",
+  reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer" };
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {}, plane() {}, mail() {}, ringBell() {} };
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
 // A page error says so once, quietly, and reports itself to the office (the doctor lists it). Errors from browser
@@ -571,7 +574,7 @@ function onNews(e) {
   if (seenNews.size > 2000) seenNews.clear();
   const seat = snap && snap.seats.find(s => s.id === e.seat);
   const who = seat ? panels.persona(seat) : null;
-  const text = panels.humanise(e.text);
+  const text = prefs.privacy && PRIVATE_NEWS[e.kind] ? `${who ? who.name : "The office"} ${PRIVATE_NEWS[e.kind]}` : panels.humanise(e.text);   // share-safe
   const sid = e.kind === "report" ? findSessionByText(e.text) : null;
   notifyTarget = e.kind === "ask" ? { kind: "inbox" } : sid && e.seat ? { kind: "session", seat: e.seat, id: sid }
     : e.kind === "shipped" ? { kind: "prs" } : e.seat ? { kind: "seat", seat: e.seat } : null;

@@ -1007,7 +1007,7 @@ export function createOffice(stage, handlers) {
     hot("wallhot", "Elevator: office news", ELEVATOR.x - 3, ELEVATOR.y - 6, 32, 46, () => handlers.openNews());
     hot("wallhot", "Employee of the day", 172, 8, 24, 32, () => handlers.openStats());
     hot("wallhot", "Trophy cabinet: everyone's achievements", 114, 6, 60, 34, () => handlers.openTrophies());
-    if (handlers.openShipped) { const b = BOARD(); hot("wallhot", shipLabel(), b.x - 1, b.y - 14, 60, 56, () => handlers.openShipped()); }
+    if (handlers.openShipped) { const b = BOARD(); hot("wallhot", shipLabel(), b.x - 1, b.y - 14, 60, 56, () => handlers.openShipped()).dataset.k = "wallhot:shipboard"; }   // counts in its label: a fixed key keeps focus
     if (L.lounge) div("room-label", "LOUNGE", L.lounge.x + 8, L.lounge.y + BACK_LABEL);
     if (L.meet) div("room-label", "MEETING", L.meet.x + 8, L.meet.y + BACK_LABEL);
     for (const o of L.open) div("room-label", "GARDEN", o.x + 8, o.y + BACK_LABEL);
@@ -1026,7 +1026,7 @@ export function createOffice(stage, handlers) {
     closet.shown.forEach((un, i) => { const [x, y] = rackPos(i); hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices()); });
     if (closet.hidden) div("room-label more", `+${closet.hidden} more`, LOBBY_W - 70, L.server.y - 12);
     hot("hire", "Hiring desk: start a new lane", L.hire.x + 8, L.hire.y + 8, POD_W - 16, POD_H - 14, () => handlers.openHire());
-    if (handlers.onMailroom && mailroom.length) hot("wallhot", `Mailroom: ${mailroom.length} gift${mailroom.length === 1 ? "" : "s"} waiting. Open the next`, L.hire.x + 2, L.hire.y + 5, 26, 28, () => handlers.onMailroom());   // over the desk's own target
+    if (handlers.onMailroom && mailroom.length) hot("wallhot", `Mailroom: ${mailroom.length} gift${mailroom.length === 1 ? "" : "s"} waiting. Open the next`, L.hire.x + 2, L.hire.y + 5, 26, 28, () => handlers.onMailroom()).dataset.k = "wallhot:mailroom";   // over the desk's own target
     place(div("plate hire-plate", "Hiring desk", 0, 0), L.hire.x + 24, L.hire.y + 98, POD_W - 48, null);
     waiting().forEach((l, i) => { const tg = div("tag queue", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 80); tg.title = l.waiting_reason || "Waiting for a seat"; });
     for (const pod of L.pods) renderPod(pod);

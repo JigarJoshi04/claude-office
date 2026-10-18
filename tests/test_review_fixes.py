@@ -256,3 +256,71 @@ class RebootRecoveryTests(unittest.TestCase):
             self.assertEqual(Path(path).stat().st_mode & 0o777, 0o700)
             self.assertIsNone(checkpoint.write_latest(empty, cfg))                    # after a restart: still there
             self.assertIn("s1", Path(path).read_text())
+
+
+class Qa17Fixes(unittest.TestCase):
+    """The review of 3.63–3.68."""
+
+    def _snap(self, ids, name="api", config_dir="/c2"):
+        return {"now": 1.0, "seats": [{"id": "c", "label": "c", "kind": "claude", "config_dir": config_dir, "sessions": [
+            {"id": i, "name": name, "kind": "desk", "live": True, "cwd": "/w"} for i in ids]}]}
+
+    def test_the_checkpoint_from_before_a_restart_is_kept(self):
+        from office import checkpoint
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = {"checkpoint_dir": tmp}
+            with patch.object(checkpoint, "_boot", return_value="boot-1"):
+                checkpoint.write_latest(self._snap(["s1", "s2", "s3"]), cfg)
+            with patch.object(checkpoint, "_boot", return_value="boot-2"):
+                checkpoint.write_latest(self._snap(["s9"]), cfg)              # the first new session after a restart
+                checkpoint.write_latest(self._snap(["s9", "s10"]), cfg)       # and later ones in the same boot
+            before = (Path(tmp) / "resume-before-restart.sh").read_text()
+            self.assertTrue(all(f"--resume {i}" in before for i in ("s1", "s2", "s3")))
+            self.assertIn("s10", (Path(tmp) / "resume-latest.sh").read_text())
+
+    def test_the_resume_script_is_safe_with_any_name_and_the_main_seat(self):
+        from office import checkpoint
+        with tempfile.TemporaryDirectory() as home:
+            with patch.object(checkpoint.config, "HOME", Path(home)):
+                main = checkpoint.resume_script(self._snap(["s1"], name="x#(touch /tmp/pwn)", config_dir=str(Path(home) / ".claude")))
+                other = checkpoint.resume_script(self._snap(["s1"], config_dir="/c2"))
+        line = next(l for l in main.splitlines() if "new-window" in l)
+        self.assertNotIn("#(", line)                                       # tmux would run #(...) in a window name
+        self.assertNotIn("CLAUDE_CONFIG_DIR", line)                        # the main seat keeps .claude.json in $HOME
+        self.assertIn("CLAUDE_CONFIG_DIR=/c2", other)
+        self.assertIn("pgrep -f -- '--resume s1'", line)                    # not opened twice
+
+    def test_resume_all_rechecks_each_lane_and_takes_only_the_ids_shown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "lanes"
+            for i in range(3):
+                (root / f"l{i}").mkdir(parents=True)
+                (root / f"l{i}" / "lane.json").write_text(json.dumps({"id": f"l{i}", "status": "interrupted", "interrupted_at": i, "title": "t"}))
+            started = []
+            def start(lane_id):
+                started.append(lane_id)
+                lane = lanes.load_lane(lane_id); lane["status"] = "starting"; lanes.save_lane(lane)   # as start_unit does
+                if lane_id == "l0":                                        # meanwhile, someone stops l1
+                    l1 = lanes.load_lane("l1"); l1["status"] = "stopped"; lanes.save_lane(l1)
+            with patch.object(lanes, "lanes_dir", return_value=root), patch.object(lanes, "start_unit", side_effect=start):
+                self.assertEqual(lanes.resume_interrupted([], gap=0, ids=["l0", "l1"]), ["l0"])
+                self.assertEqual(started, ["l0"])
+                stoppable = {l["id"]: l["status"] for l in lanes.unfinished_lanes(lanes.UNFINISHED + ("interrupted",))}
+                self.assertEqual(stoppable, {"l0": "starting", "l2": "interrupted"})   # stop-all sees the cut-off ones too
+
+    def test_waits_count_stop_sequence_turns_and_accepted_suggestions(self):
+        from office.tokens import TokenLedger
+        led = TokenLedger(None, [])
+        led._wait_end, led._helper_file = None, False
+        line = lambda **d: json.dumps(d).encode()
+        led._ts = "2026-10-18T10:00:00Z"
+        led._note_wait(line(type="assistant", message={"stop_reason": "stop_sequence"}), "s")
+        led._ts = "2026-10-18T10:02:00Z"
+        self.assertTrue(led._note_wait(line(type="user", origin={"kind": "human"}, message={"content": "yes"}), "s"))
+        w = next(iter(led.data["sessions"]["s"]["w"].values()))
+        self.assertEqual((w[0], w[1]), (120, 1))
+
+    def test_blocked_with_a_mark_or_a_number_in_front(self):
+        for line in ("⛔ STATUS: BLOCKED - creds", "[BLOCKED] no access", "1. STATUS: BLOCKED"):
+            self.assertTrue(sessions.report_blocked(line), line)
+        self.assertFalse(sessions.report_blocked("STATUS: DONE - unblocked the release"))

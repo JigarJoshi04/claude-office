@@ -143,13 +143,13 @@ GRACE_S = 90                    # a unit just started may not be listed yet
 UNFINISHED = ("scheduled", "queued", "starting", "running", "waiting")
 
 
-def unfinished_lanes() -> list[dict]:
+def unfinished_lanes(statuses=UNFINISHED) -> list[dict]:
     """Every lane that has not finished, however old (list_lanes shows only the newest 40)."""
     d = lanes_dir()
     out = []
     for p in d.iterdir() if d.is_dir() else []:
         lane = load_lane(p.name)
-        if lane and lane.get("status") in UNFINISHED:
+        if lane and lane.get("status") in statuses:
             out.append(lane)
     return out
 
@@ -169,11 +169,12 @@ def list_lanes() -> list[dict]:
         lane["unit_active"] = active is not None and unit_name(lane["id"]) in active
         if active is not None and not lane["unit_active"] and lane.get("status") in ("running", "starting", "waiting", "queued"):
             started = lane.get("unit_started_at")
-            if started and now - started > GRACE_S and not lane.get("stop_requested"):
+            full = load_lane(lane["id"]) or {}
+            if started and now - started > GRACE_S and not lane.get("stop_requested") \
+                    and full.get("status") == lane["status"] and full.get("unit_started_at") == started:   # not resumed since
                 # The unit is gone and nobody stopped it: a restart, a crash or the OOM killer cut it off. Kept, so the
                 # office can offer to resume it.
                 boot = boot or boot_id()
-                full = load_lane(lane["id"]) or {}
                 full.update(status="interrupted", interrupted_at=now, reboot=bool(boot and lane.get("boot_id") and lane["boot_id"] != boot))
                 save_lane(full)
                 _log(lane["id"], "interrupted: its unit is gone" + (" after a restart of the machine" if full["reboot"] else ""))
@@ -287,7 +288,7 @@ def start_scheduled(seats: list[dict], now: float | None = None) -> list[dict]:
     for lane in unfinished_lanes():
         if lane.get("status") == "scheduled" and due(lane, seats, now):
             full = load_lane(lane["id"])
-            if not full:
+            if not full or full.get("status") != "scheduled":   # started by hand since the list was read
                 continue
             full["status"] = "queued"
             save_lane(full)
@@ -295,6 +296,8 @@ def start_scheduled(seats: list[dict], now: float | None = None) -> list[dict]:
                 start_unit(full["id"])
                 started.append(full)
             except (ValueError, OSError) as e:
+                if "already running" in str(e):             # someone started it a moment ago: leave it running
+                    continue
                 full["status"] = "scheduled"
                 save_lane(full)
                 _log(full["id"], f"could not start on schedule: {e}")
@@ -399,10 +402,16 @@ def interrupted_lanes() -> list[dict]:
     return [l for p in (d.iterdir() if d.is_dir() else []) if (l := load_lane(p.name)) and l.get("status") == "interrupted"]
 
 
-def resume_interrupted(seat_ids: list[str], gap: float = 3.0) -> list[str]:
-    """Start every interrupted lane again, one after another (the launch lock seats them one at a time)."""
+def resume_interrupted(seat_ids: list[str], gap: float = 3.0, ids: list[str] | None = None) -> list[str]:
+    """Start the interrupted lanes again (those of `ids`, or all), one after another (the launch lock seats them one at a
+    time). Each is read again just before: one stopped or resumed meanwhile is left alone."""
     out = []
     for lane in sorted(interrupted_lanes(), key=lambda l: l.get("interrupted_at") or 0):
+        if ids is not None and lane["id"] not in ids:
+            continue
+        now = load_lane(lane["id"]) or {}
+        if now.get("status") != "interrupted":
+            continue
         try:
             resume_lane(lane["id"], None, seat_ids)
             out.append(lane["id"])

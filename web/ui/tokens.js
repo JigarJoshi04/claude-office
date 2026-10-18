@@ -38,7 +38,7 @@ export function leanHolder(weeks) {
 }
 
 // A wait, said short: "40 s", "6 min", "2 h 05 min".
-export const waitFor = (s) => (s < 60 ? `${Math.round(s)} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${Math.floor(s / 3600)} h ${String(Math.round(s % 3600 / 60)).padStart(2, "0")} min`);
+export const waitFor = (s) => { if (s < 60) return `${Math.round(s)} s`; const m = Math.round(s / 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`; };
 
 // Waiting on you: how long sessions sat finished, waiting for the next prompt someone typed (office/tokens.py
 // _note_wait), the median reply and the longest waits. `who` names a seat; `priv` hides the projects.

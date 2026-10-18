@@ -59,7 +59,7 @@ export function makeArcade(ctx) {
       let gift = false;
       if (fresh && store.get("squashGiftDay", "") !== localDay()) { store.set("squashGiftDay", localDay()); gift = onBest(st.score); }
       sound.play(fresh ? "levelup" : "report");
-      over.innerHTML = `<div class="arc-title">${fresh ? "NEW BEST!" : "TIME!"}</div><p>You scored <b>${st.score}</b> point${st.score === 1 ? "" : "s"}.${fresh && prev ? ` Your old best was ${prev}.` : ""}${gift ? "<br><b class=\"y\">A gift is waiting on the floor.</b>" : ""}</p>
+      over.innerHTML = `<div class="arc-title">${fresh ? "NEW BEST!" : "TIME!"}</div><p>You scored <b>${st.score}</b> point${st.score === 1 ? "" : "s"}.${fresh && prev ? ` Your old best was ${prev}.` : ""}${gift ? `<br><b class="y">A gift is waiting ${gift.mail ? "in the mailroom" : "on the floor"}.</b>` : ""}</p>
         <button class="btn primary" data-arc-start>${icon("play", 15)}Play again</button>`;
       over.hidden = false;
       over.querySelector("[data-arc-start]").addEventListener("click", start);

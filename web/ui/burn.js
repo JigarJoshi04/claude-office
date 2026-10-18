@@ -72,9 +72,10 @@ export function makeBurn(ctx) {
   // A milestone gift that found no room is granted on a later pass.
   function owedGift() {
     const owed = store.get("milestoneGift", null);
-    if (!owed || !full() || !giftBox.grant(null, "milestone", "epic")) return;
+    const g = owed && full() && giftBox.grant(null, "milestone", "epic");
+    if (!g) return;
     store.set("milestoneGift", null);
-    toast(`Your gift for ${rungWords(owed)} tokens is at your desk.`, "good", { ic: "gift" });
+    toast(`Your gift for ${rungWords(owed)} tokens is ${g.mail ? "in the mailroom" : "at your desk"}.`, "good", { ic: "gift" });
   }
 
   function records(r) {

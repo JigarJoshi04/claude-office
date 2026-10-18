@@ -3,6 +3,7 @@ resume it. Take one before closing the laptop or restarting it."""
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import time
 from pathlib import Path
@@ -73,17 +74,28 @@ def resume_script(snap: dict) -> str | None:
     if not rows:
         return None
     q, one = shlex.quote, (lambda t: " ".join(str(t or "").split())[:120])   # a comment stays on one line
+    main = os.path.realpath(os.path.join(str(config.HOME), ".claude"))     # the main seat keeps .claude.json in $HOME
+    window = lambda t: re.sub(r"[^\w .-]", "", one(t))[:24] or "session"     # tmux expands #(...) in window names
     now = snap.get("now") or time.time()
     out = ["#!/bin/sh", f"# Claude Office: the terminal sessions that were live at {time.strftime('%a %d %b %H:%M', time.localtime(now))},",
            "# one tmux window each. Run: sh <this file>  (needs tmux)", 'S=office-resume',
            'tmux has-session -t "$S" 2>/dev/null || tmux new-session -d -s "$S" -n office']
     for s, x in rows:
         br = (x.get("git") or {}).get("branch")
-        cmd = f"cd {q(x['cwd'])} && CLAUDE_CONFIG_DIR={q(s['config_dir'])} claude --resume {q(x['id'])}; exec \"${{SHELL:-sh}}\""
-        out.append(f"# {one(x.get('name'))} on {one(s.get('label'))}" + (f", branch {one(br)}" if br else ""))
-        out.append(f'tmux new-window -t "$S" -n {q(one(x.get("name"))[:24] or "session")} {q(cmd)}')
+        env = "" if os.path.realpath(s["config_dir"]) == main else f"CLAUDE_CONFIG_DIR={q(s['config_dir'])} "
+        cmd = f"cd {q(x['cwd'])} && {env}claude --resume {q(x['id'])}; exec \"${{SHELL:-sh}}\""
+        out.append(f"# {one(x.get('name')).replace(chr(35), '')} on {one(s.get('label'))}" + (f", branch {one(br)}" if br else ""))
+        # already open (the script run twice, or the session resumed by hand): not again
+        out.append(f'pgrep -f -- {q("--resume " + x["id"])} >/dev/null || tmux new-window -t "$S" -n {q(window(x.get("name")))} {q(cmd)}')
     out.append('tmux attach -t "$S"')
     return "\n".join(out) + "\n"
+
+
+def _boot() -> str | None:
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip() or None
+    except OSError:
+        return None
 
 
 def _dir(cfg: dict) -> Path:
@@ -106,6 +118,17 @@ def write_latest(snap: dict, cfg: dict) -> str | None:
     if not script:
         return None
     d = _dir(cfg)
+    boot, mark = _boot(), d / ".latest-boot"
+    try:
+        before = mark.read_text().strip()
+    except OSError:
+        before = None
+    if before and boot and before != boot:            # the first write after a restart keeps the one from before it
+        for a, b in (("resume-latest.sh", "resume-before-restart.sh"), ("office-checkpoint-latest.md", "office-checkpoint-before-restart.md")):
+            if (d / a).exists():
+                os.replace(d / a, d / b)
+    if boot:
+        mark.write_text(boot + "\n")
     for name, text, mode in (("office-checkpoint-latest.md", render(snap), 0o600), ("resume-latest.sh", script, 0o700)):
         tmp = d / (name + ".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)

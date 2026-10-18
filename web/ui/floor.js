@@ -57,7 +57,11 @@ export function makeFloor(ctx) {
     tvStep++;
     if (slides.length && tvStep % 3 === 0 && !replay.active()) {
       if (bootVersion && snap.office.version && snap.office.version !== bootVersion) {   // the office updated: start fresh, still on TV
-        const u = new URL(location.href); u.searchParams.set("tv", "1"); location.replace(u); return;
+        if (!document.fullscreenElement) { const u = new URL(location.href); u.searchParams.set("tv", "1"); location.replace(u); return; }
+        const line = document.querySelector(".tv-hud .tv-line");   // a reload would leave full screen (it needs a click to return)
+        if (line && !document.querySelector("[data-tv-update]")) line.insertAdjacentHTML("afterend", `<button class="btn sm" data-tv-update>Updated: click to reload</button>`);
+        const b = document.querySelector("[data-tv-update]");
+        if (b && !b.dataset.bound) { b.dataset.bound = "1"; b.addEventListener("click", () => { const u = new URL(location.href); u.searchParams.set("tv", "1"); location.replace(u); }); }
       }
       slideAt = (slideAt + 1) % slides.length;
       showSlide(slides[slideAt]);
@@ -102,12 +106,12 @@ export function makeFloor(ctx) {
     }
     const att = panels.needsList();                     // grouped as Needs you groups them, so the counts agree
     if (!att.length) return head("Needs you", "All clear") + `<p class="tvs-note">Nothing needs the CEO right now.</p>`;
-    const plan = (a) => a.nearly || a.grouped || /usage|limit|runs out|window/i.test(a.text || "");
-    const kinds = [["questions", att.filter(a => a.ask).length], ["lanes", att.filter(a => a.lane).length],
-      ["plan limits", att.filter(a => !a.ask && !a.lane && plan(a)).length]];
+    const plan = (a) => a.nearly || a.grouped || (a.seat && !a.session && !a.lane && /usage at|out of plan|runs out of its|stopped by the usage limit/i.test(a.text || ""));
+    const kinds = [["question", att.filter(a => a.ask).length], ["lane", att.filter(a => a.lane || a.interrupted).length],
+      ["plan limit", att.filter(a => !a.ask && !a.lane && !a.interrupted && plan(a)).length]];
     const other = att.length - kinds.reduce((n, k) => n + k[1], 0);
     return head("Needs you", `${att.length} thing${att.length === 1 ? "" : "s"} need${att.length === 1 ? "s" : ""} the CEO`)
-      + `<div class="tvs-tiles">${[...kinds, ["other", other]].filter(k => k[1]).map(([k, n]) => tile(n, k)).join("")}</div>`;
+      + `<div class="tvs-tiles">${[...kinds, ["other", other]].filter(k => k[1]).map(([k, n]) => tile(n, n === 1 || k === "other" ? k : k + "s")).join("")}</div>`;
   }
   function showSlide(kind) {
     const frame = document.querySelector(".floor-frame");
@@ -151,7 +155,7 @@ export function makeFloor(ctx) {
   function tvExtra() {
     const el = document.querySelector(".tv-hud .tv-extra"), g = app.gifts;
     if (!el || !g) return;
-    const offNow = (prefs.game || "full") === "off", n = offNow ? 0 : g.waiting().length, on = !offNow && g.happy();
+    const offNow = (prefs.game || "full") === "off", n = offNow ? 0 : g.waiting().length + (g.mailroom ? g.mailroom().length : 0), on = !offNow && g.happy();
     el.hidden = !n && !on;
     el.classList.toggle("happy", on);
     el.innerHTML = `${n ? `${icon("gift", 14)}${n}` : ""}${on ? `<span>Happy hour</span>` : ""}`;

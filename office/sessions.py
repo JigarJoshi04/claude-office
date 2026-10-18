@@ -590,7 +590,7 @@ def tail_text(path: str | None, max_lines: int = 12, max_bytes: int = 16384) -> 
     return redact("\n".join(lines[-max_lines:]))
 
 
-_BLOCKED = re.compile(r"^[\s#*_>`-]*(?:STATUS\W*)?BLOCKED\b", re.I)
+_BLOCKED = re.compile(r"^[\W\d_]*(?:STATUS\W*)?BLOCKED\b", re.I)   # "⛔ STATUS: BLOCKED", "[BLOCKED]", "1. Status: blocked"
 
 
 def report_blocked(line: str | None) -> bool:

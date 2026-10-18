@@ -85,9 +85,12 @@ export function makeGiftBox(ctx) {
     if (!g) return;
     sync();
     sound.play("drop");
-    if (g.mail && !store.get("mailHint", false)) {
-      store.set("mailHint", true);
-      toast(`The floor is full, so ${nameOf(seatId) || "this"} gift went to the mailroom by the hiring desk. It comes out as you open the others.`, "info", { ic: "gift", ms: 8000 });
+    if (g.mail) {
+      if (!store.get("mailHint", false)) {
+        store.set("mailHint", true);
+        toast(`The floor is full, so ${nameOf(seatId) ? nameOf(seatId) + "'s" : "this"} gift went to the mailroom by the hiring desk. It comes out as you open the others.`, "info", { ic: "gift", ms: 8000 });
+      }
+      return;                                          // not "left you a gift on the floor"
     }
     if (!store.get("giftHint", false)) {
       store.set("giftHint", true);

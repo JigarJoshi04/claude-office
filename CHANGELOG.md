@@ -3,6 +3,29 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.78.0] - 2026-10-19
+
+### Fixed
+From an adversarial review of 3.63–3.68 (every finding reproduced first):
+- The checkpoint from before a restart survives it: the first hourly write after a restart moves it to
+  `resume-before-restart.sh` (and the .md) instead of writing over it.
+- The resume script is safe with any session name (tmux ran `#(...)` in window names), leaves `CLAUDE_CONFIG_DIR`
+  out for the main seat (whose settings live in your home folder), and skips a session that is already open.
+- "Resume all" reads each lane again just before starting it, so one stopped meanwhile stays stopped; it and "Stop
+  every office lane" act on the lanes the page shows, and stop-all covers lanes cut off by a restart.
+- An interrupted lane can be dismissed from its page.
+- A lane started by hand while the scheduler looked at it, or resumed while the office decided it was cut off, is no
+  longer written back as scheduled or interrupted.
+- The mailroom never drops a gift with a promise attached (a swap, a rarity): over its cap (now 30) the oldest plain
+  one goes.
+- Keyboard focus stays on the ship board and the mailroom when their counts change.
+- Share-safe mode: news toasts say who and what kind, never a session's or project's words (as the TV ticker does).
+- TV mode in full screen asks before reloading after an update (a reload leaves full screen).
+- Waits read "2 h 00 min", never "1 h 60 min"; turns that end on a stop sequence and accepted suggestions count.
+- A report starting "⛔ STATUS: BLOCKED", "[BLOCKED]" or "1. STATUS: BLOCKED" reads as blocked again.
+- Smaller words: the needs slide says "1 question", the first mailroom notice names whose gift it is (and comes
+  alone), the arcade and milestone gifts say when they went to the mailroom, and TV mode's gift count includes it.
+
 ## [3.77.0] - 2026-10-19
 
 ### Added
