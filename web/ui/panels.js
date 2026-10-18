@@ -806,6 +806,15 @@ export function makePanels(app) {
   // ------------------------------------------------------------------------------------------ hiring
   // Templates of your own (Hire → Save as a template), kept in this browser.
   const myTemplates = () => { const l = store.get("myTemplates", []); return Array.isArray(l) ? l.filter(t => t && t.name && t.brief) : []; };
+  // What a good brief has: a goal, where to look, and how to know it is done. The chips light up as the brief says so.
+  const BRIEF_PARTS = [["Goal", /\b(goal|fix|make|build|add|write|find|investigate|review|refactor|update|remove|migrate)\b/i],
+    ["Where to look", /(\bwhere\b|\bin (the )?\w+\/|[\w-]+\.(py|js|ts|go|rs|md|json|sql|ya?ml)\b|\brepo\b|\bfolder\b|\bfile\b|\bendpoint\b|\bpage\b|#\d+)/i],
+    ["Done when", /(done when|\bdone:|\bverify\b|\bpasses?\b|\bgreen\b|\breport\b|\buntil\b|\bcounts as done\b|\bPR\b)/i]];
+  function briefCheck(text) {
+    const t = text || "";
+    return BRIEF_PARTS.map(([label, re]) => { const ok = re.test(t); return `<span class="bc ${ok ? "ok" : ""}">${icon(ok ? "check" : "dot", 13)}${label}</span>`; }).join("") +
+      `<span class="bc-n">${t.trim() ? t.trim().split(/\s+/).length + " words" : ""}</span>`;
+  }
   function hire() {
     const snap = S(), ld = snap.office.lane_defaults || {}, np = snap.next_pick, d = hireDraft;
     const dirs = [...new Set([snap.office.default_workdir, ...snap.seats.flatMap(s => s.sessions.map(x => x.cwd))].filter(Boolean))];
@@ -817,6 +826,7 @@ export function makePanels(app) {
       ${section("The brief", `
         <label class="f">Title<input type="text" id="hTitle" maxlength="80" placeholder="e.g. Fix the flaky export test" value="${esc(d.title)}"></label>
         <label class="f">What should it do?<textarea id="hBrief" placeholder="The goal, where to look, how to check the work, and what counts as done.">${esc(d.brief)}</textarea></label>
+        <div class="brief-check" id="hCheck" aria-live="polite">${briefCheck(d.brief)}</div>
         <label class="f">Working folder<input type="text" id="hDir" list="hDirs" value="${esc(d.workdir || snap.office.default_workdir || "")}"><datalist id="hDirs">${dirs.map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
         <div class="grid2">
           <label class="f">Who does it<select id="hSeat"><option value="auto" ${d.seat === "auto" ? "selected" : ""}>Let the divider pick (now ${esc(np.seat ? nameOf(np.seat) : "nobody")})</option>
@@ -835,6 +845,7 @@ export function makePanels(app) {
         const q = (id) => root.querySelector("#" + id);
         const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked }; store.set("hireDraft", hireDraft); };
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm"].forEach(id => q(id).addEventListener("input", save));
+        q("hBrief").addEventListener("input", () => { q("hCheck").innerHTML = briefCheck(q("hBrief").value); });
         q("hMsg").addEventListener("change", save);
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
         const useTpl = (t) => {
