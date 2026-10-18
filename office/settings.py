@@ -19,10 +19,26 @@ _LOCK = threading.Lock()
 def view(cfg, seats):
     return public({"office_name": cfg.get("office_name", "Claude Office"),
                    "ceo_name": cfg.get("ceo", {}).get("name", "CEO"),
-                   "seats": {s["id"]: {**{k: s.get(k) for k in ("label", "nickname", "color", "role", "motto", "style", "plan_usd")},
+                   "ceo_look": cfg.get("ceo", {}).get("look"),
+                   "seats": {s["id"]: {**{k: s.get(k) for k in ("label", "nickname", "color", "role", "motto", "style", "plan_usd", "look")},
                                        "plan_default": prices.plan_usd({"health": s.get("health")})} for s in seats},
                    "voice": {k: cfg.get("voice", {}).get(k, v) for k, v in VOICE_DEFAULTS.items()},
                    "voice_available": shutil.which("jarvis-say") is not None})
+
+
+def look(value):
+    """A character creator's choice: {"skin": 0-5, "hair": 0-8, "style": 0-5, "glasses": bool}, or None for the default."""
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) - {"skin", "hair", "style", "glasses"}:
+        raise ValueError("look must be an object with skin, hair, style and glasses")
+    for key, top in (("skin", 5), ("hair", 8), ("style", 5)):
+        v = value.get(key)
+        if v is not None and (type(v) is not int or not 0 <= v <= top):
+            raise ValueError(f"look.{key} must be a number from 0 to {top}")
+    if value.get("glasses") is not None and type(value["glasses"]) is not bool:
+        raise ValueError("look.glasses must be true or false")
+    return {k: v for k, v in value.items() if v is not None}
 
 
 def validate(body):
@@ -61,6 +77,8 @@ def validate(body):
                 if entry["style"] is not None and (not isinstance(entry["style"], str) or entry["style"] not in STYLES):
                     raise ValueError("style must be one of the personalities")
                 dest["style"] = entry["style"]
+            if "look" in entry:
+                dest["look"] = look(entry["look"])
             if "plan_usd" in entry:                       # what the seat's plan costs a month; None goes back to its tier's price
                 v = entry["plan_usd"]
                 if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 10000):
@@ -70,6 +88,8 @@ def validate(body):
                 if not isinstance(entry["color"], str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", entry["color"]):
                     raise ValueError("color must be #RRGGBB")
                 dest["color"] = entry["color"]
+    if "ceo_look" in body:
+        out.setdefault("ceo", {})["look"] = look(body["ceo_look"])
     if "voice" in body:
         v = body["voice"]
         if not isinstance(v, dict):

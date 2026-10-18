@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.55.0] - 2026-10-18
+
+### Added
+- Character creator, in Settings: pick each character's skin, hair colour, hairstyle (short, long, bun, spiky, cap,
+  crop) and glasses, and your own at the CEO's desk, with a live portrait; "Automatic" goes back to the look it was
+  born with. Saved with the office settings (`look` per seat, `ceo.look`), so every screen shows it: portraits,
+  cards, the lounge, the employee of the day and the CEO's desk.
+
 ## [3.54.0] - 2026-10-18
 
 ### Added

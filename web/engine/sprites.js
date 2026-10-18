@@ -46,15 +46,20 @@ export function hashOf(str) {
 }
 
 // Same agent, same look, every refresh.
-export function lookFor(id, shirt) {
-  const h = hashOf(id);
+// A look chosen in the character creator (Settings) wins over the one the id hashes to: {skin, hair, style, glasses},
+// by id ("mascot-<seat>", "ceo-<name>"), set from the snapshot.
+let LOOKS = {};
+export function setLooks(map) { LOOKS = map || {}; }
+export const LOOK_STYLES = ["Short", "Long", "Bun", "Spiky", "Cap", "Crop"];
+export function lookFor(id, shirt, choice = LOOKS[id]) {
+  const h = hashOf(id), o = choice || {}, pick = (list, i) => (Number.isInteger(i) && i >= 0 && i < list.length ? list[i] : null);
   return {
-    skin: P.skin[h % P.skin.length],
-    hair: P.hair[(h >>> 3) % P.hair.length],
-    style: (h >>> 7) % 6,               // 0 short, 1 long, 2 bun, 3 spiky, 4 cap, 5 bald-ish crop
+    skin: pick(P.skin, o.skin) || P.skin[h % P.skin.length],
+    hair: pick(P.hair, o.hair) || P.hair[(h >>> 3) % P.hair.length],
+    style: Number.isInteger(o.style) && o.style >= 0 && o.style < 6 ? o.style : (h >>> 7) % 6,   // 0 short, 1 long, 2 bun, 3 spiky, 4 cap, 5 crop
     shirt,
     pants: P.pants[(h >>> 13) % P.pants.length],
-    glasses: ((h >>> 11) % 5) === 0,
+    glasses: typeof o.glasses === "boolean" ? o.glasses : ((h >>> 11) % 5) === 0,
   };
 }
 

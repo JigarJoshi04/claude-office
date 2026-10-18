@@ -93,3 +93,15 @@ class PlanSettingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LookSettingTests(unittest.TestCase):
+    def test_a_characters_look_is_validated(self):
+        from office import settings
+        out = settings.validate({"seats": {"claude": {"look": {"skin": 2, "hair": 8, "style": 5, "glasses": True}}}, "ceo_name": "Me", "ceo_look": {"style": 4}})
+        self.assertEqual(out["seats"]["claude"]["look"], {"skin": 2, "hair": 8, "style": 5, "glasses": True})
+        self.assertEqual(out["ceo"], {"name": "Me", "look": {"style": 4}})
+        self.assertIsNone(settings.validate({"seats": {"claude": {"look": None}}})["seats"]["claude"]["look"])
+        for bad in ({"skin": 6}, {"style": -1}, {"hair": "1"}, {"glasses": 1}, {"hat": 1}, "x"):
+            with self.assertRaises(ValueError):
+                settings.validate({"seats": {"claude": {"look": bad}}})

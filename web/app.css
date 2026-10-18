@@ -1531,3 +1531,12 @@ ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
 .lim-row { display: grid; grid-template-columns: minmax(70px, 140px) 1fr auto; align-items: center; gap: 12px; padding: 5px 0; font-size: 13.5px; }
 .lim-row .tb-bar i { background: var(--seat); } .lim-row b { font: 700 12.5px var(--mono); min-width: 52px; text-align: right; }
 .tasklist li.completed-ok > .ic { color: var(--good); } .tasklist li.completed-ok em { color: var(--muted); }
+/* the character creator (3.55) */
+.look-edit { grid-column: 1 / -1; display: flex; gap: 14px; align-items: flex-start; margin: 8px 0 10px; padding: 10px; border-radius: 12px; background: var(--surface-3); }
+.lk-prev { flex: none; width: 48px; height: 60px; display: grid; place-items: center; } .lk-prev canvas { image-rendering: pixelated; }
+.lk-rows { display: grid; gap: 6px; min-width: 0; }
+.lk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; } .lk-row > span { width: 54px; font-size: 12px; color: var(--muted); }
+.lk-sw { width: 20px; height: 20px; border-radius: 6px; border: 0; background: var(--c); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+.lk-sw.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent-2); }
+.lk-st { border: 0; border-radius: 7px; padding: 3px 8px; font-size: 12px; cursor: pointer; background: var(--surface-2); color: var(--text-2); }
+.lk-st.on { background: var(--accent-2); color: #fff; }

@@ -1,6 +1,6 @@
 // The inspector: one renderer per view. Each returns { html, bind(root) }. Plain words first, numbers second.
 import { esc, fmtTok, ago, until, clock, dur, pct, live, store, toast, debounce, avatar, relTime, inWords, dayTime,
-  STATE_LABEL, SEAT_LABEL, mmss } from "./util.js";
+  STATE_LABEL, SEAT_LABEL, mmss, portrait } from "./util.js";
 import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary, PERSONALITIES, weekPace } from "./personas.js";
@@ -12,6 +12,7 @@ import { STICKERS, RARITY } from "../engine/stickers.js";
 import { SETS, setsDone, happyHourFor, happyNow, MAX_WAITING, GRANT_ROOM, SWAP } from "./gifts.js";
 import { md } from "./md.js";
 import { money } from "./tokens.js";
+import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
 
 const TEMPLATES = [
   { name: "Fix a failing test", ic: "check", title: "Fix failing test: ", brief: "Goal: make the failing test pass without weakening it.\nWhere: <test file or CI job>\nContext: <what changed recently>\nDone when: the test passes locally and the full suite is green.\nVerify: run the suite and paste the summary in the report." },
@@ -1167,6 +1168,38 @@ export function makePanels(app) {
   }
 
   // ----------------------------------------------------------------------------------------- settings
+  // The character creator: skin, hair colour, hairstyle and glasses, with a live portrait; "Automatic" goes back to the
+  // look the character was born with. Chosen looks wait in lookDraft until "Save office settings".
+  const lookDraft = new Map();
+  function lookEditor(portraitId, color, saved, key) {
+    const cur = lookDraft.has(key) ? lookDraft.get(key) || {} : saved || {};
+    const sw = (k, list) => list.map((c, i) => `<button type="button" class="lk-sw ${cur[k] === i ? "on" : ""}" style="--c:${c}" data-lk="${esc(key)}|${k}|${i}" aria-label="${k} ${i + 1}" aria-pressed="${cur[k] === i}"></button>`).join("");
+    return `<div class="look-edit" data-look-for="${esc(key)}" data-look-id="${esc(portraitId)}" data-look-color="${esc(color)}" data-saved="${esc(JSON.stringify(saved || null))}">
+      <div class="lk-prev" aria-hidden="true"></div>
+      <div class="lk-rows"><div class="lk-row"><span>Skin</span>${sw("skin", PALETTE.skin)}</div><div class="lk-row"><span>Hair</span>${sw("hair", PALETTE.hair)}</div>
+        <div class="lk-row"><span>Style</span>${LOOK_STYLES.map((n, i) => `<button type="button" class="lk-st ${cur.style === i ? "on" : ""}" data-lk="${esc(key)}|style|${i}" aria-pressed="${cur.style === i}">${n}</button>`).join("")}</div>
+        <div class="lk-row"><span>Glasses</span><button type="button" class="lk-st ${cur.glasses === true ? "on" : ""}" data-lk="${esc(key)}|glasses|1" aria-pressed="${cur.glasses === true}">On</button><button type="button" class="lk-st ${cur.glasses === false ? "on" : ""}" data-lk="${esc(key)}|glasses|0" aria-pressed="${cur.glasses === false}">Off</button>
+          <button type="button" class="btn sm ghost" data-lk-reset="${esc(key)}">Automatic</button></div></div></div>`;
+  }
+  function bindLooks(root) {
+    const paint = (w) => { const box = w.querySelector(".lk-prev"), l = lookDraft.has(w.dataset.lookFor) ? lookDraft.get(w.dataset.lookFor) : undefined;
+      box.replaceChildren(portrait(w.dataset.lookId, w.dataset.lookColor, { scale: 4, look: l === undefined ? undefined : (l || {}) })); };
+    root.querySelectorAll("[data-look-for]").forEach(paint);
+    root.querySelectorAll("[data-lk]").forEach(b => b.addEventListener("click", () => {
+      const [key, k, v] = b.dataset.lk.split("|"), w = root.querySelector(`[data-look-for="${CSS.escape(key)}"]`);
+      const base = lookDraft.has(key) ? { ...(lookDraft.get(key) || {}) } : { ...(JSON.parse(w.dataset.saved || "null") || {}) };
+      base[k] = k === "glasses" ? v === "1" : +v;
+      lookDraft.set(key, base);
+      w.querySelectorAll(`[data-lk^="${CSS.escape(key)}|${k}|"]`).forEach(x => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on)); });
+      paint(w);
+    }));
+    root.querySelectorAll("[data-lk-reset]").forEach(b => b.addEventListener("click", () => {
+      const key = b.dataset.lkReset, w = root.querySelector(`[data-look-for="${CSS.escape(key)}"]`);
+      lookDraft.set(key, null);
+      w.querySelectorAll("[data-lk]").forEach(x => { x.classList.remove("on"); x.setAttribute("aria-pressed", "false"); });
+      paint(w);
+    }));
+  }
   function settings() {
     if (!settingsData && !settingsLoading) {
       settingsLoading = true;
@@ -1200,7 +1233,8 @@ export function makePanels(app) {
         row("Top burner", "Say so when another character becomes the top burner of all time.", sw("alarmTopBurner", !!p.alarmTopBurner, "Top burner alarm")),
       ].join("") + `<div class="hint">Alarms ring at every game level: a toast, a chime, and a desktop notification when this tab is in the background. Each rings once an hour at most.</div>`)}
       ${!sd ? section("Office", `<div class="hint">${settingsLoading ? "Loading…" : "Office settings are not available from this server."}</div>`) : `
-      ${section("Office", `<div class="grid2"><label class="f">Office name<input type="text" id="setOffice" maxlength="40" value="${esc(sd.office_name || "")}"></label><label class="f">Your name<input type="text" id="setCeo" maxlength="40" value="${esc(sd.ceo_name || "")}"></label></div>`)}
+      ${section("Office", `<div class="grid2"><label class="f">Office name<input type="text" id="setOffice" maxlength="40" value="${esc(sd.office_name || "")}"></label><label class="f">Your name<input type="text" id="setCeo" maxlength="40" value="${esc(sd.ceo_name || "")}"></label></div>
+        <div class="persona-edit"><div class="head"><b>You, at the CEO's desk</b></div>${lookEditor("ceo-" + (sd.ceo_name || "CEO"), "#22304f", sd.ceo_look, "ceo")}</div>`)}
       ${section("Characters", Object.entries(sd.seats || {}).map(([id, st]) => {
         const seat = seatById(id), per = seat ? P(seat) : { name: st.nickname || id, role: st.role || "", motto: st.motto || "" };
         return `<div class="persona-edit"><div class="head">${avatar("mascot-" + id, st.color || "#888888")}<div class="grow"><b>${esc(per.name)}</b> <span class="hint">${esc(st.label || id)}</span></div><input type="color" data-color="${esc(id)}" value="${esc(st.color || "#888888")}" aria-label="${esc(id)} colour"></div>
@@ -1208,6 +1242,7 @@ export function makePanels(app) {
           <label class="f">Role<input type="text" data-role="${esc(id)}" aria-label="Role for ${esc(per.name)}" maxlength="40" placeholder="${esc(per.role)}" value="${esc(st.role || "")}"></label>
           <label class="f">Plan, USD a month<input type="number" min="0" max="10000" step="1" inputmode="decimal" data-plan="${esc(id)}" aria-label="Plan price a month for ${esc(per.name)}" placeholder="${st.plan_default != null ? esc(String(st.plan_default)) + " (list price)" : "not set"}" value="${st.plan_usd != null ? esc(String(st.plan_usd)) : ""}"></label>
           <label class="f full">Motto<input type="text" data-motto="${esc(id)}" aria-label="Motto for ${esc(per.name)}" maxlength="90" placeholder="${esc(per.motto)}" value="${esc(st.motto || "")}"></label>
+          ${lookEditor("mascot-" + id, st.color || "#888888", st.look, id)}
           <label class="f full">Personality: voice and room<select data-style="${esc(id)}" aria-label="Personality for ${esc(per.name)}: voice and room"><option value="">Automatic (${esc(seat ? personaFor({ ...seat, style: null }, S().seats.findIndex(x => x.id === id)).archetype : "by order")})</option>${PERSONALITIES.map(x => `<option value="${esc(x.role)}" ${st.style === x.role ? "selected" : ""}>${esc(x.role)} · ${esc(x.motto)}</option>`).join("")}</select></label></div>`; }).join(""))}
       ${section("Jarvis voice", `${row("Announce out loud", sd.voice_available ? "Speaks short alerts through jarvis-say. Off by default." : "jarvis-say was not found on this machine.", `<label class="switch"><input type="checkbox" id="setVoice" ${voice.enabled ? "checked" : ""} ${sd.voice_available ? "" : "disabled"} aria-label="Voice"><span></span></label>`)}
         <div class="row wrap" style="gap:6px;margin:10px 0">${VOICE.map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-vev="${k}" ${(voice.events || []).includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
@@ -1223,6 +1258,7 @@ export function makePanels(app) {
         root.querySelectorAll("[data-pref]").forEach(c => c.addEventListener("change", () => app.setPref(c.dataset.pref, c.checked)));
         root.querySelectorAll("[data-alarm-num]").forEach(i => i.addEventListener("change", () => { const v = i.value.trim(); app.setPref(i.dataset.alarmNum, v === "" || !(+v > 0) ? null : Math.round(+v)); }));
         const ts = root.querySelector("[data-test-sound]"); if (ts) ts.addEventListener("click", () => sound.preview("levelup"));
+        bindLooks(root);
         const sv = root.querySelector("#setSave");
         if (sv) sv.addEventListener("click", async () => {
           const body = { office_name: root.querySelector("#setOffice").value.trim(), ceo_name: root.querySelector("#setCeo").value.trim(), seats: {},
@@ -1234,8 +1270,10 @@ export function makePanels(app) {
           root.querySelectorAll("[data-motto]").forEach(i => put(i.dataset.motto, "motto", i.value.trim()));
           root.querySelectorAll("[data-color]").forEach(i => put(i.dataset.color, "color", i.value));
           root.querySelectorAll("[data-style]").forEach(i => put(i.dataset.style, "style", i.value || null));
+          root.querySelectorAll("[data-look-for]").forEach(w => { const l = lookDraft.get(w.dataset.lookFor); if (l === undefined) return;
+            if (w.dataset.lookFor === "ceo") body.ceo_look = l; else put(w.dataset.lookFor, "look", l); });
           root.querySelectorAll("[data-plan]").forEach(i => put(i.dataset.plan, "plan_usd", i.value.trim() === "" ? null : Math.min(10000, Math.max(0, +i.value || 0))));
-          try { const r = await app.post("/api/settings", body); settingsData = r.demo ? settingsData : null; result(r, "Saved. The office redecorates on the next refresh."); app.refresh(); }
+          try { const r = await app.post("/api/settings", body); settingsData = r.demo ? settingsData : null; if (!r.demo) lookDraft.clear(); result(r, "Saved. The office redecorates on the next refresh."); app.refresh(); }
           catch (e) { toast("Could not save: " + e.message, "bad"); }
         });
       } };

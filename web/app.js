@@ -23,6 +23,7 @@ import { renderTokens } from "./ui/tokens.js";
 import { makeBurn } from "./ui/burn.js";
 import { makeAlarms } from "./ui/alarms.js";
 import { hydrateStickers } from "./engine/stickers.js";
+import { setLooks } from "./engine/sprites.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
 const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
@@ -458,6 +459,8 @@ function apply(next) {
   if (!next || !next.seats) return;
   const first = !snap;
   snap = next; setNow(snap.now);
+  setLooks(Object.fromEntries([...snap.seats.filter(s => s.look).map(s => ["mascot-" + s.id, s.look]),   // the character creator's looks
+    ...(snap.office.ceo && snap.office.ceo.look ? [["ceo-" + (snap.office.ceo.name || "CEO"), snap.office.ceo.look]] : [])]));
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); game.renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   alarms.check(snap);                                 // this viewer's burn alarms (ui/alarms.js)

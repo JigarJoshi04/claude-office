@@ -61,7 +61,7 @@ export function portrait(id, color, opts = {}) {
   const ctx = c.getContext("2d");
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.imageSmoothingEnabled = false;
-  const look = S.lookFor(id, color);
+  const look = S.lookFor(id, color, opts.look);             // opts.look: a look being chosen, for a preview
   if (opts.crown) { S.rect(ctx, 3, 0, 6, 1, "#ffd24a"); S.rect(ctx, 3, -1, 1, 1, "#ffd24a"); }
   S.drawSeated(ctx, 1, 2, opts.level >= 5 ? { ...look, gear: opts.level } : look, "down", opts.pose || "idle", 0);
   if (opts.headset) { S.rect(ctx, 0, 5, 1, 3, "#2a2d38"); S.rect(ctx, 11, 5, 1, 3, "#2a2d38"); S.rect(ctx, 1, 1, 10, 1, "#2a2d38"); }
