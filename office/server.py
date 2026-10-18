@@ -22,6 +22,36 @@ from . import checkpoint, config, divider, lanes, messaging, sessions, talk, set
 MAX_BODY = 256 * 1024
 
 
+def _fmt_tok(n: float) -> str:
+    return f"{n / 1e9:.1f}B" if n >= 1e9 else f"{n / 1e6:.1f}M" if n >= 1e6 else f"{n / 1e3:.0f}k" if n >= 1e3 else str(int(n))
+
+
+def status_line(snap: dict, style: str = "emoji") -> str:
+    """One line for a tmux status bar, a shell prompt or Claude Code's status line: who works, what needs you, the
+    burn and the tightest plan. style=plain drops the emoji."""
+    seats = snap.get("seats") or []
+    live = [x for s in seats for x in s.get("sessions", []) if x.get("live", True)]
+    working = sum(1 for x in live if x.get("state") in ("working", "waiting"))
+    needs = len(snap.get("attention") or [])
+    burn = sum(s.get("tokens_1h_all") or 0 for s in seats)
+    tight = None
+    for s in seats:
+        for w in ((s.get("usage") or {}).get("five_hour"), (s.get("usage") or {}).get("weekly")):
+            if w and w.get("pct") is not None and s.get("status") not in ("benched", "offline"):
+                left = max(0, 100 - w["pct"])
+                if tight is None or left < tight[1]:
+                    tight = (s.get("nickname") or s.get("label") or s["id"], left)
+    e = (lambda a, b: a) if style != "plain" else (lambda a, b: b)
+    parts = [f"{e('⚙', 'work')} {working} working"]
+    if needs:
+        parts.append(f"{e('⚠', '!')} {needs} need{'s' if needs == 1 else ''} you")
+    if burn:
+        parts.append(f"{e('🔥', 'burn')} {_fmt_tok(burn)}/h")
+    if tight:
+        parts.append(f"{e('▁', 'low')} {tight[0]} {tight[1]:.0f}% left")
+    return " · ".join(parts)
+
+
 def _number(value: str, message: str) -> int:
     """A query number in plain ASCII digits; int() alone also takes "７" or "٣" and has its own message for "²"."""
     if not (value.isascii() and value.isdigit() and len(value) <= 6):
@@ -34,7 +64,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.25.0"
+    server_version = "ClaudeOffice/3.26.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -108,6 +138,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/stats":
                 return self._json(200, self.office.samples.stats(self.office.get(), q.get("day"),
                                                                list(self.office.events)))
+            if url.path == "/api/status.txt":
+                return self._send(200, status_line(self.office.get(), q.get("style", "emoji")).encode() + b"\n", "text/plain; charset=utf-8")
             if url.path == "/api/tokens":
                 rng, seat = q.get("range", "all"), q.get("seat") or None
                 if rng not in tokens.RANGES:

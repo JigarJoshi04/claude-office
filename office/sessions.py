@@ -96,6 +96,50 @@ def find_transcript(config_dir: str, cwd: str, session_id: str) -> Path | None:
     return hits[0] if hits else None
 
 
+_GIT_CACHE: dict = {}
+
+
+def git_place(cwd: str | None, now: float | None = None) -> dict | None:
+    """The git repository a folder is in and its checked-out branch (or short commit when detached), read from .git
+    without running git. Worktrees (a .git file pointing at the real git dir) work too. Cached for 20 seconds."""
+    if not cwd:
+        return None
+    now = now or time.time()
+    hit = _GIT_CACHE.get(cwd)
+    if hit and now - hit[0] < 20:
+        return hit[1]
+    place = None
+    try:
+        p = Path(cwd)
+        for d in (p, *p.parents):
+            g = d / ".git"
+            if g.is_dir():
+                head = g / "HEAD"
+            elif g.is_file():
+                text = g.read_text(errors="replace").strip()
+                if not text.startswith("gitdir:"):
+                    break
+                gitdir = Path(text[7:].strip())
+                head = (gitdir if gitdir.is_absolute() else d / gitdir) / "HEAD"
+            else:
+                continue
+            ref = head.read_text(errors="replace").strip()
+            branch = ref[16:] if ref.startswith("ref: refs/heads/") else ref[:7]
+            # a worktree's own folder name is not the project: name the repository by the main checkout when we can
+            repo = d.name
+            common = head.parent / "commondir"
+            if common.exists():
+                repo = (head.parent / common.read_text().strip()).resolve().parent.name or repo
+            place = {"repo": repo, "branch": branch, "detached": not ref.startswith("ref: ")}
+            break
+    except OSError:
+        place = None
+    _GIT_CACHE[cwd] = (now, place)
+    if len(_GIT_CACHE) > 500:
+        _GIT_CACHE.pop(next(iter(_GIT_CACHE)))
+    return place
+
+
 def _ts(s: str | None) -> float | None:
     if not isinstance(s, str) or not s:
         return None
@@ -421,6 +465,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "unit": unit if unit and unit.endswith(".service") else None,
             "terminal": unit if unit and unit.endswith(".scope") else None,
             "cwd": cwd,
+            "git": git_place(cwd, now),
             "started_at": (s.get("startedAt") or 0) / 1000 or None,
             "updated_at": last,
             "quiet_s": round(quiet) if quiet is not None else None,

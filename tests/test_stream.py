@@ -131,7 +131,7 @@ class StreamTests(unittest.TestCase):
         self.wait_slots(0)
 
     def test_host_and_origin_checks_cover_all_new_gets(self):
-        for path in ("/api/stream", "/api/history", "/api/stats", "/api/settings", "/api/week", "/api/tokens"):
+        for path in ("/api/stream", "/api/history", "/api/stats", "/api/settings", "/api/week", "/api/tokens", "/api/status.txt"):
             for header in ({"Host": "attacker.example"}, {"Origin": "http://attacker.example"}):
                 self.assertEqual(self.open(path, header).status, 403)
         self.wait_slots(0)
@@ -180,7 +180,19 @@ class StreamTests(unittest.TestCase):
             self.office.emit("report", "Demo report")
             self.office.build()
         self.assertEqual(self.office.get()["office"]["started_at"], before)
-        self.assertEqual(self.office.get()["office"]["version"], "3.25.0")
+        self.assertEqual(self.office.get()["office"]["version"], "3.26.0")
+
+
+class StatusLineTests(unittest.TestCase):
+    def test_one_line_for_a_status_bar(self):
+        from office.server import status_line
+        snap = {"attention": [{"seat": "a"}], "seats": [
+            {"id": "a", "label": "claude", "status": "working", "tokens_1h_all": 2_500_000, "usage": {"five_hour": {"pct": 60}, "weekly": {"pct": 20}},
+             "sessions": [{"state": "working"}, {"state": "idle"}]},
+            {"id": "b", "label": "claude2", "status": "benched", "usage": {"five_hour": {"pct": 99}}, "sessions": []}]}
+        self.assertEqual(status_line(snap), "⚙ 1 working · ⚠ 1 needs you · 🔥 2.5M/h · ▁ claude 40% left")
+        self.assertEqual(status_line(snap, "plain"), "work 1 working · ! 1 needs you · burn 2.5M/h · low claude 40% left")
+        self.assertEqual(status_line({"seats": []}), "⚙ 0 working")
 
 
 class LoginExpiryTests(unittest.TestCase):

@@ -228,6 +228,15 @@ Everything personal stays outside the repo, in `~/.config/claude-office/`:
 The office keeps its own records in `~/.local/state/claude-office/`: the usage cache, 24 hours of minute
 samples, the news, the message log and each seat's career. Lanes and checkpoints go in `~/.local/share/claude-office/`.
 
+## A status line for your terminal
+
+`GET /api/status.txt` returns one line: how many sessions work, what needs you, the burn and the tightest plan
+(`?style=plain` drops the symbols). For tmux:
+
+```
+set -g status-right '#(curl -s 127.0.0.1:7420/api/status.txt?style=plain)'
+```
+
 ## How it knows things
 
 | What | Where it comes from |

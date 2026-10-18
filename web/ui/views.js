@@ -1,5 +1,5 @@
 // The big views beside the floor: Timeline, Team and Today.
-import { esc, fmtTok, live, hydratePortraits, avatar, dayTime, STATE_LABEL, clock } from "./util.js";
+import { esc, fmtTok, live, hydratePortraits, avatar, dayTime, STATE_LABEL, clock, toast } from "./util.js";
 import { timeline, bindTips } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, leftOf, voice, diary } from "./personas.js";
@@ -74,6 +74,7 @@ export function renderStats(el, app) {
     .map(([id, at]) => ({ s, a: cat[id], at }))).sort((a, b) => a.at - b.at);
   el.innerHTML = `<div class="stats-grid">
     <div class="view-head"><div class="grow"><h3>${st.day === todayStr ? "Today" : st.day === shift0(todayStr, -1) ? "Yesterday" : esc(new Date(st.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }))}</h3><p>Who did what, from the office's own records.</p></div>
+      <button class="btn sm" data-copy-day title="The day as a few lines of text, for a standup or a channel">${icon("copy", 14)}Copy as text</button>
       <button class="btn sm" data-day="${shift(-1)}">${icon("chevronRight", 14, "flip")}Day before</button>${st.day !== todayStr ? `<button class="btn sm" data-day="${shift(1)}">Next day</button><button class="btn sm" data-day="">Today</button>` : ""}</div>
     <div class="stats-top">
       ${mvpSeat ? `<div class="mvp">${avatar("mascot-" + mvpSeat.id, mvpSeat.color, "crown")}<div><div class="eyebrow">Employee of the day</div><h3>${esc(nameOf(mvpSeat.id))}</h3><div class="muted">${esc(st.mvp.why)}</div></div></div>`
@@ -107,9 +108,31 @@ export function renderStats(el, app) {
   hydratePortraits(el, 4);
   bindWeek(el, app);
   bindTokens(el, app, () => renderStats(el, app));
+  if (!day) app.tokensCache("today");                 // warm, for Copy as text
+  const cp = el.querySelector("[data-copy-day]");
+  if (cp) cp.addEventListener("click", () => {
+    const text = dayText(st, app, nameOf);
+    navigator.clipboard.writeText(text).then(() => toast("The day is on the clipboard.", "good"), () => toast("Could not copy.", "warn"));
+  });
   if (refocus) { const f = el.querySelector(refocus); if (f) { f.focus({ preventScroll: true }); refocus = null; } }
   el.querySelectorAll("[data-trophies]").forEach(b => b.addEventListener("click", () => app.go({ kind: "trophies" })));
   el.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { app.setPref("statsDay", b.dataset.day || null); app.loadStats(b.dataset.day || null, true); }));
+}
+
+// The day as plain text: a standup note or a channel post. Names, counts and the star; no session topics.
+export function dayText(st, app, nameOf) {
+  const o = st.office || {}, seats = st.seats || {}, sum = (k) => Object.values(seats).reduce((a, s) => a + (s[k] || 0), 0);
+  const hrs = sum("active_min") / 60, day = new Date((st.day || new Date().toISOString().slice(0, 10)) + "T12:00:00");
+  const t = app.tokensCache("today"), lines = [];
+  lines.push(`${app.snap().office.name || "Claude Office"}, ${day.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}`);
+  lines.push(`- ${o.reports || 0} report${o.reports === 1 ? "" : "s"} filed, ${hrs >= 10 ? Math.round(hrs) : hrs.toFixed(1)} h of agent work, ${o.sessions || 0} sessions`);
+  if (t && t.shipped && (t.shipped.commits || t.shipped.prs_merged)) lines.push(`- Shipped: ${t.shipped.commits} commit${t.shipped.commits === 1 ? "" : "s"}${t.shipped.prs_merged ? `, ${t.shipped.prs_merged} PR${t.shipped.prs_merged === 1 ? "" : "s"} merged` : ""}`);
+  if (t && t.total && t.total.all) { const top = (t.seats || []).find(s => s.seat); lines.push(`- Tokens: ${fmtTok(t.total.all)}${top ? `, most by ${nameOf(top.seat)}` : ""}`); }
+  if (st.mvp && st.mvp.seat) lines.push(`- Employee of the day: ${nameOf(st.mvp.seat)}${st.mvp.why ? ` (${st.mvp.why})` : ""}`);
+  const busy = Object.entries(seats).filter(([, s]) => s.reports || s.active_min).sort((a, b) => b[1].active_min - a[1].active_min)
+    .map(([id, s]) => `${nameOf(id)} ${Math.round(s.active_min / 60 * 10) / 10} h${s.reports ? `, ${s.reports} report${s.reports === 1 ? "" : "s"}` : ""}`);
+  if (busy.length) lines.push(`- Who: ${busy.join("; ")}`);
+  return lines.join("\n");
 }
 
 // ------------------------------------------------------------------------------------------------ week chart

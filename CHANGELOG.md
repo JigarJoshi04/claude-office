@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.26.0] - 2026-10-18
+
+### Added
+- Every session shows its git repository and branch (read from `.git`, worktrees included, without running git), on
+  the character page and the session page; blurred for terminals in share-safe mode.
+- Copy as text on the Today view: the day as a few lines for a standup or a channel (reports, hours, shipped work,
+  tokens, the employee of the day and who did what).
+- `GET /api/status.txt`: one line for a tmux status bar or a shell prompt (`?style=plain` drops the symbols).
+
 ## [3.25.0] - 2026-10-18
 
 ### Added

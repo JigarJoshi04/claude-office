@@ -37,6 +37,7 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
     return {
         "id": sid, "seat": seat, "pid": 40000 + hash(sid) % 9000, "name": name, "kind": kind, "unit": unit,
         "terminal": None if unit else "app-terminal.scope", "cwd": cwd, "started_at": now - start_ago,
+        "git": {"repo": cwd.rstrip("/").rsplit("/", 1)[-1], "branch": "main" if kind == "desk" else f"lane/{name}", "detached": False},
         "updated_at": now - 5, "quiet_s": 5 if state == "working" else 900 if state == "stuck" else 60,
         "raw_status": "busy", "state": state, "activity": act if state not in ("limited", "idle") else
         ("Hit the usage limit" if state == "limited" else "At the desk"),
@@ -307,7 +308,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.25.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.26.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

@@ -1417,3 +1417,5 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .lean { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; padding: 1px 6px; border-radius: 99px; font: 700 10.5px var(--mono); font-style: normal; color: #0d2b18; background: #3ddc84; }
 table.ship .who { display: flex; align-items: center; gap: 8px; } table.ship .who canvas { width: 24px; height: 30px; }
 table.ship small { color: var(--muted); }
+.gitchip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 8px; border-radius: 99px; font: 600 11.5px var(--mono); color: var(--muted); background: var(--surface-2); vertical-align: 1px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.gitchip .ic { color: var(--faint); flex: none; }

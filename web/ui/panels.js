@@ -411,7 +411,13 @@ export function makePanels(app) {
     const label = x.title && x.kind === "desk" ? x.title : x.activity;
     return `<div class="sess" data-seat="${esc(s.id)}" data-id="${esc(x.id)}">${avatar(x.id, s.color, x.kind === "desk" ? "headset" : "")}
       <span class="nm"><span class="sdot ${x.state}"></span>${esc(x.name)}</span><span class="pill">${x.kind === "lane" ? "Lane" : "Terminal"}</span>
-      <span class="ac">${priv(x, label)}</span></div>`;
+      <span class="ac">${priv(x, label)}${gitChip(x)}</span></div>`;
+  }
+  // Where a session works: its repository and branch (blurred for terminals in share-safe mode, like what they do).
+  function gitChip(x) {
+    const g = x && x.git;
+    if (!g) return "";
+    return ` <span class="gitchip" title="${app.privacy() && x.kind === "desk" ? "" : esc(`${g.repo} · ${g.detached ? "detached at " : ""}${g.branch}`)}">${icon("branch", 12)}${priv(x, `${g.repo}${g.branch ? " · " + g.branch : ""}`)}</span>`;
   }
 
   // ----------------------------------------------------------------------------------------- session
@@ -430,6 +436,7 @@ export function makePanels(app) {
           ${x ? pill(STATE_LABEL[x.state] || x.state, { working: "good", waiting: "info", idle: "idle", limited: "bad", stuck: "warn" }[x.state] || "") : pill("Finished")}
           ${x ? pill(x.kind === "lane" ? "Lane" : "Terminal") : ""}
           ${x && x.model ? pill(x.model.replace(/^claude-/, "")) : ""}
+          ${x && x.git ? gitChip(x) : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
       ${tab === "chat" && conv ? `<div class="chat-find">${icon("search", 15)}<input type="search" id="chatFind" placeholder="Find in this conversation" aria-label="Find in this conversation" value="${esc(chatFind.get(v.id) || "")}" autocomplete="off"><span class="cf-n" aria-live="polite"></span></div>` : ""}
