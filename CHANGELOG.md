@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.54.0] - 2026-10-18
+
+### Added
+- What changed this week, in plain words: the PR shelf opens with every pull request merged in the last 7 days, by
+  repository, and "Copy as notes" puts them on the clipboard as a list for a standup or a changelog.
+
 ## [3.53.0] - 2026-10-18
 
 ### Added

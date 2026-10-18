@@ -743,7 +743,14 @@ export function makePanels(app) {
         <h5 class="lh">Open · ${open.length}${failing ? ` · <span style="color:var(--bad)">${failing} failing</span>` : ""}</h5>${open.length ? `<ul class="loose prs">${open.map(row).join("")}</ul>` : `<div class="hint">No open pull requests.</div>`}
         ${merged.length ? `<h5 class="lh">Merged · ${merged.length}</h5><ul class="loose prs">${merged.slice(0, 8).map(row).join("")}</ul>${merged.length > 8 ? `<p class="hint">and ${merged.length - 8} more of the last ${r.prs.length}.</p>` : ""}` : ""}
         ${closed.length ? `<p class="hint">${closed.length} closed without merging.</p>` : ""}`); }).join("");
-    return { html: `${head}<p class="hint">${d.scanning ? "Asking GitHub…" : "Refreshed every few minutes."}</p>${repos}`,
+    // What changed this week, in plain words: every PR merged in the last 7 days, to read or to paste into a standup.
+    const weekAgo = Date.now() - 7 * 86400e3;
+    const week = d.repos.map(r => ({ repo: r.repo, prs: r.prs.filter(p => p.state === "merged" && p.merged && Date.parse(p.merged) >= weekAgo) })).filter(r => r.prs.length);
+    const nWeek = week.reduce((a, r) => a + r.prs.length, 0);
+    const notes = week.map(r => `${r.repo}\n${r.prs.map(p => `- ${p.title} (#${p.number})`).join("\n")}`).join("\n\n");
+    const weekHtml = nWeek ? section(`Merged this week · ${nWeek}`, `${week.map(r => `<h5 class="lh">${esc(r.repo)} · ${r.prs.length}</h5><ul class="tasklist">${r.prs.map(p => `<li class="completed-ok">${icon("check", 14)}<span class="${pv ? "private" : ""}">${esc(p.title)}</span><em>#${p.number}</em></li>`).join("")}</ul>`).join("")}
+      <div class="row" style="margin-top:10px"><button class="btn sm" data-copy="${esc(notes)}" data-copy-note="This week's merged pull requests are on the clipboard.">${icon("copy", 14)}Copy as notes</button></div>`) : "";
+    return { html: `${head}<p class="hint">${d.scanning ? "Asking GitHub…" : "Refreshed every few minutes."}</p>${weekHtml}${repos}`,
       bind(root) { root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); })); } };
   }
   // Loose ends (office/loose.py): work left in git that is nowhere else, and worktrees that are safe to remove.
