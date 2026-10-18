@@ -884,6 +884,16 @@ body.tv .peek { width: 340px; }
 .floor-frame.replaying .replay { bottom: 0; }
 @media (min-width: 1241px) and (min-height: 640px) { .floor-frame.replaying .cam { bottom: calc(120px * var(--ui-zoom, 1)); } }
 @media (max-width: 1240px), (max-height: 639px) { .floor-frame.replaying .replay { position: relative; left: 0; translate: none; width: 100%; margin-top: 10px; } }
+@media (max-width: 760px) {
+  .replay { grid-template-columns: auto 1fr auto auto; gap: 8px; padding: 10px; }
+  .replay .rp-track { grid-column: 1 / -1; grid-row: 2; }
+  .replay .rp-speed button { padding: 5px 6px; }
+  .replay .rp-time { display: none; }   /* the badge on the floor shows the time */
+  .replay .rp-live { padding: 0 9px; }
+  .dock .latest .when { display: none; }
+  .dock .latest .btn { padding: 0 7px; }
+}
+.replay > * { min-width: 0; }
 
 /* right now: what every active agent is doing */
 .dock { display: grid; gap: 10px; min-width: 0; margin-top: 14px; }
