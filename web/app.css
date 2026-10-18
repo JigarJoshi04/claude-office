@@ -1054,3 +1054,17 @@ body.tv .floor-frame.replaying .cam { bottom: calc(170px * var(--ui-zoom, 1)); }
 .room-menu .rm-h { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
 .room-menu .rm-h i { width: 9px; height: 9px; border-radius: 50%; background: var(--seat); align-self: center; }
 .room-menu .rm-h b { font-size: 14.5px; } .room-menu .rm-h span { font-size: 12.5px; color: var(--muted); }
+
+/* formatted chat text (web/ui/md.js) */
+.msg .md { display: grid; gap: 6px; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.msg .md p { margin: 0; }
+.msg .md .md-h { font-weight: 700; font-size: 1.02em; margin-top: 4px; }
+.msg .md ul, .msg .md ol { margin: 0; padding-left: 20px; display: grid; gap: 3px; }
+.msg .md code { font: 500 .88em var(--mono); padding: 1px 5px; border-radius: 5px; background: color-mix(in srgb, var(--text) 9%, transparent); }
+.msg .md pre { margin: 2px 0; padding: 10px 12px; border-radius: 10px; background: var(--bg-2); overflow-x: auto; max-height: 320px; }
+.msg .md pre code { padding: 0; background: none; font-size: 12.5px; line-height: 1.5; white-space: pre; }
+.msg .md a { color: var(--info); text-decoration: underline; text-underline-offset: 2px; }
+.msg .md .md-table { overflow-x: auto; }
+.msg .md table { border-collapse: collapse; font-size: 13px; }
+.msg .md th, .msg .md td { padding: 4px 10px; border-bottom: 1px solid var(--line-2); text-align: left; }
+.msg .md th { font-weight: 650; color: var(--text); }

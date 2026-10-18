@@ -8,6 +8,7 @@ import { sound } from "./sound.js";
 import { goals, goalsFor, streak, weekly } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned } from "./badges.js";
+import { md } from "./md.js";
 
 const TEMPLATES = [
   { name: "Fix a failing test", ic: "check", title: "Fix failing test: ", brief: "Goal: make the failing test pass without weakening it.\nWhere: <test file or CI job>\nContext: <what changed recently>\nDone when: the test passes locally and the full suite is green.\nVerify: run the suite and paste the summary in the report." },
@@ -49,6 +50,7 @@ export function makePanels(app) {
   };
   const crumbs = (...parts) => `<nav class="crumbs"><button data-go="ceo">Office</button>${parts.map(x => `${icon("chevronRight", 14)}${x}`).join("")}</nav>`;
   const priv = (sess, text) => app.privacy() && sess && sess.kind === "desk" ? `<span class="private">${esc(text || "")}</span>` : esc(text || "");
+  const privMd = (sess, text) => app.privacy() && sess && sess.kind === "desk" ? `<span class="private">${esc(text || "")}</span>` : `<div class="md">${md(text)}</div>`;   // chat text, formatted
   const section = (title, body, extra = "") => `<div class="section"><div class="section-h"><h4>${title}</h4>${extra}</div>${body}</div>`;
   const pill = (text, tone = "", ic = "") => `<span class="pill ${tone}">${ic ? icon(ic, 14) : ""}${esc(text)}</span>`;
   const bar = (left, cls = "minibar") => `<div class="${cls} ${left != null && left < 15 ? "low" : left != null && left < 35 ? "mid" : ""}"><i style="width:${left == null ? 0 : left}%"></i></div>`;
@@ -463,12 +465,12 @@ export function makePanels(app) {
       if (it.role === "step") { steps.push(it); return; }
       flush(i);
       const time = it.ts ? `<span class="meta">${clock(it.ts)}</span>` : "";
-      if (it.role === "user") html += `<div class="msg user"><span class="who">Prompt</span>${priv(x, it.text)}${time}</div>`;
-      else if (it.role === "assistant") html += `<div class="msg agent clip"><span class="who">${esc(who)}</span>${priv(x, it.text)}${time}</div>`;
+      if (it.role === "user") html += `<div class="msg user"><span class="who">Prompt</span>${privMd(x, it.text)}${time}</div>`;
+      else if (it.role === "assistant") html += `<div class="msg agent clip"><span class="who">${esc(who)}</span>${privMd(x, it.text)}${time}</div>`;
       else if (it.role === "peer") {
         const ceo = /Claude Office/i.test(it.from_name || "");
         html += `<div class="msg ${ceo ? "ceo" : "peer"}"><span class="who">${ceo ? "You, from the office" : esc(it.from_name || "Another session")}</span>${esc(it.text)}${time}</div>`;
-      } else if (it.role === "reply") html += `<div class="msg agent"><span class="who">${esc(who)} replied to you</span>${esc(it.text)}${time}</div>`;
+      } else if (it.role === "reply") html += `<div class="msg agent"><span class="who">${esc(who)} replied to you</span><div class="md">${md(it.text)}</div>${time}</div>`;
       else if (it.role === "ceo-pending") html += `<div class="msg ceo"><span class="who">You, from the office</span>${esc(it.text)}<span class="meta">${it.status === "review" ? "Waiting for approval in its terminal" : it.status === "followup" ? "Sent as a follow-up lane" : "Sent"} · ${relTime(it.ts)}</span></div>`;
       else if (it.role === "brief") {
         const key = "brief:" + (it.ts || i), open = openSteps.has(key);
