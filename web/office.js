@@ -469,6 +469,16 @@ export function createOffice(stage, handlers) {
     return lefts.length && Math.min(...lefts) < 20 ? "cloudy" : "clear";
   }
 
+  // A worker's look with its character's gear (engine/sprites.js GEAR_LEVELS), cached per look and level.
+  const gearCache = new WeakMap();
+  function gear(look, s) {
+    const lv = s.career ? s.career.level : 0;
+    if (lv < 5) return look;
+    let g = gearCache.get(look);
+    if (!g || g.gear !== lv) { g = { ...look, gear: lv }; gearCache.set(look, g); }
+    return g;
+  }
+
   function drawPod(pod, t, lights) {
     const s = pod.seat, status = s.status, off = status === "offline";
     const bySlot = new Map();
@@ -488,7 +498,7 @@ export function createOffice(stage, handlers) {
       if (sp.top) {
         S.drawChairFront(ctx, x - 2, pod.y + 16);
         if (a) {
-          S.drawSeated(ctx, x, sp.seatY, a.look, "down", pose, t + slot * 777);
+          S.drawSeated(ctx, x, sp.seatY, gear(a.look, s), "down", pose, t + slot * 777);
           if (a.sess.kind === "desk") { S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x, sp.seatY - 1, 10, 1, "#2a2d38"); }
         }
         S.drawMonitorBack(ctx, x - 3, pod.y + 31);
@@ -501,7 +511,7 @@ export function createOffice(stage, handlers) {
       } else {
         S.drawMonitorFront(ctx, x - 3, pod.y + 51, a && !off ? pose : "off", s.color, t + slot * 1234);
         if (a) {
-          S.drawSeated(ctx, x, sp.seatY, a.look, "up", pose, t + slot * 777);
+          S.drawSeated(ctx, x, sp.seatY, gear(a.look, s), "up", pose, t + slot * 777);
           if (a.sess.kind === "desk") { S.rect(ctx, x, sp.seatY + 1, 10, 1, "#2a2d38"); S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); }
           if (pose === "sleep") S.drawZ(ctx, x + 8, sp.seatY - 4, t + slot * 500);
           if (pose === "stuck") S.drawMark(ctx, x + 3, sp.seatY - 8, "?", t);

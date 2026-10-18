@@ -61,7 +61,7 @@ export function portrait(id, color, opts = {}) {
   ctx.imageSmoothingEnabled = false;
   const look = S.lookFor(id, color);
   if (opts.crown) { S.rect(ctx, 3, 0, 6, 1, "#ffd24a"); S.rect(ctx, 3, -1, 1, 1, "#ffd24a"); }
-  S.drawSeated(ctx, 1, 2, look, "down", opts.pose || "idle", 0);
+  S.drawSeated(ctx, 1, 2, opts.level >= 5 ? { ...look, gear: opts.level } : look, "down", opts.pose || "idle", 0);
   if (opts.headset) { S.rect(ctx, 0, 5, 1, 3, "#2a2d38"); S.rect(ctx, 11, 5, 1, 3, "#2a2d38"); S.rect(ctx, 1, 1, 10, 1, "#2a2d38"); }
   if (opts.dim) { c.style.opacity = ".5"; }
   c.setAttribute("aria-hidden", "true");
@@ -95,7 +95,7 @@ export function hydratePortraits(root, scale) {
   root.querySelectorAll("i[data-portrait]").forEach(el => {
     const [id, color, o] = el.dataset.portrait.split("|");
     const opts = { scale };
-    for (const f of (o || "").split(",")) if (f) opts[f] = true;
+    for (const f of (o || "").split(",")) if (/^lv\d+$/.test(f)) opts.level = +f.slice(2); else if (f) opts[f] = true;   // "lv12": the character's gear
     el.replaceWith(portrait(id, color, opts));
   });
 }

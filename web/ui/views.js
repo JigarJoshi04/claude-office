@@ -33,7 +33,7 @@ export function renderBoard(el, app) {
         ${w && w.resets_at ? `<div class="hint" style="margin-top:4px">resets ${dayTime(w.resets_at)}</div>` : ""}</div>`;
     };
     return `<div class="tcard" style="--seat:${s.color}">
-      <div class="who" data-seat="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}
+      <div class="who" data-seat="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0))}
         <div><h3>${esc(p.name)}</h3><div class="role">${esc(p.role)} · ${esc(s.label)}</div></div>
         <span class="pill ${vo.tone}">${esc(vo.word)}</span></div>
       <div class="moodline">“${esc(vo.line)}”</div>

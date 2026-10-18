@@ -170,7 +170,28 @@ export function drawSeated(ctx, x, y, look, facing, pose, t) {
   const blink = !sleep && Math.floor(t / 3100) % 7 === 0 && (t % 3100) < 130;
   const thinking = pose === "think" && Math.floor(t / 1400) % 2 === 0;
   drawHead(ctx, x, hy, look, facing, { blink, sleep, talk: pose === "talk" && Math.floor(t / 170) % 2 === 0, eyes: thinking ? 1 : 0 });
+  if (look.gear) drawGear(ctx, x, hy, y, look, facing, sleep, t);
   if (facing === "down" && pose === "stuck") rect(ctx, x + 8, hy + 2, 1, 2, "#8fd3ff");   // sweat drop
+}
+
+// Gear that comes with a character's level (GEAR_LEVELS), worn by everyone at that seat's desks: a team badge, a cap in
+// the seat's colour, sunglasses and gold headphones. look.gear is the character's level.
+export const GEAR_LEVELS = { badge: 5, cap: 9, shades: 13, goldphones: 18 };
+function drawGear(ctx, x, hy, y, look, facing, sleep, t) {
+  const lv = look.gear, c = look.shirt;
+  if (lv >= GEAR_LEVELS.badge && facing === "down") { rect(ctx, x + 6, y + 10, 2, 2, "#f4f1ea"); rect(ctx, x + 6, y + 10, 2, 1, shade(c, 1.3)); }
+  if (lv >= GEAR_LEVELS.cap) {
+    rect(ctx, x + 1, hy - 1, 8, 3, shade(c, 0.85)); rect(ctx, x + 2, hy - 1, 6, 1, shade(c, 1.15));
+    if (facing === "down") rect(ctx, x + 1, hy + 2, 9, 1, shade(c, 0.6)); else rect(ctx, x + 3, hy + 2, 4, 1, shade(c, 0.6));
+  }
+  if (lv >= GEAR_LEVELS.shades && facing === "down" && !sleep) {
+    rect(ctx, x + 2, hy + 4, 6, 2, "#14161e"); rect(ctx, x + 4, hy + 4, 2, 1, "#2a2d38");   // two lenses and a bridge
+    if (Math.floor(t / 2400) % 5 === 0) rect(ctx, x + 2, hy + 4, 1, 1, "#9fd3ff");                     // a glint
+  }
+  if (lv >= GEAR_LEVELS.goldphones) {
+    rect(ctx, x + 1, hy - 2, 8, 1, "#e0b84a");
+    rect(ctx, x - 1, hy + 2, 2, 4, "#ffd24a"); rect(ctx, x + 9, hy + 2, 2, 4, "#ffd24a"); rect(ctx, x - 1, hy + 2, 1, 1, "#fff0a8");
+  }
 }
 
 // Walking, full body: 18 rows. facing "down" | "up" | "left" | "right".

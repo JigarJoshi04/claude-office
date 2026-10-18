@@ -72,7 +72,7 @@ export function makePanels(app) {
   function memberRow(s) {
     const p = P(s), v = say(s), m = { mood: v.word, tone: v.tone, detail: v.line }, b = binding(s);
     return `<div class="member" style="--seat:${s.color}" data-seat="${esc(s.id)}">
-      ${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}
+      ${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0))}
       <div class="nm">${esc(p.name)} <small>${esc(p.role)}</small></div>
       <div class="gauge"><div class="v">${b.left == null ? "–" : Math.round(b.left) + "%"}</div><div class="l">${b.left == null ? "no reading" : "of " + b.label + " left"}</div>${bar(b.left)}</div>
       <div class="md"><b class="${m.tone}">${esc(m.mood)}</b> · ${esc(m.detail)}</div>
@@ -167,7 +167,7 @@ export function makePanels(app) {
     const left = b.left == null ? null : Math.round(b.left);
     const lvl = left != null && left < 15 ? "low" : left != null && left < 35 ? "mid" : "";
     return `<button class="mate st-${v.state}" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}" title="${esc(p.name)}: “${esc(v.line)}”">
-      ${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "")}
+      ${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0))}
       <span class="m-who"><span class="m-name">${esc(p.name)}${c ? `<em>Lv ${c.level}</em>` : ""}</span><span class="m-word ${v.tone}"><i></i>${esc(v.word)}</span></span>
       <span class="m-plan ${lvl}"><span class="m-num"><b>${left == null ? "–" : left + "%"}</b><small>${left == null ? "no reading" : b.key === "weekly" ? "week left" : "5 h left"}</small></span><span class="m-bar"><i style="width:${left ?? 0}%"></i></span></span>
     </button>`;
@@ -296,7 +296,7 @@ export function makePanels(app) {
     return { html: `${crumbs(esc(p.name))}
       <div class="hero st-${vo.state}" style="--seat:${esc(s.color)}">
         <button class="btn sm ghost icon h-find" data-focus-seat="${esc(s.id)}" title="Show on the floor" aria-label="Show on the floor">${icon("target", 16)}</button>
-        <div class="h-top">${avatar("mascot-" + s.id, s.color, s.status === "offline" ? "dim" : "", "big")}
+        <div class="h-top">${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0), "big")}
           <div class="grow"><h2>${esc(p.name)}</h2><div class="role">${esc(p.role)}${s.career ? ` · Level ${s.career.level} ${esc(s.career.title)}` : ""}</div>
           <span class="m-word ${vo.tone}"><i></i>${esc(vo.word)}</span></div></div>
         <blockquote class="voice">“${esc(vo.line)}”</blockquote>
@@ -325,7 +325,8 @@ export function makePanels(app) {
       } };
   }
   // Career: level, XP and achievements, earned from real work (office/career.py).
-  const PERKS = [[3, "a mug"], [6, "a desk plant"], [10, "a gold cup"], [15, "a glowing desk"], [20, "a pennant"], [30, "gold trim"]];   // web/engine/sprites.js drawDeskPerks
+  const PERKS = [[3, "a mug"], [5, "a team badge for everyone at the desk"], [6, "a desk plant"], [9, "team caps"], [10, "a gold cup"], [13, "sunglasses"],
+    [15, "a glowing desk"], [18, "gold headphones"], [20, "a pennant"], [30, "gold trim"]];   // web/engine/sprites.js drawDeskPerks and GEAR_LEVELS
   function levelRow(s) {
     const c = s.career;
     if (!c) return "";
@@ -336,7 +337,7 @@ export function makePanels(app) {
       <div class="grow"><div class="lt"><b>Level ${c.level} · ${esc(c.title)}</b><span>${c.xp.toLocaleString()} XP</span></div>
         <div class="xpbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progress to level ${c.level + 1}"><i style="width:${pct}%"></i></div>
         <div class="hint">${(c.next_xp - c.xp).toLocaleString()} XP to level ${c.level + 1}${c.streak > 1 ? ` · ${icon("flame", 13)} ${c.streak}-day streak` : ""}</div>
-        ${perk ? `<div class="hint perk">${icon("sparkles", 13)} Desk upgrade at level ${perk[0]}: ${perk[1]}</div>` : ""}</div></div>`;
+        ${perk ? `<div class="hint perk">${icon("sparkles", 13)} At level ${perk[0]}: ${perk[1]}</div>` : ""}</div></div>`;
   }
   let badgeSel = null;   // the trophy whose details are open, kept across refreshes
   // How close each countable achievement is, for the "next up" nudge.
@@ -557,7 +558,7 @@ export function makePanels(app) {
         return section(`Your badges · ${n} of ${BADGES.length}`, `<div class="ol-grid">${BADGES.map(b => { const at = have[b.id];
           return `<div class="ol-card ${at ? "on" : ""}"><span class="ol-ic">${icon(at ? b.icon : "lock", 18)}</span><b>${esc(b.name)}</b><span>${esc(b.desc)}${at ? ` · ${esc(dayTime(at))}` : ""}</span></div>`; }).join("")}</div>
           <div class="hint" style="margin-top:8px">${app.demo ? "The demo office never awards badges. " : ""}Badges are kept in this browser.</div>`); })()}
-      ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color)}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}` };
+      ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, "lv" + (s.career ? s.career.level : 0))}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}` };
   }
   function trophies() {
     const seats = S().seats.filter(s => s.career), cat = S().achievements || [];
@@ -571,7 +572,7 @@ export function makePanels(app) {
     return { html: `${crumbs("Trophy room")}<h2>Trophy room</h2>
       <p class="lede">${total} ${total === 1 ? "trophy" : "trophies"} across ${seats.length} characters. Everyone earns XP from real work: tool calls, time at work, sessions and reports.</p>
       ${section("Leaderboard", ranked.map((s, i) => { const c = s.career, p = P(s);
-        return `<button class="lb-row" data-seat-go="${esc(s.id)}" style="--seat:${esc(s.color)}"><span class="rk" ${i < 3 ? `style="--medal:${medal[i]}"` : ""}>${i + 1}</span>${avatar("mascot-" + s.id, s.color)}
+        return `<button class="lb-row" data-seat-go="${esc(s.id)}" style="--seat:${esc(s.color)}"><span class="rk" ${i < 3 ? `style="--medal:${medal[i]}"` : ""}>${i + 1}</span>${avatar("mascot-" + s.id, s.color, "lv" + (s.career ? s.career.level : 0))}
           <span class="grow"><span class="nm"><b>${esc(p.name)}</b><span class="lvchip">Lv ${c.level}</span><span class="muted">${esc(c.title)}</span></span>
           <span class="xpbar"><i style="width:${Math.round(c.progress * 100)}%"></i></span></span>
           <span class="sc"><b>${c.xp.toLocaleString()}</b><small>XP · ${icon("trophy", 12)} ${Object.keys(c.unlocked).length}</small></span></button>`; }).join(""))}
