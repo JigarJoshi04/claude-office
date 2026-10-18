@@ -677,6 +677,27 @@ class TokenLedger:
                     x[0] += v[0]; x[1] += v[3]
         return {k: tuple(v) for k, v in out.items()}
 
+    def shipped_on(self, day: str, known: set, codex: str | None = None) -> dict:
+        """One day's commits, PRs opened and PRs merged, for the office and per seat (the lobby's ship board)."""
+        with self.lock:
+            key = (self.scanned_at, day, tuple(sorted(known)), codex)
+            if getattr(self, "_shipped_on", None) and self._shipped_on[0] == key:
+                return self._shipped_on[1]
+            tot, seats = [0, 0, 0], {}
+            for r in (self._serve or self.data)["sessions"].values():
+                v = (r.get("g") or {}).get(day)
+                if not v or not (v[0] or v[2] or v[3]):
+                    continue
+                row = (v[0], v[2], v[3])
+                k = codex if r.get("s") == "@codex" else r.get("s")
+                for i, x in enumerate(row):
+                    tot[i] += x
+                if k in known:
+                    seats[k] = [a + b for a, b in zip(seats.get(k, [0, 0, 0]), row)]
+            out = {"day": day, "commits": tot[0], "prs_opened": tot[1], "prs_merged": tot[2], "seats": seats}
+            self._shipped_on = (key, out)
+            return out
+
     def run(self, stop: threading.Event, live=lambda: {}, every: float = 120) -> None:
         """Scan now, then every `every` seconds, until stop."""
         while not stop.is_set():

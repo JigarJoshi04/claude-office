@@ -278,6 +278,8 @@ class DemoOffice(LiveOffice):
                         default_workdir="/home/you/work")
         self.usage = _NoPoll()
         self.career = _demo_career()
+        self._ship = [37, 5, 3]                      # today's commits, PRs opened, PRs merged on the lobby's ship board
+        self._ship_seats = {"claude2": [14, 2, 1], "claude3": [16, 2, 2], "claude": [7, 1, 0]}
         self.asks = Asks(None)                    # one question waiting, so the Inbox and the ringing phone show
         self.asks.add("Ship the rate limiter behind a flag today, or wait for Vega's review tomorrow?", "claude2", "l-rate", "api-rate-limits", "/home/you/work/apollo")
         self.asks.items[-1]["ts"] = time.time() - 420
@@ -376,6 +378,12 @@ class DemoOffice(LiveOffice):
             who, proj = [("claude2", "api-gateway"), ("claude3", "billing-service"), ("claude", "infra-terraform")][beat // 3 % 3]
             n = 1 + beat % 3
             self.emit("commit", f"{proj}: {n} commit{'' if n == 1 else 's'}", who, "good")
+            self._ship[0] += n; self._ship_seats.setdefault(who, [0, 0, 0])[0] += n
+        if getattr(self, "_commit_beat", beat) != beat and beat % 7 == 1:   # and a PR goes up or merges every couple of minutes
+            who, proj = [("claude3", "billing-service"), ("claude2", "api-gateway")][beat // 7 % 2]
+            merged = beat // 7 % 3 != 0
+            self.emit("shipped", f"{proj}: PR #{400 + beat % 97} {'merged' if merged else 'opened'}", who, "good")
+            self._ship[2 if merged else 1] += 1; self._ship_seats.setdefault(who, [0, 0, 0])[2 if merged else 1] += 1
         self._commit_beat = beat
         for s in seats:
             sc = div["seats"][s["id"]]
@@ -426,12 +434,15 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.62.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.63.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,
                 "next_pick": {"seat": ev["pick"], "why": ev["why"], "ranking": ev["ranking"]},
                 "suggested_weights": divider.suggest(seats, div)}
+        c, o, m = self._ship
+        snap["office"]["shipped_today"] = {"day": time.strftime("%Y-%m-%d"), "commits": c, "prs_opened": o, "prs_merged": m,
+                                           "seats": {k: list(v) for k, v in self._ship_seats.items()}}
         snap["asks"] = self.asks.view(30)
         snap["attention"] = Office._attention(snap)
         if not hasattr(self, "quiet"):

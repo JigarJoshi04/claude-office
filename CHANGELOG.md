@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.63.0] - 2026-10-19
+
+### Added
+- The ship board in the lobby: a chalkboard with today's commits, PRs opened and PRs merged (read from the
+  transcripts), chalk dust when a number goes up, and an outbox tray that fills as commits land. Click it for the PR
+  shelf. The snapshot carries `office.shipped_today` (the office and each seat).
+- Commits fly from the desk to the outbox as envelopes, a new PR as a parcel, and a merge rings the brass ship's bell
+  over the board (two strikes, sound rings out, with its own bell sound).
+
 ## [3.62.0] - 2026-10-18
 
 ### Added

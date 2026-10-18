@@ -39,6 +39,8 @@ const SFX = {
     [784, 988, 1175, 1568, 1976, 2349].slice(0, 3 + k).forEach((f, i) => note(f, 0.26 + i * 0.07, 0.12, "triangle", 0.05));
     if (k >= 2) [1568, 1976, 2349].forEach(f => note(f, 0.3 + (3 + k) * 0.07, 0.5, "triangle", 0.035));
   },
+  // A merge rings the ship's bell: a struck brass note with its bright, out-of-tune partials, ringing on.
+  bell: (n = 1) => { for (let i = 0; i < Math.min(4, 2 * n); i++) { const at = i * 0.56; note(784, at, 1.6, "sine", 0.08); note(1880, at, 0.9, "sine", 0.035); note(2650, at, 0.45, "sine", 0.02); note(392, at, 1.2, "triangle", 0.025); } },
   // A gift lands on the floor: a soft wooden "tok-tok".
   ring: () => { for (const at of [0, 0.5]) for (let i = 0; i < 8; i++) note(i % 2 ? 1480 : 1320, at + i * 0.045, 0.045, "square", 0.035); },   // a desk phone
   drop: () => { note(392, 0, 0.05, "triangle", 0.05); note(523, 0.07, 0.07, "triangle", 0.045); },

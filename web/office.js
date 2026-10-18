@@ -236,9 +236,19 @@ export function createOffice(stage, handlers) {
     const now = performance.now();
     for (let i = planes.length - 1; i >= 0; i--) {
       const p = planes[i], k = (now - p.start) / p.dur;
-      if (k >= 1) { planes.splice(i, 1); burst(p.to[0], p.to[1], 8, "spark"); continue; }
+      if (k < 0) continue;                                  // not off yet (a batch leaves one after another)
+      if (k >= 1) { planes.splice(i, 1); burst(p.to[0], p.to[1], p.kind ? 4 : 8, "spark"); continue; }
       const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       const x = Math.round(p.from[0] + (p.to[0] - p.from[0]) * e), y = Math.round(p.from[1] + (p.to[1] - p.from[1]) * e - Math.sin(k * Math.PI) * p.arc);
+      if (p.kind === "mail") {                              // a commit's envelope, on its way to the outbox
+        S.rect(ctx, x - 1, y - 1, 9, 7, "#2a2f40"); S.rect(ctx, x, y, 7, 5, "#f7f3e6");
+        for (const [dx, dy] of [[1, 1], [2, 2], [3, 3], [4, 2], [5, 1]]) S.rect(ctx, x + dx, y + dy, 1, 1, "#b9b2a0");
+        continue;
+      }
+      if (p.kind === "parcel") {                            // a PR, a parcel with tape
+        S.rect(ctx, x - 1, y - 1, 9, 8, "#2a2f40"); S.rect(ctx, x, y, 7, 6, "#c9a26b"); S.rect(ctx, x, y, 7, 1, "#e0bd84"); S.rect(ctx, x + 3, y, 1, 6, "#8a6a3e");
+        continue;
+      }
       const d = p.to[0] >= p.from[0] ? 1 : -1, at = (dx, w) => (d > 0 ? x + dx : x + 9 - dx - w);   // mirrored when it flies left
       S.rect(ctx, at(0, 9), y - 1, 9, 1, "#2a2f40");                                     // a dark edge, so it reads on any floor
       S.rect(ctx, at(0, 9), y, 9, 1, "#ffffff"); S.rect(ctx, at(1, 7), y + 1, 7, 1, "#e6ebf6"); S.rect(ctx, at(3, 4), y + 2, 4, 1, "#b9c3da");
@@ -286,6 +296,7 @@ export function createOffice(stage, handlers) {
     drawLounge(t, lights, env);
     for (const pod of L.pods) drawRoom(pod, t, lights, env);
     drawHire(t, lights);
+    drawShipBoard(t, lights);
     const season = seasonal ? seasonFor(now) : null;
     if (season) {
       drawSeason(ctx, L, season, reduced ? 0 : t, env.night, lights);
@@ -344,6 +355,56 @@ export function createOffice(stage, handlers) {
     }
     return out;
   }
+  // The ship board: a chalkboard in the lobby with today's commits, PRs opened and PRs merged (read from the
+  // transcripts), the outbox tray that envelopes fly into as commits land, and a brass ship's bell that rings on a merge.
+  const BOARD = () => ({ x: 10, y: L.ceo.y + 70 });
+  const TRAY = () => { const b = BOARD(); return { x: b.x + 43, y: b.y + 34 }; };
+  const STRIKE = 560;                                  // one swing of the bell, ms
+  const bell = { start: 0, strikes: 0 };
+  let slate = null, slateKey = null, chalkSeen = null;
+  const bellRinging = (now = performance.now()) => now - bell.start < bell.strikes * STRIKE;
+  function drawShipBoard(t, lights) {
+    const { x, y } = BOARD(), sh = snap.office.shipped_today || null;
+    S.rect(ctx, x + 2, y - 14, 2, 14, "#5a3b22"); S.rect(ctx, x + 2, y - 14, 15, 2, "#6e4a2b"); S.rect(ctx, x + 3, y - 14, 13, 1, "#8f6238");   // the bell's arm
+    S.rect(ctx, x + 18, y + 31, 2, 8, "#3f2816"); S.rect(ctx, x + 3, y + 31, 2, 11, "#5a3b22"); S.rect(ctx, x + 35, y + 31, 2, 11, "#5a3b22");   // the easel
+    S.rect(ctx, x, y, 40, 30, "#6e4a2b"); S.rect(ctx, x, y, 40, 1, "#8f6238");
+    const key = sh ? `${sh.commits}|${sh.prs_opened}|${sh.prs_merged}` : "-";
+    if (key !== slateKey) {
+      if (chalkSeen && sh && game === "full" && !reduced) {      // a number went up: chalk dust where it was rewritten
+        [sh.commits, sh.prs_opened, sh.prs_merged].forEach((n, i) => {
+          if (n > (chalkSeen[i] || 0)) for (let k = 0; k < 6; k++) particles.push({ x: x + 8 + i * 12 + Math.random() * 6, y: y + 22, vx: (Math.random() - 0.5) * 14, vy: -6 - Math.random() * 8, g: 18, life: 0, max: 0.7 + Math.random() * 0.4, c: "#eef2ea", s: 1 });
+        });
+      }
+      slate = S.chalkSlate(sh); slateKey = key; chalkSeen = sh ? [sh.commits, sh.prs_opened, sh.prs_merged] : null;
+    }
+    ctx.drawImage(slate, x + 2, y + 2, 36, 26);
+    S.rect(ctx, x - 1, y + 29, 42, 2, "#8a5e36"); S.rect(ctx, x + 27, y + 28, 4, 1, "#f2f2e6"); S.rect(ctx, x + 32, y + 28, 2, 1, "#ffb3c8");   // the ledge, two chalks
+    drawTray(sh);
+    const now = performance.now(), cx = x + 14, by = y - 12;
+    let sw = 0, wave = -1;
+    if (bellRinging(now) && !reduced && game !== "off") {
+      const k = (now - bell.start) / STRIKE;
+      sw = Math.round(Math.sin(k * Math.PI * 2) * 1.4);
+      wave = ((k + 0.75) % 0.5) / 0.5;                         // the clapper strikes at each end of the swing
+      lights.push({ x: cx, y: by + 5, r: 22, c: "#ffd24a", i: 0.45 });
+    } else if (!bell.start && sh && sh.prs_merged) lights.push({ x: cx, y: by + 5, r: 10, c: "#ffd24a", i: 0.15 });
+    S.drawShipBell(ctx, cx, by, sw, wave);
+  }
+  // The outbox: a wire tray on the floor by the board, holding an envelope for every few of today's commits.
+  function drawTray(sh) {
+    const { x, y } = TRAY(), n = sh && sh.commits ? Math.min(4, Math.ceil(sh.commits / 10)) : 0;
+    S.rect(ctx, x, y - 1, 14, 1, "#4a5070");
+    for (let i = 0; i < n; i++) { S.rect(ctx, x + 2 + (i % 2), y - 2 - i * 2, 10, 2, i % 2 ? "#e6e0cf" : "#f7f3e6"); S.rect(ctx, x + 6 + (i % 2), y - 2 - i * 2, 2, 1, "#b9b2a0"); }
+    S.rect(ctx, x, y, 14, 6, "#3a3f4f"); S.rect(ctx, x, y, 14, 1, "#6b7488");
+    for (let i = 0; i < 4; i++) S.rect(ctx, x + 2 + i * 3, y + 2, 1, 3, "#2a2f3a");
+  }
+  function shipLabel() {
+    const sh = snap.office.shipped_today;
+    if (!sh) return "Ship board: today's commits, PRs and merges (reading the transcripts)";
+    const pl = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+    return `Ship board: ${pl(sh.commits, "commit", "commits")}, ${pl(sh.prs_opened, "PR", "PRs")} opened and ${pl(sh.prs_merged, "merge", "merges")} today. Open the PR shelf`;
+  }
+
   // Happy hour: coloured spots wander over the lobby floor and along the corridors.
   function drawParty(t) {
     const dot = (x, y, i) => { ctx.fillStyle = `hsl(${(t / 18 + i * 53) % 360} 95% 62%)`; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); };
@@ -872,7 +933,7 @@ export function createOffice(stage, handlers) {
 
   function overlaySig() {
     return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
-      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner, belt, lean, odometer, game,
+      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner, belt, lean, odometer, game, snap.office.shipped_today && [snap.office.shipped_today.commits, snap.office.shipped_today.prs_opened, snap.office.shipped_today.prs_merged],
       [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
       snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, s.career && s.career.level, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
   }
@@ -897,6 +958,7 @@ export function createOffice(stage, handlers) {
     hot("wallhot", "Elevator: office news", ELEVATOR.x - 3, ELEVATOR.y - 6, 32, 46, () => handlers.openNews());
     hot("wallhot", "Employee of the day", 172, 8, 24, 32, () => handlers.openStats());
     hot("wallhot", "Trophy cabinet: everyone's achievements", 114, 6, 60, 34, () => handlers.openTrophies());
+    if (handlers.openShipped) { const b = BOARD(); hot("wallhot", shipLabel(), b.x - 1, b.y - 14, 60, 56, () => handlers.openShipped()); }
     if (L.lounge) div("room-label", "LOUNGE", L.lounge.x + 8, L.lounge.y + BACK_LABEL);
     if (L.meet) div("room-label", "MEETING", L.meet.x + 8, L.meet.y + BACK_LABEL);
     for (const o of L.open) div("room-label", "GARDEN", o.x + 8, o.y + BACK_LABEL);
@@ -1243,7 +1305,7 @@ export function createOffice(stage, handlers) {
       stepAgents(dt); stepParticles(dt); stepPet(cat, dt, t); if (has("dog")) stepPet(dog, dt, t);
       // Full speed while something moves (walkers, confetti, the camera, the cat); a calm floor needs ~15 frames a second.
       // Full speed for the camera, people walking and confetti; pets, the vacuum and the drone look fine at the calm rate.
-      const lively = moving || particles.length || pops.length || leavers.length || planes.length || walkingNow();
+      const lively = moving || particles.length || pops.length || leavers.length || planes.length || bellRinging() || walkingNow();
       const every = reduced ? 250 : lively ? (RES <= 2 ? 33 : RES <= 4 ? 50 : 66) : (RES <= 2 ? 66 : 90);
       if (t - lastDraw >= every && onScreen) { drawFrame(t); lastDraw = t; }   // nothing to paint while the floor is hidden
       moveDynamicDom();
@@ -1393,6 +1455,23 @@ export function createOffice(stage, handlers) {
       if (!to) return;
       const from = [96 + 34, L.ceo.y + 52], dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
       planes.push({ from, to, start: performance.now(), dur: Math.min(2600, 700 + dist * 3), arc: Math.min(60, 14 + dist / 8) });
+    },
+    // Shipped work flies to the lobby's ship board: an envelope per commit (up to three), a parcel for a PR.
+    mail(seatId, n = 1, kind = "mail") {
+      if (!L || reduced || game !== "full") return;
+      const p = L.pods.find(x => x.seat.id === seatId);
+      if (!p) return;
+      const tr = TRAY(), from = [p.x + POD_W / 2 - 3, p.y + 56], to = [tr.x + 4, tr.y - 8], dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
+      for (let i = 0; i < Math.min(3, Math.max(1, n)); i++)
+        planes.push({ from, to, kind, start: performance.now() + i * 280, dur: Math.min(2800, 900 + dist * 3), arc: Math.min(70, 20 + dist / 7) });
+    },
+    // A merge rings the ship's bell: two strikes a merge (ding-ding), more merges join a bell already ringing, six at most.
+    ringBell(n = 1) {
+      if (!L) return;
+      const now = performance.now(), k = 2 * Math.max(1, n);
+      if (bellRinging(now)) bell.strikes = Math.min(bell.strikes + k, 6);
+      else { bell.start = now; bell.strikes = Math.min(k, 6); }
+      if (!reduced && game !== "off") { const b = BOARD(); burst(b.x + 14, b.y - 4, 10, "spark"); }
     },
     // "+3 commits" rises from a seat's desk: shipped work, quieter than a celebration (commits come often).
     shipPop(seatId, text) {

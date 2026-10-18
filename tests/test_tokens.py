@@ -339,3 +339,22 @@ class ShippedForTests(unittest.TestCase):
         out = led.shipped_for([sid])
         self.assertEqual(out["commits"], sum(g[0] for g in r["g"].values()))
         self.assertIsNone(led.shipped_for(["nobody"]))
+
+
+class ShippedOnTests(unittest.TestCase):
+    def test_one_days_commits_prs_and_merges(self):
+        led = TokenLedger(None, [])
+        led.data["sessions"] = {
+            "a": {"s": "claude2", "g": {"2026-10-19": [3, 1, 1, 0, 40, 2], "2026-10-18": [9, 0, 0, 0, 0, 0]}},
+            "b": {"s": "claude2", "g": {"2026-10-19": [2, 0, 0, 1, 0, 0]}},
+            "c": {"s": "@codex", "g": {"2026-10-19": [1, 0, 0, 0, 0, 0]}},
+            "d": {"s": "gone", "g": {"2026-10-19": [4, 0, 0, 0, 0, 0]}},       # a seat no longer here: in the total only
+            "e": {"s": "claude3", "g": {"2026-10-19": [0, 2, 0, 0, 0, 0]}},    # pushes alone are not on the board
+        }
+        led.scanned_at = 1.0
+        out = led.shipped_on("2026-10-19", {"claude2", "astra"}, "astra")
+        self.assertEqual((out["commits"], out["prs_opened"], out["prs_merged"]), (10, 1, 1))
+        self.assertEqual(out["seats"], {"claude2": [5, 1, 1], "astra": [1, 0, 0]})
+        self.assertIs(led.shipped_on("2026-10-19", {"claude2", "astra"}, "astra"), out)   # cached until the next read
+        led.scanned_at = 2.0
+        self.assertEqual(led.shipped_on("2026-10-17", {"claude2"})["commits"], 0)

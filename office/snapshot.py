@@ -461,7 +461,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.62.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.63.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -480,7 +480,10 @@ class Office(LiveOffice):
             sids = [r.get("session_id") for r in l.get("runs") or [] if r.get("session_id")]
             l["spent"] = self.tokens.spent(sids) if sids else None
             l["shipped"] = self.tokens.shipped_for(sids) if sids else None
-        last = self.tokens.last_call() if self.tokens.scanned_at else None    # not before the first read of the transcripts
+        snap["office"]["shipped_today"] = (self.tokens.shipped_on(time.strftime("%Y-%m-%d", time.localtime(now)), {s["id"] for s in seats_out},
+                                                                  next((s["id"] for s in seats_out if s.get("kind") == "codex"), None))
+                                           if self.tokens.scanned_at else None)
+        last =self.tokens.last_call() if self.tokens.scanned_at else None    # not before the first read of the transcripts
         for s in seats_out:                                # plan use that nothing on this machine made
             if s.get("kind") == "claude" and last is not None:
                 s["ghost"] = ghost_use(self.history.data.get(s["id"]) or [], last.get(s["id"]),

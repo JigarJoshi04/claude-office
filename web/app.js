@@ -177,6 +177,7 @@ const office = createOffice($("stage"), {
   openDivider: () => go({ kind: "divider" }),
   openNews: () => go({ kind: "news" }),
   openTrophies: () => go({ kind: "trophies" }),
+  openShipped: () => go({ kind: "prs" }),
   openStats: () => setView("stats"),
   onCat: () => { sound.play("purr"); if (!DEMO) badge(bump("pets", 10, "cat_person")); },
   onDouble: () => { clearTimeout(panelScroll); clearTimeout(revealT); },
@@ -510,7 +511,7 @@ setInterval(() => {
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
 }, 45000);
 
-const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {}, plane() {} };
+const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {}, plane() {}, mail() {}, ringBell() {} };
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
 // A page error says so once, quietly, and reports itself to the office (the doctor lists it). Errors from browser
 // extensions and the harmless ResizeObserver notice are left alone; at most a few reports a minute.
@@ -568,6 +569,7 @@ function onNews(e) {
     case "commit": {                                   // commits read from a session's transcript, one line per read
       const n = +(/: (\d+) commits?$/.exec(e.text) || [])[1] || 1;
       fx.shipPop(e.seat, `+${n} commit${n === 1 ? "" : "s"}`);
+      fx.mail(e.seat, n);                            // envelopes fly to the outbox by the lobby's ship board
       if (who && n >= 3) fx.sayAtSeat(e.seat, `${n} commits in a minute. On a roll.`, 5000);
       break;
     }
@@ -592,9 +594,10 @@ function onNews(e) {
     case "shipped": {                                  // a PR opened or merged, read from a session's transcript
       const merged = / merged$/.test(e.text);
       fx.celebrate(e.seat, null, merged ? "Merged!" : "PR opened");
+      if (merged) fx.ringBell(1); else fx.mail(e.seat, 1, "parcel");   // a merge rings the ship's bell in the lobby
       if (who) fx.sayAtSeat(e.seat, merged ? "Merged. On to the next one." : "PR's up. Fingers crossed.", 6000);
       if (merged) { game.comboHit(e); giftBox.grant(e.seat, "shipped"); } else giftBox.earn(e.seat, "shipped");
-      sound.play("report");
+      sound.play(merged ? "bell" : "report");
       toast(text, "good", { ic: "check", ms: 5000 });
       notify(merged ? "PR merged" : "PR opened", text);
       break;

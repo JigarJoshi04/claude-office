@@ -751,3 +751,60 @@ export function drawGift(ctx, x, y, color, ribbon, t, seed = 0) {
   rect(ctx, x + 2, y, 3, 2, ribbon); rect(ctx, x + 7, y, 3, 2, ribbon); rect(ctx, x + 5, y + 1, 2, 1, shade(ribbon, 0.8));
   if (Math.floor(((t || 0) + seed * 400) / 260) % 6 === 0) rect(ctx, x + 11, y - 1, 1, 1, "#fff8c0");   // a twinkle
 }
+
+// A 3x5 chalk font for the lobby's ship board: the digits, a dash and the letters of "SHIPPED".
+const GLYPHS = {
+  0: "111101101101111", 1: "010110010010111", 2: "111001111100111", 3: "111001011001111", 4: "101101111001001",
+  5: "111100111001111", 6: "111100111101111", 7: "111001001010010", 8: "111101111101111", 9: "111101111001111",
+  "-": "000000111000000", S: "011100010001110", H: "101101111101101", I: "111010010010111", P: "110101110100100",
+  E: "111100110100111", D: "110101101101110",
+};
+export const pixTextWidth = (text) => Math.max(0, String(text).length * 4 - 1);
+export function drawPixText(ctx, x, y, text, c) {
+  let cx = x;
+  for (const ch of String(text)) {
+    const g = GLYPHS[ch];
+    if (g) for (let i = 0; i < 15; i++) if (g[i] === "1") rect(ctx, cx + (i % 3), y + Math.floor(i / 3), 1, 1, c);
+    cx += 4;
+  }
+}
+// 5x5 chalk pictures for the board's columns: an envelope (commits), an arrow going up (PRs opened), a bell (merged).
+const CHALK_ICONS = { mail: "1111111011101011000111111", up: "0010001110101010010000100", bell: "0010001110011101111100100" };
+// The ship board's slate, drawn once per change of its numbers onto a small canvas (36x26 world pixels).
+export function chalkSlate(counts) {
+  const cv = document.createElement("canvas"); cv.width = 36; cv.height = 26;
+  const c = cv.getContext("2d");
+  rect(c, 0, 0, 36, 26, "#1f2e28");
+  for (const [x, y, w] of [[3, 23, 9], [22, 1, 7], [27, 24, 6], [1, 13, 3]]) rect(c, x, y, w, 1, "rgba(220,235,225,.07)");   // old chalk, half wiped
+  drawPixText(c, 4, 1, "SHIPPED", "#eef2ea");
+  for (let i = 0; i < 28; i += 2) rect(c, 4 + i, 7, i % 6 === 4 ? 1 : 2, 1, "rgba(238,242,234,.55)");
+  const cols = [["mail", "#eef2ea", counts && counts.commits], ["up", "#a8f0b8", counts && counts.prs_opened], ["bell", "#d7b8ff", counts && counts.prs_merged]];
+  cols.forEach(([icon, col, n], i) => {
+    const mid = 6 + i * 12, g = CHALK_ICONS[icon];
+    for (let k = 0; k < 25; k++) if (g[k] === "1") rect(c, mid - 2 + (k % 5), 10 + Math.floor(k / 5), 1, 1, col);
+    const txt = n == null ? "-" : String(Math.min(999, n));
+    drawPixText(c, mid - Math.floor(pixTextWidth(txt) / 2), 18, txt, col);
+  });
+  return cv;
+}
+// The lobby's brass ship's bell, hanging from (cx, y). sw (-1..1) swings the body while the clapper lags the other way;
+// wave (0..1, time since the last strike) sends rings of sound out either side.
+export function drawShipBell(ctx, cx, y, sw, wave = -1) {
+  rect(ctx, cx, y, 1, 1, "#4a3a1a");                                         // the shackle
+  const b = cx + sw;
+  rect(ctx, b - 1, y + 1, 3, 1, "#a8862c"); rect(ctx, b - 2, y + 2, 5, 1, "#c9a227");   // the crown
+  rect(ctx, b - 3, y + 3, 7, 4, "#d9b54a"); rect(ctx, b - 3, y + 5, 7, 1, "#b8901f");   // the waist and its band
+  rect(ctx, b - 2, y + 3, 1, 2, "#fff0a8"); rect(ctx, b + 2, y + 3, 1, 4, "#a8862c");   // shine and shade
+  rect(ctx, b - 4, y + 7, 9, 1, "#f0cf5a"); rect(ctx, b - 4, y + 8, 9, 1, "#8a6d1a");   // the lip
+  rect(ctx, cx - sw, y + 9, 1, 1, "#4a3a1a");                                // the clapper
+  rect(ctx, cx - sw, y + 10, 1, 2, "#e9dcc0"); rect(ctx, cx - sw - 1, y + 12, 3, 1, "#cbb994");   // its lanyard
+  if (wave < 0 || wave >= 1) return;
+  for (const [r, a] of [[0, 0.95], [1, 0.55]]) {
+    ctx.globalAlpha = a * (1 - wave);
+    for (const side of [-1, 1]) {
+      const x = cx + side * (7 + r * 3 + Math.round(wave * 2));
+      rect(ctx, x, y + 4, 1, 3, "#ffe38a"); rect(ctx, x - side, y + 3, 1, 1, "#ffe38a"); rect(ctx, x - side, y + 7, 1, 1, "#ffe38a");
+    }
+  }
+  ctx.globalAlpha = 1;
+}
