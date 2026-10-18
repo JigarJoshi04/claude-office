@@ -855,11 +855,28 @@ export function createOffice(stage, handlers) {
     lights.push({ x: h.x + 64, y: h.y + 19, r: 34, c: "#3fe0a0", i: 0.45 });
     S.rect(ctx, h.x + 52, h.y + 41, 10, 3, S.P.white); S.rect(ctx, h.x + 54, h.y + 42, 6, 1, "#9aa3b5");
     S.rect(ctx, h.x + 72, h.y + 34, 2, 7, "#2b2f3a"); S.rect(ctx, h.x + 70, h.y + 33, 6, 2, "#3fb68b");
+    drawMailroom(h.x + 4, h.y + 9, t);
     waiting().forEach((l, i) => {                  // office lanes waiting for a seat queue up here
       const x = h.x + 34 + i * 14, y = h.y + 70;
       S.drawWalker(ctx, x, y, S.lookFor("lane-" + l.id, "#6b7a90"), "up", t, false);
       S.rect(ctx, x + 2, y + 12, 6, 3, "#ffe066");
     });
+  }
+
+  // The mailroom: pigeonholes behind the hiring counter, holding the gifts that found the floor full (one a slot,
+  // nine slots shown; past nine a bundle sits on top).
+  let mailroom = [];
+  function drawMailroom(x, y, t) {
+    S.rect(ctx, x, y, 22, 20, "#5a3b22"); S.rect(ctx, x, y, 22, 1, "#8f6238"); S.rect(ctx, x + 1, y + 19, 20, 1, "#3f2816");
+    for (let i = 0; i < 9; i++) {
+      const sx = x + 2 + (i % 3) * 7, sy = y + 2 + Math.floor(i / 3) * 6, g = mailroom[i];
+      S.rect(ctx, sx, sy, 5, 4, "#24170c");
+      if (!g) continue;
+      S.rect(ctx, sx + 1, sy + 1, 3, 3, g.color); S.rect(ctx, sx + 2, sy + 1, 1, 3, "#ffd24a");   // a small box, ribbon and all
+    }
+    if (mailroom.length > 9) { S.rect(ctx, x + 6, y - 3, 10, 3, "#f7f3e6"); S.rect(ctx, x + 6, y - 2, 10, 1, "#c9a26b"); }
+    if (mailroom.length && !reduced && game === "full" && Math.floor(t / 900) % 3 === 0) S.rect(ctx, x + 20, y + 1, 1, 1, "#fff8c0");   // a glint: something waits
+    S.rect(ctx, x + 6, y + 21, 10, 3, "#c9a227"); S.rect(ctx, x + 7, y + 22, 8, 1, "#8a6d1a");   // the brass plate
   }
 
   function drawLighting(env, lights) {
@@ -933,7 +950,7 @@ export function createOffice(stage, handlers) {
 
   function overlaySig() {
     return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
-      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner, belt, lean, odometer, game, snap.office.shipped_today && [snap.office.shipped_today.commits, snap.office.shipped_today.prs_opened, snap.office.shipped_today.prs_merged],
+      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner, belt, lean, odometer, game, mailroom.length, snap.office.shipped_today && [snap.office.shipped_today.commits, snap.office.shipped_today.prs_opened, snap.office.shipped_today.prs_merged],
       [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
       snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, s.career && s.career.level, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
   }
@@ -977,6 +994,7 @@ export function createOffice(stage, handlers) {
     closet.shown.forEach((un, i) => { const [x, y] = rackPos(i); hot("rack", `${un.unit}: ${un.active}`, x, y, 18, 42, () => handlers.openServices()); });
     if (closet.hidden) div("room-label more", `+${closet.hidden} more`, LOBBY_W - 70, L.server.y - 12);
     hot("hire", "Hiring desk: start a new lane", L.hire.x + 8, L.hire.y + 8, POD_W - 16, POD_H - 14, () => handlers.openHire());
+    if (handlers.onMailroom && mailroom.length) hot("wallhot", `Mailroom: ${mailroom.length} gift${mailroom.length === 1 ? "" : "s"} waiting. Open the next`, L.hire.x + 2, L.hire.y + 5, 26, 28, () => handlers.onMailroom());   // over the desk's own target
     place(div("plate hire-plate", "Hiring desk", 0, 0), L.hire.x + 24, L.hire.y + 98, POD_W - 48, null);
     waiting().forEach((l, i) => { const tg = div("tag queue", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 80); tg.title = l.waiting_reason || "Waiting for a seat"; });
     for (const pod of L.pods) renderPod(pod);
@@ -1447,6 +1465,7 @@ export function createOffice(stage, handlers) {
     setTopBurner(id) { if (id !== burner) { burner = id || null; ovKey = ""; renderOverlay(); } },
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },
+    setMailroom(list) { const n = (list || []).length; if (n !== mailroom.length) { mailroom = list || []; ovKey = ""; renderOverlay(); } else mailroom = list || []; },
     // Confetti where a gift was, as it opens.
     plane(seatId, sessionId) {
       if (!L || reduced || game !== "full") return;

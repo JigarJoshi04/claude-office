@@ -166,7 +166,7 @@ test("stickers: 24 pieces of 12×12 art in four rarities, rolled by weight", asy
 });
 
 test("gifts: a pity timer, a cap on waiting gifts, a daily delivery and swaps", async () => {
-  const { makeGifts, MAX_WAITING, PITY, KEEP_S, SWAP } = await import("../../web/ui/gifts.js");
+  const { makeGifts, MAX_WAITING, PITY, KEEP_S, SWAP, MAILROOM } = await import("../../web/ui/gifts.js");
   const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? mem.get(k) : d), set: (k, v) => mem.set(k, v) };
   let t = 1_000_000, r = 0.99;
   const g = makeGifts({ store, now: () => t, rand: () => r });
@@ -174,9 +174,13 @@ test("gifts: a pity timer, a cap on waiting gifts, a daily delivery and swaps", 
   assert.ok(g.earn("s1"));                                                        // …but never PITY reports without one
   r = 0;
   while (g.waiting().length < MAX_WAITING) assert.ok(g.earn("s2"));
-  assert.equal(g.earn("s2"), null);                                               // the floor holds three at most
+  const extra = g.earn("s2");                                                     // the floor holds three at most…
+  assert.ok(extra.mail);
+  assert.deepEqual([g.waiting().length, g.mailroom().length], [MAX_WAITING, 1]);  // …the next waits in the mailroom
   t += KEEP_S + 1;
-  assert.equal(g.waiting().length, 0);                                            // unopened gifts go back after a day
+  assert.equal(g.waiting().length, 0);                                            // a day unopened: to the mailroom too
+  assert.equal(g.mailroom().length, MAX_WAITING + 1);
+  assert.ok(g.mailroom().slice(1).every(x => x.late));
   assert.ok(g.daily("2026-10-18"));
   assert.equal(g.daily("2026-10-18"), null);                                      // one morning delivery a day
   const opened = g.open(g.waiting()[0].id);
@@ -190,6 +194,16 @@ test("gifts: a pity timer, a cap on waiting gifts, a daily delivery and swaps", 
   assert.equal(g.spares(), 0);
   r = 0.01; const got = g.open(sw.id);                                            // a roll that would be common is lifted
   assert.notEqual(got.sticker.rarity, "common");
+  const back = g.restock();                                                       // room on the floor: the oldest comes out
+  assert.equal(back.id, extra.id);
+  assert.equal(back.at, t);
+  assert.equal(g.mailroom().length, MAX_WAITING);
+  assert.ok(g.open(g.mailroom()[0].id));                                          // or open one straight from the mailroom
+  assert.equal(g.mailroom().length, MAX_WAITING - 1);
+  assert.equal(g.log().length, SWAP + 3);                                         // every opening logged, newest first
+  assert.deepEqual([g.log()[0].seat, g.log()[0].from], ["s1", "report"]);         // where it came from (the pity gift)
+  for (let k = 0; k < MAILROOM + 5; k++) g.grant("s1", "goals");
+  assert.equal(g.mailroom().length, MAILROOM);                                    // the pigeonholes have a limit
   const demo = makeGifts({ store, demo: true, now: () => t, rand: () => 0 });
   const before = JSON.stringify([...mem]);
   demo.earn("s1"); demo.open(demo.waiting()[0].id);
@@ -218,9 +232,9 @@ test("gifts: grants go past the cap a little; sets finish with every sticker of 
   const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? mem.get(k) : d), set: (k, v) => mem.set(k, v) };
   const g = makeGifts({ store, rand: () => 0, happy: () => true });
   while (g.waiting().length < MAX_WAITING) assert.ok(g.earn("s1"));
-  assert.equal(g.earn("s1"), null);
-  for (let i = 0; i < GRANT_ROOM; i++) assert.ok(g.grant(null, "goals", "rare"));
-  assert.equal(g.grant(null, "goals"), null);
+  assert.ok(g.earn("s1").mail);
+  for (let i = 0; i < GRANT_ROOM; i++) assert.ok(!g.grant(null, "goals", "rare").mail);
+  assert.ok(g.grant(null, "goals").mail);
   const got = g.open(g.waiting().find(x => x.from === "goals").id);
   assert.notEqual(got.sticker.rarity, "common");
   const commons = Object.fromEntries(STICKERS.filter(s => s.rarity === "common").map(s => [s.id, { n: 1 }]));
@@ -278,9 +292,12 @@ test("the morning delivery gets better with a visit streak", async () => {
   assert.equal(g.daily("2026-10-01", 1).min, undefined);
   assert.equal(g.daily("2026-10-02", 3).min, "rare");
   assert.equal(g.daily("2026-10-03", 7).min, "epic");
-  assert.equal(g.daily("2026-10-04", 8), null, "the floor is full…");
+  const d4 = g.daily("2026-10-04", 8);
+  assert.ok(d4.mail, "the floor is full…");
+  assert.equal(d4.min, "rare");
+  assert.equal(g.daily("2026-10-04", 8), null);
   for (const x of g.waiting()) g.open(x.id);
-  assert.equal(g.daily("2026-10-04", 8).min, "rare", "…so the day's delivery waits for room");
+  assert.equal(g.restock().min, "rare", "…so the day's delivery waits in the mailroom for room");
   g.open(g.waiting()[0].id);
   assert.equal(g.daily("2026-10-05", 14).min, "epic");
   assert.equal(g.open(g.waiting()[0].id).sticker.rarity, "epic");

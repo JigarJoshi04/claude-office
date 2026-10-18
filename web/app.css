@@ -1558,3 +1558,16 @@ ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
 .wait-list li { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: 13.5px; }
 .wait-list li .grow { min-width: 0; } .wait-list li b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wait-list li small { display: block; font-size: 11.5px; color: var(--muted); } .wait-list li em { font: 700 13px var(--mono); font-style: normal; }
+/* The mailroom row and the gift log in the album (panels.js album) */
+.alb-mail { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px;
+  background: linear-gradient(110deg, rgba(255,210,74,.14), var(--surface-2) 70%); box-shadow: inset 0 0 0 1px rgba(255,210,74,.3); }
+.alb-mail .as-ic { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--surface-3); color: #ffd24a; flex: none; }
+.alb-mail .grow { min-width: 0; } .alb-mail b { display: block; font-size: 13px; } .alb-mail small { display: block; font-size: 12px; line-height: 1.4; color: var(--muted); margin-top: 2px; }
+.alb-mail .btn { flex: none; }
+@media (max-width: 520px) { .alb-mail { flex-wrap: wrap; } .alb-mail .btn { width: 100%; justify-content: center; } }
+.alb-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.alb-log li { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+.alb-log li canvas { width: 22px; height: 22px; image-rendering: pixelated; }
+.alb-log li .grow { min-width: 0; } .alb-log li b { font-size: 13px; } .alb-log li small { display: block; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alb-log li em.rar { font: 700 11px var(--mono); font-style: normal; color: var(--rar); }
+:root[data-theme="light"] .alb-log li em.rar { filter: brightness(.7); }

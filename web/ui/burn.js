@@ -65,7 +65,7 @@ export function makeBurn(ctx) {
     if (!gift) store.set("milestoneGift", top);          // the floor has no room (or a replay runs): it comes later
     sound.play("levelup");
     announce(`${words} tokens`, "A new plaque goes up on Your office", "#ffd24a",
-      `The office has processed ${words} tokens. A plaque goes up on Your office${gift ? ", and a gift waits at your desk" : ", and a gift comes when your desk has room"}.`,
+      `The office has processed ${words} tokens. A plaque goes up on Your office${gift ? (gift.mail ? ", and a gift waits in the mailroom" : ", and a gift waits at your desk") : ", and a gift comes when your desk has room"}.`,
       { ic: "trophy", ms: 8000 }, app.snap().seats.map(s => s.id));
   }
 

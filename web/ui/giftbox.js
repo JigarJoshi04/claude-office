@@ -14,6 +14,7 @@ export function makeGiftBox(ctx) {
   const happy = () => forceHappy || happyNow().on;
   const gifts = makeGifts({ store, demo: DEMO, happy });
   if (ctx.fullAlbum) gifts.fillDemo();
+  if (DEMO && ctx.demoGifts > 0) for (let i = 0; i < Math.min(30, ctx.demoGifts); i++) gifts.grant(null, i % 2 ? "goals" : "daily");   // the demo's ?gifts=N: a full floor and a mailroom
   const seatName = (seatId) => { const s = seatId && app.snap() && app.snap().seats.find(x => x.id === seatId); return s ? panels.persona(s).name : null; };
   const nameOf = (seatId, g) => seatName(seatId) || (g && g.name) || null;   // a seat that has left keeps its name on its gifts
   // What a gift is called on the floor, and on its reveal card.
@@ -34,8 +35,10 @@ export function makeGiftBox(ctx) {
 
   const off = () => (prefs.game || "full") === "off";
   function sync() {
+    if (!off() && !replay.active()) while (gifts.restock()) { /* room on the floor: the mailroom's oldest come out */ }
     const list = off() ? [] : gifts.waiting();
     office.setGifts(list.map(g => ({ ...g, label: label(g) })));
+    if (office.setMailroom) office.setMailroom(off() ? [] : gifts.mailroom().map(g => ({ id: g.id, color: boxColor(g) })));
     office.setSets(setsDone(gifts.album()));
     renderChip();
   }
@@ -43,12 +46,14 @@ export function makeGiftBox(ctx) {
   function renderChip() {
     const chip = $("giftChip");
     if (!chip) return;
-    const n = off() ? 0 : gifts.waiting().length, h = happyNow(), on = happy() && !off();
-    chip.hidden = !n && !on;
+    const n = off() ? 0 : gifts.waiting().length, m = off() ? 0 : gifts.mailroom().length, h = happyNow(), on = happy() && !off();
+    chip.hidden = !n && !m && !on;
     chip.classList.toggle("happy", on);
-    const html = `${icon("gift", 14)}${n ? n : ""}${on ? `<span class="gc-happy">Happy hour${forceHappy ? "" : ` · ${h.left}m`}</span>` : ""}`;
+    const html = `${icon("gift", 14)}${n + m ? n + m : ""}${on ? `<span class="gc-happy">Happy hour${forceHappy ? "" : ` · ${h.left}m`}</span>` : ""}`;
     if (chip.dataset.html !== html) { chip.innerHTML = html; chip.dataset.html = html; }
-    chip.title = (n ? (n === 1 ? "A gift is waiting on the floor." : `${n} gifts are waiting on the floor.`) : "") + (on ? ` Happy hour: gifts are twice as likely${forceHappy ? "" : ` for ${h.left} more minutes`}.` : "");
+    chip.title = (n ? (n === 1 ? "A gift is waiting on the floor." : `${n} gifts are waiting on the floor.`) : "")
+      + (m ? ` ${m === 1 ? "One more is" : `${m} more are`} in the mailroom.` : "")
+      + (on ? ` Happy hour: gifts are twice as likely${forceHappy ? "" : ` for ${h.left} more minutes`}.` : "");
     chip.setAttribute("aria-label", chip.title.trim());
     document.dispatchEvent(new Event("office:gifts"));     // TV mode's strip shows the same count
   }
@@ -80,6 +85,10 @@ export function makeGiftBox(ctx) {
     if (!g) return;
     sync();
     sound.play("drop");
+    if (g.mail && !store.get("mailHint", false)) {
+      store.set("mailHint", true);
+      toast(`The floor is full, so ${nameOf(seatId) || "this"} gift went to the mailroom by the hiring desk. It comes out as you open the others.`, "info", { ic: "gift", ms: 8000 });
+    }
     if (!store.get("giftHint", false)) {
       store.set("giftHint", true);
       toast(`${nameOf(seatId) || "Someone"} left you a gift on the floor. Click the box to open it.`, "good", { ic: "gift", ms: 7000 });
@@ -91,7 +100,7 @@ export function makeGiftBox(ctx) {
     if (replay.active() || off()) return false;
     const g = gifts.grant(seatId, from, min, seatName(seatId));
     if (g) { sync(); sound.play("drop"); }
-    return !!g;
+    return g || false;                                  // the gift ({ mail: true } when it went to the mailroom)
   }
 
   let opening = false;
@@ -112,6 +121,10 @@ export function makeGiftBox(ctx) {
       if (res.sticker.rarity === "legendary") badge(award("golden"));
     }
   }
+
+  const boxColor = (g) => { const s = g.seat && app.snap() && app.snap().seats.find(q => q.id === g.seat); return s ? s.color : GIFT_BOX[g.from] || GIFT_BOX.daily; };
+  // The mailroom's next gift, opened where it is (the pigeonholes, or the album's Mailroom row).
+  function openNext() { const g = gifts.mailroom()[0]; if (g) open(g.id); else seek(); }
 
   function boxCanvas(g) {
     const c = document.createElement("canvas"), k = 7;
@@ -161,18 +174,18 @@ export function makeGiftBox(ctx) {
   function swap() {
     const g = gifts.swap();
     if (!g) {
-      toast(gifts.spares() >= SWAP ? "The floor is full of gifts: open one first, then swap." : `Collect ${SWAP} spare stickers to swap them.`, "info");
+      toast(`Collect ${SWAP} spare stickers to swap them.`, "info");
       return false;
     }
     sync();
-    toast("Swapped: a rare-or-better gift is waiting at the CEO desk.", "good", { ic: "gift" });
+    toast(`Swapped: a rare-or-better gift is waiting ${g.mail ? "in the mailroom" : "at the CEO desk"}.`, "good", { ic: "gift" });
     return true;
   }
 
   // The chip in the top bar flies to the first waiting gift.
   function seek() {
     const g = gifts.waiting()[0];
-    if (!g) return;
+    if (!g) { if (gifts.mailroom().length) onAlbum(); return; }   // only the mailroom has some: the album shows it
     setView("floor");
     if (g.seat && app.snap().seats.some(s => s.id === g.seat)) office.focusSeat(g.seat); else office.fit();
     // A courier may still be carrying it: wait for the box to land (a walk takes a few seconds), then show it.
@@ -190,6 +203,6 @@ export function makeGiftBox(ctx) {
   const chip = $("giftChip");
   if (chip) chip.addEventListener("click", seek);
 
-  return { sync, earn, grant, daily, open, swap, seek, album: gifts.album, spares: gifts.spares,
-    waiting: () => (off() ? [] : gifts.waiting()), happy: () => happy() && !off(), STICKERS };
+  return { sync, earn, grant, daily, open, openNext, swap, seek, album: gifts.album, spares: gifts.spares, log: gifts.log, label, fromLine,
+    waiting: () => (off() ? [] : gifts.waiting()), mailroom: () => (off() ? [] : gifts.mailroom()), happy: () => happy() && !off(), STICKERS };
 }

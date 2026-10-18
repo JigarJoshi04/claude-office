@@ -3,6 +3,19 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.66.0] - 2026-10-19
+
+### Added
+- The mailroom: no gift is lost any more. A gift that finds the floor full, or waits there a day unopened, goes to
+  the pigeonholes behind the hiring counter (up to 20) and comes back out to the floor as you open the others.
+  Click the pigeonholes, or "Open the next" in the album, to open one where it is. The gift chip counts both.
+- Where they came from: the album lists the last stickers you opened, with who left each gift and when (the last
+  50 are kept).
+- The demo takes `?gifts=N` to start with a full floor and a mailroom.
+
+### Changed
+- Swapping spares works with a full floor (the gift goes to the mailroom); a milestone says where its gift waits.
+
 ## [3.65.0] - 2026-10-19
 
 ### Fixed

@@ -186,6 +186,7 @@ const office = createOffice($("stage"), {
   needsFor: (id) => panels.needsBySeat()[id] || 0,
   onLegend: (btn) => floor.legend(btn),
   onGift: (id) => giftBox.open(id),
+  onMailroom: () => giftBox.openNext(),
   openArcade: () => arcade.open(),
   onRadio: () => setRadio(!radio.on),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
@@ -282,7 +283,7 @@ function tour() {
 const floor = makeFloor({ app, office, panels, replay, prefs, QS, DEMO, go, setView, badge: (b) => badge(b), award, zoomNow });
 // The game layer (ui/game.js): goals, badges, the weekly challenge, streaks, anniversaries, combos, the level chip.
 function badge(b) { game.badge(b); }
-const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView, prefs, forceHappy: QS.has("happy"), fullAlbum: QS.get("stickers") === "all", badge: (b) => badge(b), award, onAlbum: () => openAlbum() });
+const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView, prefs, forceHappy: QS.has("happy"), fullAlbum: QS.get("stickers") === "all", demoGifts: +QS.get("gifts") || 0, badge: (b) => badge(b), award, onAlbum: () => openAlbum() });
 app.gifts = giftBox;
 const game = makeGame({ app, office, panels, replay, store, DEMO, prefs, gifts: giftBox, view: () => view, renderPanel });
 const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });

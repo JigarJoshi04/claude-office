@@ -9,7 +9,7 @@ import { goals, goalsFor, streak, weekly, localDay } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
-import { SETS, setsDone, happyHourFor, happyNow, MAX_WAITING, GRANT_ROOM, SWAP } from "./gifts.js";
+import { SETS, setsDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
 import { md } from "./md.js";
 import { money } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
@@ -851,7 +851,10 @@ export function makePanels(app) {
       ${album()}
       ${plaques()}
       ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, "lv" + (s.career ? s.career.level : 0))}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}`,
-      bind(root) { const b = root.querySelector("[data-swap]"); if (b) b.addEventListener("click", () => { if (app.gifts.swap()) app.rerender(true); }); } };
+      bind(root) {
+        const b = root.querySelector("[data-swap]"); if (b) b.addEventListener("click", () => { if (app.gifts.swap()) app.rerender(true); });
+        const m = root.querySelector("[data-mail-open]"); if (m) m.addEventListener("click", () => { app.gifts.openNext(); app.rerender(true); });
+      } };
   }
   // Token milestones on the 1-2-5 ladder, as brass plaques with the day each was crossed.
   function plaques() {
@@ -866,7 +869,7 @@ export function makePanels(app) {
   function album() {
     const g = app.gifts;
     if (!g) return "";
-    const al = g.album(), have = STICKERS.filter(s => al[s.id]).length, spares = g.spares(), waiting = g.waiting().length;
+    const al = g.album(), have = STICKERS.filter(s => al[s.id]).length, spares = g.spares(), waiting = g.waiting().length, mail = g.mailroom();
     const tiles = STICKERS.map(s => { const x = al[s.id], r = RARITY[s.rarity];
       return `<div class="alb ${x ? "on" : ""} r-${s.rarity}" style="--rar:${r.color}" title="${esc(x ? `${s.name} · ${r.name}${x.n > 1 ? ` · ×${x.n}` : ""}` : `${r.name} · not found yet`)}">
         <i data-sticker="${esc(s.id)}|4|${x ? "" : "sil"}"></i><b>${esc(x ? s.name : "?")}</b>${x && x.n > 1 ? `<em>×${x.n}</em>` : ""}</div>`; }).join("");
@@ -881,10 +884,17 @@ export function makePanels(app) {
     const hm = (d) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     const happyLine = hn.on ? `Happy hour is on now (${hn.left} min left): gifts are twice as likely.`
       : new Date() < hn.start ? `Today's happy hour (${hm(hn.start)}, half an hour) doubles the odds.` : `Tomorrow's happy hour (${hm(tAt)}, half an hour) doubles the odds.`;
-    const full = waiting >= MAX_WAITING + GRANT_ROOM;
-    return `<div id="album">${section(`Sticker album · ${have} of ${STICKERS.length}`, `<div class="alb-sets">${counts}</div><div class="alb-grid">${tiles}</div>
-      <div class="alb-foot"><span class="hint">Your agents sometimes leave a gift when they file a report or finish a lane, and every morning a delivery waits at the CEO desk. Finishing today's goals, a ×3 combo or a level up always brings one. ${esc(happyLine)}${waiting ? ` <b>${waiting} waiting on the floor.</b>` : ""}${app.demo ? " The demo office keeps stickers until you reload." : " Stickers are kept in this browser."}</span>
-        <button class="btn sm" data-swap ${spares >= SWAP && !full ? "" : "disabled"} title="${full ? "The floor is full of gifts: open one first" : "Five spare stickers for one gift that is rare or better"}">${icon("gift", 14)}Swap 5 spares${spares ? ` (${spares})` : ""}</button></div>`)}</div>`;
+    // The mailroom (gifts that found the floor full, or waited a day) and where the last stickers came from.
+    const byId = Object.fromEntries(STICKERS.map(x => [x.id, x]));
+    const log = (g.log() || []).filter(x => byId[x.sticker]).slice(0, 8);
+    const mailRow = mail.length ? `<div class="alb-mail"><span class="as-ic">${icon("gift", 15)}</span><span class="grow"><b>Mailroom · ${mail.length} gift${mail.length === 1 ? "" : "s"}</b>
+        <small>${esc(g.label(mail[0]).replace(/: open it$/, ""))}${mail.length > 1 ? ` and ${mail.length - 1} more` : ""}. They come out to the floor as you open the ones there.</small></span>
+        <button class="btn sm primary" data-mail-open>${icon("gift", 14)}Open the next</button></div>` : "";
+    const logRows = log.length ? `<h5 class="lh" style="margin-top:14px">Where they came from</h5><ul class="alb-log">${log.map(x => { const st = byId[x.sticker], r = RARITY[st.rarity];
+      return `<li style="--rar:${r.color}"><i data-sticker="${esc(st.id)}|2|"></i><span class="grow"><b>${esc(st.name)}</b>${x.isNew ? ` <em class="lc good">new</em>` : ""}<small>${esc(g.fromLine({ from: x.from, seat: x.seat, name: x.name }) || "A gift")} · ${esc(relTime(x.at))}</small></span><em class="rar">${esc(r.name)}</em></li>`; }).join("")}</ul>` : "";
+    return `<div id="album">${section(`Sticker album · ${have} of ${STICKERS.length}`, `${mailRow}<div class="alb-sets">${counts}</div><div class="alb-grid">${tiles}</div>${logRows}
+      <div class="alb-foot"><span class="hint">Your agents sometimes leave a gift when they file a report or finish a lane, and every morning a delivery waits at the CEO desk. Finishing today's goals, a ×3 combo or a level up always brings one. ${esc(happyLine)}${waiting ? ` <b>${waiting} waiting on the floor.</b>` : ""}${mail.length ? ` <b>${mail.length} in the mailroom.</b>` : ""}${app.demo ? " The demo office keeps stickers until you reload." : " Stickers are kept in this browser."}</span>
+        <button class="btn sm" data-swap ${spares >= SWAP ? "" : "disabled"} title="Five spare stickers for one gift that is rare or better">${icon("gift", 14)}Swap 5 spares${spares ? ` (${spares})` : ""}</button></div>`)}</div>`;
   }
   function trophies() {
     const seats = S().seats.filter(s => s.career), cat = S().achievements || [];
