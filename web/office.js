@@ -12,6 +12,12 @@ const MAX_SLOTS = 6;
 const BACK_LABEL = 42;            // room labels sit just under a room's back wall
 const PROG_COLORS = ["#5b8def", "#3fb68b", "#d97757", "#c678dd", "#e5a50a", "#56b6c2", "#e06c75", "#98c379"];
 
+// What a desk's screen shows: the tool family (the web, a shell, tests, another service, a page going up) while its
+// owner is at work, else the pose's own screen.
+const SCREENS = new Set(["web", "shell", "test", "mcp", "publish"]);
+export function screenFor(sess, pose) {
+  return sess && SCREENS.has(sess.screen) && ["type", "read", "wait"].includes(pose) ? sess.screen : pose;
+}
 export function poseFor(sess, seatStatus) {
   if (!sess) return "idle";
   if (sess.state === "limited" || seatStatus === "limited") return "sleep";
@@ -776,7 +782,8 @@ export function createOffice(stage, handlers) {
           S.drawSeated(ctx, x, sp.seatY, gear(a.look, s), "down", pose, t + slot * 777);
           if (a.sess.kind === "desk") { S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x, sp.seatY - 1, 10, 1, "#2a2d38"); }
         }
-        S.drawMonitorBack(ctx, x - 3, pod.y + 31);
+        S.drawMonitorBack(ctx, x - 3, pod.y + 31, a && !off ? screenFor(a.sess, pose) : null);
+        if (a && a.sess.test_ok != null && !off) S.drawBuildLight(ctx, x - 7, pod.y + 34, a.sess.test_ok, reduced ? 0 : t);
         if (a) drawDeskBits(a, x, true, pod, t, lights);
         if (a && pose !== "sleep") S.drawHands(ctx, x, pod.y + 42, a.look, pose, t + slot * 333);
         if (a && pose === "sleep") S.drawZ(ctx, x + 8, sp.seatY - 6, t + slot * 500);
@@ -786,7 +793,8 @@ export function createOffice(stage, handlers) {
         if (a && pose === "think") S.drawThought(ctx, x + 8, sp.seatY - 8, t);
         if (a && pose !== "sleep" && !off) lights.push({ x: x + 5, y: pod.y + 30, r: 12, c: "#9fd0ff", i: 0.35 });
       } else {
-        S.drawMonitorFront(ctx, x - 3, pod.y + 51, a && !off ? pose : "off", s.color, t + slot * 1234);
+        S.drawMonitorFront(ctx, x - 3, pod.y + 51, a && !off ? screenFor(a.sess, pose) : "off", s.color, t + slot * 1234);
+        if (a && a.sess.test_ok != null && !off) S.drawBuildLight(ctx, x - 7, pod.y + 55, a.sess.test_ok, reduced ? 0 : t);
         if (a) drawDeskBits(a, x, false, pod, t, lights);
         if (a) {
           S.drawSeated(ctx, x, sp.seatY, gear(a.look, s), "up", pose, t + slot * 777);

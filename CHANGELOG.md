@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.69.0] - 2026-10-19
+
+### Added
+- Screens that show the tool: a desk's monitor shows a turning globe while its agent browses the web, a terminal
+  prompt for shell commands, dots and a crawling bar while tests run, a plug for another service (MCP) and a page
+  going up while it publishes. Monitors seen from behind carry the same sign on the lid.
+- The test flask: a desk whose last test run passed has a green flask by its screen; a failed run turns it red and
+  bubbling, until the next run. Test runs are commands that start with a test runner (pytest, unittest, npm test,
+  go test, node --test, make check and the like), so `grep pytest` is not one. Sessions carry `screen` and `test_ok`.
+
 ## [3.68.0] - 2026-10-19
 
 ### Added

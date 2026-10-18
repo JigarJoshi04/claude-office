@@ -20,12 +20,12 @@ from .live import LiveOffice, public
 
 ACTIVITY = {
     "orchestrator": [("Reading lane reports", "read"), ("Writing: L12 is green, merging it now", "talk"),
-                     ("Merge PR #482", "type"), ("Updating Mission Control", "type"), ("Thinking", "think")],
-    "rate": [("Editing limiter.py", "type"), ("Run unit tests", "wait"), ("Searching retry_after", "read"),
+                     ("Merge PR #482", "type", "shell"), ("Publishing a page", "type", "publish"), ("Thinking", "think")],
+    "rate": [("Editing limiter.py", "type"), ("Run unit tests", "wait", "test"), ("Browsing the web", "read", "web"),
              ("Editing test_limiter.py", "type")],
     "billing": [("Reading invoices.sql", "read"), ("Delegating: backfill dry run", "delegate"),
-                ("Editing migrate_0142.py", "type"), ("Run migration dry run", "wait")],
-    "docs": [("Editing getting-started.md", "type"), ("Running: npm run build", "type"), ("Thinking", "think")],
+                ("monday: get board items", "read", "mcp"), ("Run migration dry run", "wait", "shell")],
+    "docs": [("Editing getting-started.md", "type"), ("Running: npm run build", "type", "shell"), ("Browsing the web", "read", "web")],
 }
 
 
@@ -33,7 +33,8 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
           cwd="/home/you/work/apollo", tokens=0):
     acts = ACTIVITY.get(act_key) or [("At the desk", "think")]
     step = int(now // 9) % len(acts)
-    act, kind_ = acts[step]
+    act, kind_ = acts[step][:2]
+    screen = acts[step][2] if len(acts[step]) > 2 and state in ("working", "waiting") else None
     recent = [{"ts": now - 40 * i, "text": acts[(step - i) % len(acts)][0], "kind": acts[(step - i) % len(acts)][1]}
               for i in range(5, -1, -1)]
     return {
@@ -43,7 +44,8 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "updated_at": now - 5, "quiet_s": 5 if state == "working" else 900 if state == "stuck" else 60,
         "raw_status": "busy", "state": state, "activity": act if state not in ("limited", "idle") else
         ("Hit the usage limit" if state == "limited" else "At the desk"),
-        "activity_kind": kind_, "title": title, "task": task or title, "last_prompt": None,
+        "activity_kind": kind_, "screen": screen, "test_ok": ((int(now // 60) % 3) != 0) if act_key == "rate" else None,
+        "title": title, "task": task or title, "last_prompt": None,
         "last_text": "Tests pass locally; pushing the branch and opening the PR next.",
         "limit_text": "You've hit your session limit · resets 9:40pm (Asia/Kolkata)" if state == "limited" else None,
         "model": "claude-opus-5-5", "tool_calls": 40 + hash(sid) % 160, "recent": recent,
@@ -451,7 +453,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.68.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.69.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

@@ -192,6 +192,26 @@ def describe_tool(name: str, inp: dict) -> tuple[str, str]:
     return name, "type"
 
 
+# A test run: a command segment that starts with a test runner (after env settings and wrappers like `timeout 60`).
+_TEST_CMD = re.compile(r"^(?:\w+=\S*\s+)*(?:(?:time|nice|timeout\s+\S+|uv run|poetry run|npx|pipenv run)\s+)*"
+                       r"(?:(?:python3?|py) -m (?:pytest|unittest)\b|pytest\b|tox\b|nox\b|jest\b|vitest\b|mocha\b|rspec\b|phpunit\b|ctest\b"
+                       r"|(?:npm|pnpm|yarn|bun) (?:run )?test\b|(?:go|cargo|dotnet|mix|swift) test\b|node --test\b|make (?:test|check)\b)")
+
+
+def screen_for(name: str, inp: dict) -> str | None:
+    """What a desk's screen shows for a tool call: web, shell, test, mcp or publish (None: the pose decides)."""
+    if name in ("WebFetch", "WebSearch"):
+        return "web"
+    if name == "Bash":
+        cmd = str((inp if isinstance(inp, dict) else {}).get("command") or "")
+        return "test" if any(_TEST_CMD.match(seg.strip()) for seg in re.split(r"&&|\|\||[;|\n(]", cmd)) else "shell"
+    if name.startswith("mcp__"):
+        return "mcp"
+    if name == "Artifact":
+        return "publish"
+    return None
+
+
 def _user_text(content) -> str | None:
     """Text of a real human/task prompt, or None for tool results and harness notices."""
     if isinstance(content, str):
@@ -236,7 +256,7 @@ class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
                  "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context",
-                 "tasks", "task_pending", "helpers", "helpers_done", "repeat")
+                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at")
 
     def __init__(self, path: Path):
         self.path = path
@@ -268,6 +288,10 @@ class TranscriptState:
         self.helpers: dict = {}        # Agent/Task tool_use id -> {"desc", "since", "bg"}: helpers at work right now
         self.helpers_done = 0          # how many have finished (the floor docks a drone each time it goes up)
         self.repeat = None             # [signature, times in a row, activity text, since]: the same tool call again and again
+        self.screen = None             # what the desk's screen shows for the latest tool call (screen_for)
+        self.test_id = None            # the last test run's tool_use id, until its result comes back
+        self.test_ok = None            # whether the last test run passed (None: none seen yet)
+        self.test_at = None
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -292,6 +316,10 @@ class TranscriptState:
             msg = {}
         if t == "user" and not d.get("isSidechain") and self.helpers:
             self._helper_result(msg.get("content"))
+        if t == "user" and not d.get("isSidechain") and self.test_id and isinstance(msg.get("content"), list):
+            for c in msg["content"]:                # the last test run passed or failed: the desk's build light
+                if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") == self.test_id:
+                    self.test_ok, self.test_at, self.test_id = not c.get("is_error"), ts, None
         if t == "attachment" and self.helpers and isinstance(d.get("attachment"), dict) \
                 and d["attachment"].get("type") == "queued_command":   # a helper that finished while the session was busy
             self._helper_result(d["attachment"].get("prompt"))
@@ -365,6 +393,10 @@ class TranscriptState:
                 text, kind = describe_tool(str(c.get("name") or ""), c.get("input") or {})
                 if d.get("isSidechain"):
                     text, kind = f"Helper: {text}", kind
+                else:
+                    self.screen = screen_for(str(c.get("name") or ""), c.get("input") or {})
+                    if self.screen == "test":
+                        self.test_id = c.get("id")
                 self._push(ts, text, kind)
             elif c.get("type") == "text" and isinstance(c.get("text"), str) and c["text"].strip() and not d.get("isSidechain"):
                 self.last_text = _short(c["text"], 400)
@@ -651,6 +683,8 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "helpers": [{"desc": h["desc"], "since": h["since"]} for h in tr.helpers.values()
                         if (h["since"] or now) > now - 6 * 3600][:8] if tr else [],
             "helpers_done": tr.helpers_done if tr else 0,
+            "screen": tr.screen if tr else None,
+            "test_ok": tr.test_ok if tr else None,
             "loop": {"text": redact(tr.repeat[2]), "count": tr.repeat[1], "since": tr.repeat[3]} if tr and tr.repeat and tr.repeat[1] >= 5 else None,
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,

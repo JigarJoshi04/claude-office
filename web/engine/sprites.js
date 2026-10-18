@@ -256,9 +256,21 @@ export function drawDeskIsland(ctx, x, y, w, h, seam = true) {
   rect(ctx, x + 2, y + h, 2, 3, P.deskDark); rect(ctx, x + w - 4, y + h, 2, 3, P.deskDark);
 }
 
-export function drawMonitorBack(ctx, x, y) {   // the back of a light aluminium screen
+export function drawMonitorBack(ctx, x, y, mode) {   // the back of a light aluminium screen; its lid glyph says what is on the front
   rect(ctx, x, y, 16, 10, "#8f97ab"); rect(ctx, x + 1, y + 1, 14, 8, "#c3c9d6"); rect(ctx, x + 1, y + 1, 14, 1, "#dfe3eb");
-  rect(ctx, x + 7, y + 4, 2, 2, "#a9b0c0"); rect(ctx, x + 7, y + 10, 2, 2, "#8f97ab");
+  rect(ctx, x + 7, y + 10, 2, 2, "#8f97ab");
+  const g = LID[mode];
+  if (!g) { rect(ctx, x + 7, y + 4, 2, 2, "#a9b0c0"); return; }
+  for (let i = 0; i < 16; i++) if (g[0][i] === "1") rect(ctx, x + 6 + (i % 4), y + 3 + Math.floor(i / 4), 1, 1, g[1]);
+}
+// 4x4 lid glyphs: a globe, a prompt, a check box, a plug, an arrow up.
+const LID = { web: ["0110111111110110", "#3d8fe8"], shell: ["1000010010000011", "#1f9d55"], test: ["1111100110011111", "#c9a227"],
+  mcp: ["1001100111110110", "#2aa198"], publish: ["0110111101100110", "#e8743d"] };
+// The desk's test flask: green when its last test run passed, red (bubbling) when it failed.
+export function drawBuildLight(ctx, x, y, ok, t) {
+  rect(ctx, x + 1, y, 1, 2, "#c8d4e6");                                     // the neck
+  rect(ctx, x, y + 2, 3, 3, ok ? "#38e07b" : "#ff5d73"); rect(ctx, x, y + 2, 3, 1, ok ? "#9ff5c0" : "#ffb3bd");
+  if (!ok && Math.floor(t / 500) % 2) rect(ctx, x + 1, y - 1, 1, 1, "#ffb3bd");   // a bubble
 }
 
 // What the screen shows tells you what the agent is doing.
@@ -300,6 +312,46 @@ export function drawMonitorFront(ctx, x, y, mode, color, t) {
     case "talk": {
       rect(ctx, sx, sy, sw, sh, "#10202a");
       rect(ctx, sx + 1, sy + 1, 8, 3, "#2f6f8f"); rect(ctx, sx + 5, sy + 5, 8, 2, color);
+      break;
+    }
+    case "web": {                                     // a globe turning, and a page loading under it
+      rect(ctx, sx, sy, sw, sh, "#0c2340");
+      rect(ctx, sx + 4, sy + 1, 4, 1, "#4fa3ff"); rect(ctx, sx + 3, sy + 2, 6, 4, "#4fa3ff"); rect(ctx, sx + 4, sy + 6, 4, 1, "#4fa3ff");
+      const m = Math.floor(t / 260) % 4;
+      rect(ctx, sx + 3 + m + (m > 1 ? 1 : 0), sy + 2, 1, 4, "#bfe0ff"); rect(ctx, sx + 3, sy + 4, 6, 1, "#2b6fd1");   // a meridian, the equator
+      rect(ctx, sx + 10, sy + 2, 3, 1, "#7fb8ff"); rect(ctx, sx + 10, sy + 4, 2, 1, "#5d8fd0");
+      rect(ctx, sx + 1, sy + 7, 12, 1, "#1b3a66"); rect(ctx, sx + 1, sy + 7, 1 + Math.floor(t / 90) % 12, 1, "#4fa3ff");
+      break;
+    }
+    case "shell": {                                   // a terminal: lines go up, the prompt blinks
+      rect(ctx, sx, sy, sw, sh, "#05080d");
+      const off = Math.floor(t / 220);
+      for (let i = 0; i < 3; i++) rect(ctx, sx + 1, sy + 1 + i * 2, 3 + ((off + i) * 5) % 9, 1, "#5a6b7d");
+      rect(ctx, sx + 1, sy + 5, 1, 1, "#38e07b"); rect(ctx, sx + 2, sy + 6, 1, 1, "#38e07b"); rect(ctx, sx + 1, sy + 7, 1, 1, "#38e07b");   // >
+      if (Math.floor(t / 450) % 2) rect(ctx, sx + 4, sy + 7, 2, 1, "#38e07b");                                                       // _
+      break;
+    }
+    case "test": {                                    // tests running: dots fill in, the bar crawls
+      rect(ctx, sx, sy, sw, sh, "#0d1210");
+      const n = Math.floor(t / 110) % 13;
+      for (let i = 0; i < 12; i++) rect(ctx, sx + 1 + i, sy + 2, 1, 1, i < n ? "#38e07b" : "#24302a");
+      for (let i = 0; i < 12; i++) rect(ctx, sx + 1 + i, sy + 4, 1, 1, i < n - 6 ? "#38e07b" : "#24302a");
+      rect(ctx, sx + 1, sy + 7, 12, 1, "#24302a"); rect(ctx, sx + 1, sy + 7, Math.max(1, n), 1, "#ffd24a");
+      break;
+    }
+    case "mcp": {                                     // a plug and its cord: talking to another service
+      rect(ctx, sx, sy, sw, sh, "#0b1f22");
+      rect(ctx, sx + 4, sy + 2, 1, 2, "#9ff0e6"); rect(ctx, sx + 7, sy + 2, 1, 2, "#9ff0e6");
+      rect(ctx, sx + 3, sy + 4, 6, 2, "#37c6b4"); rect(ctx, sx + 5, sy + 6, 2, 1, "#2a8f83");
+      const k = Math.floor(t / 160) % 6;
+      rect(ctx, sx + 6, sy + 7, 7, 1, "#1d4a46"); rect(ctx, sx + 6 + k, sy + 7, 1, 1, "#9ff0e6");
+      break;
+    }
+    case "publish": {                                 // a page going up
+      rect(ctx, sx, sy, sw, sh, "#1a1430");
+      rect(ctx, sx + 2, sy + 1, 6, 7, "#e9edf2"); for (let i = 0; i < 3; i++) rect(ctx, sx + 3, sy + 2 + i * 2, 4, 1, "#9aa3b5");
+      const u = Math.floor(t / 200) % 4;
+      rect(ctx, sx + 11, sy + 2 + (3 - u), 1, 3, "#ff9b6a"); rect(ctx, sx + 10, sy + 3 + (3 - u), 3, 1, "#ff9b6a");
       break;
     }
     case "sleep": rect(ctx, sx, sy, sw, sh, "#2a0f14"); rect(ctx, sx + 3, sy + 3, 8, 2, Math.floor(t / 900) % 2 ? "#7a2430" : "#5a1a24"); break;

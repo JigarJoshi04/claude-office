@@ -390,3 +390,29 @@ class LoopTests(unittest.TestCase):
         for i in range(40, 46):
             st.feed_line(use(i, "Edit", {"file_path": "/a.py", "old_string": f"x{i}", "new_string": "y"}))   # different edits
         self.assertEqual(st.repeat[1], 1)
+
+
+class ScreenTests(unittest.TestCase):
+    def test_screens_follow_the_tool_and_tests_light_the_desk(self):
+        import json
+        f = sessions.screen_for
+        self.assertEqual([f("Bash", {"command": c}) for c in ("cd x && pytest -q", "TZ=UTC python3 -m unittest t 2>&1 | tail -1", "npm run test:unit",
+                                                             "grep pytest notes.md", "echo pytestify", "git push")],
+                         ["test", "test", "test", "shell", "shell", "shell"])
+        self.assertEqual([f("WebSearch", {}), f("mcp__slack__post", {}), f("Artifact", {}), f("Read", {})], ["web", "mcp", "publish", None])
+        st = sessions.TranscriptState(Path("/x.jsonl"))
+        use = lambda tid, name, inp, side=False: json.dumps({"type": "assistant", "isSidechain": side, "timestamp": "2026-10-18T10:00:00Z",
+                                                             "message": {"id": "m" + tid, "content": [{"type": "tool_use", "id": tid, "name": name, "input": inp}]}}).encode()
+        res = lambda tid, err: json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "content": "x", "is_error": err}]}}).encode()
+        st.feed_line(use("t1", "Bash", {"command": "pytest"}))
+        self.assertEqual((st.screen, st.test_ok), ("test", None))
+        st.feed_line(res("t1", True))
+        self.assertIs(st.test_ok, False)                                       # failed: the desk's light goes red
+        st.feed_line(use("h1", "WebSearch", {}, side=True))                    # a helper's call leaves the desk's screen alone
+        self.assertEqual(st.screen, "test")
+        st.feed_line(use("t2", "Bash", {"command": "npm test"}))
+        st.feed_line(res("t2", False))
+        self.assertIs(st.test_ok, True)
+        st.feed_line(use("r1", "Read", {"file_path": "/a"}))
+        self.assertIsNone(st.screen)
+        self.assertIs(st.test_ok, True)                                        # the light stays until the next run
