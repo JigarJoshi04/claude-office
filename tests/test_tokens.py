@@ -106,6 +106,7 @@ class ShippingTests(unittest.TestCase):
         self.assertEqual(shipped({"push"}, " ! [rejected]        main -> main (fetch first)")[1], 0)
         self.assertEqual(shipped({"commit"}, "[main abc1234] say nothing to commit when clean\n 1 file changed, 2 insertions(+)")[0], 1)
         self.assertEqual(shipped({"commit"}, "On branch main\nnothing added to commit but untracked files present")[0], 0)
+        self.assertEqual(shipped({"commit"}, "Ran 3556 tests\nerror: script \"test\" exited with code 1")[0], 1)    # a later command's error
         self.assertEqual(pr_number(merge, "gh pr merge 1710 --squash --admin", ""), 1710)
         self.assertEqual(pr_number(merge, "gh pr merge --squash", "✓ Squashed and merged pull request o/r#43 (x)"), 43)
         self.assertEqual(pr_number({"pr_open"}, "gh pr create --fill", "https://github.com/a/b/pull/42"), 42)

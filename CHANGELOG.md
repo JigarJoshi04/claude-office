@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.29.1] - 2026-10-18
+
+### Fixed
+- A quiet `git commit -q` followed by other commands counts again when those commands print "error:" or "fatal:"
+  lines (tests, lint, a rebase): only git's own "nothing to commit" words mean no commit. Shipped work is recounted.
+
 ## [3.29.0] - 2026-10-18
 
 ### Added

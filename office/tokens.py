@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 VERSION = 2
-SHIP_RULES = 2                # bumped when the rules for shipped work change: every transcript's commands are read again
+SHIP_RULES = 3                # bumped when the rules for shipped work change: every transcript's commands are read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -39,7 +39,7 @@ _MERGE_NO = re.compile(r"already merged|not mergeable|automatically merged|merge
 _MERGE_YES = re.compile(r"\bmerged pull request\b|\"state\":\s*\"merged\"|^merged\b", re.M)          # gh's words, or a gh pr view
 _MERGE_ERR = re.compile(r"graphql|is expected|could not|^x |^! |^error|^fatal", re.M)
 _COMMIT_LINE = re.compile(r"^\[[^\]\n]+ [0-9a-f]{7,40}\]", re.M)
-_COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|^(?:error|fatal):|aborting commit", re.M)
+_COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|aborting commit")   # not "error:": later commands print those
 
 
 def ship_kinds(cmd: str) -> set:
