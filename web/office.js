@@ -834,6 +834,34 @@ export function createOffice(stage, handlers) {
     return true;
   }
 
+  // The minimap: while zoomed in, a small picture of the whole floor with the visible part outlined; a click there
+  // moves the camera. Redrawn a few times a second from the floor canvas itself.
+  const mini = document.createElement("canvas");
+  mini.className = "minimap"; mini.hidden = true; mini.setAttribute("role", "img"); mini.setAttribute("aria-label", "Minimap: click to move the camera");
+  stage.closest(".floor-frame") ? stage.closest(".floor-frame").appendChild(mini) : stage.appendChild(mini);
+  const mg = mini.getContext("2d");
+  function drawMini() {
+    const on = cam.tz > 1.05 && !!L;
+    mini.hidden = !on;
+    if (!on) return;
+    const w = 168, h = Math.round(w * H / W);
+    if (mini.width !== w * 2 || mini.height !== h * 2) { mini.width = w * 2; mini.height = h * 2; mini.style.width = w + "px"; mini.style.height = h + "px"; }
+    mg.imageSmoothingEnabled = true;
+    mg.drawImage(canvas, 0, 0, mini.width, mini.height);
+    const k = mini.width / (W * F * cam.z), { sw, sh } = sizes();
+    const x = -cam.x * k, y = -cam.y * k, vw = sw * k, vh = sh * k;
+    mg.fillStyle = "rgba(4,6,14,0.45)";                                   // dim what is off screen
+    mg.fillRect(0, 0, mini.width, Math.max(0, y)); mg.fillRect(0, y + vh, mini.width, mini.height - y - vh);
+    mg.fillRect(0, y, Math.max(0, x), vh); mg.fillRect(x + vw, y, mini.width - x - vw, vh);
+    mg.strokeStyle = "#ffffff"; mg.lineWidth = 3; mg.strokeRect(x + 1.5, y + 1.5, vw - 3, vh - 3);
+  }
+  setInterval(drawMini, 250);
+  mini.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const r = mini.getBoundingClientRect(), wx = (e.clientX - r.left) / r.width * W, wy = (e.clientY - r.top) / r.height * H, { sw, sh } = sizes();
+    cam.tx = sw / 2 - wx * F * cam.tz; cam.ty = sh / 2 - wy * F * cam.tz; clampCam(cam);
+  });
+
   let dragStart = null, dragMoved = false;
   stage.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || e.target.closest(".cam")) return;
