@@ -3,6 +3,19 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.10.0] - 2026-10-18
+
+### Added
+- Gifts you earn for sure: finishing all three goals (rare or better), a ×3 or ×5 combo, a character's level up, the
+  office's level up and a record week (epic or better).
+- Happy hour: half an hour a day, at a time that moves from day to day, when gifts are twice as likely. Party lights
+  wander over the lobby and the corridors, and the gift chip turns into a rainbow with the minutes left.
+- Album sets: finishing every sticker of a rarity puts something on the floor: a sticker wall in the lobby (Common),
+  a lava lamp on every desk (Rare), a UFO that crosses the sky (Epic) and the golden duck on the CEO's desk
+  (Legendary).
+- Pet the office cat: hearts and a purr, and a Cat person badge at ten.
+- Demo switches for screenshots: `?happy=1` and `?stickers=all`.
+
 ## [3.9.0] - 2026-10-18
 
 ### Added

@@ -195,3 +195,36 @@ test("gifts: a pity timer, a cap on waiting gifts, a daily delivery and swaps", 
   demo.earn("s1"); demo.open(demo.waiting()[0].id);
   assert.equal(JSON.stringify([...mem]), before);                                 // the demo never writes to the browser
 });
+
+test("happy hour: one half hour a day between 11:00 and 18:00, the same all day", async () => {
+  const { happyHourFor, happyNow } = await import("../../web/ui/gifts.js");
+  const seen = new Set();
+  for (let d = 1; d <= 60; d++) {
+    const day = `2026-${String(9 + Math.floor((d - 1) / 30)).padStart(2, "0")}-${String((d - 1) % 30 + 1).padStart(2, "0")}`, h = happyHourFor(day);
+    assert.ok(h.hour >= 11 && h.hour <= 17 && [0, 30].includes(h.minute) && h.minutes === 30, day);
+    assert.deepEqual(happyHourFor(day), h);
+    seen.add(h.hour * 60 + h.minute);
+  }
+  assert.ok(seen.size >= 6, "the time moves from day to day");
+  const h = happyHourFor("2026-10-18"), at = new Date(2026, 9, 18, h.hour, h.minute + 10);
+  assert.equal(happyNow(at).on, true);
+  assert.equal(happyNow(at).left, 20);
+  assert.equal(happyNow(new Date(2026, 9, 18, h.hour, h.minute + 30)).on, false);
+});
+
+test("gifts: grants go past the cap a little; sets finish with every sticker of a rarity", async () => {
+  const { makeGifts, MAX_WAITING, GRANT_ROOM, setsDone } = await import("../../web/ui/gifts.js");
+  const { STICKERS } = await import("../../web/engine/stickers.js");
+  const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? mem.get(k) : d), set: (k, v) => mem.set(k, v) };
+  const g = makeGifts({ store, rand: () => 0, happy: () => true });
+  while (g.waiting().length < MAX_WAITING) assert.ok(g.earn("s1"));
+  assert.equal(g.earn("s1"), null);
+  for (let i = 0; i < GRANT_ROOM; i++) assert.ok(g.grant(null, "goals", "rare"));
+  assert.equal(g.grant(null, "goals"), null);
+  const got = g.open(g.waiting().find(x => x.from === "goals").id);
+  assert.notEqual(got.sticker.rarity, "common");
+  const commons = Object.fromEntries(STICKERS.filter(s => s.rarity === "common").map(s => [s.id, { n: 1 }]));
+  assert.deepEqual([...setsDone(commons)], ["common"]);
+  assert.equal(setsDone({ ...commons, rocket: { n: 2 } }).has("rare"), false);
+  assert.equal(setsDone(Object.fromEntries(STICKERS.map(s => [s.id, { n: 1 }]))).size, 4);
+});

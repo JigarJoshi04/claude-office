@@ -1176,9 +1176,6 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 :root[data-motion="reduced"] .gr-box { display: none; }
 :root[data-motion="reduced"] .gr-st { animation: none; opacity: 1; }
 
-.alb-top { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 10px; }
-.alb-r { display: inline-flex; align-items: center; gap: 6px; font: 600 12px var(--mono); color: var(--muted); }
-.alb-r i { width: 8px; height: 8px; border-radius: 2px; background: var(--rar); }
 .alb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
 .alb { position: relative; display: grid; justify-items: center; gap: 4px; padding: 10px 6px 8px; border-radius: 12px; background: var(--surface-2);
   box-shadow: inset 0 0 0 1px var(--line); }
@@ -1190,3 +1187,19 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .alb em { position: absolute; top: 6px; right: 7px; font: 700 11px var(--mono); font-style: normal; color: var(--muted); }
 .alb-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .alb-foot .hint { flex: 1 1 260px; } .alb-foot .hint b { color: var(--text-2); }
+.giftchip.happy { color: #fff; background: linear-gradient(90deg, #ff4fd8, #ff7a45, #ffd24a, #38e07b, #5b8def, #ff4fd8); background-size: 300% 100%;
+  box-shadow: 0 0 14px rgba(255,79,216,.45); animation: giftchip 2.4s ease-in-out infinite, gchappy 4s linear infinite; }
+.giftchip .gc-happy { margin-left: 2px; font-weight: 800; letter-spacing: .02em; }
+@keyframes gchappy { to { background-position: -300% 0; } }
+:root[data-motion="reduced"] .giftchip.happy { animation: none; }
+@media (max-width: 560px) { .giftchip .gc-happy { display: none; } }
+.gr-set { display: flex; gap: 8px; align-items: flex-start; text-align: left; margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; font-size: 13.5px;
+  background: rgba(255,210,74,.1); box-shadow: inset 0 0 0 1px rgba(255,210,74,.35); } .gr-set > .ic { color: #ffd24a; flex: none; margin-top: 2px; }
+.alb-sets { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.alb-set { display: grid; grid-template-columns: 30px 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.alb-set .as-ic { grid-row: span 2; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--surface-3); color: var(--faint); }
+.alb-set b { display: block; font-size: 13px; } .alb-set small { display: block; font-size: 12px; line-height: 1.4; color: var(--muted); margin-top: 2px; }
+.alb-set .as-bar { grid-column: 2; height: 5px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
+.alb-set .as-bar i { display: block; height: 100%; border-radius: 99px; background: var(--rar); }
+.alb-set.on { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rar) 55%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--rar) 12%, var(--surface-2)), var(--surface-2) 70%); }
+.alb-set.on .as-ic { background: var(--rar); color: #1d1606; }

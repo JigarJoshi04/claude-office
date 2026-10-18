@@ -17,6 +17,7 @@ export const BADGES = [
   { id: "regular", icon: "flame", name: "Regular", desc: "Check on the office seven days in a row." },
   { id: "collector", icon: "gift", name: "Collector", desc: "Collect 12 different stickers from gifts." },
   { id: "golden", icon: "sparkles", name: "Golden duck", desc: "Find the legendary golden duck." },
+  { id: "cat_person", icon: "heart", name: "Cat person", desc: "Pet Pixel, the office cat, ten times." },
   { id: "night_owl", icon: "moon", name: "Night owl", desc: "Check on the office between midnight and 4 AM." },
   { id: "early_bird", icon: "sun", name: "Early bird", desc: "Check on the office between 5 and 7 AM." },
 ];

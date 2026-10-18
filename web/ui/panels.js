@@ -5,10 +5,11 @@ import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary, PERSONALITIES } from "./personas.js";
 import { sound } from "./sound.js";
-import { goals, goalsFor, streak, weekly } from "./goals.js";
+import { goals, goalsFor, streak, weekly, localDay } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
+import { SETS, setsDone, happyHourFor } from "./gifts.js";
 import { md } from "./md.js";
 
 const TEMPLATES = [
@@ -610,10 +611,14 @@ export function makePanels(app) {
     const tiles = STICKERS.map(s => { const x = al[s.id], r = RARITY[s.rarity];
       return `<div class="alb ${x ? "on" : ""} r-${s.rarity}" style="--rar:${r.color}" title="${esc(x ? `${s.name} · ${r.name}${x.n > 1 ? ` · ×${x.n}` : ""}` : `${r.name} · not found yet`)}">
         <i data-sticker="${esc(s.id)}|4|${x ? "" : "sil"}"></i><b>${esc(x ? s.name : "?")}</b>${x && x.n > 1 ? `<em>×${x.n}</em>` : ""}</div>`; }).join("");
+    const done = setsDone(al);
     const counts = Object.keys(RARITY).map(k => { const all = STICKERS.filter(s => s.rarity === k), got = all.filter(s => al[s.id]).length;
-      return `<span class="alb-r" style="--rar:${RARITY[k].color}"><i></i>${RARITY[k].name} ${got}/${all.length}</span>`; }).join("");
-    return `<div id="album">${section(`Sticker album · ${have} of ${STICKERS.length}`, `<div class="alb-top">${counts}</div><div class="alb-grid">${tiles}</div>
-      <div class="alb-foot"><span class="hint">Your agents sometimes leave a gift when they file a report or finish a lane, and every morning a delivery waits at the CEO desk.${waiting ? ` <b>${waiting} waiting on the floor.</b>` : ""}${app.demo ? " The demo office keeps stickers until you reload." : " Stickers are kept in this browser."}</span>
+      return `<div class="alb-set ${done.has(k) ? "on" : ""}" style="--rar:${RARITY[k].color}"><span class="as-ic">${icon(done.has(k) ? "trophy" : "lock", 15)}</span>
+        <span class="grow"><b>${esc(RARITY[k].name)} ${got}/${all.length} · ${esc(SETS[k].name)}</b><small>${done.has(k) ? "On the floor now: " : "Finish the set: "}${esc(SETS[k].desc.charAt(0).toLowerCase() + SETS[k].desc.slice(1))}</small></span>
+        <span class="as-bar"><i style="width:${Math.round(got / all.length * 100)}%"></i></span></div>`; }).join("");
+    const hh = happyHourFor(localDay()), at = new Date(); at.setHours(hh.hour, hh.minute, 0, 0);
+    return `<div id="album">${section(`Sticker album · ${have} of ${STICKERS.length}`, `<div class="alb-sets">${counts}</div><div class="alb-grid">${tiles}</div>
+      <div class="alb-foot"><span class="hint">Your agents sometimes leave a gift when they file a report or finish a lane, and every morning a delivery waits at the CEO desk. Finishing today's goals, a ×3 combo or a level up always brings one, and today's happy hour (${esc(at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}, half an hour) doubles the odds.${waiting ? ` <b>${waiting} waiting on the floor.</b>` : ""}${app.demo ? " The demo office keeps stickers until you reload." : " Stickers are kept in this browser."}</span>
         <button class="btn sm" data-swap ${spares >= 5 ? "" : "disabled"} title="Five spare stickers for one gift that is rare or better">${icon("gift", 14)}Swap 5 spares${spares ? ` (${spares})` : ""}</button></div>`)}</div>`;
   }
   function trophies() {

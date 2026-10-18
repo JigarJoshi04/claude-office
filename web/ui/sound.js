@@ -39,6 +39,10 @@ const SFX = {
     [784, 988, 1175, 1568, 1976, 2349].slice(0, 3 + k).forEach((f, i) => note(f, 0.26 + i * 0.07, 0.12, "triangle", 0.05));
     if (k >= 2) [1568, 1976, 2349].forEach(f => note(f, 0.3 + (3 + k) * 0.07, 0.5, "triangle", 0.035));
   },
+  // The cat purrs: a low, soft rumble.
+  purr: () => { for (let i = 0; i < 6; i++) note(i % 2 ? 62 : 58, i * 0.07, 0.08, "triangle", 0.06); note(880, 0.45, 0.06, "triangle", 0.02); },
+  // Happy hour: a little party horn.
+  happy: () => { [523, 659, 784, 659, 784, 1047].forEach((f, i) => note(f, i * 0.09, 0.1, "square", 0.045)); },
   // Achievement: two bright chimes and a sparkle.
   achievement: () => { note(1319, 0, 0.12, "triangle", 0.06); note(1760, 0.11, 0.22, "triangle", 0.06); [2637, 3136].forEach((f, i) => note(f, 0.3 + i * 0.05, 0.08, "square", 0.02)); },
 };

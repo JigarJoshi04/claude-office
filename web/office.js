@@ -64,6 +64,8 @@ export function createOffice(stage, handlers) {
   let clockAt = null;                  // replay's time (seconds), or null for now
   let seasonal = true;                 // Settings → Seasonal decorations
   let gifts = [];                      // gift boxes waiting on the floor: {id, seat, from, label}
+  let happy = false;                   // the day's happy hour: party lights in the lobby and corridors
+  let sets = new Set();                // finished album sets (rarities): their rewards on the floor
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
   let leavers = [];                   // agents walking out
@@ -165,6 +167,8 @@ export function createOffice(stage, handlers) {
   new IntersectionObserver((en) => { onScreen = en[0].isIntersecting; }).observe(stage);
   const DRONE_EVERY = 48000, DRONE_FLIGHT = 9000;
   const droneUp = (t) => has("drone") && !reduced && t % DRONE_EVERY > DRONE_EVERY - DRONE_FLIGHT;
+  const UFO_EVERY = 75000, UFO_FLIGHT = 12000;      // the epic set's saucer, out of step with the drone
+  const ufoUp = (t) => sets.has("epic") && !reduced && (t + 31000) % UFO_EVERY > UFO_EVERY - UFO_FLIGHT;
   function walkingNow() {
     for (const a of agents.values()) if (a.mode === "walking" || a.shift) return true;
     return !!L && L.pods.some(p => p.targetY != null && p.y !== p.targetY);
@@ -195,6 +199,7 @@ export function createOffice(stage, handlers) {
     const cols = ["#ff5d73", "#ffd24a", "#38e07b", "#5b8def", "#c678dd", "#ff9f43", "#56b6c2"];
     for (let i = 0; i < n; i++) {
       const ang = Math.random() * Math.PI * 2, v = 30 + Math.random() * 60;
+      if (kind === "heart") { particles.push({ x: x + (Math.random() - 0.5) * 8, y, vx: (Math.random() - 0.5) * 16, vy: -14 - Math.random() * 18, g: -4, life: 0, max: 1.2 + Math.random() * 0.6, c: i % 3 ? "#ff6fa8" : "#ff9cc4", s: 1, heart: true }); continue; }
       particles.push(kind === "spark"
         ? { x, y, vx: Math.cos(ang) * 25, vy: -Math.random() * 30, g: 60, life: 0, max: 0.5 + Math.random() * 0.3, c: Math.random() > 0.5 ? "#ffd24a" : "#ff7a3d", s: 1 }
         : { x, y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 50, g: 90, life: 0, max: 1.4 + Math.random() * 0.8, c: cols[i % cols.length], s: 1 + (i % 2) });
@@ -206,7 +211,11 @@ export function createOffice(stage, handlers) {
     for (let i = particles.length - 1; i >= 0; i--) if (particles[i].life > particles[i].max) particles.splice(i, 1);
   }
   function drawParticles() {
-    for (const p of particles) { ctx.globalAlpha = Math.max(0, 1 - p.life / p.max); S.rect(ctx, p.x, p.y, p.s, p.s, p.c); }
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, 1 - p.life / p.max);
+      if (p.heart) { const x = Math.round(p.x), y = Math.round(p.y); S.rect(ctx, x, y, 1, 1, p.c); S.rect(ctx, x + 2, y, 1, 1, p.c); S.rect(ctx, x, y + 1, 3, 1, p.c); S.rect(ctx, x + 1, y + 2, 1, 1, p.c); }
+      else S.rect(ctx, p.x, p.y, p.s, p.s, p.c);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -231,6 +240,7 @@ export function createOffice(stage, handlers) {
       drawSeason(ctx, L, season, reduced ? 0 : t, env.night, lights);
       if (season === "winter") for (const pod of L.pods) { const wr = windowRect(pod.room); drawSnow(ctx, wr.x, wr.y, wr.w, wr.h, reduced ? 0 : t); }
     }
+    if (happy) drawParty(reduced ? 0 : t);
     drawGifts(t);
     const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers].sort((a, b) => a.y - b.y);
     for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
@@ -245,6 +255,10 @@ export function createOffice(stage, handlers) {
       const k = ((t % DRONE_EVERY) - DRONE_EVERY + DRONE_FLIGHT) / DRONE_FLIGHT, dx = -20 + k * (W + 40), dy = 4 + Math.round(Math.sin(k * 9) * 2);
       S.rect(ctx, dx + 2, dy + 8, 4, 4, "#c9a26b"); S.rect(ctx, dx + 2, dy + 8, 4, 1, "#e0bd84");
       S.drawDrone(ctx, Math.round(dx), dy, "#38e07b", t);
+    }
+    if (ufoUp(t)) {                                 // the epic set: a saucer drifts across, beaming now and then
+      const k = (((t + 31000) % UFO_EVERY) - UFO_EVERY + UFO_FLIGHT) / UFO_FLIGHT, ux = W + 20 - k * (W + 40), uy = 3 + Math.round(Math.sin(k * 14) * 2);
+      S.drawUfo(ctx, Math.round(ux), uy, t, Math.floor(t / 900) % 5 === 0);
     }
     drawParticles();
     if (spot) { const p = L.pods.find(p => p.seat.id === spot); if (p) lights.push({ x: p.room.x + p.room.w / 2, y: p.room.y + p.room.h / 2, r: 110, c: p.seat.color, i: 0.5 }); }
@@ -270,9 +284,18 @@ export function createOffice(stage, handlers) {
       const pod = g.seat && L.pods.find(p => p.seat.id === g.seat), key = pod ? g.seat : "", k = per.get(key) || 0;
       per.set(key, k + 1);
       out.push(pod ? { g, x: pod.room.x + 26 + k * 15, y: pod.room.y + pod.room.h - 48, color: pod.seat.color, ribbon: "#ffffff" }
-        : { g, x: 104 + k * 16, y: L.ceo.y + 84, color: g.from === "swap" ? "#7d5cff" : "#e8475a", ribbon: "#ffd24a" });
+        : { g, x: 104 + k * 16, y: L.ceo.y + 84, color: S.GIFT_BOX[g.from] || S.GIFT_BOX.daily, ribbon: "#ffd24a" });
     }
     return out;
+  }
+  // Happy hour: coloured spots wander over the lobby floor and along the corridors.
+  function drawParty(t) {
+    const dot = (x, y, i) => { ctx.fillStyle = `hsl(${(t / 18 + i * 53) % 360} 95% 62%)`; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); };
+    ctx.globalAlpha = 0.2;
+    const top = WALL + 12, h = Math.max(20, L.server.y - top - 12), w = LOBBY_W - 40;
+    for (let i = 0; i < 7; i++) dot(14 + w * (0.5 + 0.45 * Math.sin(t / 1700 + i * 1.9)), top + h * (0.5 + 0.45 * Math.cos(t / 2100 + i * 2.3)), i);
+    L.corridors.forEach((cy, j) => { for (let i = 0; i < 4; i++) dot(LOBBY_W + 10 + (W - LOBBY_W - 20) * (0.5 + 0.48 * Math.sin(t / 2300 + i * 1.6 + j)), cy + 6, i + j * 4 + 7); });
+    ctx.globalAlpha = 1;
   }
   function drawGifts(t) {
     giftSpots().forEach((p, i) => S.drawGift(ctx, p.x, p.y, p.color, p.ribbon, reduced ? 0 : t, i));
@@ -288,6 +311,7 @@ export function createOffice(stage, handlers) {
     lights.push({ x: ELEVATOR.x + 13, y: ELEVATOR.y - 2, r: 12, c: "#ff8f3d", i: 0.5 });
     const cups = trophies();
     S.drawCabinet(ctx, 116, 8, cups, t);
+    if (sets.has("common")) drawStickerWall();
     if (cups.length) lights.push({ x: 144, y: 22, r: 26, c: "#ffd24a", i: cups.some(c => c.glint) ? 0.4 : 0.22 });
     S.drawFrame(ctx, 176, 12, 16, 22, !!mvp);
     if (mvp) {
@@ -296,6 +320,19 @@ export function createOffice(stage, handlers) {
       if (Math.floor(t / 600) % 4 === 0) S.rect(ctx, 178 + (Math.floor(t / 150) % 12), 13, 1, 1, "#fff8c0");
       lights.push({ x: 184, y: 22, r: 18, c: "#ffd24a", i: 0.35 });
     }
+  }
+
+  // The common set: stickers slapped all along the lobby's wainscot, and two by the elevator.
+  const DECALS = ["#ffd24a", "#e8475a", "#4fc36a", "#4f86c0", "#ff7ac8", "#ff8f3d", "#9b6bff", "#7fdbe6"];
+  function drawStickerWall() {
+    for (let i = 0, x = 3; x < LOBBY_W - 8; i++) {
+      const hx = S.hashOf("decal" + i), y = WALL - 9 + (hx % 4), c = DECALS[(hx >>> 4) % DECALS.length];
+      S.rect(ctx, x, y, 5, 5, "#ffffff"); S.rect(ctx, x + 1, y + 1, 3, 3, c);
+      if ((hx >>> 9) % 3 === 0) S.rect(ctx, x + 2, y + 2, 1, 1, "#ffffff");
+      x += 8 + (hx >>> 12) % 7;
+    }
+    S.rect(ctx, 77, 14, 5, 5, "#ffffff"); S.rect(ctx, 78, 15, 3, 3, "#ffd24a");
+    S.rect(ctx, 78, 24, 5, 5, "#ffffff"); S.rect(ctx, 79, 25, 3, 3, "#4f86c0");
   }
 
   // Every unlocked achievement in the office, oldest first; ones from the last hour glint.
@@ -372,6 +409,7 @@ export function createOffice(stage, handlers) {
     S.rect(ctx, dx + 62 + ring, dy + 5, 8, 5, attn ? "#d94a4a" : "#30343f"); S.rect(ctx, dx + 61 + ring, dy + 4, 10, 2, attn ? "#ff6b6b" : "#454a5c");
     if (attn) { S.drawMark(ctx, dx + 64, dy - 4, urgent ? "!" : "?", t); lights.push({ x: dx + 66, y: dy + 6, r: 16, c: "#ff4d5e", i: 0.5 }); }
     S.drawMug(ctx, dx + 10, dy + 6, t, true, "#e8c66a");
+    if (sets.has("legendary")) S.drawGoldDuck(ctx, dx + 51, dy + 3, t);   // the legendary set
     S.rect(ctx, dx + 16, dy + 5, 8, 6, S.P.white); S.rect(ctx, dx + 17, dy + 6, 6, 1, "#9aa3b5"); S.rect(ctx, dx + 17, dy + 8, 4, 1, "#9aa3b5");
     S.drawDeskLamp(ctx, dx + 50, dy - 4, true);
     lights.push({ x: dx + 39, y: dy + 4, r: 60, c: "#ffcf7a", i: 0.65 });
@@ -509,6 +547,7 @@ export function createOffice(stage, handlers) {
     if (busy) lights.push({ x: mid, y: pod.y + 54, r: 62, c: "#ffd59a", i: 0.5 });
     const lv = s.career ? s.career.level : 1;
     if (lv >= 3) S.drawDeskPerks(ctx, desk, lv, s.color, t);
+    if (sets.has("rare")) { S.drawLavaLamp(ctx, desk.x + 2, desk.y + 6, t + s.id.length * 700); lights.push({ x: desk.x + 4, y: desk.y + 9, r: 10, c: "#ff7ac8", i: 0.35 }); }
     if (lv >= 15) lights.push({ x: mid, y: desk.y + desk.h, r: 40, c: s.color, i: 0.3 });
     for (let slot = 0; slot < pod.cap; slot++) {
       const sp = seatSpot(pod, slot), a = bySlot.get(slot), x = sp.cx + (a ? Math.round(a.shift || 0) : 0);
@@ -805,6 +844,7 @@ export function createOffice(stage, handlers) {
       e.stopPropagation();
       const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
       if (p.mode === "sleep") { p.mode = "sit"; p.until = performance.now() + 5000; }
+      if (!reduced) burst(p.x + 6, p.y + 2, 7, "heart");
       pops.push({ el: div("bubble cat-says", p.says + tip, p.x + 5, p.y - 2), until: performance.now() + 5200 });
       if (handlers.onCat) handlers.onCat(tip);
     });
@@ -1090,6 +1130,8 @@ export function createOffice(stage, handlers) {
     spotlight(id) { spot = id || null; },
     setSeasonal(on) { seasonal = !!on; },
     setGifts(list) { gifts = list || []; ovKey = ""; renderOverlay(); },
+    setHappy(on) { happy = !!on; },
+    setSets(s) { sets = new Set(s || []); },
     // Confetti where a gift was, as it opens.
     unwrap(id) { const p = L && giftSpots().find(x => x.g.id === id); if (p && !reduced) burst(p.x + 6, p.y + 4, 40, "confetti"); },
     season: () => (seasonal ? seasonFor(new Date()) : null),

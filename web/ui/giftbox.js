@@ -1,30 +1,70 @@
 // The gift boxes on the floor, from the CEO's side: who left each one, the chip that counts them, opening one (confetti,
-// a reveal card with the sticker) and the badges that come with the album. The rules live in gifts.js.
+// a reveal card with the sticker), the day's happy hour, finished album sets and the badges that come with the album.
+// The rules live in gifts.js.
 import { $, esc, toast } from "./util.js";
 import { icon } from "./icons.js";
 import { sound } from "./sound.js";
 import { localDay } from "./goals.js";
-import { makeGifts, SWAP } from "./gifts.js";
+import { makeGifts, SWAP, SETS, setsDone, happyNow } from "./gifts.js";
 import { STICKERS, RARITY, stickerCanvas } from "../engine/stickers.js";
-import { drawGift } from "../engine/sprites.js";
+import { drawGift, GIFT_BOX } from "../engine/sprites.js";
 
 export function makeGiftBox(ctx) {
-  const { app, office, panels, replay, store, DEMO, setView, badge, award, onAlbum } = ctx;
-  const gifts = makeGifts({ store, demo: DEMO });
+  const { app, office, panels, replay, store, DEMO, setView, badge, award, onAlbum, prefs, forceHappy } = ctx;
+  const happy = () => forceHappy || happyNow().on;
+  const gifts = makeGifts({ store, demo: DEMO, happy });
+  if (ctx.fullAlbum) gifts.fillDemo();
   const nameOf = (seatId) => { const s = seatId && app.snap() && app.snap().seats.find(x => x.id === seatId); return s ? panels.persona(s).name : null; };
-  const label = (g) => g.from === "daily" ? "Morning delivery: open it" : g.from === "swap" ? "A swapped gift, rare or better: open it"
-    : nameOf(g.seat) ? `A gift from ${nameOf(g.seat)}: open it` : "A gift: open it";
+  // What a gift is called on the floor, and on its reveal card.
+  const KINDS = { daily: ["Morning delivery", "This morning's delivery"], swap: ["A swapped gift, rare or better", "Swapped for five spares"],
+    goals: ["A gift for today's goals, rare or better", "For finishing today's goals"], office: ["An office level-up gift, epic or better", "For the office's level up"],
+    week: ["A record-week gift, epic or better", "For a record week"] };
+  const label = (g) => {
+    const who = nameOf(g.seat);
+    if (KINDS[g.from]) return KINDS[g.from][0] + ": open it";
+    if (who && g.from === "levelup") return `${who}'s level-up gift: open it`;
+    if (who && g.from === "combo") return `A combo gift from ${who}: open it`;
+    return who ? `A gift from ${who}: open it` : "A gift: open it";
+  };
+  const fromLine = (g) => KINDS[g.from] ? KINDS[g.from][1] : nameOf(g.seat) ? `From ${nameOf(g.seat)}${g.from === "levelup" ? ", for levelling up" : g.from === "combo" ? ", for the combo" : ""}` : "";
 
   function sync() {
     const list = gifts.waiting();
     office.setGifts(list.map(g => ({ ...g, label: label(g) })));
+    office.setSets(setsDone(gifts.album()));
+    renderChip();
+  }
+  // The top-bar chip: gifts waiting, and the happy hour while it lasts.
+  function renderChip() {
     const chip = $("giftChip");
     if (!chip) return;
-    chip.hidden = !list.length;
-    chip.innerHTML = `${icon("gift", 14)}${list.length}`;
-    chip.title = list.length === 1 ? "A gift is waiting on the floor" : `${list.length} gifts are waiting on the floor`;
-    chip.setAttribute("aria-label", chip.title);
+    const n = gifts.waiting().length, h = happyNow(), on = happy();
+    chip.hidden = !n && !on;
+    chip.classList.toggle("happy", on);
+    const html = `${icon("gift", 14)}${n ? n : ""}${on ? `<span class="gc-happy">Happy hour${forceHappy ? "" : ` · ${h.left}m`}</span>` : ""}`;
+    if (chip.dataset.html !== html) { chip.innerHTML = html; chip.dataset.html = html; }
+    chip.title = (n ? (n === 1 ? "A gift is waiting on the floor." : `${n} gifts are waiting on the floor.`) : "") + (on ? ` Happy hour: gifts are twice as likely${forceHappy ? "" : ` for ${h.left} more minutes`}.` : "");
+    chip.setAttribute("aria-label", chip.title.trim());
   }
+  // Happy hour starts once a day at a time picked for that day: party lights on the floor, a banner if the office is
+  // open, and twice the chance of a gift for half an hour.
+  let happyOn = null;
+  function happyTick() {
+    const on = happy();
+    office.setHappy(on);
+    if (on !== happyOn) {
+      happyOn = on;
+      if (on && (forceHappy || (!DEMO && store.get("happyDay", "") !== localDay()))) {   // announced once a day
+        if (!forceHappy) store.set("happyDay", localDay());
+        if (prefs.view === "floor" && !replay.active()) office.banner("Happy hour!", "Gifts are twice as likely for half an hour", "#ff7ac8");
+        sound.play("happy");
+        toast("Happy hour: for the next half hour, reports are twice as likely to leave a gift.", "good", { ic: "gift", ms: 7000 });
+      }
+    }
+    renderChip();
+  }
+  setInterval(happyTick, 20000);
+  setTimeout(happyTick, 1200);
 
   // A report or a finished lane may leave a gift (never while replaying: the floor shows the past).
   function earn(seatId, from) {
@@ -38,14 +78,21 @@ export function makeGiftBox(ctx) {
     }
   }
   function daily() { if (gifts.daily(localDay())) sync(); }
+  // A gift earned for sure (all goals, a big combo, a level up, a record week); never from a replay.
+  function grant(seatId, from, min) {
+    if (replay.active()) return;
+    if (gifts.grant(seatId, from, min)) sync();
+  }
 
   function open(id) {
     office.unwrap(id);
+    const before = setsDone(gifts.album());
     const res = gifts.open(id);
     sync();
     if (!res) return;
     sound.play("gift", res.sticker.rarity);
-    reveal(res);
+    const done = [...setsDone(gifts.album())].filter(k => !before.has(k));
+    reveal(res, done);
     if (!DEMO) {
       if (res.have >= 12) badge(award("collector"));
       if (res.sticker.rarity === "legendary") badge(award("golden"));
@@ -58,12 +105,12 @@ export function makeGiftBox(ctx) {
     const x = c.getContext("2d");
     x.imageSmoothingEnabled = false; x.scale(k, k);
     const s = g.seat && app.snap() && app.snap().seats.find(q => q.id === g.seat);
-    drawGift(x, 1, 2, s ? s.color : g.from === "swap" ? "#7d5cff" : "#e8475a", s ? "#ffffff" : "#ffd24a", 0);
+    drawGift(x, 1, 2, s ? s.color : GIFT_BOX[g.from] || GIFT_BOX.daily, s ? "#ffffff" : "#ffd24a", 0);
     return c;
   }
 
-  function reveal(res) {
-    const st = res.sticker, r = RARITY[st.rarity], from = res.gift.from === "daily" ? "This morning's delivery" : res.gift.from === "swap" ? "Swapped for five spares" : nameOf(res.gift.seat) ? `From ${nameOf(res.gift.seat)}` : "";
+  function reveal(res, done = []) {
+    const st = res.sticker, r = RARITY[st.rarity], from = fromLine(res.gift);
     const d = $("dialog");
     d.classList.add("gift");
     d.addEventListener("close", () => d.classList.remove("gift"), { once: true });
@@ -73,6 +120,7 @@ export function makeGiftBox(ctx) {
       <div class="gr-rar">${esc(r.name)}</div>
       <h3 class="gr-name">${esc(st.name)}</h3>
       <p class="gr-sub">${res.isNew ? `<b>New for your album</b> · ${res.have} of ${res.total}` : `Another one: you have ${res.count}`}${from ? ` · ${esc(from)}` : ""}</p>
+      ${done.map(k => `<p class="gr-set">${icon("trophy", 15)}<span><b>${esc(RARITY[k].name)} set complete: ${esc(SETS[k].name)}.</b> ${esc(SETS[k].desc)}</span></p>`).join("")}
       ${DEMO ? `<p class="gr-demo">The demo office keeps stickers until you reload.</p>` : ""}
       <div class="gr-act"><button class="btn primary" id="grOk">Keep it</button><button class="btn" id="grAlbum">${icon("star", 15)}Open the album</button></div></div>`;
     d.querySelector(".gr-box").appendChild(boxCanvas(res.gift));
@@ -103,5 +151,5 @@ export function makeGiftBox(ctx) {
   const chip = $("giftChip");
   if (chip) chip.addEventListener("click", seek);
 
-  return { sync, earn, daily, open, swap, seek, album: gifts.album, spares: gifts.spares, waiting: gifts.waiting, STICKERS };
+  return { sync, earn, grant, daily, open, swap, seek, album: gifts.album, spares: gifts.spares, waiting: gifts.waiting, happy, STICKERS };
 }

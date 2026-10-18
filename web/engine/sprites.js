@@ -694,6 +694,30 @@ export function drawFirework(ctx, x, y, t, seed) {
   if (cycle > 0.85) return;
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; rect(ctx, x + Math.round(Math.cos(a) * r), y + Math.round(Math.sin(a) * r), 1, 1, c); }
 }
+// Album-set rewards. A lava lamp (4×9) whose blobs rise and fall.
+export function drawLavaLamp(ctx, x, y, t) {
+  rect(ctx, x + 1, y, 2, 1, "#9aa3b8");
+  rect(ctx, x, y + 1, 4, 5, "#4a2378"); rect(ctx, x, y + 1, 1, 5, "#5d2f94");
+  const k = Math.floor((t || 0) / 520) % 8, a = k < 4 ? k : 7 - k, b = 3 - a;
+  rect(ctx, x + 1, y + 1 + a, 2, 2, "#ff7ac8"); rect(ctx, x + 2, y + 2 + b, 1, 1, "#ffb3e0");
+  rect(ctx, x, y + 6, 4, 2, "#7d8496"); rect(ctx, x - 1, y + 8, 6, 1, "#5d6476");
+}
+// The golden duck (7×5), with a glint now and then.
+export function drawGoldDuck(ctx, x, y, t) {
+  rect(ctx, x + 3, y, 3, 2, "#ffcf3a"); rect(ctx, x + 6, y + 1, 1, 1, "#e09a2a"); rect(ctx, x + 4, y, 1, 1, "#5e3b24");
+  rect(ctx, x, y + 2, 6, 3, "#ffcf3a"); rect(ctx, x, y + 1, 1, 1, "#ffcf3a"); rect(ctx, x + 1, y + 4, 5, 1, "#d99a1a");
+  if (Math.floor((t || 0) / 250) % 12 === 0) rect(ctx, x + 2, y + 2, 1, 1, "#fff6c8");
+}
+// A flying saucer (13×6) with a flickering beam when `beam`.
+export function drawUfo(ctx, x, y, t, beam) {
+  if (beam) { ctx.globalAlpha = 0.22; for (let i = 0; i < 14; i++) rect(ctx, x + 4 - Math.floor(i / 3), y + 6 + i, 5 + 2 * Math.floor(i / 3), 1, "#7fdbe6"); ctx.globalAlpha = 1; }
+  rect(ctx, x + 4, y, 5, 2, "#7fdbe6"); rect(ctx, x + 5, y, 2, 1, "#d8f6fa");
+  rect(ctx, x + 1, y + 2, 11, 2, "#c9cdd8"); rect(ctx, x, y + 3, 13, 1, "#9aa3b8"); rect(ctx, x + 2, y + 4, 9, 1, "#7d8496");
+  for (let i = 0; i < 4; i++) rect(ctx, x + 2 + i * 3, y + 3, 1, 1, Math.floor((t || 0) / 200 + i) % 2 ? "#ffd24a" : "#ff7ac8");
+}
+
+// Gift wrapping by where a gift came from (a seat's gifts wear that seat's colour).
+export const GIFT_BOX = { daily: "#e8475a", swap: "#7d5cff", goals: "#e0a92a", office: "#18a39a", week: "#ff7a45" };
 // A gift box about 11 wide and 11 tall at (x, y): wrapped in `color` with a light ribbon and a bow. Now and then it
 // hops, so it is easy to spot; `seed` keeps several boxes out of step.
 export function drawGift(ctx, x, y, color, ribbon, t, seed = 0) {

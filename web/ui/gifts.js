@@ -8,18 +8,45 @@ export const KEEP_S = 24 * 3600;       // an unopened gift goes back after a day
 export const CHANCE = 0.45;            // a report's chance of a gift…
 export const PITY = 3;                 // …but never three reports in a row without one
 export const SWAP = 5;                 // spares for one rare-or-better gift
+export const HAPPY_CHANCE = 0.9;       // during the day's happy hour
+export const GRANT_ROOM = 2;           // earned-for-sure gifts (goals, level-ups) may go this far over the cap
+
+// The day's happy hour: half an hour between 11:00 and 17:30 local time, the same for every tab on a given day.
+export function happyHourFor(day) {
+  let h = 2166136261;
+  for (const ch of "happy|" + day) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const slot = h % 14;                 // 11:00, 11:30, … 17:30
+  return { hour: 11 + Math.floor(slot / 2), minute: (slot % 2) * 30, minutes: 30 };
+}
+export function happyNow(d = new Date()) {
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const hh = happyHourFor(day), start = new Date(d); start.setHours(hh.hour, hh.minute, 0, 0);
+  const end = new Date(start.getTime() + hh.minutes * 60000);
+  return { on: d >= start && d < end, start, end, left: Math.max(0, Math.ceil((end - d) / 60000)) };
+}
 
 const ORDER = Object.keys(RARITY);
 
-export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, rand = Math.random }) {
+// The album sets: finishing every sticker of a rarity puts something on the floor.
+export const SETS = {
+  common: { name: "Sticker wall", desc: "Stickers all over the lobby's back wall." },
+  rare: { name: "Lava lamps", desc: "A lava lamp on every desk." },
+  epic: { name: "Close encounters", desc: "A UFO crosses the sky now and then." },
+  legendary: { name: "The golden duck", desc: "The golden duck sits on the CEO's desk." },
+};
+export function setsDone(album) {
+  return new Set(Object.keys(RARITY).filter(k => STICKERS.filter(s => s.rarity === k).every(s => album[s.id])));
+}
+
+export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, rand = Math.random, happy = () => false }) {
   const mem = new Map();
   const get = (k, d) => (demo ? (mem.has(k) ? mem.get(k) : d) : store.get(k, d));
   const set = (k, v) => (demo ? mem.set(k, v) : store.set(k, v));
   const waiting = () => get("gifts", []).filter(g => now() - g.at < KEEP_S);
   let seq = 0;
-  const add = (g) => {
+  const add = (g, room = 0) => {
     const list = waiting();
-    if (list.length >= MAX_WAITING) return null;
+    if (list.length >= MAX_WAITING + room) return null;
     const gift = { id: Math.floor(now() * 1000).toString(36) + "-" + (seq++).toString(36), at: now(), ...g };
     set("gifts", [...list, gift]);
     return gift;
@@ -29,14 +56,18 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
 
   return {
     waiting, album, spares,
+    // The demo's ?stickers=all: a full album, in memory, to show what the sets put on the floor.
+    fillDemo() { if (demo) set("album", Object.fromEntries(STICKERS.map(s => [s.id, { n: 1, first: now() }]))); },
     // A report or a finished lane: maybe a gift from that seat.
     earn(seat, from = "report") {
       if (waiting().length >= MAX_WAITING) return null;
       const miss = get("giftMiss", 0);
-      if (miss + 1 < PITY && rand() >= CHANCE) { set("giftMiss", miss + 1); return null; }
+      if (miss + 1 < PITY && rand() >= (happy() ? HAPPY_CHANCE : CHANCE)) { set("giftMiss", miss + 1); return null; }
       set("giftMiss", 0);
       return add({ seat, from });
     },
+    // A gift earned for sure: all goals done, a level up, a big combo. `min` lifts the rarity.
+    grant(seat, from, min) { return add({ seat, from, ...(min ? { min } : {}) }, GRANT_ROOM); },
     // The first visit of a local day: a morning delivery at the CEO desk.
     daily(day) {
       if (get("giftDay", "") === day) return null;

@@ -113,7 +113,7 @@ const office = createOffice($("stage"), {
   openNews: () => go({ kind: "news" }),
   openTrophies: () => go({ kind: "trophies" }),
   openStats: () => setView("stats"),
-  onCat: () => sound.play("arrive"),
+  onCat: () => { sound.play("purr"); if (!DEMO) badge(bump("pets", 10, "cat_person")); },
   onDouble: () => { clearTimeout(panelScroll); clearTimeout(revealT); },
   onPeek: (id, r) => floor.peekCard(id, r),
   onRoomMenu: (id, x, y, el) => floor.roomMenu(id, x, y, el),
@@ -212,7 +212,7 @@ function tour() {
 }
 
 const floor = makeFloor({ app, office, panels, replay, prefs, QS, DEMO, go, setView, badge: (b) => badge(b), award, zoomNow });
-const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView, badge: (b) => badge(b), award, onAlbum: () => openAlbum() });
+const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView, prefs, forceHappy: QS.has("happy"), fullAlbum: QS.get("stickers") === "all", badge: (b) => badge(b), award, onAlbum: () => openAlbum() });
 app.gifts = giftBox;
 // "Your office", scrolled to the sticker album.
 function openAlbum() { go({ kind: "office" }); requestAnimationFrame(() => { const a = document.getElementById("album"); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }); }
@@ -367,6 +367,7 @@ function cheerGoals(st) {
     fresh.forEach(g => goalsSeen.ids.add(g.id));
     const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
     if (prefs.view === "floor") fxNow().banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
+    if (all) giftBox.grant(null, "goals", "rare");
     sound.play(all ? "levelup" : "achievement");
     toast(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
   }
@@ -461,7 +462,7 @@ function onNews(e) {
       fx.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
       if (lvl && seat && prefs.view === "floor") fx.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
       if (who) fx.sayAtSeat(e.seat, line(who, e.kind), 6500);
-      if (lvl) teammateReacts(e, "levelup");
+      if (lvl) { teammateReacts(e, "levelup"); giftBox.grant(e.seat, "levelup"); }
       sound.play(e.kind);
       toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
       notify(lvl ? "Level up" : "Achievement unlocked", text);
@@ -495,6 +496,7 @@ function cheerWeekly() {
   sound.play("levelup");
   toast(`Record week: ${w.have} reports, beating last week's ${w.last}.`, "good", { ic: "flame", ms: 7000 });
   badge(award("record_week"));
+  giftBox.grant(null, "week", "epic");
 }
 
 // The visit streak: days in a row this browser has opened the office (a flame by the level chip from two days on).
@@ -556,6 +558,7 @@ function comboHit(e) {
   combo.best = Math.max(combo.best, combo.n);
   store.set("combo", combo);
   if (combo.n >= 3 && !DEMO) badge(award("hot_streak"));
+  if (combo.n === 3 || combo.n === 5) giftBox.grant(e.seat, "combo");
   if (combo.n >= 2) {
     setTimeout(() => sound.play("combo", combo.n), 700);
     const word = combo.n >= 5 ? "Unstoppable!" : combo.n >= 4 ? "On fire!" : combo.n >= 3 ? "Hot streak!" : "Combo!";
@@ -642,6 +645,7 @@ function renderOfficeLevel() {
     if (prefs.view === "floor") fxNow().banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
     sound.play("levelup");
     toast(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
+    giftBox.grant(null, "office", "epic");
   }
   if (ol.level > olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }   // only rises: a dip never re-celebrates
 }
