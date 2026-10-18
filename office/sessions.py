@@ -286,6 +286,11 @@ def step_kind(name: str, inp, screen: str | None) -> str | None:
     return None
 
 
+def _trust(report_status, tr):
+    from .trust import trust_of                  # (trust.py imports this module)
+    return trust_of(report_status, tr.test_ok, tr.test_at, tr.edit_at)
+
+
 def phase_of(steps: list[str], test_ok) -> str | None:
     """Where a session is in its work, from its last steps: exploring, building, testing, debugging or wrapping up."""
     if not steps:
@@ -345,7 +350,7 @@ class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
                  "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context",
-                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at", "risks", "steps")
+                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at", "risks", "steps", "edit_at")
 
     def __init__(self, path: Path):
         self.path = path
@@ -383,6 +388,7 @@ class TranscriptState:
         self.test_at = None
         self.risks: list[dict] = []    # risky tool calls (risk.py): {"id", "ts", "rule", "text"}, the last 20
         self.steps: list[str] = []     # the last main-chain tool calls by kind (step_kind), for its phase
+        self.edit_at = None            # its last code change (a main-chain edit), for trust.py
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -499,6 +505,8 @@ class TranscriptState:
                     if sk:
                         self.steps.append(sk)
                         del self.steps[:-10]
+                    if sk == "edit":
+                        self.edit_at = ts or self.edit_at
                 self._push(ts, text, kind)
             elif c.get("type") == "text" and isinstance(c.get("text"), str) and c["text"].strip() and not d.get("isSidechain"):
                 self.last_text = _short(c["text"], 400)
@@ -789,6 +797,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "test_ok": tr.test_ok if tr else None,
             "risks": list(tr.risks[-5:]) if tr else [],
             "phase": phase_of(tr.steps, tr.test_ok) if tr and state in ("working", "waiting") else None,
+            "trust": _trust(report_status, tr) if tr and report_status else None,
             "loop": {"text": redact(tr.repeat[2]), "count": tr.repeat[1], "since": tr.repeat[3]} if tr and tr.repeat and tr.repeat[1] >= 5 else None,
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,

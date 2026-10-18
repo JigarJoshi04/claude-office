@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.104.0] - 2026-10-19
+
+### Added
+- Trust check on reports. When a session or lane reports DONE (or READY, COMPLETE, SHIPPED…), the office compares the
+  claim with its own transcript: its last test run passed after its last code change is Verified; failed is
+  Contradicted; no test run seen, or code changed after the last pass, is Unverified. The verdict and why show above
+  the report on the session and lane pages and on the lane list, the report news says it, and a Contradicted claim
+  lands in Needs you for 12 hours (opening the lane when its session has gone). No AI; verdicts are kept in
+  `state/trust.json`.
+
 ## [3.103.0] - 2026-10-19
 
 ### Fixed

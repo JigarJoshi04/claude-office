@@ -100,7 +100,7 @@ export function makePanels(app) {
     const backlog = (S().lanes || []).filter(x => x.status === "scheduled" && x.schedule && x.schedule.backlog).sort((a, b) => (a.schedule.order || 0) - (b.schedule.order || 0));
     const when = l.status === "scheduled" && l.schedule ? (l.schedule.backlog ? ` · in the backlog, ${ordinal((l.backlog_pos ?? backlog.indexOf(l)) + 1)} in line` : l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
     return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop", scheduled: "calendar", interrupted: "alert" }[l.status] || "briefcase", 16)}</span>
-      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status === "stopped" && l.stopped_reason === "time budget" ? "stopped at its time limit" : l.status)}${when}${l.deadline && ["running", "starting", "waiting"].includes(l.status) ? ` · until ${esc(clock(l.deadline))}` : !l.deadline && l.max_minutes && l.status !== "stopped" ? ` · ${l.max_minutes} min limit` : ""}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
+      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status === "stopped" && l.stopped_reason === "time budget" ? "stopped at its time limit" : l.status)}${when}${l.deadline && ["running", "starting", "waiting"].includes(l.status) ? ` · until ${esc(clock(l.deadline))}` : !l.deadline && l.max_minutes && l.status !== "stopped" ? ` · ${l.max_minutes} min limit` : ""}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}${l.trust ? ` · <span class="t-${l.trust.level}">${TRUST_WORD[l.trust.level]}</span>` : ""}</div></div></div>`;
   }
 
   // ---------------------------------------------------------------------------------------- briefing
@@ -271,6 +271,9 @@ export function makePanels(app) {
         <p class="hint">${a.demo ? "Demo answer: nothing was read." : `Read from its transcript by the analyst${a.cached ? " (from the cache)" : a.tokens ? `, ${fmtTok(a.tokens)} tokens` : ""}. The session was not told.`}</p>`;
     return `${form}<div class="about-ans${a.error ? " err" : ""}"><button class="btn sm ghost icon" data-ask-x aria-label="Clear the answer">${icon("x", 14)}</button>${body}</div>`;
   }
+  // A report's claim against its own last test run (trust.py): Verified, Unverified or Contradicted, and why.
+  const TRUST_WORD = { verified: "Verified", unverified: "Unverified", contradicted: "Contradicted" };
+  const trustChip = (v) => v ? `<div class="trust t-${v.level}" title="From its transcript: its last test run against its last code change">${icon(v.level === "verified" ? "check" : v.level === "contradicted" ? "x" : "alert", 14)}<b>${TRUST_WORD[v.level]}</b><span>${esc(v.why)}</span></div>` : "";
   const PHASE_ICON = { exploring: "search", building: "tool", testing: "target", debugging: "bug", "wrapping up": "send" };
   // One fix per kind of problem, so every item in Needs you has a next step.
   function needAction(a) {
@@ -300,7 +303,7 @@ export function makePanels(app) {
   function needs(snap) {
     const out = [], spent = new Map(), nearly = new Map();
     for (const a of snap.attention || []) {
-      if (a.ask || a.ci || a.review || a.risk || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
+      if (a.ask || a.ci || a.review || a.risk || a.trust || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
       const st = a.seat && seatById(a.seat);
       const planItem = /usage at \d+%|stopped by the usage limit|runs out of its/i.test(a.text);
       // A seat close to its limit says so once: "Orion has 1% of its 5-hour window left, out in ~2 min".
@@ -806,7 +809,7 @@ export function makePanels(app) {
         <ul class="tasklist">${x.tasks.items.map(t => `<li class="${t.status}">${icon(t.status === "completed" ? "check" : t.status === "in_progress" ? "play" : "dot", 14)}<span>${priv(x, t.subject)}</span>${t.status === "in_progress" ? `<em>now</em>` : ""}</li>`).join("")}</ul>
         ${x.tasks.total > x.tasks.items.length ? `<div class="hint">and ${x.tasks.total - x.tasks.items.length} more</div>` : ""}`) : ""}
       ${x.state_file ? section("Progress notes", d && d.state_tail ? `<pre class="pre">${esc(d.state_tail)}</pre>` : `<div class="hint">${d ? "Empty so far." : "Loading…"}</div>`) : ""}
-      ${x.report_status ? section("Report", d && d.report ? `<div class="doc md">${md(d.report)}</div>` : `<div class="quote">${esc(x.report_status)}</div>`, d && d.report ? `<button class="btn sm ghost" data-copy="${esc(d.report)}">${icon("copy", 14)}Copy</button>` : "") : ""}
+      ${x.report_status ? section("Report", trustChip(x.trust) + (d && d.report ? `<div class="doc md">${md(d.report)}</div>` : `<div class="quote">${esc(x.report_status)}</div>`), d && d.report ? `<button class="btn sm ghost" data-copy="${esc(d.report)}">${icon("copy", 14)}Copy</button>` : "") : ""}
       ${section("Burn", `<div class="tiles"><div class="tile"><div class="v">${fmtTok(t1.fresh)}</div><div class="tk">fresh tokens, last hour</div></div>
         <div class="tile"><div class="v">${fmtTok(t5.fresh)}</div><div class="tk">last 5 hours</div></div><div class="tile"><div class="v">${x.tool_calls ?? "–"}</div><div class="tk">tool calls</div></div></div>
         ${burnWhyHtml(x)}`)}
@@ -1174,7 +1177,7 @@ export function makePanels(app) {
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
         ${running || scheduled ? `<button class="btn sm ghost" data-remind="${esc(JSON.stringify(["lane_end", l.id, `when lane '${l.title}' ends`]))}">${icon("bell", 14)}Remind me when it ends</button>` : ""}
       </div>
-      ${l.report_status ? section("Report", `<div class="doc md">${md((d && d.report) || l.report_status)}</div>`, `<button class="btn sm ghost" data-copy="${esc((d && d.report) || l.report_status)}">${icon("copy", 14)}Copy</button>`) : ""}
+      ${l.report_status ? section("Report", `${trustChip(l.trust)}<div class="doc md">${md((d && d.report) || l.report_status)}</div>`, `<button class="btn sm ghost" data-copy="${esc((d && d.report) || l.report_status)}">${icon("copy", 14)}Copy</button>`) : ""}
       ${section("Progress notes", `<div class="doc md">${md((d && d.state) || l.state_tail || "Nothing yet.")}</div>`)}
       ${section("Runs", runs.length ? runs.slice().reverse().map(r => `<div class="act ${r.ended_by === "limit" ? "warn" : r.rc === 0 ? "good" : r.rc == null ? "" : "bad"}">${icon(r.ended_by === "limit" ? "sleep" : r.rc === 0 ? "check" : r.rc == null ? "play" : "alert", 16)}<span>${esc(nameOf(r.seat))}${r.rc != null ? ` · exit ${r.rc}` : " · running"}${r.ended_by ? " · hit its limit, moved on" : ""}</span><span class="when">${clock(r.started_at)}</span></div>`).join("") : `<div class="muted">Not started yet.</div>`)}
       ${section("Brief", `<div class="quote">${esc(d ? d.brief : "")}</div>`)}

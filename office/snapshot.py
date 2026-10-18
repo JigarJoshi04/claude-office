@@ -17,7 +17,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, brain, cabinet, checkpoint, config, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, weeks
+from . import asks, brain, cabinet, checkpoint, config, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, trust, weeks
 from .career import CATALOGUE, Career
 from .presence import Presence
 from .reminders import Reminders
@@ -49,6 +49,8 @@ def attention_key(a: dict) -> str:
         return "ask:" + a["ask"]
     if a.get("interrupted"):
         return "interrupted:"
+    if a.get("trust"):                                    # a claim its transcript contradicts (before its lane's own items)
+        return f"trust:{a['trust']}"
     if a.get("lane"):                                     # waiting for a seat and failed are two things to snooze
         return f"lane:{a['lane']}:{a.get('status') or ''}"
     if a.get("unit"):
@@ -302,6 +304,7 @@ class Office(LiveOffice):
         self.quiet = Quiet(config.STATE_DIR / "quiet.json")
         self.risk_seen = risk.Seen(config.STATE_DIR / "risks-seen.json")
         self.brain = brain.Brain(config.STATE_DIR / "ai")                 # the opt-in analyst (brain.py)
+        self.trust = trust.Store(config.STATE_DIR / "trust.json")         # reports' claims against their transcripts
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -371,7 +374,13 @@ class Office(LiveOffice):
                     if x.get("report_status") and not psess[sid].get("report_status") and sid not in self._reported:
                         self._reported.add(sid)
                         lvl = "warn" if sessions.report_blocked(x["report_status"]) else "good"
-                        self.emit("report", f"{x['name']} filed its report: {x['report_status']}", s["id"], lvl)
+                        v = x.get("trust")                   # its claim against its own last test run (trust.py)
+                        if v:
+                            self.trust.put(sid, dict(v, at=cur["now"], name=x["name"], seat=s["id"], lane=x.get("lane_id")))
+                            if v["level"] == "contradicted":
+                                lvl = "warn"
+                        self.emit("report", f"{x['name']} filed its report: {x['report_status']}"
+                                  + (f" ({trust.WORDS[v['level']]}: {v['why']})" if v else ""), s["id"], lvl)
             for sid, x in psess.items():
                 if sid not in csess:
                     self.emit("leave", f"{x['name']} left {s['label']}", s["id"])
@@ -496,7 +505,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.103.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.104.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg)},
@@ -521,6 +530,7 @@ class Office(LiveOffice):
                 x["spent"] = self.tokens.spent([x["id"]]) if s.get("kind") == "claude" else None
         for l in lane_list:
             sids = [r.get("session_id") for r in l.get("runs") or [] if r.get("session_id")]
+            l["trust"] = next((v for v in (self.trust.get(x) for x in reversed(sids)) if v), None) if l.get("report_status") else None
             l["spent"] = self.tokens.spent(sids) if sids else None
             l["shipped"] = self.tokens.shipped_for(sids) if sids else None
         snap["office"]["shipped_today"] = (self.tokens.shipped_on(time.strftime("%Y-%m-%d", time.localtime(now)), {s["id"] for s in seats_out},
@@ -535,6 +545,7 @@ class Office(LiveOffice):
                     self._ghost_said[s["id"]] = now
                     self.emit("ghost", f"{s['label']}'s 5-hour use rose {s['ghost']['rise']:.0f}% in {s['ghost']['minutes']} min with nothing running on this machine", s["id"], "warn")
         snap["asks"] = self.asks.view(30)
+        snap["contradicted"] = [dict(v, session=k) for k, v in self.trust.recent(now - 12 * 3600) if v.get("level") == "contradicted"]
         snap["attention"] = self._attention(snap)
         quiet = self.quiet.get()                          # snoozed items wait; do not disturb is on every screen
         snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > now)
@@ -594,6 +605,11 @@ class Office(LiveOffice):
                 items.append({"level": "warn", "seat": a.get("seat"), "ask": a["id"],
                               "text": f"{who}{' on ' + labels[a['seat']] if a.get('seat') in labels else ''} asks: {a['text'][:140]}"})
         mute = set((snap.get("office") or {}).get("risk_mute") or ())
+        live_ids = {x.get("id") for s in snap.get("seats", []) for x in s.get("sessions", []) if x.get("live", True)}
+        for v in snap.get("contradicted") or []:             # said it was done, but its last test run failed (trust.py)
+            items.append({"level": "warn", "seat": v.get("seat"), "session": v["session"] if v["session"] in live_ids else None,
+                          "lane": None if v["session"] in live_ids else v.get("lane"), "trust": v["session"],
+                          "text": f"{v.get('name') or 'A session'}{' on ' + labels[v['seat']] if v.get('seat') in labels else ''} says it is done, but {v['why']}"})
         reviewed = set()                                     # one review item per PR, however many desks share its branch
         for s in snap["seats"]:
             label = s["label"]

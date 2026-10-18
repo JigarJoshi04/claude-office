@@ -54,6 +54,7 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "tokens_5h": {"fresh": tokens * 3, "cached": tokens * 90, "turns": tokens // 1300},
         "cpu_s": 312.0, "state_file": "/home/you/work/handover/L12-STATE.md" if kind == "lane" else None,
         "report_file": None, "report_status": report, "transcript": None,
+        "trust": ({"level": "verified", "why": "its tests passed after its last change"} if report and "BLOCKED" not in report else None),
         "resume_cmd": f"CLAUDE_CONFIG_DIR=~/.{seat} claude --resume {sid}", "live": True,
         "cache": _demo_cache(sid, state, now),
         "tasks": _demo_tasks(sid, now),
@@ -479,6 +480,7 @@ class DemoOffice(LiveOffice):
              "status": "done", "seat": "claude4", "runs": [{"seat": "claude3", "started_at": now - 13900, "rc": 1, "ended_by": "limit"},
                                                           {"seat": "claude4", "started_at": now - 12000, "rc": 0}],
              "unit": "office-lane-1016-101500-weekly-dependency-bump", "report_status": "STATUS: DONE - 14 packages bumped, PR #480",
+             "trust": {"level": "verified", "why": "its tests passed after its last change"},
              "state_tail": None, "unit_active": False},
         ]
         lanes.append({"id": "1016-150000-nightly-flake-hunt", "title": "Nightly flake hunt", "workdir": "/home/you/work/apollo",
@@ -504,7 +506,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.103.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.104.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096}},
@@ -515,6 +517,8 @@ class DemoOffice(LiveOffice):
         snap["office"]["shipped_today"] = {"day": time.strftime("%Y-%m-%d"), "commits": c, "prs_opened": o, "prs_merged": m,
                                            "seats": {k: list(v) for k, v in self._ship_seats.items()}}
         snap["asks"] = self.asks.view(30)
+        snap["contradicted"] = [{"session": "d-old", "seat": "claude3", "lane": "1016-031200-migrate-the-billing-tables", "name": "billing-migration",
+                                 "level": "contradicted", "why": "its last test run failed", "at": now - 1800}]
         snap["attention"] = Office._attention(snap)
         if not hasattr(self, "quiet"):
             from .snapshot import Quiet

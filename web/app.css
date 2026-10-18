@@ -1689,3 +1689,8 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .ph { font-weight: 600; } .ph-exploring { color: #7cb7ff; } .ph-building { color: var(--accent-2); } .ph-testing { color: #ffc24b; }
 .ph-debugging { color: #ff6b7a; } .ph-wrapping-up { color: #3ddc84; }
 .pill.ph { background: var(--surface-2); }
+/* trust.py: a report's claim against its transcript. */
+.trust { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; }
+.trust span { color: var(--muted); }
+.trust.t-verified svg, .t-verified { color: var(--good); } .trust.t-unverified svg, .t-unverified { color: var(--warn); }
+.trust.t-contradicted svg, .t-contradicted { color: var(--bad); } .trust.t-contradicted { box-shadow: inset 3px 0 0 var(--bad); }
