@@ -61,7 +61,7 @@ function tree(c, x, y, t, lights) {
 export function drawSeason(c, L, season, t, night, lights) {
   if (!season || !L) return;
   if (season === "halloween") {
-    pumpkin(c, 72, WALL + 14, t, night, lights); pumpkin(c, 168, WALL + 14, t, night, lights);
+    pumpkin(c, 8, WALL + 46, t, night, lights); pumpkin(c, 142, WALL + 14, t, night, lights);   // clear of the palms, the TV and the carpet
     for (const p of L.pods) pumpkin(c, p.room.x + 8, p.room.y + p.room.h - 46, t, night, lights);   // above the nameplate
     for (let i = 0; i < 3; i++) {                    // a few bats flutter over the corridors
       const cy = L.corridors[i % L.corridors.length], k = ((t / 9000) + i / 3) % 1;

@@ -44,7 +44,7 @@ export function goals(st) {
 // browser only (a per-viewer nicety), as "YYYY-MM-DD" strings.
 export function streak(days, today) {
   const have = new Set(days || []);
-  const step = (d, n) => { const t = new Date(d + "T12:00:00"); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
+  const step = (d, n) => { const t = new Date(d + "T12:00:00"); t.setDate(t.getDate() + n); return localDay(t); };
   let d = have.has(today) ? today : step(today, -1), n = 0;
   while (have.has(d)) { n++; d = step(d, -1); }
   return n;
@@ -61,4 +61,9 @@ export function weekly(days) {
   const known = lastWeek.filter(d => d.sessions || d.reports || d.active_min).length;
   if (known < 3) return { calibrating: true, week: thisWeek[0].day, known };   // too little of last week on record to beat
   return { week: thisWeek[0].day, have, target, last, f: Math.min(1, have / target), done: have >= target, daysLeft: 6 - dow };
+}
+
+// "YYYY-MM-DD" in local time (toISOString is UTC, a day off east of UTC+12 and west of UTC−12).
+export function localDay(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }

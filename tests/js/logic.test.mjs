@@ -29,7 +29,7 @@ test("unlocks are ordered and unique", () => {
 });
 
 test("each day draws three different goals, the same for everyone", () => {
-  const days = Array.from({ length: 60 }, (_, i) => new Date(Date.UTC(2026, 9, 1 + i)).toISOString().slice(0, 10));
+  const days = Array.from({ length: 60 }, (_, i) => new Date(Date.UTC(2026, 9, 1 + i)).toISOString().slice(0, 10));   // just labels: any time zone
   const seen = new Set();
   for (const d of days) {
     const g = goalsFor(d);
@@ -132,7 +132,7 @@ test("banter is two filled-in lines that fit the moment", async () => {
 
 test("the weekly challenge beats last week by 10%, Monday to Sunday", async () => {
   const { weekly } = await import("../../web/ui/goals.js");
-  const mk = (end, n, reports) => Array.from({ length: n }, (_, i) => { const d = new Date(end + "T12:00:00"); d.setDate(d.getDate() - (n - 1 - i)); return { day: d.toISOString().slice(0, 10), reports: reports(d), sessions: 1 }; });
+  const mk = (end, n, reports) => Array.from({ length: n }, (_, i) => { const d = new Date(end + "T12:00:00"); d.setDate(d.getDate() - (n - 1 - i)); return { day: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`, reports: reports(d), sessions: 1 }; });
   assert.equal(weekly(mk("2026-10-18", 7, () => 1)), null);
   const w = weekly(mk("2026-10-14", 14, (d) => d.getDate() <= 11 ? 4 : 10));   // Wednesday 14 Oct; last week Mon 5 – Sun 11
   assert.equal(w.week, "2026-10-12");

@@ -232,7 +232,8 @@ function peekCard(id, r) {
   // The card is zoomed with the text size: measure it on screen, then give left/top in its own (zoomed) pixels.
   const z = zoomNow(), box = peekEl.getBoundingClientRect(), w = box.width, h = box.height, gap = 10;
   let left = r.right + gap; if (left + w > innerWidth - 8) left = r.left - w - gap; if (left < 8) left = Math.min(innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2));
-  const top = Math.max(8, Math.min(innerHeight - h - 10, r.top + r.height / 2 - h / 2));
+  const minTop = document.body.classList.contains("tv") ? 62 * z : 8;   // below TV mode's status strip
+  const top = Math.max(minTop, Math.min(innerHeight - h - 10, r.top + r.height / 2 - h / 2));
   peekEl.style.left = Math.max(8, left) / z + "px"; peekEl.style.top = top / z + "px";
 }
 addEventListener("scroll", () => { peekEl.hidden = true; }, { passive: true, capture: true });
@@ -247,7 +248,7 @@ function tvTour() {
   tvAt = (tvAt + 1) % seats.length;
   const s = seats[tvAt], el = document.querySelector(`.hot.pod[data-k="pod:${CSS.escape(s.id)}"]`);
   office.spotlight(s.id);
-  if (el) peekCard(s.id, el.getBoundingClientRect());
+  if (el && !replay.active()) peekCard(s.id, el.getBoundingClientRect()); else peekCard(null);   // live cards never sit on a replayed floor
   const hud = document.querySelector(".tv-hud .tv-line");
   if (hud) hud.textContent = $("pulseText").textContent;
   tvTicker();
@@ -455,7 +456,7 @@ function cheerGoals(st) {
   if (fresh.length) {   // one celebration per refresh, however many goals finished in it
     fresh.forEach(g => goalsSeen.ids.add(g.id));
     const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
-    if (prefs.view === "floor") office.banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
+    if (prefs.view === "floor") fxNow().banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
     sound.play(all ? "levelup" : "achievement");
     toast(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
   }
@@ -483,7 +484,7 @@ function apply(next) {
 // awake and not the one the news is about, and never more than one reaction at a time.
 let lastReaction = 0;
 function teammateReacts(e, kind) {
-  if (!snap || Date.now() - lastReaction < 8000) return;
+  if (!snap || replay.active() || Date.now() - lastReaction < 8000) return;
   const about = snap.seats.find(s => s.id === e.seat);
   if (!about) return;
   const mates = snap.seats.filter(s => s.id !== e.seat && !["limited", "offline", "benched"].includes(s.status) && live(s).length);
@@ -512,7 +513,10 @@ setInterval(() => {
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
 }, 45000);
 
+const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {} };
+const fxNow = () => (replay.active() ? NOFX : office);   // floor effects for live news: none while replaying
 function onNews(e) {
+  const fx = replay.active() ? NOFX : office;     // while replaying, the floor shows the past: live news only toasts
   const key = e.ts + "|" + e.text;
   if (seenNews.has(key)) return;
   seenNews.add(key);
@@ -526,23 +530,23 @@ function onNews(e) {
     case "report": {
       const ok = e.level === "good";
       const sid = findSessionByText(e.text);
-      if (ok) { lastReport = Date.now(); office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); comboHit(e); }
+      if (ok) { lastReport = Date.now(); fx.celebrate(e.seat, sid, "Shipped!"); if (who) fx.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); comboHit(e); }
       else sound.play("bad");
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
       break;
     }
-    case "limit": office.alarm(e.seat, "Out of plan"); if (who) office.sayAtSeat(e.seat, line(who, "limit"), 8000); teammateReacts(e, "limit"); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;
-    case "login": office.alarm(e.seat, "Logged out"); sound.play("bad"); toast(text, "bad"); notify("Seat logged out", text); break;
+    case "limit": fx.alarm(e.seat, "Out of plan"); if (who) fx.sayAtSeat(e.seat, line(who, "limit"), 8000); teammateReacts(e, "limit"); sound.play("limit"); toast(text, "warn"); notify("Usage limit", text); break;
+    case "login": fx.alarm(e.seat, "Logged out"); sound.play("bad"); toast(text, "bad"); notify("Seat logged out", text); break;
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
-    case "reset": toast(text, "good"); office.celebrate(e.seat, null, "Fresh plan!"); sound.play("arrive"); if (who) office.sayAtSeat(e.seat, line(who, "reset"), 6000); break;
-    case "stuck": if (who) office.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
+    case "reset": toast(text, "good"); fx.celebrate(e.seat, null, "Fresh plan!"); sound.play("arrive"); if (who) fx.sayAtSeat(e.seat, line(who, "reset"), 6000); break;
+    case "stuck": if (who) fx.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
     case "levelup":
     case "achievement": {
       const lvl = e.kind === "levelup";
       const what = lvl ? (text.match(/level (\d+)/) || [])[1] : text.split(" unlocked ")[1];
-      office.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
-      if (lvl && seat && prefs.view === "floor") office.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
-      if (who) office.sayAtSeat(e.seat, line(who, e.kind), 6500);
+      fx.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
+      if (lvl && seat && prefs.view === "floor") fx.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
+      if (who) fx.sayAtSeat(e.seat, line(who, e.kind), 6500);
       if (lvl) teammateReacts(e, "levelup");
       sound.play(e.kind);
       toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
@@ -551,7 +555,7 @@ function onNews(e) {
     }
     case "reply": sound.play("arrive"); toast(text, "good"); notify("A session replied", text); for (const k of chats.keys()) chats.get(k).at = 0; break;
     case "lane":
-      if (e.level === "good") { office.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); comboHit(e); }
+      if (e.level === "good") { fx.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); }
       else if (e.level === "bad") { sound.play("bad"); notify("Office lane failed", text); }
       if (e.level !== "info") toast(text, e.level);
       break;
@@ -573,7 +577,7 @@ function cheerWeekly() {
   const seen = store.get("weeklyDone", "");
   if (seen === w.week) return;
   store.set("weeklyDone", w.week);
-  if (prefs.view === "floor") office.banner("Record week!", `${w.have} reports: you beat last week's ${w.last}`, "#ff7a45");
+  if (prefs.view === "floor") fxNow().banner("Record week!", `${w.have} reports: you beat last week's ${w.last}`, "#ff7a45");
   sound.play("levelup");
   toast(`Record week: ${w.have} reports, beating last week's ${w.last}.`, "good", { ic: "flame", ms: 7000 });
   badge(award("record_week"));
@@ -619,7 +623,7 @@ function comboHit(e) {
   if (combo.n >= 2) {
     setTimeout(() => sound.play("combo", combo.n), 700);
     const word = combo.n >= 5 ? "Unstoppable!" : combo.n >= 4 ? "On fire!" : combo.n >= 3 ? "Hot streak!" : "Combo!";
-    if (combo.n >= 3 && prefs.view === "floor") office.banner(`Combo ×${combo.n}`, word + (best ? " A new best today." : ""), "#ff7a45");
+    if (combo.n >= 3 && prefs.view === "floor") fxNow().banner(`Combo ×${combo.n}`, word + (best ? " A new best today." : ""), "#ff7a45");
     toast(`Combo ×${combo.n}: ${word}`, "good", { ic: "flame", ms: 4500 });
   }
   renderCombo();
@@ -698,12 +702,12 @@ function renderOfficeLevel() {
   b.setAttribute("aria-label", b.title);
   if (olSeen && ol.level > olSeen) {
     const got = UNLOCKS_BY_LEVEL(olSeen, ol.level);
-    for (const s of snap.seats) office.celebrate(s.id, null, "Level up!");     // confetti in every room
-    if (prefs.view === "floor") office.banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
+    for (const s of snap.seats) fxNow().celebrate(s.id, null, "Level up!");     // confetti in every room
+    if (prefs.view === "floor") fxNow().banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
     sound.play("levelup");
     toast(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
   }
-  if (ol.level !== olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }
+  if (ol.level > olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }   // only rises: a dip never re-celebrates
 }
 $("officeLvl").addEventListener("click", () => go({ kind: "office" }));
 
@@ -835,7 +839,7 @@ async function shareDay() {
   $("dialogBody").innerHTML = `<div class="dh"><b>Today's card</b><button class="btn sm ghost" id="dcClose" aria-label="Close">${icon("x", 16)}</button></div>
     <div class="db"><img class="daycard" src="${url}" alt="A card of today's work: reports, hours, tool calls, the employee of the day, goals and the team">
     <p class="hint" style="margin:10px 0 0">Only character names, levels and counts: no session names, topics or accounts.</p>
-    <div class="row" style="margin-top:14px;gap:8px"><button class="btn primary" id="dcSave">${icon("copy", 15)}Save PNG</button><button class="btn" id="dcCopy">${icon("copy", 15)}Copy image</button></div></div>`;
+    <div class="row" style="margin-top:14px;gap:8px"><button class="btn primary" id="dcSave">${icon("file", 15)}Save PNG</button><button class="btn" id="dcCopy">${icon("copy", 15)}Copy image</button></div></div>`;
   $("dialog").classList.add("wide"); $("dialog").showModal();
   $("dialog").addEventListener("close", () => $("dialog").classList.remove("wide"), { once: true });
   $("dcClose").addEventListener("click", () => $("dialog").close());
@@ -909,6 +913,7 @@ function openMenu(focusItem) {
 // ------------------------------------------------------------------------------------------------ views
 function setView(v) {
   if (!["floor", "timeline", "board", "stats"].includes(v)) v = "floor";
+  if (v !== "floor" && document.body.classList.contains("tv")) setTv(false);   // TV mode is the floor alone
   if (v !== "floor" && typeof replay !== "undefined" && replay.active()) replay.close();   // replay lives on the floor
   mainDrawn.delete(v);
   setPref("view", v);

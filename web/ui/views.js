@@ -3,6 +3,7 @@ import { esc, fmtTok, live, hydratePortraits, avatar, dayTime, STATE_LABEL, cloc
 import { timeline, bindTips } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, leftOf, voice, diary } from "./personas.js";
+import { localDay } from "./goals.js";
 
 export function renderTimeline(el, app) {
   const hours = app.prefs().tlHours || 6;
@@ -60,7 +61,7 @@ export function renderStats(el, app) {
   const maxMin = Math.max(1, ...rows.map(r => r.active_min));
   const mvpSeat = st.mvp && seatOf(st.mvp.seat);
   const o = st.office || {};
-  const shift = (n) => { const d = new Date((st.day || new Date().toISOString().slice(0, 10)) + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  const shift = (n) => { const d = new Date((st.day || localDay()) + "T12:00:00"); d.setDate(d.getDate() + n); return localDay(d); };
   const now = new Date(), todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const human = (t) => { let x = String(t); for (const s of snap.seats) { const n = nameOf(s.id); if (n !== s.label) x = x.replace(new RegExp(`\\b${s.label}\\b`, "g"), n); } return x; };
   const hours = Math.round(rows.reduce((a, r) => a + r.active_min, 0) / 6) / 10;
@@ -154,7 +155,7 @@ function weekFacts(app, last) {
 function bindWeek(el, app) {
   el.querySelectorAll("[data-week-metric]").forEach(b => b.addEventListener("click", () => { app.setPref("weekMetric", b.dataset.weekMetric); renderStats(el, app); }));
   el.querySelectorAll("[data-week-day]").forEach(g => {
-    const open = () => { const d = g.dataset.weekDay, today = new Date().toISOString().slice(0, 10); const day = d === app.weekCache().slice(-1)[0].day ? null : d; app.setPref("statsDay", day); app.loadStats(day, true); };
+    const open = () => { const d = g.dataset.weekDay, day = d === app.weekCache().slice(-1)[0].day ? null : d; app.setPref("statsDay", day); app.loadStats(day, true); };
     g.addEventListener("click", open);
     g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
   });

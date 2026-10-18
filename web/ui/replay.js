@@ -30,7 +30,7 @@ export function makeReplay(app, office, frame) {
     }).filter(Boolean);
     const seats = live.seats.map(s => {
       const r = rowAt(s.id), sessions = sessionsAt(s.id), u = s.usage || {};
-      const win = (w, pct) => pct == null ? w || null : { ...(w || {}), pct, resets_at: null, reset_since_read: false };
+      const win = (w, pct) => ({ ...(w || {}), pct: pct ?? null, resets_at: null, reset_since_read: false });   // history's number, or unknown
       const usage = { ...u, five_hour: win(u.five_hour, r ? r[1] : null), weekly: win(u.weekly, r ? r[2] : null) };
       const status = s.status === "benched" || s.status === "offline" ? s.status
         : r && r[1] != null && r[1] >= 100 ? "limited"
@@ -54,13 +54,16 @@ export function makeReplay(app, office, frame) {
     }
   }
 
+  const when = (ts) => { const d = new Date(ts * 1000), y = new Date(); y.setDate(y.getDate() - 1);
+    return (d.toDateString() === y.toDateString() ? "yesterday " : "") + clock(ts); };
   function render() {
+    office.setClock(t);
     office.update(snapAt(t));
     if (!bar) return;
     const span = hist.now - hist.from;
     bar.querySelector(".rp-range").value = String(Math.round(((t - hist.from) / span) * 1000));
-    bar.querySelector(".rp-time").textContent = clock(t);
-    frame.querySelector(".rp-badge b").textContent = clock(t);
+    bar.querySelector(".rp-time").textContent = when(t);
+    frame.querySelector(".rp-badge b").textContent = when(t);
     const btn = bar.querySelector("[data-rp-play]");
     btn.innerHTML = icon(playing ? "pause" : "play", 16); btn.setAttribute("aria-label", playing ? "Pause" : "Play"); btn.title = playing ? "Pause (space)" : "Play (space)";
   }
@@ -85,11 +88,14 @@ export function makeReplay(app, office, frame) {
     bar.className = "replay"; bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Replay");
     bar.innerHTML = `<button class="rp-btn" data-rp-play aria-label="Play"></button>
       <div class="rp-speed" role="group" aria-label="Speed">${SPEEDS.map(v => `<button data-rp-speed="${v}" class="${v === speed ? "on" : ""}">${v}×</button>`).join("")}</div>
-      <div class="rp-track"><div class="rp-ticks">${ticks}</div><input class="rp-range" type="range" min="0" max="1000" step="1" aria-label="Time"><div class="rp-ends"><span>${esc(clock(hist.from))}</span><span>now</span></div></div>
+      <div class="rp-track"><div class="rp-ticks">${ticks}</div><input class="rp-range" type="range" min="0" max="1000" step="1" aria-label="Time"><div class="rp-ends"><span>${esc(when(hist.from))}</span><span>now</span></div></div>
       <span class="rp-time"></span>
       <button class="rp-btn rp-live" data-rp-close title="Back to live (Esc)">${icon("x", 15)}Live</button>
       <div class="rp-news" aria-live="polite"></div>`;
-    frame.appendChild(bar);
+    // On the desktop shell the bar floats over the floor (the building re-plans above it); on stacked layouts it sits
+    // under the floor, so it never covers the camera buttons.
+    if (matchMedia("(min-width: 1241px) and (min-height: 640px)").matches || document.body.classList.contains("tv")) frame.appendChild(bar);
+    else { bar.classList.add("below"); frame.after(bar); }
     const badge = document.createElement("div");
     badge.className = "rp-badge"; badge.innerHTML = `<i></i>Replay <b></b>`;
     frame.appendChild(badge);
@@ -98,15 +104,22 @@ export function makeReplay(app, office, frame) {
       speed = +b.dataset.rpSpeed; bar.querySelectorAll("[data-rp-speed]").forEach(x => x.classList.toggle("on", x === b));
     }));
     const range = bar.querySelector(".rp-range");
-    range.addEventListener("input", () => { pause(); t = hist.from + (+range.value / 1000) * (hist.now - hist.from); office.reset(); render(); });   // a jump: no walking
+    range.addEventListener("input", () => { t = hist.from + (+range.value / 1000) * (hist.now - hist.from); pause(); office.reset(); render(); });   // a jump: no walking
     bar.querySelector("[data-rp-close]").addEventListener("click", close);
-    bar.addEventListener("keydown", (e) => {
+    bar.addEventListener("keydown", (e) => {   // the scrubber is an input, so the page's own keys do not reach it
       if (e.key === " " && e.target === range) { e.preventDefault(); playing ? pause() : play(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+      else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && e.target === range) { e.preventDefault(); e.stopPropagation(); api.step(e.key === "ArrowLeft" ? -5 : 5); }
     });
   }
 
+  let opening = false;
   async function open(hours = 6) {
-    if (hist) return;
+    if (hist || opening) return;
+    opening = true;
+    try { await load(hours); } finally { opening = false; }
+  }
+  async function load(hours) {
     try {
       const r = await fetch(`/api/history?hours=${hours}`);
       if (!r.ok) throw new Error("HTTP " + r.status);
@@ -133,14 +146,16 @@ export function makeReplay(app, office, frame) {
     if (bar) { bar.remove(); bar = null; }
     const badge = frame.querySelector(".rp-badge"); if (badge) badge.remove();
     frame.classList.remove("replaying");
+    office.setClock(null);
     office.setWalkBoost(1);
     office.reset();
     if (app.snap()) office.update(app.snap());
   }
-  return {
+  const api = {
     open, close,
     active: () => !!hist,
     toggle: () => (hist ? (playing ? pause() : play()) : null),
     step: (min) => { if (!hist) return; pause(); t = Math.max(hist.from, Math.min(hist.now, t + min * 60)); office.reset(); render(); },
   };
+  return api;
 }

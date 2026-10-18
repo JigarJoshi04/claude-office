@@ -61,6 +61,7 @@ export function createOffice(stage, handlers) {
   let spot = null;
   let skyKey = "";
   let walkBoost = 1;
+  let clockAt = null;                  // replay's time (seconds), or null for now
   let seasonal = true;                 // Settings → Seasonal decorations                   // replay speeds walking up so arrivals reach their desks in replay time                     // a seat being pointed at in the inspector or on the floor: its room lights up
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
@@ -213,7 +214,7 @@ export function createOffice(stage, handlers) {
     ctx.setTransform(RES, 0, 0, RES, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bg, 0, 0, W, H);
-    const now = new Date();
+    const now = clockAt ? new Date(clockAt * 1000) : new Date();   // replay shows its own time of day
     const env = skyFor(now);
     if (env.sky[0] !== skyKey) { skyKey = env.sky[0]; stage.style.setProperty("--sky-a", env.sky[0]); stage.style.setProperty("--sky-b", env.sky[1]); stage.dataset.sky = env.night ? "night" : "day"; }   // the backdrop's sky
     const lights = [];
@@ -1029,6 +1030,7 @@ export function createOffice(stage, handlers) {
     spotlight(id) { spot = id || null; },
     setSeasonal(on) { seasonal = !!on; },
     season: () => (seasonal ? seasonFor(new Date()) : null),
+    setClock(ts) { clockAt = ts || null; },
     setWalkBoost(k) { walkBoost = Math.max(1, Math.min(8, k || 1)); },
     // The next update seats everyone where they belong at once (no walking in or out): for jumps in time (replay).
     reset() { for (const a of agents.values()) if (a.tagEl) a.tagEl.remove(); agents.clear(); leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; }); fresh.clear(); first = true; },

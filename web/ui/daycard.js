@@ -32,7 +32,7 @@ export async function dayCard({ snap, stats, persona, goalDays }) {
   // heading
   g.textBaseline = "alphabetic";
   g.font = "40px Silkscreen, monospace"; g.fillStyle = "#ffd8fb"; g.shadowColor = "#ff4fd8"; g.shadowBlur = 16;
-  g.fillText((snap.office.name || "Claude Office").toUpperCase(), 60, 92); g.shadowBlur = 0;
+  g.fillText(fit(g, (snap.office.name || "Claude Office").toUpperCase(), W - 300), 60, 92); g.shadowBlur = 0;
   g.font = "500 22px Inter, sans-serif"; g.fillStyle = "#a1a7bc";
   g.fillText(`My AI team's day · ${day.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}`, 60, 130);
 
@@ -62,7 +62,7 @@ export async function dayCard({ snap, stats, persona, goalDays }) {
   g.fillStyle = "#ffd24a"; g.font = "700 13px Inter, sans-serif"; g.fillText("EMPLOYEE OF THE DAY", mx + 20, my + 30);
   if (mvpSeat) {
     g.imageSmoothingEnabled = false; g.drawImage(portrait("mascot-" + mvpSeat.id, mvpSeat.color, { scale: 5, crown: true }), mx + 18, my + 40);
-    g.fillStyle = "#ffffff"; g.font = "700 26px Inter, sans-serif"; g.fillText(persona(mvpSeat).name, mx + 88, my + 72);
+    g.fillStyle = "#ffffff"; g.font = "700 26px Inter, sans-serif"; g.fillText(fit(g, persona(mvpSeat).name, 160), mx + 88, my + 72);
     g.fillStyle = "#c6cad8"; g.font = "500 15px Inter, sans-serif"; wrap(g, (stats.mvp.why || "").replace(/^\w/, ch => ch.toUpperCase()), mx + 88, my + 96, 160, 18, 2);
   } else { g.fillStyle = "#a1a7bc"; g.font = "500 17px Inter, sans-serif"; g.fillText("Nobody yet today.", mx + 20, my + 72); }
 
@@ -83,13 +83,19 @@ export async function dayCard({ snap, stats, persona, goalDays }) {
 
   // the team
   g.font = "700 15px Inter, sans-serif"; g.fillStyle = "#a1a7bc"; g.fillText("THE TEAM", 60, 438);
-  const team = snap.seats.slice(0, 6);
+  const more = snap.seats.length > 6 ? snap.seats.length - 5 : 0, team = snap.seats.slice(0, more ? 5 : 6);
+  if (more) {                                         // a seventh seat and beyond fold into one card
+    const x = 60 + 5 * 180, y = 452;
+    g.fillStyle = "rgba(255,255,255,0.05)"; roundRect(g, x, y, 174, 74, 14); g.fill();
+    g.fillStyle = "#ffffff"; g.font = "800 26px Inter, sans-serif"; g.fillText(`+${more}`, x + 20, y + 44);
+    g.fillStyle = "#a1a7bc"; g.font = "500 14px Inter, sans-serif"; g.fillText("more on the team", x + 72, y + 42);
+  }
   team.forEach((s, i) => {
     const x = 60 + i * 180, y = 452, p = persona(s);
     g.fillStyle = "rgba(255,255,255,0.05)"; roundRect(g, x, y, 174, 74, 14); g.fill();
     g.fillStyle = s.color; roundRect(g, x, y, 5, 74, 3); g.fill();
     g.imageSmoothingEnabled = false; g.drawImage(portrait("mascot-" + s.id, s.color, { scale: 4, dim: false }), x + 14, y + 10);
-    g.fillStyle = "#ffffff"; g.font = "700 18px Inter, sans-serif"; g.fillText(p.name, x + 66, y + 32);
+    g.fillStyle = "#ffffff"; g.font = "700 18px Inter, sans-serif"; g.fillText(fit(g, p.name, 100), x + 66, y + 32);
     const st = seats[s.id] || {};
     g.fillStyle = "#a1a7bc"; g.font = "500 14px Inter, sans-serif";
     const n = st.reports || 0;
@@ -101,6 +107,13 @@ export async function dayCard({ snap, stats, persona, goalDays }) {
   return c;
 }
 
+// The text, shortened with an ellipsis to fit maxW at the current font.
+function fit(g, text, maxW) {
+  if (g.measureText(text).width <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && g.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+  return t + "…";
+}
 function roundRect(g, x, y, w, h, r) {
   g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
 }

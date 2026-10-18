@@ -175,7 +175,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 .pod-sign.st-offline { opacity: .5; }
 .plate { position: absolute; display: grid; gap: calc(1.8px * var(--f)); padding: calc(2.6px * var(--f)) calc(3.6px * var(--f)) calc(2.8px * var(--f)); border-radius: calc(3.4px * var(--f));
   background: rgba(10,12,22,.9); color: #eef0f6; border: 0; box-shadow: 0 0 0 calc(.4px * var(--f)) rgba(255,255,255,.12), 0 calc(2px * var(--f)) calc(6px * var(--f)) rgba(0,0,0,.35);
-  cursor: pointer; text-align: left; font: 500 max(11px, calc(5.8px * var(--f)))/1.2 Inter, sans-serif; backdrop-filter: blur(3px); }
+  cursor: pointer; text-align: left; font: 500 max(calc(11px * var(--ui-zoom, 1)), calc(5.8px * var(--f)))/1.2 Inter, sans-serif; backdrop-filter: blur(3px); }   /* never smaller than the chosen text size */
 .plate:hover, .plate.sel { box-shadow: 0 0 0 calc(.7px * var(--f)) var(--seat), 0 0 calc(9px * var(--f)) color-mix(in srgb, var(--seat) 55%, transparent); }
 .plate .pl-line { display: flex; justify-content: space-between; align-items: center; gap: calc(2.4px * var(--f)); white-space: nowrap; overflow: hidden; }
 .plate .pl-line b { font-weight: 750; font-size: 1.12em; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: calc(1.8px * var(--f)); letter-spacing: -.01em; }
@@ -886,7 +886,7 @@ body.tv .peek { width: 340px; }
 @media (min-width: 1241px) and (min-height: 640px) { #viewFloor .floor-frame.replaying { padding-bottom: calc(108px * var(--ui-zoom, 1)); } }   /* the building re-plans above the bar */
 .floor-frame.replaying .replay { bottom: 0; }
 @media (min-width: 1241px) and (min-height: 640px) { .floor-frame.replaying .cam { bottom: calc(120px * var(--ui-zoom, 1)); } }
-@media (max-width: 1240px), (max-height: 639px) { .floor-frame.replaying .replay { position: relative; left: 0; translate: none; width: 100%; margin-top: 10px; } }
+.replay.below { position: relative; left: 0; translate: none; width: 100%; margin-top: 10px; bottom: auto; }
 @media (max-width: 760px) {
   .replay { grid-template-columns: auto 1fr auto auto; gap: 8px; padding: 10px; }
   .replay .rp-track { grid-column: 1 / -1; grid-row: 2; }
@@ -1031,3 +1031,20 @@ body.tv .peek { width: 340px; }
 .weekly.done .wk-ic { color: #1d1203; background: #ff9b3d; }
 .weekly.done .wk-bar i { background: linear-gradient(90deg, #ff9b3d, #ffd24a); }
 .weekly.calib .wk-ic { color: var(--muted); background: var(--surface-3); }
+
+/* replay and the combo with the TV strips and on phones */
+.floor-frame.replaying .combo { display: none; }                  /* the combo is live news; replay is the past */
+.rp-badge { top: auto; bottom: 14px; }                              /* off the neon sign: bottom-left of the floor */
+.floor-frame.replaying .rp-badge { bottom: 118px; }   /* zoomed elements: offsets are in their own (zoomed) pixels */
+@media (max-width: 1240px), (max-height: 639px) { .floor-frame.replaying .rp-badge { bottom: 14px; } }
+body.tv .combo { top: 68px; }
+body.tv .floor-frame.replaying .replay { bottom: 52px; }                       /* above the news ticker */
+body.tv #viewFloor .floor-frame.replaying { padding-bottom: calc(156px * var(--ui-zoom, 1)); }   /* the building re-plans above both */
+body.tv .floor-frame.replaying .rp-badge { bottom: 170px; }
+body.tv .cam { bottom: calc(56px * var(--ui-zoom, 1)); }
+body.tv .floor-frame.replaying .cam { bottom: calc(170px * var(--ui-zoom, 1)); }
+@media (max-width: 760px) {
+  .combo { right: 8px; top: 8px; min-width: 0; padding: 5px 9px 7px 8px; gap: 1px 7px; }
+  .combo .cb-x { font-size: 17px; } .combo .cb-w small { display: none; }
+  .tv-hud { gap: 10px; padding: 0 10px; } .tv-hud .tv-brand { display: none; } .tv-hud .tv-line { font-size: 13px; } .tv-hud .tv-clock { font-size: 15px; }
+}
