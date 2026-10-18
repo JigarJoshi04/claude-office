@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.83.0] - 2026-10-19
+
+### Added
+- The seat failover walk: when a lane's seat runs out and the lane moves to another seat, its worker waits by the
+  old chair, picks up a box and walks down the corridors (and the spine, between rows) to the new room, saying
+  where it is going, instead of leaving by the elevator and someone new walking in. If the lane comes back on the
+  same seat, the worker sits back down; if it does not come back within 45 seconds, the worker leaves as before.
+
 ## [3.82.0] - 2026-10-19
 
 ### Added

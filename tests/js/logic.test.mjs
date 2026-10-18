@@ -479,3 +479,16 @@ test("the mailroom keeps promised gifts over its cap, and waits read in whole mi
   assert.equal(waitFor(7170), "2 h 00 min");                              // never "1 h 60 min"
   assert.equal(waitFor(45), "45 s");
 });
+
+test("a lane worker's walk to another seat stays on corridors and doors, never via the elevator", async () => {
+  const { computeLayout, planFor, pathBetween, ELEVATOR, SPINE_X } = await import("../../web/engine/scene.js");
+  const seats = ["a", "b", "c", "d", "e"].map((id, i) => ({ id, label: id, color: "#888", sessions: [], kind: "claude", status: "idle" }));
+  const L = computeLayout(seats, () => null, planFor(5, 1440, 900));
+  const [p0, p1] = [L.pods[0], L.pods[L.pods.length - 1]];
+  const path = pathBetween(L, p0, 0, p1, 0);
+  assert.ok(path.length >= 4);
+  assert.ok(!path.some(([x, y]) => x === ELEVATOR.x + 8 && y === ELEVATOR.y + 18), "never through the elevator");
+  if (p0.corr !== p1.corr) assert.ok(path.some(([x]) => x === SPINE_X), "along the spine between rows");
+  const same = pathBetween(L, L.pods[0], 0, L.pods[1], 0);
+  if (L.pods[0].corr === L.pods[1].corr) assert.ok(!same.some(([x]) => x === SPINE_X), "same corridor: no detour by the spine");
+});

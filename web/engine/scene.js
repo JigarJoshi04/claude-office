@@ -86,6 +86,17 @@ export function deskFor(pod) {
     gaps: xs.slice(1).map((x, i) => pod.x + (xs[i] + 10 + x) / 2) };   // spaces between neighbours, for desk things
 }
 
+// From one seat to another without the elevator: out of room A by its door, along its corridor (and the spine to the
+// other corridor when the rooms are on different rows), in by room B's door, to the seat (walker top-left coords).
+export function pathBetween(layout, podA, slotA, podB, slotB) {
+  const a = pathTo(layout, podA, slotA).reverse(), b = pathTo(layout, podB, slotB);
+  const doorA = a.findIndex(p => p[0] === podA.door.x - 5 && p[1] === podA.corr - 2);
+  const doorB = b.findIndex(p => p[0] === podB.door.x - 5 && p[1] === podB.corr - 2);
+  const spine = podA.corr === podB.corr ? [] : [[SPINE_X, podA.corr - 2], [SPINE_X, podB.corr - 2]];
+  return [...a.slice(0, doorA + 1), ...spine, ...b.slice(doorB)]
+    .filter((p, i, all) => i === 0 || p[0] !== all[i - 1][0] || p[1] !== all[i - 1][1]);
+}
+
 // Elevator → lobby walkway → spine → the room's corridor → its door → an aisle → the seat (walker top-left coords).
 export function pathTo(layout, pod, slot) {
   const sp = seatSpot(pod, slot), room = pod.room;

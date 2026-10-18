@@ -1,7 +1,7 @@
 // The office floor engine: a pixel canvas rendered at a whole-number scale, a DOM overlay for names, bubbles
 // and click targets, a camera you can zoom and pan, agents that walk in from the elevator, and night lighting.
 import * as S from "./engine/sprites.js";
-import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, drawStatic, capFor, deskFor } from "./engine/scene.js";
+import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, pathBetween, drawStatic, capFor, deskFor } from "./engine/scene.js";
 import { windowRect, drawDecorLive } from "./engine/decor.js";
 import { officeLevel } from "./engine/unlocks.js";
 import { seasonFor, drawSeason, drawSnow } from "./engine/season.js";
@@ -127,7 +127,21 @@ export function createOffice(stage, handlers) {
         let slot = 0; while (taken.has(slot)) slot++;
         taken.add(slot);
         const look = S.lookFor(x.id, pod.seat.color);
-        if (!a) {
+        const held = !a && x.lane_id && leavers.find(l => l.hold && l.sess.lane_id === x.lane_id);
+        const mover = held && held.seatId !== pod.seat.id ? held : null;
+        if (held && !mover) {            // the lane came back on the same seat: its worker sits back down
+          leavers = leavers.filter(l => l !== held);
+          if (held.tagEl) held.tagEl.remove();
+          a = { id: x.id, seatId: pod.seat.id, slot, sess: x, pod, look: held.look, mode: "seated", x: 0, y: 0, path: [], facing: "down" };
+          agents.set(x.id, a);
+        } else if (mover) {                     // the lane moved seats (its old one hit a limit): its worker carries the box over
+          leavers = leavers.filter(l => l !== mover);
+          if (mover.tagEl) mover.tagEl.remove();
+          const p = pathBetween(L, mover.pod, mover.slot, pod, slot);
+          a = { id: x.id, seatId: pod.seat.id, slot, sess: x, pod, look: mover.look, mode: "walking", x: p[0][0], y: p[0][1], path: p.slice(1), facing: "down", carry: true, color: mover.pod.seat.color };
+          if (persona && game === "full") said.set(x.id, { text: `Moving to ${persona(pod.seat).name}'s desk.`, until: performance.now() + 9000, at: performance.now() });
+          agents.set(x.id, a);
+        } else if (!a) {
           a = { id: x.id, seatId: pod.seat.id, slot, sess: x, pod, look, mode: "seated", x: 0, y: 0, path: [], facing: "down" };
           if (!first && !reduced) {      // a new arrival walks in from the elevator
             const p = pathTo(L, pod, slot);
@@ -145,7 +159,9 @@ export function createOffice(stage, handlers) {
       if (a.mode === "seated" && !reduced) {      // walk out to the elevator, from the chair they were in
         const p = pathTo(L, a.pod, a.slot).reverse();
         const sp = a.was || seatSpot(a.pod, a.slot);
-        leavers.push({ ...a, mode: "leaving", x: sp.cx + (sp.shown || 0), y: sp.standY, path: p.slice(1), gone: false, tagEl: null });
+        // A lane's worker waits by the chair for a while: if the lane comes back on another seat, they move over there.
+        const hold = a.sess && a.sess.lane_id && !first ? performance.now() + 45000 : 0;
+        leavers.push({ ...a, mode: "leaving", x: sp.cx + (sp.shown || 0), y: sp.standY, path: p.slice(1), gone: false, tagEl: null, hold });
       }
     }
   }
@@ -198,8 +214,9 @@ export function createOffice(stage, handlers) {
     if (L) for (const p of L.pods) if (p.targetY != null && p.y !== p.targetY) { p.y += (p.targetY - p.y) * k; if (Math.abs(p.targetY - p.y) < 0.3) p.y = p.targetY; }
     const move = (a) => walkStep(a, dt);
     let settled = false;
-    for (const a of agents.values()) if (a.mode === "walking" && move(a)) { a.mode = "seated"; settled = true; }
-    for (const a of leavers) if (move(a)) { a.gone = true; openElevator(); }
+    for (const a of agents.values()) if (a.mode === "walking" && move(a)) { a.mode = "seated"; a.carry = false; settled = true; }
+    const now = performance.now();
+    for (const a of leavers) if (!(a.hold && now < a.hold) && move(a)) { a.gone = true; openElevator(); }   // a held worker stays put
     if (leavers.some(a => a.gone)) { leavers.filter(a => a.gone && a.tagEl).forEach(a => a.tagEl.remove()); leavers = leavers.filter(a => !a.gone); settled = true; }
     for (const c of couriers) {
       if (!walkStep(c, dt)) continue;
@@ -314,8 +331,8 @@ export function createOffice(stage, handlers) {
     drawGifts(t);
     const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers, ...couriers].sort((a, b) => a.y - b.y);
     for (const a of walkers) {
-      S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
-      if (a.phase === "in") { S.rect(ctx, a.x + 2, a.y + 8, 7, 5, a.color); S.rect(ctx, a.x + 5, a.y + 8, 1, 5, "#ffd24a"); S.rect(ctx, a.x + 2, a.y + 8, 7, 1, "#ffffff"); }   // the box in both hands
+      S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, !(a.hold && performance.now() < a.hold));   // a held worker stands still
+      if (a.phase === "in" || a.carry) { S.rect(ctx, a.x + 2, a.y + 8, 7, 5, a.color); S.rect(ctx, a.x + 5, a.y + 8, 1, 5, "#ffd24a"); S.rect(ctx, a.x + 2, a.y + 8, 7, 1, "#ffffff"); }   // the box in both hands
     }
     S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
     if (cat.mode === "sleep") S.drawZ(ctx, cat.x + 8, cat.y - 2, t);
