@@ -148,6 +148,9 @@ export function createOffice(stage, handlers) {
   }
   function openElevator() { elevator.until = performance.now() + 1600; }
 
+  let onScreen = true;                 // the floor is visible (another view or a hidden tab skips painting)
+  new IntersectionObserver((en) => { onScreen = en[0].isIntersecting; }).observe(stage);
+  function walkingNow() { for (const a of agents.values()) if (a.mode === "walking") return true; return false; }
   function stepAgents(dt) {
     const move = (a) => {
       if (!a.path.length) return true;
@@ -870,10 +873,13 @@ export function createOffice(stage, handlers) {
   function loop(t) {
     const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
     if (snap && L) {
-      if (applyCam(false)) { clearTimeout(reresTimer); reresTimer = setTimeout(() => reres(false), 160); }
+      const moving = applyCam(false);
+      if (moving) { clearTimeout(reresTimer); reresTimer = setTimeout(() => reres(false), 160); }
       stepAgents(dt); stepParticles(dt); stepCat(dt, t);
-      const every = reduced ? 250 : RES <= 2 ? 33 : RES <= 4 ? 50 : 66;   // big canvases draw a little less often
-      if (t - lastDraw >= every) { drawFrame(t); lastDraw = t; }
+      // Full speed while something moves (walkers, confetti, the camera, the cat); a calm floor needs ~15 frames a second.
+      const lively = moving || particles.length || pops.length || leavers.length || cat.mode === "walk" || spot || walkingNow();
+      const every = reduced ? 250 : lively ? (RES <= 2 ? 33 : RES <= 4 ? 50 : 66) : (RES <= 2 ? 66 : 90);
+      if (t - lastDraw >= every && onScreen) { drawFrame(t); lastDraw = t; }   // nothing to paint while the floor is hidden
       moveDynamicDom();
       if (Math.floor(t / 1000) !== lastSec) {
         lastSec = Math.floor(t / 1000);

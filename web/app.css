@@ -179,9 +179,13 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 .plate .bar.mid i { background: #ffc24b; } .plate .bar.low i { background: #ff5566; }
 .plate .pl-need { position: absolute; top: calc(-3px * var(--f)); left: calc(-3px * var(--f)); min-width: max(16px, calc(6px * var(--f))); height: max(16px, calc(6px * var(--f)));
   display: grid; place-items: center; padding: 0 3px; border-radius: 99px; font: 800 max(10px, calc(4px * var(--f)))/1 Inter, sans-serif; color: #1d1203; background: #ffc24b;
-  box-shadow: 0 0 0 calc(.5px * var(--f)) rgba(10,12,22,.9), 0 0 calc(6px * var(--f)) rgba(255,194,75,.8); animation: needpulse 1.6s ease-in-out infinite; }
-@keyframes needpulse { 50% { box-shadow: 0 0 0 calc(.5px * var(--f)) rgba(10,12,22,.9), 0 0 calc(14px * var(--f)) rgba(255,194,75,.25); transform: scale(1.08); } }
-.plate.st-limited { box-shadow: 0 0 0 calc(.6px * var(--f)) #ff5566, 0 0 calc(10px * var(--f)) rgba(255,85,102,.6); animation: alarm 1.4s infinite alternate; }
+  box-shadow: 0 0 0 calc(.5px * var(--f)) rgba(10,12,22,.9); animation: needpulse 1.6s ease-in-out infinite; }
+.plate .pl-need::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; box-shadow: 0 0 calc(8px * var(--f)) rgba(255,194,75,.85); animation: needglow 1.6s ease-in-out infinite; }
+@keyframes needpulse { 50% { transform: scale(1.08); } }       /* compositor-only: no repaint per frame */
+@keyframes needglow { 50% { opacity: .25; } }
+.plate.st-limited { box-shadow: 0 0 0 calc(.6px * var(--f)) #ff5566; }
+.plate.st-limited::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: 0 0 calc(10px * var(--f)) rgba(255,85,102,.7); animation: alarmglow 1.4s infinite alternate; }
+@keyframes alarmglow { to { opacity: .25; } }
 @keyframes alarm { to { box-shadow: 0 0 0 calc(.6px * var(--f)) #ff5566, 0 0 calc(3px * var(--f)) rgba(255,85,102,.2); } }
 .hire-plate { text-align: center; justify-content: center; pointer-events: none; color: #a8f5d3; background: rgba(8,40,30,.88); box-shadow: 0 0 0 calc(.5px * var(--f)) rgba(63,224,160,.45);
   font-size: max(10px, calc(4.6px * var(--f))); font-weight: 650; padding: calc(1.4px * var(--f)) calc(3px * var(--f)); }
@@ -214,8 +218,8 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius
 @keyframes bannerin { 0% { transform: scaleY(0); opacity: 0; } 10% { transform: scaleY(1.06); opacity: 1; } 16% { transform: scaleY(1); } 82% { opacity: 1; } 100% { opacity: 0; transform: scaleY(.9); } }
 .pop.bad { color: #2a0509; background: linear-gradient(#ffc9cf, #ff6170); box-shadow: 0 0 calc(10px * var(--f)) rgba(255,85,102,.7); }
 @keyframes rise { 0% { transform: translate(-50%, -60%) scale(.5); opacity: 0; } 12% { transform: translate(-50%, -100%) scale(1.15); opacity: 1; } 22% { transform: translate(-50%, -100%) scale(1); } 80% { opacity: 1; } 100% { transform: translate(-50%, -240%); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .bubble, .pop, .neon, .plate.st-limited, .pulse .dot, .latest .txt, .plate .pl-need { animation: none; } }
-:root[data-motion="reduced"] .bubble, :root[data-motion="reduced"] .pop, :root[data-motion="reduced"] .neon, :root[data-motion="reduced"] .plate.st-limited { animation: none; }
+@media (prefers-reduced-motion: reduce) { .bubble, .pop, .neon, .plate.st-limited::after, .pulse .dot, .latest .txt, .plate .pl-need, .plate .pl-need::after { animation: none; } }
+:root[data-motion="reduced"] .bubble, :root[data-motion="reduced"] .pop, :root[data-motion="reduced"] .neon, :root[data-motion="reduced"] .plate.st-limited::after, :root[data-motion="reduced"] .plate .pl-need, :root[data-motion="reduced"] .plate .pl-need::after { animation: none; }
 
 /* ------------------------------------------------------------------------------------------ inspector */
 .panel { position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); scrollbar-width: thin; }
