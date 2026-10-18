@@ -549,7 +549,7 @@ export function makePanels(app) {
         <div class="hint" style="margin-top:6px">${x.quiet_s != null ? `Last sign of life ${dur(x.quiet_s)} ago.` : ""}${x.limit_text ? " " + esc(x.limit_text) : ""}</div>`)}
       ${x.title || x.task ? section("Working on", `${x.title ? `<div style="font-weight:600;margin-bottom:8px">${priv(x, x.title)}</div>` : ""}${x.task ? `<div class="quote">${priv(x, x.task)}</div>` : ""}`) : ""}
       ${x.state_file ? section("Progress notes", d && d.state_tail ? `<pre class="pre">${esc(d.state_tail)}</pre>` : `<div class="hint">${d ? "Empty so far." : "Loading…"}</div>`) : ""}
-      ${x.report_status ? section("Report", d && d.report ? `<pre class="pre">${esc(d.report)}</pre>` : `<div class="quote">${esc(x.report_status)}</div>`) : ""}
+      ${x.report_status ? section("Report", d && d.report ? `<div class="doc md">${md(d.report)}</div>` : `<div class="quote">${esc(x.report_status)}</div>`) : ""}
       ${section("Burn", `<div class="tiles"><div class="tile"><div class="v">${fmtTok(t1.fresh)}</div><div class="tk">fresh tokens, last hour</div></div>
         <div class="tile"><div class="v">${fmtTok(t5.fresh)}</div><div class="tk">last 5 hours</div></div><div class="tile"><div class="v">${x.tool_calls ?? "–"}</div><div class="tk">tool calls</div></div></div>`)}
       ${section("Details", `<dl class="facts">
@@ -661,8 +661,8 @@ export function makePanels(app) {
         <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">As before</option><option value="auto">Let the divider pick</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
       </div>
-      ${l.report_status ? section("Report", `<pre class="pre">${esc((d && d.report) || l.report_status)}</pre>`) : ""}
-      ${section("Progress notes", `<pre class="pre">${esc((d && d.state) || l.state_tail || "Nothing yet.")}</pre>`)}
+      ${l.report_status ? section("Report", `<div class="doc md">${md((d && d.report) || l.report_status)}</div>`) : ""}
+      ${section("Progress notes", `<div class="doc md">${md((d && d.state) || l.state_tail || "Nothing yet.")}</div>`)}
       ${section("Runs", runs.length ? runs.slice().reverse().map(r => `<div class="act ${r.ended_by === "limit" ? "warn" : r.rc === 0 ? "good" : r.rc == null ? "" : "bad"}">${icon(r.ended_by === "limit" ? "sleep" : r.rc === 0 ? "check" : r.rc == null ? "play" : "alert", 16)}<span>${esc(nameOf(r.seat))}${r.rc != null ? ` · exit ${r.rc}` : " · running"}${r.ended_by ? " · hit its limit, moved on" : ""}</span><span class="when">${clock(r.started_at)}</span></div>`).join("") : `<div class="muted">Not started yet.</div>`)}
       ${section("Brief", `<div class="quote">${esc(d ? d.brief : "")}</div>`)}
       ${section("Log", `<pre class="pre">${esc((d && d.log) || "")}</pre>`)}
