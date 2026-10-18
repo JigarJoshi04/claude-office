@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.81.0] - 2026-10-19
+
+### Added
+- Next up on the hiring desk: up to three lanes worth hiring, from what the office saw (a lane or a session that
+  reported BLOCKED, a lane that failed, a PR whose checks fail), each a ready brief in the folder it concerns. A
+  click fills the form and nothing starts until you hire; "Not now" hides one in this browser. Each desk's CI info
+  now carries the PR's title and branch.
+
 ## [3.80.0] - 2026-10-19
 
 ### Added

@@ -1196,6 +1196,8 @@ export function makePanels(app) {
     return { html: `${crumbs("Hiring desk")}
       <h2>Hire a lane</h2>
       <p class="lede">A lane is an agent that works in the background on one brief. It keeps notes, moves to another seat if its seat runs out of plan, and files a report when it is done.</p>
+      ${(() => { const nx = nextUp(); return nx.length ? section("Next up", `<div class="nextup">${nx.map((n, i) => `<span class="nx"><button data-next="${i}" title="${esc(n.why)}">${icon(n.ic, 16)}<span class="${app.privacy() ? "private" : ""}">${esc(n.title)}</span></button><button class="tpl-x" data-next-x="${esc(n.key)}" aria-label="Not now" title="Not now">${icon("x", 13)}</button></span>`).join("")}</div>
+        <p class="hint">From what the office saw: blocked reports, lanes that failed and PRs whose checks fail. A click fills the form; nothing starts until you hire.</p>`) : ""; })()}
       ${section("Start from a template", `<div class="templates">${myTemplates().map((t, i) => `<span class="tpl-mine"><button data-mytpl="${i}" title="${esc(t.title)}">${icon("star", 16)}${esc(t.name)}</button><button class="tpl-x" data-mytpl-del="${i}" aria-label="Delete the template ${esc(t.name)}" title="Delete">${icon("x", 13)}</button></span>`).join("")}${TEMPLATES.map((t, i) => `<button data-tpl="${i}">${icon(t.ic, 16)}${esc(t.name)}</button>`).join("")}</div>`)}
       ${section("The brief", `
         <label class="f">Title<input type="text" id="hTitle" maxlength="80" placeholder="e.g. Fix the flaky export test" value="${esc(d.title)}"></label>
@@ -1258,6 +1260,15 @@ export function makePanels(app) {
           list.unshift({ name, title: hireDraft.title, brief: hireDraft.brief });
           store.set("myTemplates", list.slice(0, 12)); app.rerender(true); toast(`Saved the template "${name}".`, "good");
         });
+        root.querySelectorAll("[data-next]").forEach(b => b.addEventListener("click", () => {
+          const n = nextUp()[+b.dataset.next]; if (!n) return; save();
+          if ((hireDraft.title.trim() || hireDraft.brief.trim()) && !confirm("Replace your title and brief with this suggestion?")) return;
+          hireDraft = { ...hireDraft, title: n.title, brief: n.brief, workdir: n.workdir || hireDraft.workdir }; store.set("hireDraft", hireDraft); app.rerender(true);
+          const ti = document.getElementById("hBrief"); if (ti) ti.focus();
+        }));
+        root.querySelectorAll("[data-next-x]").forEach(b => b.addEventListener("click", () => {
+          store.set("nextSkip", [...store.get("nextSkip", []), b.dataset.nextX].slice(-60)); app.rerender(true);
+        }));
         root.querySelectorAll("[data-tpl]").forEach(b => b.addEventListener("click", () => {
           const t = TEMPLATES[+b.dataset.tpl]; save();
           const mine = (hireDraft.title.trim() || hireDraft.brief.trim()) && !TEMPLATES.some(x => x.brief === hireDraft.brief);
@@ -1287,6 +1298,28 @@ export function makePanels(app) {
       } };
   }
   const UNFINISHED = ["scheduled", "queued", "starting", "running", "waiting", "interrupted"];   // lanes.UNFINISHED, and the cut-off ones
+  // Next up: lanes worth hiring, from what the office saw (blocked reports, failed lanes, PRs whose checks fail), as
+  // ready briefs in the folder they concern. Three at most; "Not now" hides one in this browser.
+  function nextUp() {
+    const skip = new Set(store.get("nextSkip", [])), out = [], seen = new Set();
+    const add = (n) => { if (!skip.has(n.key) && !seen.has(n.key) && n.workdir !== undefined) { seen.add(n.key); out.push(n); } };
+    for (const l of S().lanes || []) {
+      if (l.status === "blocked" && l.report_status) add({ key: "lane-blocked:" + l.id, ic: "alert", title: `Unblock: ${l.title}`.slice(0, 80), workdir: l.workdir || "",
+        why: `Lane '${l.title}' reported: ${l.report_status}`,
+        brief: `The office lane "${l.title}" stopped with this report:\n\n${l.report_status}\n\nRead its REPORT.md and STATE.md in this folder, find what blocks it and fix that. If you need a decision from the CEO, ask with \`python3 -m office ask\` and keep going on what you can.` });
+      if (l.status === "failed") add({ key: "lane-failed:" + l.id, ic: "refresh", title: `Retry: ${l.title}`.slice(0, 80), workdir: l.workdir || "",
+        why: `Lane '${l.title}' failed${l.error ? ": " + l.error : ""}`, brief: `The office lane "${l.title}" failed before it finished. Read its notes in this folder (STATE.md, lane.log), work out why, and finish the job it was given.` });
+    }
+    for (const st of S().seats) for (const x of st.sessions || []) {
+      if (x.live === false) continue;
+      if (x.ci && x.ci.checks === "fail") add({ key: "ci:" + x.ci.number, ic: "x", title: `Fix the checks on PR #${x.ci.number}`, workdir: x.cwd || "",
+        why: `PR #${x.ci.number}'s checks fail on ${x.ci.branch || "its branch"}`,
+        brief: `Pull request #${x.ci.number}${x.ci.title ? ` ("${x.ci.title}")` : ""} has failing checks. Read them with \`gh pr checks ${x.ci.number}\` and the failing job's log, fix the cause on its branch, push, and confirm the checks pass.` });
+      if (x.report_status && /^[\W\d_]*(?:STATUS\W*)?BLOCKED\b/i.test(x.report_status)) add({ key: "session-blocked:" + x.id, ic: "alert", title: `Unblock: ${x.name}`.slice(0, 80), workdir: x.cwd || "",
+        why: `${x.name} reported: ${x.report_status}`, brief: `The session "${x.name}" in this folder reported:\n\n${x.report_status}\n\nFind what blocks it and fix that, or say clearly what you need from the CEO.` });
+    }
+    return out.slice(0, 3);
+  }
   function laneListHtml() {
     const active = S().lanes.filter(l => UNFINISHED.includes(l.status)).length;
     return (active > 1 ? `<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn sm danger" data-stop-all>${icon("stop", 14)}Stop all ${active}</button></div>` : "")

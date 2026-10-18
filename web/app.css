@@ -1628,3 +1628,9 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .rem-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); margin-top: 6px; }
 .rem-row .grow { min-width: 0; } .rem-row b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rem-row small { display: block; font-size: 12px; color: var(--muted); }
+/* Next up on the hiring desk (panels.js nextUp) */
+.nextup { display: flex; flex-wrap: wrap; gap: 8px; }
+.nextup .nx { display: inline-flex; align-items: stretch; border-radius: 10px; background: color-mix(in srgb, var(--warn) 12%, var(--surface-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent); }
+.nextup .nx > button:first-child { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; border-radius: 10px; max-width: 320px; }
+.nextup .nx > button:first-child span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nextup .nx .tpl-x { border: 0; background: none; color: var(--muted); padding: 0 8px; cursor: pointer; border-radius: 10px; }

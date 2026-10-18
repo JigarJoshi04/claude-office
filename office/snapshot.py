@@ -480,7 +480,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.80.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.81.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -738,7 +738,8 @@ class Office(LiveOffice):
                 g = x.get("git") or {}
                 p = open_prs.get((gh.get(g.get("repo")), g.get("branch"))) if g.get("branch") else None
                 if p:
-                    x["ci"] = {"checks": p["checks"], "number": p["number"], "url": p["url"], "state": p["state"], "review": p["review"]}
+                    x["ci"] = {"checks": p["checks"], "number": p["number"], "url": p["url"], "state": p["state"], "review": p["review"],
+                               "title": p.get("title"), "branch": p.get("branch")}
 
     def cabinet_view(self, q: str = "", seat: str | None = None, offset: int = 0) -> dict:
         """The filing cabinet: past sessions matching q, most recent first (cabinet.py)."""
