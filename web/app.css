@@ -1702,3 +1702,14 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .tag.mdl-tag { box-shadow: inset 3px 0 0 var(--m); padding-left: 7px; }
 .mdl { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 6px; margin-left: 4px; background: var(--surface-2); }
 .m-opus { color: #c678dd; } .m-sonnet { color: #5b8def; } .m-haiku { color: #38e07b; } .m-fable { color: #ffb347; } .m-gpt, .m-codex { color: #56b6c2; }
+/* The scrapbook (ui/scrapbook.js): polaroids of big moments. */
+.scrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; margin-top: 12px; }
+.polaroid { display: flex; flex-direction: column; gap: 4px; padding: 8px 8px 10px; border: 0; border-radius: 4px; background: #f4f1ea; color: #23202b; text-align: left; cursor: pointer;
+  transform: rotate(var(--tilt)); box-shadow: 0 6px 16px rgba(0,0,0,.35); transition: transform .15s; }
+.polaroid:hover, .polaroid:focus-visible { transform: rotate(0deg) scale(1.04); }
+.polaroid img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; image-rendering: pixelated; border-radius: 2px; background: #111; }
+.polaroid .pc { font-size: 13px; font-weight: 650; line-height: 1.25; } .polaroid small { font-size: 11px; color: #6c6677; }
+.photo-view { display: grid; gap: 10px; max-width: min(720px, 90vw); }
+.photo-view img { width: 100%; image-rendering: pixelated; border-radius: 8px; }
+.photo-view p { margin: 0; display: grid; } .photo-view small { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .polaroid { transform: none; transition: none; } }

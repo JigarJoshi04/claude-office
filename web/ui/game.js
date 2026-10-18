@@ -7,6 +7,7 @@ import { sound } from "./sound.js";
 import { goals, streak, weekly, quests, PUNCH, localDay } from "./goals.js";
 import { award } from "./badges.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
+import * as scrapbook from "./scrapbook.js";
 
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {} };
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
@@ -67,7 +68,7 @@ export function makeGame(ctx) {
       fresh.forEach(g => goalsSeen.ids.add(g.id));
       const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
       if (prefs.view === "floor") fxNow().banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
-      if (all) gifts.grant(null, "goals", "rare");
+      if (all) { gifts.grant(null, "goals", "rare"); if (!replay.active()) scrapbook.capture(office, prefs, "goals", "Every goal done today", null); }
       chime(all ? "levelup" : "achievement");
       note(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
     }
@@ -220,6 +221,7 @@ export function makeGame(ctx) {
       chime("levelup");
       note(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
       gifts.grant(null, "office", "epic");
+      if (!replay.active()) scrapbook.capture(office, prefs, "office", `The office reached level ${ol.level}`, null);
     }
     if (ol.level > olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }   // only rises: a dip never re-celebrates
   }

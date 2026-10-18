@@ -11,6 +11,7 @@ import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
 import { SETS, setsDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
 import { md } from "./md.js";
+import { pageHtml as scrapHtml, bindPage as bindScrap } from "./scrapbook.js";
 import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
 
@@ -1118,7 +1119,7 @@ export function makePanels(app) {
     const open = visibleAchievements(cat, anyone).filter(a => !anyone(a.id));
     const medal = ["#ffd24a", "#c9d1e0", "#d08a4c"];
     return { html: `${crumbs("Trophy room")}<h2>Trophy room</h2>
-      <p class="lede">${total} ${total === 1 ? "trophy" : "trophies"} across ${seats.length} characters. Everyone earns XP from real work: tool calls, time at work, sessions and reports.</p>
+      <p class="lede"><button class="btn sm" data-go="scrapbook" style="float:right">${icon("star", 14)}Scrapbook</button>${total} ${total === 1 ? "trophy" : "trophies"} across ${seats.length} characters. Everyone earns XP from real work: tool calls, time at work, sessions and reports.</p>
       ${section("Leaderboard", ranked.map((s, i) => { const c = s.career, p = P(s);
         return `<button class="lb-row" data-seat-go="${esc(s.id)}" style="--seat:${esc(s.color)}"><span class="rk" ${i < 3 ? `style="--medal:${medal[i]}"` : ""}>${i + 1}</span>${avatar("mascot-" + s.id, s.color, "lv" + (s.career ? s.career.level : 0))}
           <span class="grow"><span class="nm"><b>${esc(p.name)}</b><span class="lvchip">Lv ${c.level}</span><span class="muted">${esc(c.title)}</span></span>
@@ -1682,7 +1683,9 @@ export function makePanels(app) {
   return { office, setDuty, needText, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
     draftHire: (d) => { hireDraft = { ...hireDraft, ...d }; store.set("hireDraft", hireDraft); },
-    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml,
+    scrapbook: () => ({ html: scrapHtml({ crumbs, privacy: app.privacy() }),
+      bind(root) { bindScrap(root, { dialog: document.getElementById("dialog"), rerender: () => app.rerender(true), privacy: app.privacy() }); } }), persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"
       || (k === "inbox" && ([...askDrafts.values()].some(v => v.trim()) || !!(document.activeElement && document.activeElement.matches("[data-ask-draft]")))) };
 }

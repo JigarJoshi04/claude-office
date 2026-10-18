@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.108.0] - 2026-10-19
+
+### Added
+- The scrapbook: the office's big moments as captioned polaroids. A character's level-up or trophy is photographed
+  in their room a moment after it happens, confetti and all; an office level or a day with every goal done is a
+  photo of the whole floor. Flip through them from Trophies or Ctrl+K (Scrapbook), full size with the arrow keys,
+  and remove any you do not want. Kept in this browser, the newest 36; share-safe shows only what kind of moment.
+
 ## [3.107.0] - 2026-10-19
 
 ### Added

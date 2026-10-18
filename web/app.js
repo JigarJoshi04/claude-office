@@ -2,6 +2,7 @@
 import { createOffice } from "./office.js";
 import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss, setToastGate, clock } from "./ui/util.js";
 import { configureGoals, goals, localDay } from "./ui/goals.js";
+import * as scrapbook from "./ui/scrapbook.js";
 import { openPoster } from "./ui/poster.js";
 import { makeDirector } from "./ui/director.js";
 import { makePanels } from "./ui/panels.js";
@@ -412,7 +413,7 @@ function viewFromHash() {
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
-  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office", "loose", "prs", "inbox", "cabinet", "doctor"].includes(k) ? { kind: k } : { kind: "ceo" };
+  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "scrapbook", "office", "loose", "prs", "inbox", "cabinet", "doctor"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 let revealT = 0;
@@ -648,6 +649,7 @@ function onNews(e) {
       if (lvl && seat && prefs.view === "floor") fx.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
       if (who) fx.sayAtSeat(e.seat, line(who, e.kind), 6500);
       if (lvl) { teammateReacts(e, "levelup"); giftBox.grant(e.seat, "levelup"); } else teammateReacts(e, "achievement");
+      if (!replay.active() && who) scrapbook.capture(office, prefs, e.kind, lvl ? `${who.name} reached level ${what}` : `${who.name} unlocked ${what || "a trophy"}`, e.seat);
       if (prefs.game === "full") sound.play(e.kind);
       if (prefs.game !== "off") toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
       notify(lvl ? "Level up" : "Achievement unlocked", text);
@@ -1294,6 +1296,7 @@ function paletteItems() {
     { icon: icon("trophy", 16), label: "Today: stats and MVP", hint: "S", keywords: "league employee of the day", run: () => setView("stats") },
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
+    { icon: icon("star", 16), label: "Scrapbook", keywords: "photos moments memories album pictures", run: () => go({ kind: "scrapbook" }) },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
     { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
     { icon: icon("news", 16), label: "This morning's standup", keywords: "standup slack yesterday today blockers daily", run: openStandup },

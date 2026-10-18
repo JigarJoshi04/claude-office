@@ -1676,6 +1676,17 @@ export function createOffice(stage, handlers) {
     // The next update seats everyone where they belong at once (no walking in or out): for jumps in time (replay).
     reset() { for (const a of agents.values()) if (a.tagEl) a.tagEl.remove(); agents.clear(); leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; }); fresh.clear(); first = true; },
     // The whole floor, whatever the camera shows, and where its page text stands, to paint in (ui/poster.js).
+    // A photo of one room (or the whole floor) as a small JPEG, for the scrapbook: cut from the floor's own canvas.
+    photo(seatId) {
+      if (!L) return null;
+      const pod = seatId && L.pods.find(p => p.seat.id === seatId);
+      const r = pod ? { x: pod.room.x - 4, y: pod.room.y - 2, w: pod.room.w + 8, h: pod.room.h + 4 } : { x: 0, y: 0, w: W, h: L.H };
+      const sc = canvas.width / W, tw = 360, th = Math.round(tw * r.h / r.w);
+      const out = document.createElement("canvas"); out.width = tw; out.height = th;
+      const c = out.getContext("2d"); c.imageSmoothingEnabled = false;
+      c.drawImage(canvas, r.x * sc, r.y * sc, r.w * sc, r.h * sc, 0, 0, tw, th);
+      try { return out.toDataURL("image/jpeg", 0.82); } catch { return null; }
+    },
     picture: () => ({ canvas, W, neon: { x: 6, y: 8, w: 70, h: 22 },
       plates: L ? L.pods.map(p => ({ seat: p.seat.id, x: p.room.x + 12, y: p.room.y + p.room.h - 31, w: p.room.w - 24,
         line: plateLine(p.seat, (p.seat.sessions || []).filter(x => x.live !== false)) })) : [],
