@@ -8,6 +8,10 @@ what it is doing right now. New sessions walk in from the elevator; spent seats 
 working and who is stuck, talk to any task, split new work across seats, and hire background lanes from the front
 desk.
 
+And the office grows with the work: characters level up and earn gear, the office itself levels up and unlocks palms,
+a robot vacuum, a dog and fireworks, and there are daily goals, a weekly "beat last week" challenge, combos and
+badges to chase. Replay the day on the floor, put it on a spare screen in TV mode, or share a picture of the day.
+
 ![Claude Office in demo mode: a visitor lane walks in from the elevator, a character card opens, then a session's Chat, the Team view and the Timeline](docs/demo.gif)
 
 *Every screenshot and recording is demo mode (`python3 -m office serve --demo`): made-up seats, no real accounts.*
