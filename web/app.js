@@ -514,6 +514,7 @@ function apply(next) {
   app.tokensCache();                                  // the odometer, the belt and milestones (fetched every 2 minutes)
   configureGoals({ store, days: app.weekCache(), seats: snap.seats.filter(s => (s.divider || {}).enabled !== false && s.status !== "offline").length });   // today's goals follow the office's pace
   presenceStep(snap.ceo);
+  office.setLightsOut((prefs.lightsOutUntil || 0) > Date.now() / 1000);   // goodnight's lights out, until the morning
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) safeNews(e);
@@ -918,6 +919,31 @@ function openRemind(when = null, label = "", text = "") {
   $("rmText").focus();
 }
 
+// Goodnight: before you go, what still needs you, who works on overnight (and a note to the lanes to write theirs),
+// which seats get their plan back before morning, a checkpoint, and lights out until the morning.
+function morning() { const d = new Date(); d.setHours(7, 0, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); return d.getTime() / 1000; }
+function goodnight() {
+  const need = panels.needsList(), working = snap.seats.flatMap(s => live(s).filter(x => x.state === "working" || x.state === "waiting"));
+  const lanesUp = working.filter(x => x.kind === "lane").length, until = morning();
+  const back = snap.seats.filter(s => s.kind === "claude").map(s => ({ s, at: ((s.usage || {}).five_hour || {}).resets_at }))
+    .filter(x => x.at && x.at > Date.now() / 1000 && x.at < until && ((x.s.usage || {}).five_hour || {}).pct >= 50).sort((a, b) => a.at - b.at);
+  const row = (ic, t, d, act = "") => `<div class="setup-step"><span class="es-ic">${icon(ic, 16)}</span><span class="grow"><b>${t}</b><small>${d}</small></span>${act}</div>`;
+  $("dialogBody").innerHTML = `<div class="dh"><b>Goodnight${(snap.office.ceo || {}).name && snap.office.ceo.name !== "CEO" ? ", " + esc(snap.office.ceo.name) : ""}</b><button class="btn sm ghost" id="gnClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="db">
+      ${row("alert", need.length ? `${need.length} thing${need.length === 1 ? "" : "s"} still need${need.length === 1 ? "s" : ""} you` : "Nothing needs you", need.length ? esc(need.slice(0, 2).map(a => a.text).join(" · ")) : "A clean desk.", need.length ? `<button class="btn sm" id="gnNeeds">Look</button>` : "")}
+      ${row("moon", working.length ? `${working.length} session${working.length === 1 ? "" : "s"} at work overnight` : "Nobody at work", lanesUp ? `${lanesUp} of them ${lanesUp === 1 ? "is a lane" : "are lanes"}: ask them to write their notes before you go.` : "Lanes keep notes as they go.", lanesUp ? `<button class="btn sm" id="gnNotes">Ask for notes</button>` : "")}
+      ${back.length ? row("refresh", "Back before morning", back.map(x => `${esc(panels.persona(x.s).name)} at ${esc(clock(x.at))}`).join(" · ")) : ""}
+      <div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="gnCheck">${icon("pin", 15)}Take a checkpoint</button><button class="btn primary" id="gnOut">${icon("moon", 15)}Lights out</button></div>
+      <p class="hint">Lights out dims the floor until 7 in the morning (rooms at work keep their lights); the menu turns them back on.</p></div>`;
+  $("dialog").showModal();
+  $("gnClose").addEventListener("click", () => $("dialog").close());
+  const nb = $("gnNeeds"); if (nb) nb.addEventListener("click", () => { $("dialog").close(); go({ kind: "ceo" }); });
+  const nn = $("gnNotes"); if (nn) nn.addEventListener("click", () => { $("dialog").close(); broadcast("Before the night: write your progress notes and what you will do next, then keep going."); });
+  $("gnCheck").addEventListener("click", () => { $("dialog").close(); checkpoint(); });
+  $("gnOut").addEventListener("click", () => { setPref("lightsOutUntil", until); office.setLightsOut(true); $("dialog").close(); toast("Goodnight. The lights come back on at 7.", "good", { ic: "moon" }); });
+  $("gnOut").focus();
+}
+
 // This morning's standup (office/standup.py): Yesterday, Today and Blockers from the office's own records, with the
 // characters' names, in a dialog to copy into Slack. Share-safe blurs it on screen; copying still gives the words.
 async function openStandup() {
@@ -988,7 +1014,7 @@ function whatsNew() {
 function shortcuts() {
   const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S K", "Floor, Timeline, Team, Today, Tokens"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
-    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["M", "Office radio: lo-fi on or off"], ["Z", "Game intensity: Full, Calm, Off"], ["\\", "Hide or show the inspector"],
+    ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["G", "Goodnight (again: lights on)"], ["M", "Office radio: lo-fi on or off"], ["Z", "Game intensity: Full, Calm, Off"], ["\\", "Hide or show the inspector"],
     ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
   $("dialogBody").innerHTML = `<div class="dh"><b>Keyboard shortcuts</b><button class="btn sm ghost" id="kClose">${icon("x", 16)}</button></div>
     <div class="db"><table class="keys">${keys.map(([k, what]) => `<tr><td>${k.split(" ").map(x => `<kbd>${esc(x)}</kbd>`).join(" ")}</td><td>${esc(what)}</td></tr>`).join("")}</table></div>`;
@@ -1177,7 +1203,7 @@ async function checkpoint() {
     const cp = $("dCopyPath"); if (cp) cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(r.path); toast("Copied.", "good", 1800); } catch { /* ignore */ } });
   } catch (e) { toast("Checkpoint failed: " + e.message, "bad"); }
 }
-function broadcast() {
+function broadcast(preset = "") {
   const targets = snap.seats.flatMap(s => live(s).filter(x => x.kind === "lane" && (x.talk === "direct" || x.talk === "review")).map(x => ({ s, x })));
   const who = (s) => panels.persona(s).name;
   $("dialogBody").innerHTML = `<div class="dh"><b>Message all lanes</b><button class="btn sm ghost" id="bClose">${icon("x", 16)}</button></div>
@@ -1187,7 +1213,7 @@ function broadcast() {
       <div class="row" style="margin-top:12px;gap:8px"><button class="btn primary" id="bSend">${icon("send", 16)}Send to selected</button><span class="hint" id="bStatus"></span></div>`
       : `<p class="muted" style="margin-top:0">No running lanes can take a message right now.</p>`}</div>`;
   $("dialog").showModal();
-  if ($("bText")) $("bText").focus();
+  if ($("bText")) { $("bText").value = preset; $("bText").focus(); }
   $("bClose").addEventListener("click", () => $("dialog").close());
   const send = $("bSend");
   if (send) send.addEventListener("click", async () => {
@@ -1236,6 +1262,7 @@ function paletteItems() {
     { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
     { icon: icon("news", 16), label: "This morning's standup", keywords: "standup slack yesterday today blockers daily", run: openStandup },
     { icon: icon("bell", 16), label: "Remind me…", keywords: "reminder remind later timer alarm note", run: () => openRemind() },
+    { icon: icon("moon", 16), label: (prefs.lightsOutUntil || 0) > Date.now() / 1000 ? "Lights on" : "Goodnight…", hint: "G", keywords: "goodnight night lights out bed sleep wrap", run: () => ((prefs.lightsOutUntil || 0) > Date.now() / 1000 ? (setPref("lightsOutUntil", 0), office.setLightsOut(false)) : goodnight()) },
     { icon: icon("eye", 16), label: prefs.director ? "Director cam: off" : "Director cam: on", keywords: "director camera follow auto tour", run: () => setDirector(!prefs.director) },
     { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },
@@ -1328,6 +1355,7 @@ document.addEventListener("keydown", (e) => {
   if (k === "Escape" && document.querySelector(".legend")) { floor.legend(document.querySelector('[data-cam="legend"]')); return; }
   if (document.body.classList.contains("tv") && k === "Escape") { floor.setTv(false); return; }
   if (k === "v") { floor.setTv(!document.body.classList.contains("tv")); return; }
+  if (k === "g") { if ((prefs.lightsOutUntil || 0) > Date.now() / 1000) { setPref("lightsOutUntil", 0); office.setLightsOut(false); toast("Good morning. Lights on.", "good"); } else goodnight(); return; }
   if (k === "m") { setRadio(!radio.on); return; }
   if (k === "z") { cycleGame(); return; }
   if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else { const back = $("panel").contains(document.activeElement); go({ kind: "ceo" }); if (back) $("panel").focus({ preventScroll: true }); } }

@@ -310,7 +310,7 @@ export function createOffice(stage, handlers) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bg, 0, 0, W, H);
     const now = clockAt ? new Date(clockAt * 1000) : new Date();   // replay shows its own time of day
-    const env = skyFor(now);
+    const sky = skyFor(now), env = lightsOut ? { ...sky, dark: Math.max(sky.dark, 0.55), night: true } : sky;   // goodnight: lights out
     if (env.sky[0] !== skyKey) { skyKey = env.sky[0]; stage.style.setProperty("--sky-a", env.sky[0]); stage.style.setProperty("--sky-b", env.sky[1]); stage.dataset.sky = env.night ? "night" : "day"; }   // the backdrop's sky
     const lights = [];
     drawLobbyWall(t, lights);
@@ -637,7 +637,7 @@ export function createOffice(stage, handlers) {
     const attn = (snap.attention || []).filter(a => a.level !== "info").length;
     const look = S.lookFor("ceo-" + ((snap.office.ceo || {}).name || "CEO"), "#22304f");
     S.drawChairFront(ctx, dx + 31, dy - 22);
-    if (ceoAway) {                                  // away from the computer: an empty chair (and a card on the desk, below)
+    if (ceoAway || lightsOut) {                     // away from the computer, or gone for the night: an empty chair
     } else if (urgent && !reduced) {                // pacing behind the desk, on the phone
       ceoPace += 0.016;
       const px = dx + 28 + Math.round(Math.sin(ceoPace) * 22);
@@ -652,7 +652,7 @@ export function createOffice(stage, handlers) {
     S.rect(ctx, dx, dy, 78, 24, "#5a3a24"); S.rect(ctx, dx, dy, 78, 3, "#7a5034"); S.rect(ctx, dx + 2, dy + 22, 74, 2, "#41291a");
     S.drawMonitorBack(ctx, dx + 30, dy - 6);
     S.rect(ctx, dx + 30, dy + 10, 18, 5, "#c8a046"); S.rect(ctx, dx + 31, dy + 11, 16, 3, "#e8c66a");
-    if (ceoAway) {                                  // a "back soon" tent card where the CEO sits
+    if (ceoAway || lightsOut) {                     // a "back soon" tent card where the CEO sits
       S.rect(ctx, dx + 56, dy + 12, 12, 7, "#f4f1e8"); S.rect(ctx, dx + 56, dy + 12, 12, 1, "#ffffff"); S.rect(ctx, dx + 56, dy + 18, 12, 1, "#c9c2b0");
       S.rect(ctx, dx + 58, dy + 14, 8, 1, "#d94a4a"); S.rect(ctx, dx + 58, dy + 16, 5, 1, "#8a8476");
     }
@@ -1482,7 +1482,7 @@ export function createOffice(stage, handlers) {
     if (!(stage.closest(".floor-frame") || stage).querySelector(".lvl-banner")) stage.classList.remove("bannering");
   }
   // While the CEO is away from the computer, banners wait (the last three) and play when they are back.
-  let ceoAway = false;
+  let ceoAway = false, lightsOut = false;
   const heldBanners = [];
   function banner(title, sub, color, onShow) {
     if (reduced || game !== "full") { dropBanners(); if (onShow) onShow(); return; }
@@ -1558,6 +1558,7 @@ export function createOffice(stage, handlers) {
     setTopBurner(id) { if (id !== burner) { burner = id || null; ovKey = ""; renderOverlay(); } },
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },
+    setLightsOut(on) { lightsOut = !!on; },          // goodnight (app.js): the floor dims, rooms at work keep their lights
     // The CEO stepped away from the computer (presence.py) or came back: back plays the banners that waited.
     setCeoAway(away) {
       away = !!away;

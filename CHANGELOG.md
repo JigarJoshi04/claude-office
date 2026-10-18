@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.86.0] - 2026-10-19
+
+### Added
+- Goodnight (`G`, or the palette): before you go, what still needs you, who works on overnight (with one click to ask
+  the lanes to write their notes), which seats get their 5-hour plan back before morning, a checkpoint, and lights
+  out: the floor dims until 7 in the morning (rooms at work keep their lights) and the CEO's chair is empty. `G`
+  again, or the palette, turns the lights back on.
+
 ## [3.85.0] - 2026-10-19
 
 ### Added
