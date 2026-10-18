@@ -3,6 +3,21 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.8.0] - 2026-10-18
+
+### Added
+- Install as an app (Chrome and Edge): a web app manifest and icons; an installed office shows the Needs-you count
+  on its dock icon.
+- Find in a conversation: matches highlighted, other messages faded, Enter and Shift+Enter between matches.
+- Save your own lane templates in Hire (up to 12, per browser).
+- What's new after an update, once.
+- Open a character and someone at their desk says hello in their voice.
+- Office news grouped under Just now, Earlier today, Yesterday and dates; the floor legend explains weather, gear and
+  unlocks; the morning card shows the weekly challenge.
+
+### Changed
+- Reduced motion also holds window weather, the balloon, fireworks and seasonal bats still.
+
 ## [3.7.0] - 2026-10-18
 
 ### Added

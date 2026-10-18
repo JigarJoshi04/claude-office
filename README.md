@@ -112,6 +112,7 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - Send a message from the office. Lanes you hire here get it straight away. Terminal sessions hold it for approval
   at that terminal, because that is Claude Code's own safety rule and the office respects it.
 - Agents can answer you: the office has its own inbox, and replies show up in the chat and as a toast.
+- **Find** anything in a conversation: matches are highlighted and Enter jumps between them.
 - **Follow up** on a finished session. Your message starts a lane that resumes that exact conversation.
 - **Message all lanes** at once, for example "limits reset in 20 minutes: write your notes now".
 
@@ -149,7 +150,7 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Load divider**: drag the borders of the split bar to share new lanes between seats. Send a seat on holiday, cap
   its lanes, or set usage guards. Adapt-to-plan mode shrinks a seat's share as its plan runs out. Scripts follow it
   too: `seat=$(claude-office pick-seat)`.
-- **Hiring desk**: six brief templates.
+- **Hiring desk**: six brief templates, plus your own (Save as a template).
   - Lanes run as low-priority background services.
   - A lane keeps notes, moves to another seat if its seat hits a limit, and files a report when done.
   - You can stop, resume, re-hire or chat with any lane.
