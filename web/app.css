@@ -1006,3 +1006,13 @@ body.tv .peek { width: 340px; }
 .wk .lbl { font: 700 12px var(--mono); fill: var(--text); }
 .wk .ax { font: 600 12px Inter, sans-serif; fill: var(--muted); }
 .wk-bar.on .ax { fill: var(--text); }
+
+/* the day's rhythm: a morning recap and an evening wrap-up in the briefing */
+.rhythm { display: flex; align-items: center; gap: 12px; padding: 12px 10px 12px 14px; margin-bottom: 16px; border-radius: 16px; font-size: 14px; line-height: 1.45; animation: fadein .3s ease; }
+.rhythm > .ic { flex: none; }
+.rhythm b { display: block; font-size: 15px; } .rhythm span { color: var(--text-2); }
+.rhythm .btn { flex: none; }
+.rhythm.am { background: linear-gradient(120deg, rgba(255,194,75,.16), var(--surface-2) 65%); box-shadow: inset 0 0 0 1px rgba(255,194,75,.28); }
+.rhythm.am > .ic { color: #ffc24b; }
+.rhythm.pm { background: linear-gradient(120deg, rgba(122,168,255,.16), var(--surface-2) 65%); box-shadow: inset 0 0 0 1px rgba(122,168,255,.28); }
+.rhythm.pm > .ic { color: var(--info); }

@@ -5,7 +5,7 @@ import { usageSpark, bindSparks } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, binding, leftOf, voice, diary, PERSONALITIES } from "./personas.js";
 import { sound } from "./sound.js";
-import { goals, streak } from "./goals.js";
+import { goals, goalsFor, streak } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned } from "./badges.js";
 
@@ -104,6 +104,28 @@ export function makePanels(app) {
         <button class="btn sm ghost icon" data-dismiss-away aria-label="Dismiss" title="Dismiss">${icon("x", 16)}</button></div>
       ${awayOpen ? `<div class="away-list">${top.map(m => `<div class="act ${tone(m.level)} ${m.seat ? "click" : ""}" ${m.seat ? `data-seat="${esc(m.seat)}"` : ""}>${icon(EVENT_ICON[m.kind] || "dot", 16)}<span>${esc(humanise(m.text))}</span><span class="when">${relTime(m.ts)}</span></div>`).join("")}</div>` : ""}</div>`;
   }
+  // The day's rhythm: a morning card recaps yesterday and names today's goals; an evening card wraps the day up and
+  // offers its picture. Each shows once a day until dismissed (per browser).
+  function rhythmHtml() {
+    const h = new Date().getHours(), st = app.statsCache(null), wk = app.weekCache(), ceo = (S().office.ceo || {}).name;
+    if (!st || st.unavailable || !st.day) return "";
+    const seen = store.get("rhythm", {}), sum = (o, k) => Object.values(o.seats || {}).reduce((a, x) => a + (x[k] || 0), 0);
+    const hrs = (m) => m >= 600 ? Math.round(m / 60) + " h" : (m / 60).toFixed(1) + " h";
+    if (h >= 5 && h < 11 && !seen["am-" + st.day]) {
+      const y = wk && wk.length >= 2 ? wk[wk.length - 2] : null;
+      const recap = y && (y.reports || y.active_min) ? `Yesterday: ${y.reports} report${y.reports === 1 ? "" : "s"} and ${hrs(y.active_min)} of agent work.` : "A fresh day.";
+      return `<div class="rhythm am">${icon("sun", 20)}<div class="grow"><b>Good morning${ceo && ceo !== "CEO" ? ", " + esc(ceo) : ""}.</b>
+        <span>${esc(recap)} Today's goals: ${goalsFor(st.day).map(g => esc(g.label.toLowerCase())).join(", ")}.</span></div>
+        <button class="btn sm ghost icon" data-rhythm="am-${esc(st.day)}" aria-label="Dismiss" title="Dismiss">${icon("x", 15)}</button></div>`;
+    }
+    if (h >= 18 && !seen["pm-" + st.day] && ((st.office || {}).reports || sum(st, "active_min"))) {
+      return `<div class="rhythm pm">${icon("moon", 20)}<div class="grow"><b>That's a wrap.</b>
+        <span>Today: ${(st.office || {}).reports || 0} report${(st.office || {}).reports === 1 ? "" : "s"}, ${hrs(sum(st, "active_min"))} of agent work${st.mvp && seatById(st.mvp.seat) ? `, and ${esc(P(seatById(st.mvp.seat)).name)} was the star` : ""}.</span></div>
+        <button class="btn sm" data-share-day>Share the day</button>
+        <button class="btn sm ghost icon" data-rhythm="pm-${esc(st.day)}" aria-label="Dismiss" title="Dismiss">${icon("x", 15)}</button></div>`;
+    }
+    return "";
+  }
   // Today's goals as three small rings (web/ui/goals.js); a finished day folds into one gold line.
   function goalsHtml() {
     const st = app.statsCache(null), gl = goals(st);
@@ -187,7 +209,7 @@ export function makePanels(app) {
     const idle = all.length - working - stopped;
     const num = (n, label, dot, tip = "") => `<div class="b-n ${n ? "" : "zero"}"${tip ? ` title="${tip}"` : ""}><b>${n}</b><span><i class="sdot ${dot}"></i>${label}</span></div>`;
     // Three blocks, always in this order: how the office is doing, what needs you, who is on the team.
-    return { html: `${awayHtml()}
+    return { html: `${awayHtml()}${rhythmHtml()}
       ${snap.office.config_error ? `<div class="need bad"><span class="ico">${icon("alert", 16)}</span><div class="grow"><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
       <section class="b-status" aria-label="Sessions right now">
         <div class="b-nums">${num(working, "Working", "working")}${num(idle, "Idle", "idle")}${num(stopped, "Stopped", "limited", "Out of plan or stuck")}</div>
@@ -206,7 +228,8 @@ export function makePanels(app) {
         <button data-go="services">${icon("server", 16)}Services</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
-        const sd = root.querySelector("[data-share-day]"); if (sd) sd.addEventListener("click", () => app.shareDay());
+        root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
+        root.querySelectorAll("[data-rhythm]").forEach(b => b.addEventListener("click", () => { store.set("rhythm", { ...store.get("rhythm", {}), [b.dataset.rhythm]: 1 }); app.rerender(true); }));
         const at = root.querySelector("[data-away-toggle]"); if (at) at.addEventListener("click", () => { awayOpen = !awayOpen; app.rerender(true); });
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
