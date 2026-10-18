@@ -675,6 +675,7 @@ export function createOffice(stage, handlers) {
     const podHot = hot("pod", `${who.name}'s desks`, pod.room.x + 2, pod.room.y + 2, pod.room.w - 4, pod.room.h - 30, () => handlers.openSeat(s.id), () => focusSeat(s.id));
     podHot.dataset.k = "pod:" + s.id;
     for (const el of [podHot, plate]) {
+      el.addEventListener("contextmenu", (e) => { if (!handlers.onRoomMenu) return; e.preventDefault(); e.stopPropagation(); peek(null); handlers.onRoomMenu(s.id, e.clientX, e.clientY, el); });
       el.addEventListener("mouseenter", () => { spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); peek(s.id, podHot); });
       el.addEventListener("mouseleave", () => { if (spot === s.id) spot = null; if (handlers.onHoverSeat) handlers.onHoverSeat(null); peek(null); });
     }

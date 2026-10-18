@@ -1048,3 +1048,9 @@ body.tv .floor-frame.replaying .cam { bottom: calc(170px * var(--ui-zoom, 1)); }
   .combo .cb-x { font-size: 17px; } .combo .cb-w small { display: none; }
   .tv-hud { gap: 10px; padding: 0 10px; } .tv-hud .tv-brand { display: none; } .tv-hud .tv-line { font-size: 13px; } .tv-hud .tv-clock { font-size: 15px; }
 }
+
+/* the room menu (right-click a room) */
+.room-menu { position: fixed; width: 280px; zoom: var(--ui-zoom, 1); }
+.room-menu .rm-h { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.room-menu .rm-h i { width: 9px; height: 9px; border-radius: 50%; background: var(--seat); align-self: center; }
+.room-menu .rm-h b { font-size: 14.5px; } .room-menu .rm-h span { font-size: 12.5px; color: var(--muted); }

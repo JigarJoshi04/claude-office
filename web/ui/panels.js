@@ -865,7 +865,16 @@ export function makePanels(app) {
       } };
   }
 
-  return { office, needsCount: () => needs(S()).length,
+  // Duty for one seat from anywhere (the room menu on the floor): on duty or on holiday.
+  async function setDuty(id, on) {
+    const cfg = JSON.parse(JSON.stringify(S().divider)), st = seatById(id);
+    if (!cfg.seats[id]) return;
+    cfg.seats[id].enabled = on;
+    try { const r = await app.post("/api/divider", cfg); result(r, on ? `${P(st).name} is back on duty.` : `${P(st).name} is on holiday: no new lanes go there.`); app.refresh(); }
+    catch (e) { toast(e.message, "bad"); }
+  }
+  return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
+    needsCount: () => needs(S()).length,
     needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings" };
 }

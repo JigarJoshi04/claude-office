@@ -113,6 +113,7 @@ const office = createOffice($("stage"), {
   onCat: () => sound.play("arrive"),
   onDouble: () => { clearTimeout(panelScroll); clearTimeout(revealT); },
   onPeek: (id, r) => peekCard(id, r),
+  onRoomMenu: (id, x, y, el) => roomMenu(id, x, y, el),
   needsFor: (id) => panels.needsBySeat()[id] || 0,
   onLegend: (btn) => legend(btn),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
@@ -289,6 +290,46 @@ app.setTv = setTv;
 setInterval(() => { const c = document.querySelector(".tv-clock"); if (c) c.textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }, 1000);
 document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("tv") && QS.get("tv") !== "1") setTv(false); });
 
+// The room menu (right-click, or Shift+F10 / the context-menu key on a focused room): quick actions for one seat.
+function roomMenu(id, x, y, origin) {
+  closeRoomMenu();
+  const s = snap && snap.seats.find(z => z.id === id);
+  if (!s) return;
+  const p = panels.persona(s), duty = s.divider ? s.divider.enabled !== false : s.status !== "benched";
+  const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : `gpt -w -C <folder> "task"`;
+  const items = [
+    ["open", "users", `Open ${p.name}`], ["zoom", "target", "Zoom in on the room"], ["hire", "plus", `Hire a lane for ${p.name}`],
+    ["duty", duty ? "sun" : "briefcase", duty ? "Send on holiday" : "Back on duty"], ["copy", "copy", s.kind === "claude" ? "Copy the terminal command" : "Copy the Codex command"],
+  ];
+  const m = document.createElement("div");
+  m.className = "menu room-menu"; m.setAttribute("role", "menu"); m.setAttribute("aria-label", `${p.name}'s room`);
+  m.innerHTML = `<div class="rm-h" style="--seat:${esc(s.color)}"><i></i><b>${esc(p.name)}</b><span>${esc(p.role)}</span></div>` +
+    items.map(([k, ic, label]) => `<button class="mi" role="menuitem" data-rm="${k}">${icon(ic, 17)}<span>${esc(label)}</span></button>`).join("");
+  document.body.appendChild(m);
+  if (!x && !y && origin) { const r = origin.getBoundingClientRect(); x = r.left + 12; y = r.top + 12; }   // opened from the keyboard
+  const z = zoomNow(), box = m.getBoundingClientRect();                                                       // the menu is zoomed with the text size
+  m.style.left = Math.max(8, Math.min(innerWidth - box.width - 8, x)) / z + "px"; m.style.top = Math.max(8, Math.min(innerHeight - box.height - 8, y)) / z + "px"; m.style.right = "auto";
+  const list = [...m.querySelectorAll(".mi")]; list[0].focus();
+  const back = () => { closeRoomMenu(); if (origin && origin.isConnected) origin.focus({ preventScroll: true }); };
+  m.addEventListener("keydown", (e) => {
+    const i = list.indexOf(document.activeElement);
+    const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: list.length - 1 }[e.key];
+    if (to != null) { e.preventDefault(); list[(to + list.length) % list.length].focus(); }
+    else if (e.key === "Escape" || e.key === "Tab") { e.preventDefault(); e.stopPropagation(); back(); }
+  });
+  m.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.rm; closeRoomMenu();
+    if (k === "open") go({ kind: "seat", seat: id });
+    else if (k === "zoom") { setView("floor"); office.focusSeat(id); }
+    else if (k === "hire") { panels.hireFor(id); go({ kind: "hire" }); }
+    else if (k === "duty") panels.setDuty(id, !duty);
+    else if (k === "copy") navigator.clipboard.writeText(cmd).then(() => toast("Copied.", "good", 1800), () => toast("Copy failed: open the character's Settings tab instead.", "warn"));
+  }));
+  setTimeout(() => document.addEventListener("mousedown", roomMenuAway, true), 0);
+}
+function roomMenuAway(e) { const m = document.querySelector(".room-menu"); if (m && !m.contains(e.target)) closeRoomMenu(); }
+function closeRoomMenu() { const m = document.querySelector(".room-menu"); if (m) m.remove(); document.removeEventListener("mousedown", roomMenuAway, true); }
+
 // The floor legend: what the colours, badges and little icons mean.
 function legend(btn) {
   const old = document.querySelector(".legend");
@@ -308,7 +349,7 @@ function legend(btn) {
     <div class="lg-grid"><span>💭 Thinking</span><span>⌨ Typing (the screen shows what)</span><span>☕ Idle at the desk</span><span>? Quiet for a while</span><span>z Asleep: out of plan</span><span>🛸 A helper subagent</span></div>
     <div class="lg-sec">Lobby</div>
     <div class="lg-grid"><span>Elevator: office news</span><span>Cabinet: trophies</span><span>Gold frame: today's star</span><span>Screen: load divider</span><span>Green desk: hire a lane</span><span>Racks: background services</span></div>
-    <div class="lg-foot">Hover a room for a peek · double-click to zoom · drag to pan · 0 fits the office</div>`;
+    <div class="lg-foot">Hover a room for a peek · right-click it for actions · double-click to zoom · drag to pan · 0 fits the office</div>`;
   btn.closest(".floor-frame").appendChild(el);
   btn.setAttribute("aria-expanded", "true");
   el.querySelector("[data-lg-close]").addEventListener("click", () => legend(btn));
