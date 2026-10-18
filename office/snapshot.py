@@ -407,7 +407,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.37.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.37.1", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -592,7 +592,10 @@ class Office(LiveOffice):
         snap = self.get() or {}
         cwds = [x.get("cwd") for s in snap.get("seats", []) for x in s.get("sessions", [])]
         lane_dirs = [l.get("workdir") for l in lanes.list_lanes()]
-        self.loose.note(cwds + lane_dirs)
+        if not getattr(self, "_loose_boot", False):        # once a start: where every project's sessions have been
+            self._loose_boot = True
+            cwds += list(self.tokens.project_cwds())
+        self.loose.note(cwds + lane_dirs + list(self.tokens.cwds))
         live = {x.get("cwd") for s in snap.get("seats", []) for x in s.get("sessions", []) if x.get("live", True) and x.get("cwd")}
         return self.loose.view(self.loose.known(self.cfg.get("repos") or []), live, force)
 

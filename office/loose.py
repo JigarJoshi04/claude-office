@@ -12,6 +12,7 @@ import os
 import re
 import shlex
 import subprocess
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -218,10 +219,14 @@ class LooseEnds:
             self.roots = set(json.loads(path.read_text())) if path else set()
         except (OSError, ValueError, TypeError):
             pass
+        tmp = os.path.realpath(tempfile.gettempdir())
+        self.roots = {r for r in self.roots if not r.startswith(tmp)}
 
     def note(self, cwds) -> None:
-        """Remember the repository of every folder a session or lane works in."""
-        new = {str(r) for r in (repo_root(c) for c in cwds if c) if r} - self.roots
+        """Remember the repository of every folder a session or lane works in (never a scratch folder's)."""
+        tmp = os.path.realpath(tempfile.gettempdir())
+        roots = {str(r) for r in (repo_root(c) for c in set(cwds) if c and not os.path.realpath(c).startswith(tmp)) if r}
+        new = {r for r in roots if r != os.sep and not r.startswith(tmp)} - self.roots
         if new:
             self.roots |= new
             if self.path:

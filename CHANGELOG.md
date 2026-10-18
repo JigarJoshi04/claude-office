@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.37.1] - 2026-10-18
+
+### Fixed
+- Loose ends finds the repositories every project's sessions have worked in (from the first lines of each project's
+  newest transcript, once a start, and from the transcripts as they are read), not only those of the sessions running
+  now; scratch folders under the temp directory are never swept.
+
 ## [3.37.0] - 2026-10-18
 
 ### Added

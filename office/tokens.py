@@ -33,6 +33,7 @@ SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletion
 _STAT = re.compile(r"(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?")
 _PUSHED = re.compile(r"\b[0-9a-f]{7,40}\.\.[0-9a-f]{7,40}\s+\S+ -> \S+|\* \[new branch\]")
 _PR_URL = re.compile(r"/pull/(\d+)")
+_CWD = re.compile(rb'"cwd":\s*"([^"]{1,1024})"')
 _START = r"(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*"                 # a command's start, after any VAR=value
 _GIT = _START + r"git\b(?:\s+-[-\w]+(?:[ =][^\s;&|]+)?)*\s+"
 _GH = _START + r"gh\s+pr\s+"
@@ -149,6 +150,7 @@ class TokenLedger:
         self._ts = None                         # the last timestamp seen in the file being read (results carry none)
         self.events: list = []                  # newly shipped PRs, for the office's news (see take_events)
         self.scans = 0
+        self.cwds: set = set()                  # folders the sessions worked in, seen while reading (for loose.py; not saved)
         self.data = self._load()
 
     # -- state ----------------------------------------------------------------------------------------------------
@@ -299,6 +301,9 @@ class TokenLedger:
                 if not raw.endswith(b"\n"):                # a line still being written: read it next time
                     break
                 at, pos = pos, pos + len(raw)
+                cw = _CWD.search(raw, 0, 4096) if len(self.cwds) < 5000 else None
+                if cw:
+                    self.cwds.add(cw.group(1).decode(errors="replace"))
                 if at >= offset:
                     changed |= self._take(raw, sid, last_id)
                     last_id = self._last
@@ -494,6 +499,27 @@ class TokenLedger:
             return False
         self.data["codex"][key] = [pos, t0, c0, o0]
         return changed
+
+    def project_cwds(self) -> set:
+        """The folder each project's newest transcript worked in, from its first lines: where the sessions have been,
+        for loose.py to find their repositories. Reads a few KB per project folder."""
+        out = set()
+        for root in self._projects_dirs():
+            try:
+                folders = [e for e in os.scandir(root) if e.is_dir()]
+            except OSError:
+                continue
+            for d in folders:
+                try:
+                    newest = max((e for e in os.scandir(d.path) if e.name.endswith(".jsonl")), key=lambda e: e.stat().st_mtime, default=None)
+                    if newest:
+                        with open(newest.path, "rb") as fh:
+                            m = _CWD.search(fh.read(65536))
+                        if m:
+                            out.add(m.group(1).decode(errors="replace"))
+                except OSError:
+                    continue
+        return out
 
     def last_call(self) -> dict:
         """When each seat last made an API call from this machine (epoch seconds), from the transcripts read so far."""
