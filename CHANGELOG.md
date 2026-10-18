@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.119.0] - 2026-10-19
+
+### Added
+- The morning standup, on the floor. On the day's first visit between 5 and 11, a "Morning standup" banner calls
+  everyone on duty to the lounge: each character walks out of their room and down the corridors, they line up by the
+  lounge door, each says what they did yesterday (reports and hours at work) in turn, and everyone walks back. Once a
+  day per browser, at Full game intensity; Ctrl+K "Standup on the floor" runs it any time.
+
 ## [3.118.0] - 2026-10-19
 
 ### Added

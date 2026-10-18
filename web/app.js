@@ -525,7 +525,7 @@ function apply(next) {
   presenceStep(snap.ceo);
   office.setLightsOut((prefs.lightsOutUntil || 0) > Date.now() / 1000);   // goodnight's lights out, until the morning
   renderPanel(false);
-  if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
+  if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); setTimeout(() => standupScene(), 4000); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) safeNews(e);
   lastEventTs = Math.max(lastEventTs, ...(snap.events || []).map(e => e.ts));
   if (view.kind === "session") { loadDetail("s:" + view.seat + "/" + view.id); app.chatFor(view.seat, view.id); }
@@ -546,6 +546,24 @@ function teammateReacts(e, kind) {
   setTimeout(() => office.sayAtSeat(mate.id, reaction(kind, panels.persona(about).name, panels.persona(mate).role), 6000), 1800);
 }
 
+// The morning standup on the floor (office.js startStandup): on the day's first visit between 5 and 11, everyone on
+// duty walks to the lounge and says what they did yesterday. Once a day per browser, at Full game intensity.
+async function standupScene(force) {
+  const h = new Date().getHours();
+  if (!snap || replay.active() || prefs.motion === "reduced" || prefs.view !== "floor" || document.hidden) return;
+  if (!force && (prefs.game !== "full" || h < 5 || h >= 11 || store.get("standupScene", "") === localDay())) return;
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  let y = null;
+  try { const r = await fetch("/api/stats?day=" + localDay(d)); y = r.ok ? await r.json() : null; } catch { y = null; }
+  const seats = snap.seats.filter(s => s.status !== "benched" && s.status !== "offline");
+  const lines = seats.map(s => {
+    const v = (y && y.seats && y.seats[s.id]) || {}, bits = [];
+    if (v.reports) bits.push(`${v.reports} report${v.reports === 1 ? "" : "s"}`);
+    if (v.active_min) bits.push(`${(v.active_min / 60).toFixed(v.active_min >= 600 ? 0 : 1)} h at work`);
+    return { seat: s.id, text: bits.length ? `Yesterday: ${bits.join(", ")}.` : "Fresh start today." };
+  });
+  if (office.standup(lines)) { store.set("standupScene", localDay()); office.banner("Morning standup", "Everyone to the lounge", "#ffd24a"); }
+}
 // Banter: every couple of minutes two characters at their desks trade a line (ui/personas.js banter). Never during
 // replay or reduced motion, and never over another reaction.
 let lastReport = 0, lastReportSeat = null;
@@ -1318,6 +1336,7 @@ function paletteItems() {
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("star", 16), label: "Scrapbook", keywords: "photos moments memories album pictures", run: () => go({ kind: "scrapbook" }) },
+    { icon: icon("users", 16), label: "Standup on the floor", keywords: "standup morning lounge gather walk", run: () => { setView("floor"); standupScene(true); } },
     { icon: icon("tv", 16), label: "Standup mode", hint: "2 min", keywords: "standup present screen share meeting slides morning", run: () => presentStandup() },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
     { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
