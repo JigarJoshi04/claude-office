@@ -186,8 +186,8 @@ export function makePanels(app) {
   // One fix per kind of problem, so every item in Needs you has a next step.
   function needAction(a) {
     const st = a.seat && seatById(a.seat);
-    if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
     if (a.ask) return `<button class="btn sm primary" data-go="inbox">${icon("reply", 14)}Answer</button>`;
+    if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
     if (a.session) return `<button class="btn sm" data-open-session="${esc(a.seat)}|${esc(a.session)}">${icon("chat", 14)}Open</button>`;
     if (a.lane) return `<button class="btn sm" data-lane-go="${esc(a.lane)}">${icon("briefcase", 14)}Open</button>`;
     if (a.unit) return `<button class="btn sm" data-go="services">${icon("server", 14)}Open</button>`;
@@ -209,6 +209,7 @@ export function makePanels(app) {
   function needs(snap) {
     const out = [], spent = new Map(), nearly = new Map();
     for (const a of snap.attention || []) {
+      if (a.ask || a.ci || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
       const st = a.seat && seatById(a.seat);
       const planItem = /usage at \d+%|stopped by the usage limit|runs out of its/i.test(a.text);
       // A seat close to its limit says so once: "Orion has 1% of its 5-hour window left, out in ~2 min".
@@ -263,7 +264,7 @@ export function makePanels(app) {
       </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
       ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
-          <span class="grow"><span class="t">${esc(humanise(a.text))}</span>${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
+          <span class="grow"><span class="t">${esc(a.ask && app.privacy() ? "An agent asks you a question" : humanise(a.text))}</span>${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
       ${unusedHtml()}
@@ -388,10 +389,20 @@ export function makePanels(app) {
   }
   let badgeSel = null;   // the trophy whose details are open, kept across refreshes
   // How close each countable achievement is, for the "next up" nudge.
+  // Achievement chains show one tier past the highest earned; secrets read "???" until they are earned.
+  const SECRET = { name: "???", desc: "A secret: it shows itself when it is earned", icon: "lock" };
+  function visibleAchievements(cat, has) {
+    const top = {};
+    for (const a of cat) if (a.chain && has(a.id)) top[a.chain] = Math.max(top[a.chain] || 0, a.tier);
+    return cat.filter(a => has(a.id) || !a.chain || a.tier <= (top[a.chain] || 0) + 1)
+      .map(a => (a.hidden && !has(a.id) ? { ...a, ...SECRET } : a));
+  }
   const GOALS = { first_hour: (c) => [c.stats.hours, 1, "hour at work"], paper_trail: (c) => [c.stats.reports, 10, "reports"],
     first_report: (c) => [c.stats.reports, 1, "report"], hands_1k: (c) => [c.stats.tool_calls, 1000, "tool calls"],
     hands_10k: (c) => [c.stats.tool_calls, 10000, "tool calls"], tokens_10m: (c) => [c.stats.tokens, 1e7, "tokens"],
-    regular: (c) => [c.streak, 3, "days in a row"], week_streak: (c) => [c.streak, 7, "days in a row"], level_10: (c) => [c.level, 10, "levels"] };
+    regular: (c) => [c.streak, 3, "days in a row"], week_streak: (c) => [c.streak, 7, "days in a row"], level_10: (c) => [c.level, 10, "levels"],
+    hands_100k: (c) => [c.stats.tool_calls, 100000, "tool calls"], paper_50: (c) => [c.stats.reports, 50, "reports"], paper_200: (c) => [c.stats.reports, 200, "reports"],
+    tokens_100m: (c) => [c.stats.tokens, 1e8, "tokens"], tokens_1b: (c) => [c.stats.tokens, 1e9, "tokens"], month_streak: (c) => [c.streak, 30, "days in a row"] };
   // All time, from the token ledger (it reaches back past careers): this character's tokens and its rank.
   function allTimeTokens(s) {
     const t = app.tokensCache && app.tokensCache();
@@ -402,8 +413,9 @@ export function makePanels(app) {
       <span class="grow"><b>${b(r.all)} tokens all time</b><span>#${i + 1} of ${rows.length}${i === 0 ? ", the office's top burner" : ""} · ${b(r.output)} written · ${r.sessions} sessions${r.usd ? ` · ${money(r.usd)} at API prices` : ""}</span></span>${icon("chevronRight", 14)}</button>`;
   }
   function careerHtml(s) {
-    const c = s.career, cat = S().achievements || [];
+    const c = s.career;
     if (!c) return "";
+    const cat = visibleAchievements(S().achievements || [], (id) => !!c.unlocked[id]);
     const st = c.stats, got = cat.filter(a => c.unlocked[a.id]);
     const big = (n) => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : (+n).toLocaleString();
     const tiles = [["At work", Math.round(st.hours).toLocaleString() + " h"], ["Tool calls", big(st.tool_calls)], ["Reports", big(st.reports)], ["Tokens", big(st.tokens)]];
@@ -462,7 +474,7 @@ export function makePanels(app) {
           ${x && x.loop ? `<span class="pill ${x.loop.count >= 8 ? "warn" : ""}" title="The same call, ${x.loop.count} times in a row: ${esc(x.loop.text)}. A session repeating itself with nothing in between may be stuck.">${icon("refresh", 13)}Same call ×${x.loop.count}</span>` : ""}
           ${x && x.ci ? `<a class="pill ci ${esc(x.ci.checks || "")}" href="${esc(x.ci.url)}" target="_blank" rel="noopener noreferrer" title="Its branch's pull request on GitHub">${icon(x.ci.checks === "fail" ? "x" : x.ci.checks === "pass" ? "check" : "clock", 13)}PR #${x.ci.number}${x.ci.checks ? ` · ${CI_WORD[x.ci.checks]}` : ""}</a>` : ""}
           ${x && x.spent && x.spent.usd ? `<span class="pill spent" title="${fmtTok(x.spent.tokens)} tokens so far (its helpers included), at API list prices">${icon("coin", 13)}${esc(money(x.spent.usd))} so far</span>` : ""}
-          ${x && x.cache && x.cache.window ? (() => { const f = x.cache.context / x.cache.window, pc = Math.round(f * 100);
+          ${x && x.cache && x.cache.window ? (() => { const f = Math.min(1, x.cache.context / Math.max(x.cache.window, x.cache.context)), pc = Math.round(f * 100);
             return `<span class="pill ctx ${f >= 0.9 ? "bad" : f >= 0.7 ? "warn" : ""}" title="${fmtTok(x.cache.context)} of ${fmtTok(x.cache.window)} tokens of context: what it sends with every reply. Near full, Claude Code compacts the conversation. On the floor it is the pile of paper on its desk.">${icon("files", 13)}Context ${pc}%</span>`; })() : ""}
           ${x && x.tasks ? `<span class="pill ${x.tasks.done === x.tasks.total ? "good" : ""}" title="Its task list: ${x.tasks.done} of ${x.tasks.total} done">${icon("check", 13)}${x.tasks.done}/${x.tasks.total} tasks</span>` : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
@@ -689,13 +701,14 @@ export function makePanels(app) {
   function inbox() {
     const list = S().asks || [], open = list.filter(a => a.status === "open"), done = list.filter(a => a.status !== "open");
     const from = (a) => { const s = a.seat && seatById(a.seat); return `${s ? avatar("mascot-" + s.id, s.color) : `<span class="ask-av">${icon("bot", 16)}</span>`}<span class="grow"><b>${esc(a.name || a.where || "An agent")}</b><small>${s ? esc(P(s).name) + " · " : ""}${esc(relTime(a.ts))}</small></span>`; };
-    const card = (a) => `<div class="ask open"><div class="ask-h">${from(a)}</div><p class="ask-q">${esc(a.text)}</p>
+    const pv = app.privacy();
+    const card = (a) => `<div class="ask open"><div class="ask-h">${from(a)}</div><p class="ask-q ${pv ? "private" : ""}">${esc(a.text)}</p>
       <textarea class="ask-a" rows="3" maxlength="1000" data-ask-draft="${esc(a.id)}" placeholder="Your answer goes back to ${a.session ? "this session as a message" : "the Inbox (the office could not tell which session asked)"}" aria-label="Your answer">${esc(askDrafts.get(a.id) || "")}</textarea>
       <div class="row wrap" style="gap:8px;margin-top:8px"><button class="btn sm primary" data-ask-send="${esc(a.id)}">${icon("send", 14)}Send the answer</button>
         ${a.session && a.seat ? `<button class="btn sm ghost" data-open-session="${esc(a.seat)}|${esc(a.session)}">${icon("chat", 14)}Open the session</button>` : ""}
         <button class="btn sm ghost" data-ask-dismiss="${esc(a.id)}">Dismiss</button></div></div>`;
-    const past = (a) => `<div class="ask done"><div class="ask-h">${from(a)}<span class="lc ${a.status === "answered" ? "good" : ""}">${a.status}</span></div><p class="ask-q">${esc(a.text)}</p>
-      ${a.answer ? `<p class="ask-ans">${icon("reply", 14)}<span>${esc(a.answer)}</span></p>` : ""}</div>`;
+    const past = (a) => `<div class="ask done"><div class="ask-h">${from(a)}<span class="lc ${a.status === "answered" ? "good" : ""}">${a.status}</span></div><p class="ask-q ${pv ? "private" : ""}">${esc(a.text)}</p>
+      ${a.answer ? `<p class="ask-ans">${icon("reply", 14)}<span class="${pv ? "private" : ""}">${esc(a.answer)}</span></p>` : ""}</div>`;
     return { html: `${crumbs("Inbox")}<h2>Inbox</h2><p class="lede">Questions your agents asked you. An agent asks with <code>python3 -m office ask "…"</code> and keeps working; your answer goes back to its session as a message.</p>
       ${section(`Waiting for you · ${open.length}`, open.map(card).join("") || `<div class="g-clear">${icon("check", 16)}No questions waiting.</div>`)}
       ${done.length ? section("Answered", done.slice(0, 20).map(past).join("")) : ""}`,
@@ -711,7 +724,7 @@ export function makePanels(app) {
             askDrafts.delete(id);
             const q = (S().asks || []).find(x => x.id === id);
             if (q && q.seat && r.delivery) app.plane(q.seat, q.session);
-            toast(r.demo ? "Demo office: nothing was sent." : r.note ? `Answered. ${r.note}` : r.delivery === "review" ? "Sent. It waits for approval in that session's terminal." : "Sent to the session.", r.note ? "info" : "good");
+            toast(r.demo ? "Demo office: nothing was sent." : r.note ? `Answered. ${r.note}` : r.delivery === "review" ? "Sent. It waits for approval in that session's terminal." : "Sent to the session.", r.note || r.demo ? "info" : "good");
             app.refresh(); app.rerender(true);
           } catch (e) { b.disabled = false; toast("Could not send: " + e.message, "bad"); }
         }));
@@ -734,7 +747,7 @@ export function makePanels(app) {
       const desk = p.at_desk && seatById(p.at_desk.seat);
       return `<li class="pr ${esc(p.state)}"><span class="ci-dot ${esc(p.checks || "none")}" title="${p.checks ? "Checks " + CI_WORD[p.checks] : "No checks"}"></span>
         <span class="grow"><a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer"><b>#${p.number}</b> <span class="${pv ? "private" : ""}">${esc(p.title)}</span></a>
-        <small>${esc(p.branch || "")}${p.updated ? " · " + esc(relTime(Date.parse(p.updated) / 1000)) : ""}</small></span>
+        <small><span class="${pv ? "private" : ""}">${esc(p.branch || "")}</span>${p.updated ? " · " + esc(relTime(Date.parse(p.updated) / 1000)) : ""}</small></span>
         <span class="lc-tags">${p.state === "draft" ? `<em class="lc">draft</em>` : ""}${p.review && REVIEW[p.review] ? `<em class="lc ${REVIEW[p.review][0]}">${REVIEW[p.review][1]}</em>` : ""}
           ${desk ? `<button class="lc info" data-open-session="${esc(desk.id)}|${esc(p.at_desk.session)}" title="The session on this branch">${esc(P(desk).name)}'s desk</button>` : ""}</span></li>`; };
     const repos = d.repos.map(r => {
@@ -761,15 +774,18 @@ export function makePanels(app) {
     if (!d) return { html: head + `<div class="skeleton"></div><div class="skeleton" style="width:70%"></div>` };
     if (!d.at) return { html: head + `<div class="muted">${d.scanning ? "Looking through the repositories…" : "No repositories yet: the office learns them from the folders its sessions and lanes work in (or add <code>\"repos\"</code> to config.json)."}</div>` };
     const t = d.totals || {}, n = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
-    const row = (w, tags) => `<li><span class="grow"><b class="${pv ? "private" : ""}" title="${pv ? "" : esc(w.path)}">${esc(w.name)}</b><small>${esc(w.branch || "detached at " + w.head)}${w.touched ? " · touched " + esc(relTime(w.touched)) : ""}</small></span><span class="lc-tags">${tags}</span></li>`;
-    const tags = (w) => [w.files && `<em class="lc bad">${n(w.files, "file")} not committed</em>`, w.unpushed && !w.merged && w.upstream !== "gone" && `<em class="lc warn">${n(w.unpushed, "commit")} on no remote</em>`,
-      w.unpushed && !w.upstream && `<em class="lc">never pushed</em>`, w.live && `<em class="lc info">a session works here</em>`].filter(Boolean).join("");
+    const row = (w, tags) => `<li><span class="grow"><b class="${pv ? "private" : ""}" title="${pv ? "" : esc(w.path)}">${esc(w.name)}</b><small><span class="${pv ? "private" : ""}">${esc(w.branch || "detached at " + w.head)}</span>${w.touched ? " · touched " + esc(relTime(w.touched)) : ""}</small></span><span class="lc-tags">${tags}</span></li>`;
+    const tags = (w) => [w.files && `<em class="lc bad">${n(w.files, "file")} not committed</em>`, w.unpushed && !w.merged && `<em class="lc warn">${n(w.unpushed, "commit")} on no remote</em>`,
+      w.unknown && `<em class="lc warn">could not check its commits</em>`, w.detached && w.unpushed && !w.merged && `<em class="lc">detached: on no branch</em>`,
+      w.unpushed && !w.upstream && !w.detached && `<em class="lc">never pushed</em>`, w.live && `<em class="lc info">a session works here</em>`].filter(Boolean).join("");
+    const ign = (w) => (w.ignored && w.ignored.length ? `<em class="lc" title="Removing the worktree deletes these ignored files too">deletes ${esc(w.ignored.slice(0, 2).join(", "))}${w.ignored.length > 2 ? "…" : ""}</em>` : "");
     const copyAll = (cmds, what) => cmds && cmds.length ? `<button class="btn sm" data-copy="${esc(cmds.join("\n"))}" data-copy-note="${cmds.length} commands on the clipboard: paste them in a terminal.">${icon("copy", 14)}Copy ${n(cmds.length, what)}</button>` : "";
     const repos = (d.repos || []).map(r => section(`${esc(r.name)} · ${n(r.worktrees, "worktree")}`, `
-      ${r.work.length ? `<h5 class="lh">Work that is nowhere else · ${r.work.length}</h5><ul class="loose">${r.work.slice(0, 40).map(w => row(w, tags(w))).join("")}</ul>${r.work.length > 40 ? `<p class="hint">and ${r.work.length - 40} more</p>` : ""}`
+      ${r.error ? `<p class="hint">Git could not read this repository: it may be empty, or owned by another user.</p>` : ""}
+      ${r.error ? "" : r.work.length ? `<h5 class="lh">Work that is nowhere else · ${r.work.length}</h5><ul class="loose">${r.work.slice(0, 40).map(w => row(w, tags(w))).join("")}</ul>${r.work.length > 40 ? `<p class="hint">and ${r.work.length - 40} more</p>` : ""}`
         : `<div class="g-clear">${icon("check", 16)}Nothing left behind here.</div>`}
-      ${r.safe.length ? `<h5 class="lh">Safe to remove · ${r.safe.length}</h5><p class="hint">Clean, and every commit is on a remote or on ${esc(r.base || "the default branch")} by name (a squash merge). Removing a worktree keeps its branch.</p>
-        <ul class="loose">${r.safe.slice(0, 6).map(w => row(w, w.merged ? `<em class="lc good">merged</em>` : `<em class="lc good">pushed</em>`)).join("")}</ul>${r.safe.length > 6 ? `<p class="hint">and ${r.safe.length - 6} more, oldest first.</p>` : ""}${copyAll(r.remove_cmds, "remove command")}` : ""}
+      ${r.safe.length ? `<h5 class="lh">Safe to remove · ${r.safe.length}</h5><p class="hint">Clean, and every commit is on a remote or, every one of them, on ${esc(r.base || "the default branch")} by name (a squash merge). Removing a worktree keeps its branch, but deletes the files git ignores in it (build output, .env files): the rows say which.</p>
+        <ul class="loose">${r.safe.slice(0, 6).map(w => row(w, (w.merged ? `<em class="lc good">merged</em>` : `<em class="lc good">pushed</em>`) + ign(w))).join("")}</ul>${r.safe.length > 6 ? `<p class="hint">and ${r.safe.length - 6} more, oldest first.</p>` : ""}${copyAll(r.remove_cmds, "remove command")}` : ""}
       ${r.deleted.length ? `<h5 class="lh">Remote branch deleted · ${r.deleted.length}</h5><p class="hint">Their remote branches were deleted, usually after a merge, but their commits are not on ${esc(r.base || "the default branch")} by name. Look before you remove: removing keeps the branch and its commits.</p>
         <ul class="loose">${r.deleted.slice(0, 5).map(w => row(w, `<em class="lc">${n(w.unpushed, "commit")}</em>`)).join("")}</ul>${r.deleted.length > 5 ? `<p class="hint">and ${r.deleted.length - 5} more.</p>` : ""}${copyAll(r.deleted_cmds, "remove command")}` : ""}
       ${r.prune_cmd ? `<p class="hint">${n(r.gone, "worktree")} whose folder is gone: <button class="btn sm ghost" data-copy="${esc(r.prune_cmd)}">${icon("copy", 13)}Copy the prune command</button></p>` : ""}`)).join("");
@@ -853,7 +869,8 @@ export function makePanels(app) {
     const total = seats.reduce((n, s) => n + Object.keys(s.career.unlocked).length, 0);
     const recent = seats.flatMap(s => Object.entries(s.career.unlocked).map(([id, at]) => ({ s, a: byId[id], at }))).filter(x => x.a)
       .sort((a, b) => b.at - a.at).slice(0, 8);
-    const open = cat.filter(a => !seats.some(s => s.career.unlocked[a.id]));
+    const anyone = (id) => seats.some(s => s.career.unlocked[id]);
+    const open = visibleAchievements(cat, anyone).filter(a => !anyone(a.id));
     const medal = ["#ffd24a", "#c9d1e0", "#d08a4c"];
     return { html: `${crumbs("Trophy room")}<h2>Trophy room</h2>
       <p class="lede">${total} ${total === 1 ? "trophy" : "trophies"} across ${seats.length} characters. Everyone earns XP from real work: tool calls, time at work, sessions and reports.</p>

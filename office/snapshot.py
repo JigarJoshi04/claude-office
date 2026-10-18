@@ -411,7 +411,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.55.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.56.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -498,13 +498,15 @@ class Office(LiveOffice):
                         if left < 2 * 86400 else f"{round(left / 86400)} days"
                     items.append({"level": "bad" if left < 12 * 3600 else "warn", "seat": s["id"],
                                   "text": f"{label}'s login lapses in {when}: run /login on it", "lapses_at": rexp})
+            seen_prs = set()                                 # one item per failing PR, however many desks share its branch
             for x in s.get("sessions", []):
                 lp = x.get("loop")
                 if lp and lp["count"] >= 8 and x.get("live", True) and x.get("state") in ("working", "waiting"):
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"], "loop": True,
                                   "text": f"{x.get('name') or 'A session'} on {label} has made the same call {lp['count']} times in a row: {lp['text']}"})
                 ci = x.get("ci")
-                if ci and ci.get("checks") == "fail" and x.get("live", True):
+                if ci and ci.get("checks") == "fail" and x.get("live", True) and ci["number"] not in seen_prs:
+                    seen_prs.add(ci["number"])
                     items.append({"level": "warn", "seat": s["id"], "ci": True, "session": x["id"],
                                   "text": f"PR #{ci['number']}'s checks failed: {x.get('name') or 'a session'} on {label}"})
             g = s.get("ghost")

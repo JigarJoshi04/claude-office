@@ -33,6 +33,12 @@ class PriceTests(unittest.TestCase):
         self.assertEqual(prices.response_cost("claude-haiku-5-5", long), round(50_000 * 0.5 + 60_000 * 0.05 + 1000 * 2.5))
         self.assertIsNone(prices.response_cost("mystery-model", u))
 
+    def test_context_windows(self):
+        self.assertEqual(prices.context_window("claude-haiku-5-5"), 1_000_000)
+        self.assertEqual(prices.context_window("claude-opus-5-5"), 1_000_000)
+        self.assertEqual(prices.context_window("claude-haiku-4-5-20251001"), 200_000)
+        self.assertEqual(prices.context_window("mystery"), 200_000)
+
     def test_plans(self):
         self.assertEqual(prices.plan_usd({"health": {"tier": "Max 5x"}}), 100)
         self.assertEqual(prices.plan_usd({"health": {"tier": "Max 5x"}, "plan_usd": 150}), 150)

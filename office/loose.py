@@ -40,6 +40,8 @@ def repo_root(cwd: str | None) -> Path | None:
                     return None
                 gitdir = Path(text[7:].strip())
                 gitdir = gitdir if gitdir.is_absolute() else (d / gitdir).resolve()
+                if "modules" in gitdir.parts:                  # a submodule: its parent's .git/modules, not a checkout
+                    return None
                 common = gitdir / "commondir"
                 main = (gitdir / common.read_text().strip()).resolve() if common.exists() else gitdir
                 return main.parent
@@ -60,7 +62,7 @@ def worktrees(root: Path) -> list[dict]:
     """`git worktree list --porcelain`, as dicts: path, head, branch (or None when detached), locked, prunable, main."""
     out = _git(["worktree", "list", "--porcelain"], root)
     if out is None:
-        return []
+        return None                                       # git cannot read it (empty, or owned by someone else)
     items, cur = [], None
     for line in out.splitlines() + [""]:
         if line.startswith("worktree "):
@@ -126,9 +128,10 @@ def main_subjects(root: Path, base: str | None) -> set:
 
 
 def merged_by_name(subjects: list[str], main: set) -> bool:
-    """True when one of a branch's own commits is on the default branch by name. Generic or short subjects ("wip",
-    "address review") never count."""
-    return any(len(x) >= 20 and not GENERIC.match(x) and x in main for x in (y.strip() for y in subjects))
+    """True only when every one of a branch's own commits is on the default branch by name (a squash or a rebase
+    keeps the subject). A generic or short subject ("wip", "address review") proves nothing, so it never counts."""
+    subjects = [y.strip() for y in subjects]
+    return bool(subjects) and all(len(x) >= 20 and not GENERIC.match(x) and x in main for x in subjects)
 
 
 def inspect(w: dict, main: set | None = None) -> dict:
@@ -136,17 +139,20 @@ def inspect(w: dict, main: set | None = None) -> dict:
     path = w["path"]
     if w["prunable"] or not os.path.isdir(path):
         return dict(w, gone=True)
-    st = _git(["status", "--porcelain=v1", "-b", "--untracked-files=normal"], path)
+    st = _git(["status", "--porcelain=v1", "-b", "--untracked-files=normal", "--ignored=matching"], path)
     if st is None:
         return dict(w, error=True)
-    info = parse_status(st)
+    lines = st.splitlines()
+    ignored = [x[3:].strip() for x in lines if x.startswith("!! ")]       # removing the worktree deletes these too
+    info = parse_status("\n".join(x for x in lines if not x.startswith("!! ")))
+    info["ignored"] = ignored[:6]
     n = _git(["rev-list", "--count", "HEAD", "--not", "--remotes"], path)
     try:
-        info["unpushed"] = int((n or "0").strip() or 0)
-    except ValueError:
-        info["unpushed"] = 0
+        info["unpushed"] = int(n.strip())
+    except (AttributeError, ValueError):                 # could not count: never call it safe
+        info["unpushed"], info["unknown"] = 0, True
     subjects = (_git(["log", "--format=%s", "-200", "HEAD", "--not", "--remotes"], path) or "").splitlines() if info["unpushed"] else []
-    info["merged"] = bool(subjects and main and merged_by_name(subjects, main))
+    info["merged"] = bool(main and merged_by_name(subjects, main))
     try:
         info["touched"] = os.stat(path).st_mtime
     except OSError:
@@ -160,6 +166,10 @@ def sweep(roots: list[Path], live_cwds: set[str], workers: int = 4) -> dict:
     repos = []
     for root in roots:
         trees, base = worktrees(root), default_branch(root)
+        if trees is None:
+            repos.append({"root": str(root), "name": root.name, "worktrees": 0, "base": None, "error": True, "work": [], "safe": [],
+                          "deleted": [], "gone": 0, "remove_cmds": [], "deleted_cmds": [], "prune_cmd": None})
+            continue
         main = main_subjects(root, base)
         with ThreadPoolExecutor(max_workers=workers) as pool:
             seen = list(pool.map(lambda w: inspect(w, main), trees))
@@ -171,8 +181,8 @@ def sweep(roots: list[Path], live_cwds: set[str], workers: int = 4) -> dict:
                 gone.append(w)
             elif w.get("error"):
                 continue
-            elif w.get("files") or (w.get("unpushed") and not w.get("merged") and w.get("upstream") != "gone"):
-                work.append(w)
+            elif w.get("files") or w.get("unknown") or (w.get("unpushed") and not w.get("merged") and (w.get("upstream") != "gone" or w.get("detached"))):
+                work.append(w)                                 # a detached HEAD's own commits would be lost: never safe
             elif w.get("unpushed") and not w.get("merged"):   # its remote branch was deleted, usually after a merge
                 if not w["main"] and not w["locked"] and not w["live"]:
                     deleted.append(w)
@@ -191,7 +201,7 @@ def sweep(roots: list[Path], live_cwds: set[str], workers: int = 4) -> dict:
         })
     repos.sort(key=lambda r: (-len(r["work"]), -len(r["safe"])))
     return {"at": time.time(), "repos": repos,
-            "totals": {"repos": len(repos), "worktrees": sum(r["worktrees"] for r in repos),
+            "totals": {"repos": sum(1 for r in repos if not r.get("error")), "worktrees": sum(r["worktrees"] for r in repos),
                        "work": sum(len(r["work"]) for r in repos), "safe": sum(len(r["safe"]) for r in repos),
                        "deleted": sum(len(r["deleted"]) for r in repos),
                        "gone": sum(r["gone"] for r in repos)}}
@@ -201,6 +211,7 @@ def _row(w: dict) -> dict:
     return {"path": w["path"], "name": os.path.basename(w["path"].rstrip("/")), "branch": w.get("branch"),
             "head": (w.get("head") or "")[:7], "files": w.get("files", 0), "unpushed": w.get("unpushed", 0),
             "upstream": w.get("upstream"), "ahead": w.get("ahead", 0), "merged": w.get("merged", False),
+            "unknown": w.get("unknown", False), "detached": w.get("detached", False), "ignored": w.get("ignored", []),
             "main": w["main"], "live": w.get("live", False),
             "locked": w["locked"], "touched": w.get("touched")}
 

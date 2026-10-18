@@ -1540,3 +1540,5 @@ ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
 .lk-sw.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent-2); }
 .lk-st { border: 0; border-radius: 7px; padding: 3px 8px; font-size: 12px; cursor: pointer; background: var(--surface-2); color: var(--text-2); }
 .lk-st.on { background: var(--accent-2); color: #fff; }
+:root[data-theme="light"] .lc.good { color: #0b6a35; } :root[data-theme="light"] .lc.warn { color: #7a4c00; } :root[data-theme="light"] .lc.bad { color: #a51c2b; }
+:root[data-theme="light"] .lc.info { color: #1d4ea8; } :root[data-theme="light"] .lc { color: #3c4256; }

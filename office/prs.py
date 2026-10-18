@@ -15,7 +15,7 @@ import threading
 import time
 from pathlib import Path
 
-FIELDS = "number,title,state,isDraft,url,headRefName,updatedAt,mergedAt,reviewDecision,statusCheckRollup,author"
+FIELDS = "number,title,state,isDraft,url,headRefName,updatedAt,mergedAt,reviewDecision,statusCheckRollup,author,isCrossRepository"
 STALE_S = 180
 _GH_REMOTE = re.compile(r"github\.com[:/]([\w.-]+)/([\w.-]+?)(?:\.git)?/?$")
 
@@ -53,15 +53,12 @@ def summarize(pr: dict) -> dict:
     return {"number": pr.get("number"), "title": pr.get("title") or "", "state": state, "url": pr.get("url"),
             "branch": pr.get("headRefName"), "updated": pr.get("updatedAt"), "merged": pr.get("mergedAt"),
             "review": (pr.get("reviewDecision") or "").lower() or None, "checks": checks(pr.get("statusCheckRollup")),
-            "author": ((pr.get("author") or {}).get("login"))}
+            "author": ((pr.get("author") or {}).get("login")), "fork": bool(pr.get("isCrossRepository"))}
 
 
-def fetch(repo: str, limit: int = 40) -> list[dict] | None:
-    gh = shutil.which("gh")
-    if not gh:
-        return None
+def _list(gh: str, repo: str, state: str, limit: int) -> list[dict] | None:
     try:
-        r = subprocess.run([gh, "pr", "list", "-R", repo, "--state", "all", "--limit", str(limit), "--json", FIELDS],
+        r = subprocess.run([gh, "pr", "list", "-R", repo, "--state", state, "--limit", str(limit), "--json", FIELDS],
                            capture_output=True, text=True, timeout=30, env={**os.environ, "GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
     except (OSError, subprocess.SubprocessError):
         return None
@@ -71,6 +68,21 @@ def fetch(repo: str, limit: int = 40) -> list[dict] | None:
         return [summarize(p) for p in json.loads(r.stdout or "[]")]
     except (ValueError, TypeError):
         return None
+
+
+def fetch(repo: str, limit: int = 40) -> list[dict] | None:
+    """Every open PR (old ones too: a busy repository's last 40 can all be closed) and the most recent of the rest."""
+    gh = shutil.which("gh")
+    if not gh:
+        return None
+    opened, recent = _list(gh, repo, "open", 200), _list(gh, repo, "all", limit)
+    if opened is None and recent is None:
+        return None
+    seen, out = set(), []
+    for p in (opened or []) + (recent or []):
+        if p["number"] not in seen:
+            seen.add(p["number"]); out.append(p)
+    return out
 
 
 class PullRequests:
@@ -103,11 +115,12 @@ class PullRequests:
                 self.running = False
 
     def by_branch(self) -> dict:
-        """(owner/name, branch) -> the newest open PR on it, for the desks' CI lamps."""
+        """(owner/name, branch) -> the newest open PR on it, for the desks' CI lamps. A fork's PR, or one whose head is
+        the default branch, says nothing about the desks on that branch here."""
         out = {}
         with self.lock:
             for repo, d in self.data.items():
                 for p in d.get("prs") or []:
-                    if p["state"] in ("open", "draft") and p.get("branch"):
+                    if p["state"] in ("open", "draft") and p.get("branch") and not p.get("fork") and p["branch"] not in ("main", "master"):
                         out.setdefault((repo, p["branch"]), p)
         return out

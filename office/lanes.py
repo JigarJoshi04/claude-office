@@ -307,7 +307,7 @@ def build_prompt(lane: dict, seat_id: str, cfg: dict) -> str:
         f'{messaging.LANE_PROMPT_START}{lane["title"]}" (lane id {lane["id"]}), working headless on the '
         f"seat {seat_id} in Claude Office. Nobody is watching this terminal; do not ask questions, decide. "
         f"Only when a decision is truly the CEO's (money, someone else's data, anything that cannot be undone), ask it "
-        f"once with `PYTHONPATH={Path(__file__).resolve().parent.parent} python3 -m office ask \"<the question>\"` and keep "
+        f"once with `PYTHONPATH={Path(__file__).resolve().parent.parent} python3 -P -m office ask \"<the question>\"` and keep "
         f"working on what does not depend on it: the answer comes back to you as a message. "
         f"Do not end your turn while a background task or workflow you still need is running.\n"
         f"Working directory: {lane['workdir']}\n"

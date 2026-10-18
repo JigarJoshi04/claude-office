@@ -88,6 +88,17 @@ class CareerTests(unittest.TestCase):
         self.assertEqual(news, [("a", "achievement", "Atlas unlocked Prolific")])
         self.assertEqual(c.shipped_totals({"a": (1001, 3)}, {"a": "Atlas"}), [])    # once
 
+    def test_chains_and_secrets(self):
+        cat = {a["id"]: a for a in career.CATALOGUE}
+        self.assertEqual((cat["paper_200"]["chain"], cat["paper_200"]["tier"]), ("paper", 4))
+        self.assertTrue(cat["speed_run"]["hidden"] and not cat["paper_50"]["hidden"])
+        c = career.Career(self.path, clock=lambda: 1000.0)
+        c.observe(snap(1000))                                                   # the first look is quiet
+        start = {"id": "s2", "live": True, "state": "working", "tool_calls": 0, "tokens_total": 0, "report_status": None, "started_at": 1000}
+        c.observe({"now": 1100, "seats": [{"id": "a", "label": "a", "status": "working", "sessions": [start]}]})
+        news = c.observe({"now": 1400, "seats": [{"id": "a", "label": "a", "status": "working", "sessions": [dict(start, report_status="STATUS: DONE - ok")]}]})
+        self.assertIn(("a", "achievement", "a unlocked Speedrun"), news)            # a report 400 s after its start
+
     def test_catalogue_icons_and_names_are_complete(self):
         self.assertEqual(len({a["id"] for a in career.CATALOGUE}), len(career.CATALOGUE))
         icons = Path(__file__).resolve().parent.parent.joinpath("web/ui/icons.js").read_text()

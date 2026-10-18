@@ -3,6 +3,34 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.56.0] - 2026-10-18
+
+### Added
+- Achievement chains and secrets: Factory (100,000 tool calls), Filing clerk (50 reports), Archivist (200), Hundred
+  million and Billionaire (tokens), Iron will (30 days in a row), and two secrets (Speedrun, Ultramarathon) that read
+  "???" until someone earns them. Chains show one tier past the highest earned, here and in the Trophy room.
+
+### Fixed
+- Loose ends could call work "safe to remove": a count git could not make read as zero commits, one commit found on
+  the default branch by name made a whole branch "merged", and a detached HEAD with commits found nowhere else was
+  offered for removal (which orphans those commits). Now every commit must be on the default branch by name, a count
+  that fails means "could not check", and a detached HEAD with its own commits is always work. Safe rows name the
+  ignored files a removal deletes; submodules are not swept; a folder git cannot read says so instead of "all clear".
+- The filing cabinet's resume command quotes the folder, the config dir and the session, so pasting it can never run
+  anything else (and works for folders with accents).
+- The PR shelf lists every open pull request, not only those among the last 40; a fork's PR, or one whose head is the
+  default branch, lights no desk; one failing PR is one Needs-you item.
+- Answering a question: the question closes only when the answer is delivered (a failure keeps it open, with the
+  reason), two answers cannot both go out, an ended session's follow-up lane is said, and the demo says it sent nothing.
+  Questions are limited to 10 a minute, and open ones are never trimmed away.
+- Needs you no longer reads a question, a CI item, ghost use or a loop as a plan item or a logout.
+- Share-safe hides questions and answers (in Needs you, the Inbox, toasts and notifications) and blurs branch names on
+  the PR shelf and in Loose ends.
+- Claude Haiku 5.5 reads a million tokens of context; the context gauge never shows more than 100%.
+- `office ask` and `office post` fail cleanly when something other than the office answers; lanes call
+  `python3 -P -m office ask`, so a project's own `office` package cannot stand in.
+- Light theme: the status tags in Loose ends and the PR shelf are readable.
+
 ## [3.55.0] - 2026-10-18
 
 ### Added

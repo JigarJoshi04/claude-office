@@ -18,8 +18,10 @@ class ParseTests(unittest.TestCase):
 
     def test_merged_by_name_ignores_generic_subjects(self):
         main = {"fix(api): retry the upload when the token expires", "wip", "address review"}
-        self.assertTrue(loose.merged_by_name(["address review", "fix(api): retry the upload when the token expires"], main))
+        self.assertTrue(loose.merged_by_name(["fix(api): retry the upload when the token expires"], main))
+        self.assertFalse(loose.merged_by_name(["address review", "fix(api): retry the upload when the token expires"], main))   # every commit
         self.assertFalse(loose.merged_by_name(["wip", "address review"], main))
+        self.assertFalse(loose.merged_by_name([], main))
         self.assertFalse(loose.merged_by_name(["fix(api): something else entirely"], main))
 
 
@@ -57,6 +59,36 @@ class SweepTests(unittest.TestCase):
             self.assertEqual(r["gone"], 1)
             self.assertTrue(all(c.startswith("git -C ") and " worktree remove " in c for c in r["remove_cmds"]))
             self.assertEqual(res["totals"]["work"], 2)
+            # a detached HEAD with one commit on main by name and one nowhere else is work, never safe
+            git("worktree", "add", "-q", "--detach", str(t / "wt-det"), "HEAD", cwd=repo)
+            for subject in ("feat: retry uploads when the token expires", "brand new follow-up work only here"):
+                (t / "wt-det" / (subject[:4] + ".txt")).write_text(subject); git("add", ".", cwd=t / "wt-det"); git("commit", "-qm", subject, cwd=t / "wt-det")
+            (t / "wt-clean" / "build.log").write_text("x")                                          # an ignored file
+            (t / "wt-clean" / ".gitignore").write_text("build.log\n"); git("add", ".gitignore", cwd=t / "wt-clean"); git("commit", "-qm", "ignore build logs", cwd=t / "wt-clean")
+            git("push", "-q", "origin", "clean", cwd=t / "wt-clean")
+            r = loose.sweep([repo.resolve()], set())["repos"][0]
+            self.assertIn("wt-det", {w["name"] for w in r["work"]})
+            clean = next(w for w in r["safe"] if w["name"] == "wt-clean")
+            self.assertEqual(clean["ignored"], ["build.log"])
+            # a count git could not make is never "safe"
+            real = loose._git
+            loose._git = lambda args, cwd, timeout=20: None if args[0] == "rev-list" else real(args, cwd, timeout)
+            try:
+                r = loose.sweep([repo.resolve()], set())["repos"][0]
+            finally:
+                loose._git = real
+            self.assertEqual(r["safe"], [])
+            self.assertTrue(all(w["unknown"] for w in r["work"] if not w["files"]))
+            # a folder git cannot read is an error, not an all-clear
+            bad = t / "empty"; (bad / ".git").mkdir(parents=True)
+            res = loose.sweep([bad], set())
+            self.assertTrue(res["repos"][0]["error"])
+            self.assertEqual(res["totals"]["repos"], 0)
+            # a submodule's .git file leads into its parent's .git/modules: not a checkout to sweep
+            sub = t / "parent" / "lib"; sub.mkdir(parents=True)
+            (sub / ".git").write_text("gitdir: ../.git/modules/lib\n")
+            (t / "parent" / ".git" / "modules" / "lib").mkdir(parents=True)
+            self.assertIsNone(loose.repo_root(str(sub)))
 
 
 if __name__ == "__main__":

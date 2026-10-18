@@ -42,8 +42,26 @@ ACHIEVEMENTS = [
     ("commits_1k", "Prolific", "Land 1,000 commits", "layers"),
     ("first_merge", "Merged", "Get a first pull request merged", "send"),
     ("merges_50", "Release train", "Get 50 pull requests merged", "trophy"),
+    ("hands_100k", "Factory", "Make 100,000 tool calls", "server"),
+    ("paper_50", "Filing clerk", "File 50 reports", "files"),
+    ("paper_200", "Archivist", "File 200 reports", "layers"),
+    ("tokens_100m", "Hundred million", "Use 100 million tokens", "spark"),
+    ("tokens_1b", "Billionaire", "Use a billion tokens", "star"),
+    ("month_streak", "Iron will", "Work 30 days in a row", "flame"),
+    ("speed_run", "Speedrun", "File a report within 10 minutes of starting", "zap"),
+    ("ultramarathon", "Ultramarathon", "Keep one session at work for 12 hours", "trophy"),
 ]
-CATALOGUE = [{"id": a, "name": n, "desc": d, "icon": i} for a, n, d, i in ACHIEVEMENTS]
+# Chains: each tier is shown once the one before it is earned. Secrets stay "???" until someone earns them.
+CHAINS = {"hands_1k": ("hands", 1), "hands_10k": ("hands", 2), "hands_100k": ("hands", 3),
+          "first_report": ("paper", 1), "paper_trail": ("paper", 2), "paper_50": ("paper", 3), "paper_200": ("paper", 4),
+          "tokens_10m": ("tokens", 1), "tokens_100m": ("tokens", 2), "tokens_1b": ("tokens", 3),
+          "regular": ("streak", 1), "week_streak": ("streak", 2), "month_streak": ("streak", 3),
+          "marathon": ("marathon", 1), "ultramarathon": ("marathon", 2),
+          "first_commit": ("commits", 1), "commits_100": ("commits", 2), "commits_1k": ("commits", 3),
+          "first_merge": ("merges", 1), "merges_50": ("merges", 2)}
+HIDDEN = {"speed_run", "ultramarathon"}
+CATALOGUE = [{"id": a, "name": n, "desc": d, "icon": i, "chain": CHAINS.get(a, (None, 0))[0], "tier": CHAINS.get(a, (None, 0))[1],
+              "hidden": a in HIDDEN} for a, n, d, i in ACHIEVEMENTS]
 NAMES = {a: n for a, n, _, _ in ACHIEVEMENTS}
 
 
@@ -143,11 +161,15 @@ class Career:
                         st["active_s"] = st.get("active_s", 0.0) + dt
                         if st["active_s"] >= 4 * 3600:
                             news += self._unlock(c, sid, s, "marathon", now)
+                        if st["active_s"] >= 12 * 3600:
+                            news += self._unlock(c, sid, s, "ultramarathon", now)
                     if x.get("report_status") and not st.get("reported"):
                         st["reported"] = True
                         if "BLOCKED" not in str(x["report_status"]).upper():
                             c["reports"] += 1
                             gained += XP_REPORT
+                            if not quiet and x.get("started_at") and now - x["started_at"] <= 600:
+                                news += self._unlock(c, sid, s, "speed_run", now)
                 if working and dt:
                     before_min = int(c["active_s"] // 60)
                     c["active_s"] += dt
@@ -219,9 +241,11 @@ class Career:
         checks = [("first_hour", c["active_s"] >= 3600), ("first_report", c["reports"] >= 1),
                   ("paper_trail", c["reports"] >= 10), ("hands_1k", c["tool_calls"] >= 1000),
                   ("hands_10k", c["tool_calls"] >= 10000), ("juggler", working >= 4),
-                  ("tokens_10m", c["tokens"] >= 10_000_000), ("level_10", level_for(c["xp"]) >= 10)]
+                  ("tokens_10m", c["tokens"] >= 10_000_000), ("level_10", level_for(c["xp"]) >= 10),
+                  ("hands_100k", c["tool_calls"] >= 100_000), ("paper_50", c["reports"] >= 50), ("paper_200", c["reports"] >= 200),
+                  ("tokens_100m", c["tokens"] >= 100_000_000), ("tokens_1b", c["tokens"] >= 1_000_000_000)]
         streak = _streak(c["days"])
-        checks += [("regular", streak >= 3), ("week_streak", streak >= 7)]
+        checks += [("regular", streak >= 3), ("week_streak", streak >= 7), ("month_streak", streak >= 30)]
         for aid, ok in checks:
             if ok:
                 out += self._unlock(c, sid, s, aid, now)

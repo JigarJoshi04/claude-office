@@ -47,9 +47,28 @@ class Asks:
                 "name": name, "where": os.path.basename((cwd or "").rstrip("/")) or None, "status": "open",
                 "answer": None, "answered_at": None, "delivery": None}
         with self.lock:
-            self.items = (self.items + [item])[-MAX_KEEP:]
+            items = self.items + [item]                  # open questions are never trimmed away, only old answered ones
+            closed = [x for x in items if x["status"] != "open"]
+            drop = {id(x) for x in closed[:max(0, len(items) - MAX_KEEP)]}
+            self.items = [x for x in items if id(x) not in drop]
             self._save()
         return dict(item)
+
+    def claim(self, ask_id: str) -> dict | None:
+        """Mark an open question as being answered, so two answers cannot both go out. None when it is not open."""
+        with self.lock:
+            for x in self.items:
+                if x["id"] == ask_id and x["status"] == "open":
+                    x["status"] = "sending"
+                    return dict(x)
+        return None
+
+    def release(self, ask_id: str) -> None:
+        """An answer that could not be delivered: the question is open again."""
+        with self.lock:
+            for x in self.items:
+                if x["id"] == ask_id and x["status"] == "sending":
+                    x["status"] = "open"
 
     def answer(self, ask_id: str, text: str, delivery: str | None) -> dict | None:
         with self.lock:
@@ -74,12 +93,12 @@ class Asks:
             return next((dict(x) for x in self.items if x["id"] == ask_id), None)
 
     def view(self, limit: int = 60) -> list[dict]:
-        """Open questions first (oldest first: they have waited longest), then the latest answered ones."""
+        """Every open question (oldest first: they have waited longest), then the latest answered ones."""
         with self.lock:
             items = [dict(x) for x in self.items]
-        open_ = [x for x in items if x["status"] == "open"]
-        done = sorted((x for x in items if x["status"] != "open"), key=lambda x: -(x.get("answered_at") or x["ts"]))
-        return (open_ + done)[:limit]
+        open_ = [x for x in items if x["status"] in ("open", "sending")]
+        done = sorted((x for x in items if x["status"] not in ("open", "sending")), key=lambda x: -(x.get("answered_at") or x["ts"]))
+        return open_[:100] + done[:max(0, limit - len(open_))]
 
 
 def session_for(snap: dict, pids: list[int], cwd: str | None) -> tuple[str | None, str | None, str | None]:

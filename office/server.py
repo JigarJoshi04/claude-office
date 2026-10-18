@@ -71,6 +71,8 @@ def ask_question(office, body: dict) -> dict:
     cwd = body.get("cwd")
     if cwd is not None and (not isinstance(cwd, str) or len(cwd) > 1024):
         raise ValueError("cwd must be a path")
+    if not _event_budget(limit=10, bucket=_ASKS):
+        raise ValueError("Too many questions: at most 10 a minute")
     snap = office.get()
     seat, session, name = asks.session_for(snap, pids, cwd)
     item = office.asks.add(text.strip(), seat, session, name, cwd)
@@ -96,16 +98,24 @@ def answer_question(office, body: dict, dismiss: bool, demo: bool) -> dict:
     text = body.get("text")
     if not isinstance(text, str) or not 1 <= len(text.strip()) <= asks.MAX_TEXT:
         raise ValueError(f"Write an answer of 1-{asks.MAX_TEXT} characters")
+    if not office.asks.claim(ask_id):                     # someone else is answering it right now
+        raise ValueError("That question is already being answered")
     delivery, note = None, None
-    if not demo and item.get("session") and item.get("seat"):
+    if demo:
+        office.asks.release(ask_id)
+        return {"ok": True, "demo": True}
+    if item.get("session") and item.get("seat"):
         try:
             r = talk.send(office, {"seat": item["seat"], "id": item["session"],
                                    "text": f"The CEO answered your question ({item['text'][:200]}):\n\n{text.strip()}"},
                           [s["id"] for s in office.get().get("seats", [])])
             delivery = r.get("delivery")
-        except ValueError as e:
-            note = str(e)
-    elif not item.get("session"):
+        except ValueError as e:                           # not delivered: the question stays open, to try again
+            office.asks.release(ask_id)
+            raise ValueError(f"Not sent: {e}")
+        if delivery == "followup":
+            note = "That session had ended, so a follow-up lane picks up your answer."
+    else:
         note = "The office could not tell which session asked, so the answer is kept here."
     done = office.asks.answer(ask_id, text.strip(), delivery)
     office.emit("answer", f"CEO answered {item.get('name') or 'an agent'}: {text.strip()[:80]}", item.get("seat"), "good")
@@ -116,13 +126,17 @@ def answer_question(office, body: dict, dismiss: bool, demo: bool) -> dict:
 _EVENTS: list = []
 
 
-def _event_budget(now: float | None = None, limit: int = 30) -> bool:
-    """At most `limit` inbound events a minute, so a runaway script cannot flood the floor."""
+_ASKS: list = []
+
+
+def _event_budget(now: float | None = None, limit: int = 30, bucket: list | None = None) -> bool:
+    """At most `limit` inbound events (or questions) a minute, so a runaway script cannot flood the floor."""
     now = time.time() if now is None else now
-    _EVENTS[:] = [t for t in _EVENTS if now - t < 60]
-    if len(_EVENTS) >= limit:
+    b = _EVENTS if bucket is None else bucket
+    b[:] = [t for t in b if now - t < 60]
+    if len(b) >= limit:
         return False
-    _EVENTS.append(now)
+    b.append(now)
     return True
 
 
@@ -152,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.55.0"
+    server_version = "ClaudeOffice/3.56.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass

@@ -80,7 +80,7 @@ def estimate(model: str | None, fresh: float, cache: float, output: float) -> fl
 
 
 # Claude 4.6 and later models read a million tokens of context (Haiku 5.5 excepted); the rest, and unknown models, 200k.
-_WINDOW_200K = ("claude-haiku-5-5", "claude-haiku-4-5", "claude-3-5-haiku", "claude-haiku-3-5", "claude-sonnet-4-5", "claude-sonnet-4",
+_WINDOW_200K = ("claude-haiku-4-5", "claude-3-5-haiku", "claude-haiku-3-5", "claude-sonnet-4-5", "claude-sonnet-4",
                 "claude-opus-4-5", "claude-opus-4-1", "claude-opus-4")
 
 

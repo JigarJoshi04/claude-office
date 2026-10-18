@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import threading
 import time
 from pathlib import Path
@@ -111,7 +112,8 @@ class Cabinet:
         for _, sid, r, k, meta in rows[offset:offset + limit]:
             st = known.get(k)
             cwd = meta.get("cwd")
-            resume = (f"cd {json.dumps(cwd)} && CLAUDE_CONFIG_DIR={st['config_dir']} claude --resume {sid}"
+            q = shlex.quote                                  # inert to paste: folder names can hold anything
+            resume = (f"cd {q(cwd)} && CLAUDE_CONFIG_DIR={q(st['config_dir'])} claude --resume {q(sid)}"
                       if st and st.get("kind") == "claude" and meta.get("path") and cwd else None)
             out.append({"id": sid, "seat": k, "project": r.get("p"), "title": meta.get("title"), "prompt": meta.get("prompt"),
                         "first": r.get("fi"), "last": r.get("l"), "tokens": r.get("f", 0) + r.get("c", 0), "responses": r.get("n", 0),

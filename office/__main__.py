@@ -99,7 +99,7 @@ def cmd_ask(args) -> int:
     import os
     from .asks import parent_pids
     code, out = _post("/api/ask", {"text": args.question, "pids": parent_pids(), "cwd": os.getcwd()}, args.port)
-    if code != 200:
+    if code != 200 or out is None:
         print((out or {}).get("error") or f"HTTP {code}", file=sys.stderr)
         return 1
     print("Asked. Keep working on what does not depend on it: the CEO's answer comes back to this session as a message."
@@ -115,7 +115,7 @@ def cmd_post(args) -> int:
     if args.source:
         body["source"] = args.source
     code, out = _post("/api/event", body, args.port)
-    if code != 200:
+    if code != 200 or out is None:
         print((out or {}).get("error") or f"HTTP {code}", file=sys.stderr)
         return 1
     return 0

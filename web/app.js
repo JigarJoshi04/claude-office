@@ -546,9 +546,10 @@ function onNews(e) {
       break;
     }
     case "ask": {                                      // an agent's question for the CEO (python3 -m office ask): an alert, at every level
+      const said = prefs.privacy ? "An agent asks you a question. Open the Inbox to answer." : text;   // share-safe: not the question
       sound.play("ring");
-      toast(text, "warn", { ic: "bell", ms: 9000 });
-      notify("A question for you", text);
+      toast(said, "warn", { ic: "bell", ms: 9000 });
+      notify("A question for you", said);
       if (e.seat) fx.sayAtSeat(e.seat, "I need a decision from the CEO.", 7000);
       break;
     }

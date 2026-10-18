@@ -29,7 +29,14 @@ class CabinetTests(unittest.TestCase):
             self.assertEqual([x["id"] for x in r["rows"]], ["s1"])                          # every word, any case
             row = r["rows"][0]
             self.assertEqual((row["tokens"], row["usd"], row["has_transcript"]), (100, 2.5, True))
-            self.assertEqual(row["resume"], 'cd "/work/api" && CLAUDE_CONFIG_DIR=/home/me/.claude claude --resume s1')
+            self.assertEqual(row["resume"], "cd /work/api && CLAUDE_CONFIG_DIR=/home/me/.claude claude --resume s1")
+            ledger["s1"]["s"] = "claude"
+            c.index["s1"]["cwd"] = "/home/u/proj $(touch PWNED)/café`id`"
+            seats[0]["config_dir"] = "/home/u/.claude two"
+            cmd = c.search(ledger, seats, "rate")["rows"][0]["resume"]
+            import shlex
+            self.assertEqual(shlex.split(cmd)[:2], ["cd", "/home/u/proj $(touch PWNED)/café`id`"])     # one quoted word, nothing runs
+            self.assertIn("CLAUDE_CONFIG_DIR='/home/u/.claude two'", cmd)
             self.assertEqual(c.search(ledger, seats, "", seat="nobody")["total"], 0)
 
 

@@ -101,3 +101,47 @@ class AskTests(unittest.TestCase):
         import os
         from office.asks import parent_pids
         self.assertEqual(parent_pids()[0], os.getppid())
+
+
+class AnswerSafetyTests(unittest.TestCase):
+    def test_a_failed_delivery_keeps_the_question_open_and_answers_go_once(self):
+        import tempfile
+        from pathlib import Path
+        from office import asks
+        import office.server as srv
+
+        class Office:
+            def __init__(self):
+                self.asks = asks.Asks(Path(tempfile.mkdtemp()) / "a.json")
+                self.snap = {"seats": [{"id": "c", "label": "c", "sessions": []}]}
+            def get(self):
+                return self.snap
+            def emit(self, *a, **k):
+                pass
+            def build(self):
+                return self.snap
+        o = Office()
+        q = o.asks.add("Ship it?", "c", "11111111-2222-3333-4444-555555555555", "lane", "/w")
+        real = srv.talk.send
+        try:
+            def refuse(off, body, ids):
+                raise ValueError("That running session cannot receive messages right now")
+            srv.talk.send = refuse
+            with self.assertRaises(ValueError):
+                srv.answer_question(o, {"id": q["id"], "text": "Yes"}, False, False)
+            self.assertEqual(o.asks.get(q["id"])["status"], "open")                  # still open: try again later
+            srv.talk.send = lambda off, body, ids: {"delivery": "followup"}
+            r = srv.answer_question(o, {"id": q["id"], "text": "Yes"}, False, False)
+            self.assertIn("follow-up lane", r["note"])
+        finally:
+            srv.talk.send = real
+        q2 = o.asks.add("Again?", "c", None, None, None)
+        self.assertTrue(o.asks.claim(q2["id"]))
+        self.assertIsNone(o.asks.claim(q2["id"]))                                   # a second answer cannot go out
+        q3 = o.asks.add("Demo?", "c", None, None, None)
+        self.assertEqual(srv.answer_question(o, {"id": q3["id"], "text": "x"}, False, True), {"ok": True, "demo": True})
+        self.assertEqual(o.asks.get(q3["id"])["status"], "open")
+        srv._ASKS.clear()
+        self.assertTrue(all(srv._event_budget(now=100 + i, limit=10, bucket=srv._ASKS) for i in range(10)))
+        self.assertFalse(srv._event_budget(now=111, limit=10, bucket=srv._ASKS))
+        srv._ASKS.clear()
