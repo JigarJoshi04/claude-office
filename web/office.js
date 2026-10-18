@@ -780,6 +780,7 @@ export function createOffice(stage, handlers) {
     lights.push({ x: lo.x + 174, y: lo.y + 84, r: 22, c: "#ffcf7a", i: 0.4 });
     S.drawCoffeeMachine(ctx, lo.x + 148, lo.y + 76, t);
     S.drawArcade(ctx, lo.x + 166, lo.y + 110, t);
+    if (squashToday != null) S.drawPixText(ctx, lo.x + 166 + Math.max(0, 7 - String(squashToday).length * 2), lo.y + 103, String(squashToday), "#ff8ef0");   // today's Daily run best
     lights.push({ x: lo.x + 173, y: lo.y + 118, r: 22, c: "#ff4fd8", i: 0.45 });
     S.drawWaterCooler(ctx, lo.x + 148, lo.y + 112, t);
     const spots = [[lo.x + 22, lo.y + 46], [lo.x + 42, lo.y + 46], [lo.x + 22, lo.y + 94], [lo.x + 42, lo.y + 94], [lo.x + 79, lo.y + 54], [lo.x + 101, lo.y + 70]];
@@ -1304,6 +1305,7 @@ export function createOffice(stage, handlers) {
   function focusSession(id) { refocus = { at: performance.now(), run: () => focusSession(id) }; const a = agents.get(id); if (!a) return; const [x, y] = anchorFor(a); focusRect(x - 44, y - 24, 88, 70); }
   function fit() { refocus = null; cam.tz = 1; cam.tx = 0; cam.ty = 0; clampCam(cam); }
   // The last time the CEO moved the camera themselves: the director cam (ui/director.js) stands down after it.
+  let squashToday = null;                 // the best Daily Squash run today, on the cabinet's marquee (ui/arcade.js)
   let userCamAt = -1e9, menuAt = -1e9;     // menuAt: when a room menu last opened (a long press or a right click)
   const userCam = () => { userCamAt = performance.now(); };
   function applyCam(force) {
@@ -1696,6 +1698,7 @@ export function createOffice(stage, handlers) {
     userCamAt: () => userCamAt,
     // Whoever just shipped gets a visit from both pets (the cat, and the dog once it is unlocked).
     petsCheer(seatId) { const pod = L && L.pods.find(p => p.seat.id === seatId); if (!pod) return; petVisit(cat, pod, "sit", 12000, 28); if (has("dog")) petVisit(dog, pod, "sit", 12000, 40); },
+    setSquash(n) { squashToday = n == null ? null : Math.max(0, Math.min(999, Math.round(n))); },
     focusShipBoard() { if (L) { const b = BOARD(); focusRect(b.x - 6, b.y - 18, 60, 64); } },
     setDirector(on) { const b = document.querySelector('[data-cam="director"]'); if (b) { b.setAttribute("aria-pressed", String(!!on)); b.classList.toggle("on", !!on); } },
     pan(dx, dy) { userCam(); cam.tx += dx; cam.ty += dy; clampCam(cam); },

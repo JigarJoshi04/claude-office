@@ -359,7 +359,9 @@ const cards = makeCards({ app, panels, prefs });
 const alarms = makeAlarms({ app, prefs, toast, notify: (t, b) => { notifyTarget = { kind: "ceo" }; notify(t, b); }, sound, panels, DEMO, quiet: () => dndOn() });
 const burn = makeBurn({ app, office, panels, store, DEMO, prefs, giftBox, toast, sound, replay, alarms });
 app.openCard = (id) => cards.open(id);
-const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
+const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); },
+  onDaily: (n) => office.setSquash(n) });
+office.setSquash((store.get("squashDays", {}) || {})[localDay()]);   // today's Daily run on the lounge cabinet
 // "Your office", scrolled to the sticker album.
 function openAlbum() { if (floor.tv()) floor.setTv(false); go({ kind: "office" }, false, { anchor: "album" }); }
 

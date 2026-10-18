@@ -1,7 +1,8 @@
 // Bug Squash, the lounge's arcade game: 30 seconds of squashing bugs that crawl over a code editor. Green bugs are
 // worth 1, fast red ones 3, the rare golden bug 10; blue features cost 5 (don't squash features). Mouse, touch or
-// keyboard (arrows move the crosshair, space squashes). The best score lives in this browser; beating it brings a
-// gift, once a day.
+// keyboard (arrows move the crosshair, space squashes, P pauses). The Daily run spawns the same bugs, in the same
+// places, for everyone all day (seeded by the date); free play is random. The best score, and each day's best Daily
+// run for 30 days, live in this browser; beating the best brings a gift, once a day.
 import { $ } from "./util.js";
 import { icon } from "./icons.js";
 import { sound } from "./sound.js";
@@ -26,47 +27,85 @@ export function spawnKind(roll, t) {
 // Seconds between spawns: quicker as the round goes on.
 export const spawnGap = (t) => Math.max(0.28, 0.85 - t * 0.02);
 
-export function makeArcade(ctx) {
-  const { store, onBest } = ctx;
-  let raf = 0;
+// A small seeded random source (mulberry32), and a day's seed from its date: the Daily run's spawns.
+export function seeded(a) {
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+export const daySeed = (day) => [...String(day)].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0;
+// The Daily runs kept: {day: best}, the last 30 days; and the run of days in a row with one, up to today.
+export function keepDays(days, day, score) {
+  const out = { ...days, [day]: Math.max(days[day] || 0, score) };
+  return Object.fromEntries(Object.entries(out).sort(([a], [b]) => a < b ? -1 : 1).slice(-30));
+}
+export function dailyStreak(days, today) {
+  let n = 0;
+  for (let d = new Date(today + "T12:00:00"); days[localDay(d)] != null; d.setDate(d.getDate() - 1)) n++;
+  return n;
+}
 
+export function makeArcade(ctx) {
+  const { store, onBest, onDaily } = ctx;
+  let raf = 0;
+  const today = () => store.get("squashDays", {})[localDay()] ?? null;
+
+  // The last 14 days' Daily runs as little bars, today's lit, and the days in a row.
+  function historyHtml() {
+    const days = store.get("squashDays", {}), now = new Date(), cells = [];
+    for (let i = 13; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); const k = localDay(d); cells.push([k, days[k]]); }
+    const top = Math.max(10, ...cells.map(([, v]) => v || 0)), streak = dailyStreak(days, localDay());
+    if (!cells.some(([, v]) => v != null)) return "";
+    return `<div class="arc-days" aria-label="Daily runs, the last 14 days">${cells.map(([k, v], i) => `<i class="${i === 13 ? "today" : ""}" style="height:${v == null ? 2 : 4 + Math.round(v / top * 22)}px" title="${k}: ${v == null ? "no run" : v}"></i>`).join("")}</div>
+      <p class="arc-streak">${streak > 1 ? `${streak} days in a row` : "Play the Daily run each day for a streak"}</p>`;
+  }
   function open() {
     const d = $("dialog");
     d.classList.add("arcade");
     const best = store.get("squashBest", 0);
     $("dialogBody").innerHTML = `<div class="arc">
-      <div class="arc-h"><b>Bug Squash</b><span class="arc-best">Best ${best}</span><button class="btn sm ghost" data-arc-close aria-label="Close">${icon("x", 16)}</button></div>
+      <div class="arc-h"><b>Bug Squash</b><span class="arc-best">Best ${best}${today() != null ? ` · today's Daily ${today()}` : ""}</span><button class="btn sm ghost" data-arc-pause aria-label="Pause" title="Pause (P)" hidden>${icon("pause", 16)}</button><button class="btn sm ghost" data-arc-close aria-label="Close">${icon("x", 16)}</button></div>
       <div class="arc-screen"><canvas width="${GW}" height="${GH}" tabindex="0" aria-label="Bug Squash: squash bugs, not features. Arrows move, space squashes."></canvas>
         <div class="arc-over"><div class="arc-title">BUG SQUASH</div><p>Squash the bugs before they ship. <b class="g">Green 1</b> · <b class="r">Red 3</b> · <b class="y">Gold 10</b><br>Don't squash the <b class="b">features</b> (−5).</p>
-          <button class="btn primary" data-arc-start>${icon("play", 15)}Start · 30 s</button></div></div>
-      <div class="arc-hud"><span>Score <b data-arc-score>0</b></span><span>Time <b data-arc-time>${ROUND}</b></span><span class="muted">Click or tap a bug · arrows + space</span></div></div>`;
+          <div class="row" style="gap:8px;justify-content:center"><button class="btn primary" data-arc-start="daily">${icon("calendar", 15)}Daily run</button><button class="btn" data-arc-start>${icon("play", 15)}Free play</button></div>${historyHtml()}</div></div>
+      <div class="arc-hud"><span>Score <b data-arc-score>0</b></span><span>Time <b data-arc-time>${ROUND}</b></span><span class="muted">Click or tap a bug · arrows + space · P pauses</span></div></div>`;
     const cv = d.querySelector("canvas"), g = cv.getContext("2d"), over = d.querySelector(".arc-over");
     g.imageSmoothingEnabled = false;
     const st = { on: false, t: 0, score: 0, bugs: [], splats: [], pops: [], next: 0, cx: GW / 2, cy: GH / 2, keys: new Set(), last: 0 };
     const code = Array.from({ length: 14 }, (_, i) => ({ indent: (i * 7) % 4, parts: Array.from({ length: 2 + (i * 5) % 4 }, (_, k) => ({ w: 6 + ((i * 13 + k * 7) % 22), c: ["#c678dd", "#56b6c2", "#e5c07b", "#98c379", "#7f848e"][(i + k) % 5] })) }));
 
-    function start() {
-      Object.assign(st, { on: true, t: 0, score: 0, bugs: [], splats: [], pops: [], next: 0.4, last: performance.now(), t0: performance.now() });
-      over.hidden = true; cv.focus();
+    function start(daily) {
+      Object.assign(st, { on: true, t: 0, score: 0, bugs: [], splats: [], pops: [], next: 0.4, last: performance.now(), t0: performance.now(),
+                          daily: !!daily, rng: daily ? seeded(daySeed(localDay())) : Math.random, paused: null });   // the Daily run: today's bugs
+      over.hidden = true; cv.focus(); pauseBtn.hidden = false;
       cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
     }
+    function pause() {                                   // the clock stops; the bugs freeze where they are
+      if (!st.on) return;
+      if (st.paused == null) { st.paused = performance.now(); over.innerHTML = `<div class="arc-title">PAUSED</div><p>P or the button to go on.</p>`; over.hidden = false; }
+      else { st.t0 += performance.now() - st.paused; st.paused = null; st.last = performance.now(); over.hidden = true; cv.focus(); raf = requestAnimationFrame(loop); }
+    }
+    const pauseBtn = d.querySelector("[data-arc-pause]");
+    pauseBtn.addEventListener("click", pause);
+    const bindStarts = (root) => root.querySelectorAll("[data-arc-start]").forEach(b => b.addEventListener("click", () => start(b.dataset.arcStart === "daily")));
     function finish() {
-      st.on = false;
+      st.on = false; pauseBtn.hidden = true;
       const prev = store.get("squashBest", 0), best = Math.max(prev, st.score);
       store.set("squashBest", best);
-      d.querySelector(".arc-best").textContent = `Best ${best}`;
+      const dayPrev = today();
+      if (st.daily) { store.set("squashDays", keepDays(store.get("squashDays", {}), localDay(), st.score)); if (onDaily) onDaily(today()); }
+      d.querySelector(".arc-best").textContent = `Best ${best}${today() != null ? ` · today's Daily ${today()}` : ""}`;
       const fresh = st.score > prev && st.score > 0;
       let gift = false;
       if (fresh && store.get("squashGiftDay", "") !== localDay()) { store.set("squashGiftDay", localDay()); gift = onBest(st.score); }
       sound.play(fresh ? "levelup" : "report");
-      over.innerHTML = `<div class="arc-title">${fresh ? "NEW BEST!" : "TIME!"}</div><p>You scored <b>${st.score}</b> point${st.score === 1 ? "" : "s"}.${fresh && prev ? ` Your old best was ${prev}.` : ""}${gift ? `<br><b class="y">A gift is waiting ${gift.mail ? "in the mailroom" : "on the floor"}.</b>` : ""}</p>
-        <button class="btn primary" data-arc-start>${icon("play", 15)}Play again</button>`;
+      const dayBest = st.daily && st.score > (dayPrev ?? -1);
+      over.innerHTML = `<div class="arc-title">${fresh ? "NEW BEST!" : dayBest ? "TODAY'S BEST!" : "TIME!"}</div><p>You scored <b>${st.score}</b> point${st.score === 1 ? "" : "s"}${st.daily ? " on today's Daily run" : ""}.${fresh && prev ? ` Your old best was ${prev}.` : ""}${gift ? `<br><b class="y">A gift is waiting ${gift.mail ? "in the mailroom" : "on the floor"}.</b>` : ""}</p>
+        <div class="row" style="gap:8px;justify-content:center"><button class="btn ${st.daily ? "primary" : ""}" data-arc-start="daily">${icon("calendar", 15)}Daily run</button><button class="btn ${st.daily ? "" : "primary"}" data-arc-start>${icon("play", 15)}Free play</button></div>${historyHtml()}`;
       over.hidden = false;
-      over.querySelector("[data-arc-start]").addEventListener("click", start);
-      over.querySelector("[data-arc-start]").focus();
+      bindStarts(over);
+      over.querySelector(st.daily ? "[data-arc-start=daily]" : "[data-arc-start]:not([data-arc-start=daily])").focus();
     }
     function squash(x, y) {
-      if (!st.on) return;
+      if (!st.on || st.paused != null) return;
       let hit = null;
       for (const b of st.bugs) if (!b.dead && Math.abs(b.x - x) <= 5 && Math.abs(b.y - y) <= 5) { hit = b; break; }
       if (!hit) { st.splats.push({ x, y, life: 0.25, miss: true }); return; }
@@ -80,13 +119,14 @@ export function makeArcade(ctx) {
     }
     function loop(now) {
       const dt = Math.min(0.05, (now - st.last) / 1000); st.last = now;
+      if (st.on && st.paused != null) return;          // paused: no frames until it goes on
       if (st.on) {
         st.t = (now - st.t0) / 1000;                     // the clock is real time, however slow the frames
         if (st.t >= ROUND) { d.querySelector("[data-arc-time]").textContent = 0; draw(); finish(); return; }
         st.next -= dt;
-        if (st.next <= 0) {
-          const kind = spawnKind(Math.random(), st.t), a = Math.random() * Math.PI * 2, k = KINDS[kind];
-          st.bugs.push({ kind, x: 8 + Math.random() * (GW - 16), y: 10 + Math.random() * (GH - 18), vx: Math.cos(a) * k.speed, vy: Math.sin(a) * k.speed, age: 0 });
+        if (st.next <= 0) {                              // four draws a spawn, so the Daily run's spawns never drift
+          const kind = spawnKind(st.rng(), st.t), a = st.rng() * Math.PI * 2, k = KINDS[kind];
+          st.bugs.push({ kind, x: 8 + st.rng() * (GW - 16), y: 10 + st.rng() * (GH - 18), vx: Math.cos(a) * k.speed, vy: Math.sin(a) * k.speed, age: 0 });
           st.next = spawnGap(st.t);
         }
         for (const b of st.bugs) {
@@ -140,11 +180,12 @@ export function makeArcade(ctx) {
     cv.addEventListener("pointerdown", (e) => { e.preventDefault(); const [x, y] = at(e); st.cx = x; st.cy = y; squash(x, y); });
     const keydown = (e) => {
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && st.on) { e.preventDefault(); st.keys.add(e.key); }
-      else if (e.key === " " && st.on) { e.preventDefault(); squash(st.cx, st.cy); }
+      else if (e.key === " " && st.on && st.paused == null) { e.preventDefault(); squash(st.cx, st.cy); }
+      else if ((e.key === "p" || e.key === "P") && st.on) { e.preventDefault(); pause(); }
     };
     const keyup = (e) => st.keys.delete(e.key);
     d.addEventListener("keydown", keydown); d.addEventListener("keyup", keyup);
-    d.querySelector("[data-arc-start]").addEventListener("click", start);
+    bindStarts(d);
     d.querySelector("[data-arc-close]").addEventListener("click", () => d.close());
     d.addEventListener("close", () => { cancelAnimationFrame(raf); st.on = false; d.removeEventListener("keydown", keydown); d.removeEventListener("keyup", keyup); d.classList.remove("arcade"); }, { once: true });
     draw();

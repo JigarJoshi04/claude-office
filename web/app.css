@@ -1713,3 +1713,6 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .photo-view img { width: 100%; image-rendering: pixelated; border-radius: 8px; }
 .photo-view p { margin: 0; display: grid; } .photo-view small { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .polaroid { transform: none; transition: none; } }
+.arc-days { display: flex; align-items: flex-end; justify-content: center; gap: 3px; height: 28px; margin-top: 12px; }
+.arc-days i { width: 7px; border-radius: 2px; background: rgba(255,142,240,.35); } .arc-days i.today { background: #ff8ef0; box-shadow: 0 0 8px #ff4fd8; }
+.arc-streak { margin: 4px 0 0; font-size: 12px; color: #ffd8fb; opacity: .8; }

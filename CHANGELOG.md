@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.109.0] - 2026-10-19
+
+### Added
+- Daily Squash. Bug Squash has a Daily run: the same bugs, in the same places, for everyone all day (seeded by the
+  date), beside free play. Each day's best Daily run is kept for 30 days, shown as two weeks of bars with your run of
+  days in a row, and today's best glows on the lounge's arcade cabinet. The game pauses with P or a button.
+
 ## [3.108.0] - 2026-10-19
 
 ### Added

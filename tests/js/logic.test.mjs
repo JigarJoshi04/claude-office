@@ -533,3 +533,17 @@ test("plain-language commands in the palette", async () => {
   assert.deepEqual(pc("tokens", now), []);
   assert.deepEqual(pc("remind me in 20 min", now), []);                               // nothing to remind of
 });
+
+test("Daily Squash: the same bugs all day, kept 30 days, a streak", async () => {
+  const { seeded, daySeed, keepDays, dailyStreak, spawnKind } = await import("../../web/ui/arcade.js");
+  const run = (day) => { const r = seeded(daySeed(day)); return Array.from({ length: 12 }, () => spawnKind(r(), 5) + ":" + Math.round(r() * 100)); };
+  assert.deepEqual(run("2026-10-19"), run("2026-10-19"));
+  assert.notDeepEqual(run("2026-10-19"), run("2026-10-20"));
+  let days = {};
+  for (let i = 1; i <= 35; i++) days = keepDays(days, `2026-09-${String(i).padStart(2, "0")}`.replace(/-3[1-5]$/, m => m), i);
+  assert.equal(Object.keys(days).length, 30);
+  assert.equal(keepDays({ "2026-10-19": 40 }, "2026-10-19", 12)["2026-10-19"], 40);           // the day's best stays
+  assert.equal(dailyStreak({ "2026-10-17": 1, "2026-10-18": 2, "2026-10-19": 3 }, "2026-10-19"), 3);
+  assert.equal(dailyStreak({ "2026-10-17": 1, "2026-10-19": 3 }, "2026-10-19"), 1);
+  assert.equal(dailyStreak({}, "2026-10-19"), 0);
+});
