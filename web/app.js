@@ -523,7 +523,7 @@ function apply(next) {
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   if (!DEMO) { checkBadges(); cheerWeekly(); }   // the demo office never hands out badges
-  if (first) visitStreak();
+  if (first) { visitStreak(); setTimeout(whatsNew, 1500); }
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) onNews(e);
@@ -909,6 +909,32 @@ async function shareDay() {
   if (!DEMO) badge(award("show_and_tell"));
 }
 app.shareDay = shareDay;
+
+// What's new: after an update, people who used an earlier version get a short list of what changed (once). A first
+// visit gets the tour instead.
+const WHATS_NEW = [
+  ["star", "The office levels up", "Everyone's XP adds up to an office level that unlocks palms, a vacuum, a dog, fireworks and more. Click the gold ring."],
+  ["rewind", "Replay the day", "Press R and the floor plays back the last hours."],
+  ["tv", "TV mode", "Press V for the floor alone, full screen, with a news ticker."],
+  ["flame", "Goals, combos and a weekly challenge", "Three new goals every day, combos for reports in a row, and a challenge to beat last week."],
+  ["calendar", "This week", "Today now charts the last seven days."],
+  ["sparkles", "Gear, seasons and banter", "Team caps and shades come with levels, Halloween is on the floor, and characters chat."],
+  ["users", "Right-click a room", "Open, zoom, hire a lane for that seat, or send it on holiday."],
+];
+function whatsNew() {
+  const v = snap && snap.office.version, seen = store.get("seenVersion", null);
+  if (!v || DEMO) return;
+  store.set("seenVersion", v);
+  if (seen === v || !store.get("welcomed", false)) return;   // a returning visitor (the hint was dismissed) who has not seen this version
+  $("dialogBody").innerHTML = `<div class="dh"><b>New in Claude Office ${esc(v)}</b><button class="btn sm ghost" id="wnClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="db"><div class="wn">${WHATS_NEW.map(([ic, t, d]) => `<div class="wn-row"><span class="wn-ic">${icon(ic, 18)}</span><div><b>${esc(t)}</b><span>${esc(d)}</span></div></div>`).join("")}</div>
+    <div class="row" style="margin-top:14px;gap:8px"><button class="btn primary" id="wnOk">Got it</button><button class="btn" id="wnTour">${icon("sparkles", 15)}Take the tour</button></div></div>`;
+  $("dialog").showModal();
+  $("wnClose").addEventListener("click", () => $("dialog").close());
+  $("wnOk").addEventListener("click", () => $("dialog").close());
+  $("wnTour").addEventListener("click", () => { $("dialog").close(); tour(); });
+  $("wnOk").focus();
+}
 
 function shortcuts() {
   const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S", "Floor, Timeline, Team, Today"],
