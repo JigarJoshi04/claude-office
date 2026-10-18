@@ -158,7 +158,7 @@ def read_state(path: Path | None):
         return None
 
 
-STATE_FILES = ("tokens.json", "career.json", "asks.json", "days.json", "usage-history.json", "loose-roots.json", "quiet.json", "weeks.json", "reminders.json", "risks-seen.json", "trust.json")
+STATE_FILES = ("tokens.json", "career.json", "asks.json", "days.json", "usage-history.json", "loose-roots.json", "quiet.json", "weeks.json", "reminders.json", "risks-seen.json", "trust.json", "save.json")
 
 
 def backup_state(now: float | None = None, keep: int = 7) -> Path | None:

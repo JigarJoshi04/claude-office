@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.122.0"
+    server_version = "ClaudeOffice/3.123.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -276,6 +276,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"days": self.office.samples.week(self.office.get(), days, list(self.office.events))})
             if url.path == "/api/settings":
                 return self._json(200, settings.view(self.office.cfg, self.office.get().get("seats", [])))
+            if url.path == "/api/save":                     # the CEO's game save (save.py)
+                sv = getattr(self.office, "save", None)
+                return self._json(200, sv.view() if sv and not self.demo else {"keys": {}, "at": 0, "demo": self.demo})
             if url.path == "/api/egress":                   # what the office sends off this machine (egress.py)
                 from . import egress
                 return self._json(200, {"calls": egress.view(), "page": "Nothing: the page's fonts and code are served by the office."})
@@ -409,6 +412,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, ask_question(self.office, body))
             if path in ("/api/ask/answer", "/api/ask/dismiss"):
                 return self._json(200, answer_question(self.office, body, path.endswith("dismiss"), self.demo))
+            if path == "/api/save":                          # one key of the CEO's game save; the demo keeps nothing
+                if self.demo:
+                    return self._json(200, {"ok": True, "demo": True})
+                return self._json(200, self.office.save.put(body.get("key"), body.get("v"), body.get("at")))
             if path == "/api/reminders":                     # notes to yourself (reminders.py); the demo keeps them in memory
                 rem = self.office.reminders
                 if body.get("action") == "delete":

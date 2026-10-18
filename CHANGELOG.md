@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.123.0] - 2026-10-19
+
+### Added
+- One save for your game, kept by the office: the sticker album, badges, gifts and the mailroom, streaks and goal
+  days, quest stamps, Bug Squash bests, hire templates and the rest of your progress are the same on the desktop, the
+  TV screen and the phone. Each change goes to the office; on load each screen merges in what the office keeps (adding
+  up stickers, badges, goal days, quest stamps and bests, the newer write otherwise) and reloads once if anything
+  changed. Layout, drafts and dismissed cards stay per screen. Settings → Your data exports the save to a file and
+  merges one back in. `GET/POST /api/save`, kept in `state/save.json`.
+
 ## [3.122.0] - 2026-10-19
 
 ### Added

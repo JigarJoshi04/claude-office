@@ -20,6 +20,7 @@ from pathlib import Path
 
 from . import asks, brain, cabinet, checkpoint, config, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, trust, weeks
 from .career import CATALOGUE, Career
+from . import save as save_mod
 from .presence import Presence
 from .reminders import Reminders
 from .history import DayLedger, HistoryStore
@@ -332,6 +333,7 @@ class Office(LiveOffice):
         self.brain = brain.Brain(config.STATE_DIR / "ai")                 # the opt-in analyst (brain.py)
         self.trust = trust.Store(config.STATE_DIR / "trust.json")         # reports' claims against their transcripts
         self._collide_said: dict = {}
+        self.save = save_mod.Save(config.STATE_DIR / "save.json")        # the CEO's game, shared by every screen
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -532,7 +534,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.122.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.123.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),

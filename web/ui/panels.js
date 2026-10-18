@@ -12,6 +12,7 @@ import { STICKERS, RARITY } from "../engine/stickers.js";
 import { SETS, setsDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
 import { md } from "./md.js";
 import { pageHtml as scrapHtml, bindPage as bindScrap } from "./scrapbook.js";
+import { exportSave, importSave } from "./sync.js";
 import { seasonFor, SEASON_NAME } from "../engine/season.js";
 import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
@@ -1724,6 +1725,8 @@ export function makePanels(app) {
         <div class="row wrap" style="gap:6px;margin:10px 0">${Object.entries(sd.risk_watch.rules || {}).map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-rwatch="${esc(k)}" ${(sd.risk_watch.mute || []).includes(k) ? "" : "checked"}> ${esc(l)}</label>`).join("")}</div>`) : ""}
       <div class="row" style="margin-top:8px"><button class="btn primary" id="setSave">Save office settings</button></div>`}
       ${section("Keyboard", `<dl class="facts">${[["Ctrl/⌘ K", "Search and commands"], ["Esc", "Back to the briefing"], ["F  T  B  S", "Floor, Timeline, Team, Today"], ["H", "Hire a lane"], ["D", "Load divider"], ["P", "Share-safe"], ["1 … 9", "Open a character"], ["\\", "Hide or show the inspector"], ["+  −  0", "Zoom in, out, fit"], ["Arrows", "Pan when zoomed in"]].map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join("")}</dl>`)}
+      ${section("Your data", `<p class="hint" style="margin-top:0">Your game (stickers, badges, gifts, streaks, bests and hire templates) is kept by the office, so every screen shares it. Save it to a file, or merge a saved file in.</p>
+        <div class="row" style="gap:8px"><button class="btn sm" data-save-export>${icon("download", 14)}Export</button><label class="btn sm" style="cursor:pointer">${icon("file", 14)}Import<input type="file" accept="application/json,.json" data-save-import hidden></label></div>`)}
       ${egressData ? section("What leaves this machine", `<p class="hint" style="margin-top:0">The office's own outbound calls in the last day. The page fetches nothing from elsewhere: its fonts and code come from the office. Your agents' traffic is theirs.</p>
         ${egressData.calls.length ? `<dl class="facts">${egressData.calls.map(c => `<dt>${esc(c.host)}</dt><dd>${esc(c.why)} · ${c.calls.toLocaleString()} call${c.calls === 1 ? "" : "s"}${c.failed ? ` (${c.failed} failed)` : ""}${c.last_at ? `, the last ${relTime(c.last_at)}` : ""}</dd>`).join("")}</dl>` : `<p class="hint">None in the last day.</p>`}`) : ""}
       ${section("About", `<div class="hint">Claude Office ${esc(S().office.version || "")} · up ${S().office.started_at ? ago(S().office.started_at).replace(" ago", "") : "–"} · ${esc(app.liveMode())}</div>`)}`,
@@ -1736,6 +1739,8 @@ export function makePanels(app) {
         root.querySelectorAll("[data-alarm-num]").forEach(i => i.addEventListener("change", () => { const v = i.value.trim(); app.setPref(i.dataset.alarmNum, v === "" || !(+v > 0) ? null : Math.round(+v)); }));
         const ts = root.querySelector("[data-test-sound]"); if (ts) ts.addEventListener("click", () => sound.preview("levelup"));
         bindLooks(root);
+        const ex = root.querySelector("[data-save-export]"); if (ex) ex.addEventListener("click", () => exportSave());
+        const im = root.querySelector("[data-save-import]"); if (im) im.addEventListener("change", () => { if (im.files[0]) importSave(im.files[0]); });
         const sv = root.querySelector("#setSave");
         if (sv) sv.addEventListener("click", async () => {
           const body = { office_name: root.querySelector("#setOffice").value.trim(), ceo_name: root.querySelector("#setCeo").value.trim(), seats: {},

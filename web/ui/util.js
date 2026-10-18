@@ -18,9 +18,11 @@ export function fmtTok(n) {
   if (n >= 1e3) return Math.round(n / 1e3) + "k";
   return String(Math.round(n));
 }
+let onStoreSet = null;              // the game save (ui/sync.js) hears every write, and keeps the shared keys in step
+export function setStoreHook(fn) { onStoreSet = fn; }
 export const store = {
   get(k, d) { try { const v = localStorage.getItem("office." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem("office." + k, JSON.stringify(v)); } catch { /* private window */ } },
+  set(k, v) { try { localStorage.setItem("office." + k, JSON.stringify(v)); } catch { /* private window */ } if (onStoreSet) onStoreSet(k, v); },
 };
 export function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 

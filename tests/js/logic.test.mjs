@@ -555,3 +555,17 @@ test("Daily Squash: the same bugs all day, kept 30 days, a streak", async () => 
   assert.equal(dailyStreak({ "2026-10-17": 1, "2026-10-19": 3 }, "2026-10-19"), 1);
   assert.equal(dailyStreak({}, "2026-10-19"), 0);
 });
+
+test("the game save merges copies from two screens", async () => {
+  const { mergeKey, SYNC } = await import("../../web/ui/sync.js");
+  assert.ok(SYNC.has("album") && !SYNC.has("prefs") && !SYNC.has("hireDraft") && !SYNC.has("scrapbook"));
+  const album = mergeKey("album", { duck: { n: 2, first: 5 }, mug: { n: 1, first: 9 } }, { duck: { n: 1, first: 3 }, gem: { n: 1, first: 7 } }, 1, 2);
+  assert.deepEqual(album, { duck: { n: 2, first: 3 }, mug: { n: 1, first: 9 }, gem: { n: 1, first: 7 } });
+  assert.deepEqual(mergeKey("badges", { a: 10 }, { a: 5, b: 7 }), { a: 5, b: 7 });
+  assert.deepEqual(mergeKey("goalDays", ["2026-10-01", "2026-10-03"], ["2026-10-02", "2026-10-03"]), ["2026-10-01", "2026-10-02", "2026-10-03"]);
+  assert.equal(mergeKey("squashBest", 40, 52), 52);
+  assert.deepEqual(mergeKey("gifts", [1], [2], 100, 200), [2]);                      // the newer write
+  assert.deepEqual(mergeKey("gifts", [1], [2], 300, 200), [1]);
+  assert.deepEqual(mergeKey("gifts", undefined, [2], 0, 200), [2]);
+  assert.deepEqual(mergeKey("gifts", [1], undefined, 100, 0), [1]);
+});
