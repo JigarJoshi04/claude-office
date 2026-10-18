@@ -398,8 +398,8 @@ function apply(next) {
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   if (!DEMO) { checkBadges(); cheerWeekly(); anniversaries(); }   // the demo office never hands out badges
-  if (first) { visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
-  if (!replay.active()) giftBox.daily();       // the first visit of a day finds a gift at the CEO desk
+  if (first) { visits = visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
+  if (!replay.active()) giftBox.daily(visits); // the first visit of a day finds a gift at the CEO desk
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) safeNews(e);
@@ -516,6 +516,7 @@ function cheerWeekly() {
 }
 
 // The visit streak: days in a row this browser has opened the office (a flame by the level chip from two days on).
+let visits = 0;
 function visitStreak() {
   const d = new Date(), key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
   const days = new Set(store.get("visits", []));
@@ -529,6 +530,7 @@ function visitStreak() {
   el.title = `${n} days in a row: you have checked on the office every day.`;
   el.setAttribute("aria-label", el.title);
   if (n >= 7 && !DEMO) badge(award("regular"));
+  return n;
 }
 
 // Work anniversaries: a character's first week, month, 100 days and year at the office (from its career's start) get a

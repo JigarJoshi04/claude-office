@@ -68,11 +68,14 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
     },
     // A gift earned for sure: all goals done, a level up, a big combo. `min` lifts the rarity.
     grant(seat, from, min) { return add({ seat, from, ...(min ? { min } : {}) }, GRANT_ROOM); },
-    // The first visit of a local day: a morning delivery at the CEO desk.
-    daily(day) {
+    // The first visit of a local day: a morning delivery at the CEO desk. A visit streak makes it better: from three
+    // days in a row it is rare or better, and every seventh day epic or better. With the floor full it waits for room.
+    daily(day, streak = 0) {
       if (get("giftDay", "") === day) return null;
-      set("giftDay", day);
-      return add({ seat: null, from: "daily" });
+      const min = streak >= 7 && streak % 7 === 0 ? "epic" : streak >= 3 ? "rare" : null;
+      const g = add({ seat: null, from: "daily", ...(min ? { min, streak } : {}) });
+      if (g) set("giftDay", day);
+      return g;
     },
     // Swap the most-duplicated spares for a gift that is rare or better.
     swap() {

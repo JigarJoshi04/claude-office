@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.14.0] - 2026-10-18
+
+### Added
+- A visit streak improves the morning delivery: rare or better from three days in a row, epic or better every seventh
+  day. With the floor full, the day's delivery waits for room instead of being lost.
+- A soft drop sound when a gift lands on the floor.
+- The project page shows gifts, the sticker album, Bug Squash, the radio and the week in review.
+
+### Changed
+- The pet badge is now "Pet person" and counts the dog too.
+
 ## [3.13.0] - 2026-10-18
 
 ### Added

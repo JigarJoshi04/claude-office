@@ -39,6 +39,8 @@ const SFX = {
     [784, 988, 1175, 1568, 1976, 2349].slice(0, 3 + k).forEach((f, i) => note(f, 0.26 + i * 0.07, 0.12, "triangle", 0.05));
     if (k >= 2) [1568, 1976, 2349].forEach(f => note(f, 0.3 + (3 + k) * 0.07, 0.5, "triangle", 0.035));
   },
+  // A gift lands on the floor: a soft wooden "tok-tok".
+  drop: () => { note(392, 0, 0.05, "triangle", 0.05); note(523, 0.07, 0.07, "triangle", 0.045); },
   // The cat purrs: a low, soft rumble.
   purr: () => { for (let i = 0; i < 6; i++) note(i % 2 ? 62 : 58, i * 0.07, 0.08, "triangle", 0.06); note(880, 0.45, 0.06, "triangle", 0.02); },
   // Happy hour: a little party horn.

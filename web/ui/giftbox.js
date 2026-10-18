@@ -21,12 +21,13 @@ export function makeGiftBox(ctx) {
     week: ["A record-week gift, epic or better", "For a record week"], arcade: ["An arcade prize", "For a new best at Bug Squash"] };
   const label = (g) => {
     const who = nameOf(g.seat);
+    if (g.from === "daily" && g.min) return `Morning delivery, day ${g.streak} of your streak (${g.min} or better): open it`;
     if (KINDS[g.from]) return KINDS[g.from][0] + ": open it";
     if (who && g.from === "levelup") return `${who}'s level-up gift: open it`;
     if (who && g.from === "combo") return `A combo gift from ${who}: open it`;
     return who ? `A gift from ${who}: open it` : "A gift: open it";
   };
-  const fromLine = (g) => KINDS[g.from] ? KINDS[g.from][1] : nameOf(g.seat) ? `From ${nameOf(g.seat)}${g.from === "levelup" ? ", for levelling up" : g.from === "combo" ? ", for the combo" : ""}` : "";
+  const fromLine = (g) => g.from === "daily" && g.streak ? `Day ${g.streak} of your visit streak` : KINDS[g.from] ? KINDS[g.from][1] : nameOf(g.seat) ? `From ${nameOf(g.seat)}${g.from === "levelup" ? ", for levelling up" : g.from === "combo" ? ", for the combo" : ""}` : "";
 
   function sync() {
     const list = gifts.waiting();
@@ -72,17 +73,18 @@ export function makeGiftBox(ctx) {
     const g = gifts.earn(seatId, from);
     if (!g) return;
     sync();
+    sound.play("drop");
     if (!store.get("giftHint", false)) {
       store.set("giftHint", true);
       toast(`${nameOf(seatId) || "Someone"} left you a gift on the floor. Click the box to open it.`, "good", { ic: "gift", ms: 7000 });
     }
   }
-  function daily() { if (gifts.daily(localDay())) sync(); }
+  function daily(streak) { if (gifts.daily(localDay(), streak)) sync(); }
   // A gift earned for sure (all goals, a big combo, a level up, a record week); never from a replay.
   function grant(seatId, from, min) {
     if (replay.active()) return false;
     const g = gifts.grant(seatId, from, min);
-    if (g) sync();
+    if (g) { sync(); sound.play("drop"); }
     return !!g;
   }
 

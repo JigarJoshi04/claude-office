@@ -270,3 +270,18 @@ test("the radio's chords: four-note sevenths, a new progression every eight bars
   assert.deepEqual(chordAt(3), chordAt(7));                   // the same four bars repeat…
   assert.notDeepEqual(chordAt(0), chordAt(8));                // …until the progression changes
 });
+
+test("the morning delivery gets better with a visit streak", async () => {
+  const { makeGifts } = await import("../../web/ui/gifts.js");
+  const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? mem.get(k) : d), set: (k, v) => mem.set(k, v) };
+  const g = makeGifts({ store, rand: () => 0 });
+  assert.equal(g.daily("2026-10-01", 1).min, undefined);
+  assert.equal(g.daily("2026-10-02", 3).min, "rare");
+  assert.equal(g.daily("2026-10-03", 7).min, "epic");
+  assert.equal(g.daily("2026-10-04", 8), null, "the floor is full…");
+  for (const x of g.waiting()) g.open(x.id);
+  assert.equal(g.daily("2026-10-04", 8).min, "rare", "…so the day's delivery waits for room");
+  g.open(g.waiting()[0].id);
+  assert.equal(g.daily("2026-10-05", 14).min, "epic");
+  assert.equal(g.open(g.waiting()[0].id).sticker.rarity, "epic");
+});
