@@ -28,6 +28,7 @@ export function makePanels(app) {
   let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false;
   let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
   const sessTab = new Map();
+  const chatFind = new Map();     // session id -> the text being searched for in its chat
   const openSteps = new Set();
 
   const S = () => app.snap();
@@ -389,6 +390,7 @@ export function makePanels(app) {
           ${x && x.model ? pill(x.model.replace(/^claude-/, "")) : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
+      ${tab === "chat" && conv ? `<div class="chat-find">${icon("search", 15)}<input type="search" id="chatFind" placeholder="Find in this conversation" aria-label="Find in this conversation" value="${esc(chatFind.get(v.id) || "")}" autocomplete="off"><span class="cf-n" aria-live="polite"></span></div>` : ""}
       ${tab === "chat" ? chatHtml(s, x, conv, talk) : overviewHtml(s, x)}`,
       bind(root) {
         root.querySelectorAll("[data-stab]").forEach(b => b.addEventListener("click", () => {
@@ -396,6 +398,41 @@ export function makePanels(app) {
           if (b.dataset.stab === "chat") { const c = root.querySelector(".chat"); if (c && getComputedStyle(c).overflowY !== "visible") c.scrollTop = c.scrollHeight; else root.scrollTop = root.scrollHeight; }   // Chat opens at the newest
         }));
         root.querySelectorAll("[data-steps]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.steps; if (openSteps.has(k)) openSteps.delete(k); else openSteps.add(k); app.rerender(true); }));
+        // Find in this conversation: messages without the text fade out, matches are marked, Enter jumps to the next.
+        const find = root.querySelector("#chatFind");
+        if (find) {
+          let at = -1;
+          const apply = () => {
+            const q = find.value.trim().toLowerCase(), msgs = [...root.querySelectorAll(".chat .msg")];
+            chatFind.set(v.id, find.value);
+            root.querySelectorAll(".chat mark.cf").forEach(m => { const parent = m.parentNode; m.replaceWith(document.createTextNode(m.textContent)); parent.normalize(); });   // merge the text back so the next search sees whole words
+            if (!q) { msgs.forEach(m => m.classList.remove("cf-out")); root.querySelector(".cf-n").textContent = ""; return []; }
+            const hits = [];
+            for (const m of msgs) {
+              const has = m.textContent.toLowerCase().includes(q);
+              m.classList.toggle("cf-out", !has);
+              if (!has) continue;
+              hits.push(m);
+              const walk = document.createTreeWalker(m, NodeFilter.SHOW_TEXT), nodes = [];
+              while (walk.nextNode()) if (!walk.currentNode.parentElement.closest(".who, .meta, button")) nodes.push(walk.currentNode);
+              for (const n of nodes) {
+                const i = n.textContent.toLowerCase().indexOf(q);
+                if (i < 0) continue;
+                const mark = document.createElement("mark"); mark.className = "cf";
+                const after = n.splitText(i); after.splitText(q.length);
+                mark.textContent = after.textContent; after.replaceWith(mark);
+              }
+            }
+            root.querySelector(".cf-n").textContent = `${hits.length} message${hits.length === 1 ? "" : "s"}`;
+            return hits;
+          };
+          let hits = apply();
+          find.addEventListener("input", () => { at = -1; hits = apply(); });
+          find.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && hits.length) { e.preventDefault(); at = (at + (e.shiftKey ? -1 : 1) + hits.length) % hits.length; hits[at].scrollIntoView({ block: "center", behavior: "smooth" }); }
+            else if (e.key === "Escape" && find.value) { e.preventDefault(); e.stopPropagation(); find.value = ""; hits = apply(); }
+          });
+        }
         root.querySelectorAll(".msg .md pre").forEach(pre => {   // a Copy button on every code block
           const b = document.createElement("button");
           b.className = "btn sm ghost md-copy"; b.type = "button"; b.innerHTML = `${icon("copy", 13)}Copy`; b.setAttribute("aria-label", "Copy the code");

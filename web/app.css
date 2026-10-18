@@ -1082,3 +1082,12 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .news-h { margin: 14px 0 2px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 .news-h:first-child { margin-top: 0; }
 .news-h + .act { border-top: 0; }
+
+/* find in this conversation */
+.chat-find { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 0 12px; height: 38px; border-radius: 12px; background: var(--surface-2); color: var(--muted); }
+.chat-find input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 0; height: 100%; color: var(--text); font-size: 14px; }
+.chat-find input:focus { outline: none; }
+.chat-find:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--info) 50%, transparent); }
+.chat-find .cf-n { flex: none; font: 600 12px var(--mono); color: var(--faint); }
+.chat .msg.cf-out { opacity: .28; }
+.chat mark.cf { background: color-mix(in srgb, #ffd24a 55%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
