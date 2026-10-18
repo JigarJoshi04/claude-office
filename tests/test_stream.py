@@ -131,7 +131,7 @@ class StreamTests(unittest.TestCase):
         self.wait_slots(0)
 
     def test_host_and_origin_checks_cover_all_new_gets(self):
-        for path in ("/api/stream", "/api/history", "/api/stats", "/api/settings"):
+        for path in ("/api/stream", "/api/history", "/api/stats", "/api/settings", "/api/week"):
             for header in ({"Host": "attacker.example"}, {"Origin": "http://attacker.example"}):
                 self.assertEqual(self.open(path, header).status, 403)
         self.wait_slots(0)
@@ -143,8 +143,14 @@ class StreamTests(unittest.TestCase):
             response = self.open(path)
             self.assertEqual(response.status, 200)
             self.assertLessEqual(keys, json.loads(response.read()).keys())
-        for path in ("/api/history?hours=0", "/api/history?hours=25", "/api/history?hours=no", "/api/history?hours=1.5", "/api/stats?day=no"):
+        for path in ("/api/history?hours=0", "/api/history?hours=25", "/api/history?hours=no", "/api/history?hours=1.5", "/api/stats?day=no",
+                     "/api/week?days=0", "/api/week?days=91", "/api/week?days=-1", "/api/week?days=1.5", "/api/week?days=x"):
             self.assertEqual(self.open(path).status, 400)
+        week = json.loads(self.open("/api/week?days=14").read())["days"]
+        self.assertEqual(len(week), 14)
+        self.assertEqual(set(week[0]), {"day", "reports", "sessions", "active_min", "tool_calls", "limits", "lanes_hired", "mvp"})
+        self.assertEqual(week, sorted(week, key=lambda d: d["day"]))
+        self.assertGreater(sum(d["reports"] for d in week[:-1]), 0)   # the demo carries made-up earlier days
         headers = {"Content-Type": "application/json"}
         self.assertEqual(self.open("/api/settings", headers, "POST", "{}").status, 403)
         headers["X-Office-Token"] = "demo"
