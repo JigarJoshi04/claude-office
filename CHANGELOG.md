@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.42.0] - 2026-10-18
+
+### Added
+- Context gauge: each session's context (what it sends with every reply) against its model's window (a million tokens
+  for Claude 4.6 and later, 200k before; Codex's own), as "Context 38%" on its page (amber from 70%, red from 90%, when
+  Claude Code is about to compact) and as a pile of paper on its desk that grows with it, red on top when nearly full.
+
+### Changed
+- The CI lamp and the task strip show on the desks of the second row too.
+
 ## [3.41.0] - 2026-10-18
 
 ### Added

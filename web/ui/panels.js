@@ -459,6 +459,8 @@ export function makePanels(app) {
           ${x && x.git ? gitChip(x) : ""}
           ${x && x.cache && x.state !== "working" ? cachePill(x) : ""}
           ${x && x.ci ? `<a class="pill ci ${esc(x.ci.checks || "")}" href="${esc(x.ci.url)}" target="_blank" rel="noopener noreferrer" title="Its branch's pull request on GitHub">${icon(x.ci.checks === "fail" ? "x" : x.ci.checks === "pass" ? "check" : "clock", 13)}PR #${x.ci.number}${x.ci.checks ? ` · ${CI_WORD[x.ci.checks]}` : ""}</a>` : ""}
+          ${x && x.cache && x.cache.window ? (() => { const f = x.cache.context / x.cache.window, pc = Math.round(f * 100);
+            return `<span class="pill ctx ${f >= 0.9 ? "bad" : f >= 0.7 ? "warn" : ""}" title="${fmtTok(x.cache.context)} of ${fmtTok(x.cache.window)} tokens of context: what it sends with every reply. Near full, Claude Code compacts the conversation. On the floor it is the pile of paper on its desk.">${icon("files", 13)}Context ${pc}%</span>`; })() : ""}
           ${x && x.tasks ? `<span class="pill ${x.tasks.done === x.tasks.total ? "good" : ""}" title="Its task list: ${x.tasks.done} of ${x.tasks.total} done">${icon("check", 13)}${x.tasks.done}/${x.tasks.total} tasks</span>` : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>

@@ -228,7 +228,8 @@ def cache_view(tr) -> dict | None:
         return None
     p = prices.rates(tr.model)
     saves = round(tr.context * ((p[2] if tr.cache_ttl == 3600 else p[1]) - p[3]) / 1e6, 2) if p else None
-    return {"until": tr.cache_at + tr.cache_ttl, "ttl": tr.cache_ttl, "context": tr.context, "saves_usd": saves}
+    return {"until": tr.cache_at + tr.cache_ttl, "ttl": tr.cache_ttl, "context": tr.context, "saves_usd": saves,
+            "window": prices.context_window(tr.model)}
 
 
 class TranscriptState:

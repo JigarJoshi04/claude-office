@@ -79,6 +79,19 @@ def estimate(model: str | None, fresh: float, cache: float, output: float) -> fl
     return (max(0, fresh - output) * first + cache * p[3] + output * p[4]) / 1e6
 
 
+# Claude 4.6 and later models read a million tokens of context (Haiku 5.5 excepted); the rest, and unknown models, 200k.
+_WINDOW_200K = ("claude-haiku-5-5", "claude-haiku-4-5", "claude-3-5-haiku", "claude-haiku-3-5", "claude-sonnet-4-5", "claude-sonnet-4",
+                "claude-opus-4-5", "claude-opus-4-1", "claude-opus-4")
+
+
+def context_window(model: str | None) -> int:
+    """How many tokens of context a model reads, for the context gauge."""
+    k = base_model(model)
+    if k in ("codex", "gpt-6-astra"):
+        return 258_400                                  # what Codex reports as its window
+    return 1_000_000 if k and k.startswith("claude") and k not in _WINDOW_200K else 200_000
+
+
 def plan_usd(seat: dict) -> float | None:
     """A seat's plan cost a month: set in Settings, or the list price of its tier, or None when unknown."""
     if isinstance(seat.get("plan_usd"), (int, float)):

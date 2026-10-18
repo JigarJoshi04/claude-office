@@ -88,7 +88,7 @@ def _demo_cache(sid, state, now):
     context = 180_000 + hash(sid) % 400_000
     until = now + 290 if state == "working" else now - (now % 360) + 300
     p = prices.rates("claude-opus-5-5")
-    return {"until": until, "ttl": 300, "context": context, "saves_usd": round(context * (p[1] - p[3]) / 1e6, 2)}
+    return {"until": until, "ttl": 300, "context": context, "saves_usd": round(context * (p[1] - p[3]) / 1e6, 2), "window": 1_000_000}
 
 
 class _NoPoll:
@@ -400,7 +400,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.41.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.42.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

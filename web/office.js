@@ -698,15 +698,7 @@ export function createOffice(stage, handlers) {
           if (a.sess.kind === "desk") { S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x, sp.seatY - 1, 10, 1, "#2a2d38"); }
         }
         S.drawMonitorBack(ctx, x - 3, pod.y + 31);
-        const ci = a && a.sess.ci;               // the CI lamp: its branch's PR checks, on the corner of the screen
-        if (ci && ci.checks) {
-          const blink = ci.checks !== "pass" && !reduced && Math.floor(t / 600) % 2;
-          S.rect(ctx, x + 10, pod.y + 30, 3, 3, "#0a0b10");
-          S.rect(ctx, x + 11, pod.y + 31, 1, 1, blink ? "#5b6378" : { pass: "#3ddc84", pending: "#ffc24b", fail: "#ff4d5e" }[ci.checks]);
-          if (ci.checks === "fail" && !blink) lights.push({ x: x + 11, y: pod.y + 31, r: 8, c: "#ff4d5e", i: 0.6 });
-        }
-        const tk = a && a.sess.tasks;            // the session's task list as a strip across the back of its screen
-        if (tk && tk.total) { S.rect(ctx, x - 1, pod.y + 33, 12, 2, "#5b6378"); S.rect(ctx, x - 1, pod.y + 33, Math.round(12 * tk.done / tk.total), 2, tk.done === tk.total ? "#ffd24a" : "#3ddc84"); }
+        if (a) drawDeskBits(a, x, true, pod, t, lights);
         if (a && pose !== "sleep") S.drawHands(ctx, x, pod.y + 42, a.look, pose, t + slot * 333);
         if (a && pose === "sleep") S.drawZ(ctx, x + 8, sp.seatY - 6, t + slot * 500);
         // The mug steams while its owner waits on a long tool, or while an idle session's prompt cache is still warm.
@@ -716,6 +708,7 @@ export function createOffice(stage, handlers) {
         if (a && pose !== "sleep" && !off) lights.push({ x: x + 5, y: pod.y + 30, r: 12, c: "#9fd0ff", i: 0.35 });
       } else {
         S.drawMonitorFront(ctx, x - 3, pod.y + 51, a && !off ? pose : "off", s.color, t + slot * 1234);
+        if (a) drawDeskBits(a, x, false, pod, t, lights);
         if (a) {
           S.drawSeated(ctx, x, sp.seatY, gear(a.look, s), "up", pose, t + slot * 777);
           if (a.sess.kind === "desk") { S.rect(ctx, x, sp.seatY + 1, 10, 1, "#2a2d38"); S.rect(ctx, x - 1, sp.seatY + 3, 1, 3, "#2a2d38"); S.rect(ctx, x + 10, sp.seatY + 3, 1, 3, "#2a2d38"); }
@@ -737,6 +730,25 @@ export function createOffice(stage, handlers) {
     const lamp = { working: "#38e07b", idle: "#e5c07b", limited: "#ff3b4e", benched: "#5b8def", offline: "#6b7080" }[status] || "#6b7080";
     if (status === "limited") { S.drawBeacon(ctx, pod.x + POD_W - 18, pod.y + 36, t); lights.push({ x: pod.x + POD_W - 16, y: pod.y + 37, r: 34 + Math.sin(t / 220) * 6, c: "#ff3b4e", i: 0.6 }); }
     else { S.rect(ctx, pod.x + POD_W - 17, pod.y + 40, 3, 3, lamp); if (status === "working" && Math.floor(t / 600) % 2) S.rect(ctx, pod.x + POD_W - 18, pod.y + 39, 5, 5, S.alpha(lamp, 0.3)); }
+  }
+
+  // What a desk says about its session at a glance: the CI lamp on the screen's corner (its PR's checks), the task
+  // list as a strip, and its context as a pile of paper that grows towards the model's window (red when nearly full).
+  function drawDeskBits(a, x, top, pod, t, lights) {
+    const ci = a.sess.ci, ly = top ? pod.y + 30 : pod.y + 50;
+    if (ci && ci.checks) {
+      const blink = ci.checks !== "pass" && !reduced && Math.floor(t / 600) % 2;
+      S.rect(ctx, x + 10, ly, 3, 3, "#0a0b10");
+      S.rect(ctx, x + 11, ly + 1, 1, 1, blink ? "#5b6378" : { pass: "#3ddc84", pending: "#ffc24b", fail: "#ff4d5e" }[ci.checks]);
+      if (ci.checks === "fail" && !blink) lights.push({ x: x + 11, y: ly + 1, r: 8, c: "#ff4d5e", i: 0.6 });
+    }
+    const tk = a.sess.tasks, sy = top ? pod.y + 33 : pod.y + 63;
+    if (tk && tk.total) { S.rect(ctx, x - 1, sy, 12, 2, "#5b6378"); S.rect(ctx, x - 1, sy, Math.round(12 * tk.done / tk.total), 2, tk.done === tk.total ? "#ffd24a" : "#3ddc84"); }
+    const c = a.sess.cache;
+    if (c && c.window && c.context) {
+      const fill = Math.min(1, c.context / c.window), sheets = Math.max(1, Math.round(fill * 7)), px = x + 16, py = top ? pod.y + 46 : pod.y + 61;
+      for (let i = 0; i < sheets; i++) S.rect(ctx, px + (i % 2), py - i, 4, 1, fill >= 0.9 && i >= sheets - 2 ? "#ff8a8a" : i % 2 ? "#eef1f7" : "#cdd3e0");
+    }
   }
 
   function waiting() { return (snap.lanes || []).filter(l => l.status === "waiting" || l.status === "queued").slice(0, 5); }

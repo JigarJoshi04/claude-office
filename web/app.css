@@ -1508,3 +1508,4 @@ ul.prs li a { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; 
 .ask-a { width: 100%; min-height: 64px; height: 76px; margin-top: 10px; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text); font: inherit; font-size: 14px; resize: vertical; box-sizing: border-box; }
 .ask-ans { display: flex; gap: 8px; margin: 8px 0 0; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--good) 10%, transparent); font-size: 13.5px; color: var(--text-2); }
 .ask-ans > .ic { color: var(--good); flex: none; margin-top: 2px; }
+.pill.ctx.warn { color: var(--warn); } .pill.ctx.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
