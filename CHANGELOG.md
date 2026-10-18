@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.117.0] - 2026-10-19
+
+### Added
+- Seasonal stickers: a pumpkin for Halloween, a diya for Diwali, and a snowflake and a firework for the winter
+  holidays. In its season one gift in five is that season's sticker (they count as rare), and they come back every
+  year; the album has a fifth set, "Through the year", that says which season is on now.
+
 ## [3.116.0] - 2026-10-19
 
 ### Fixed

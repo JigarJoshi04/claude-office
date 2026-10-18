@@ -12,6 +12,7 @@ import { STICKERS, RARITY } from "../engine/stickers.js";
 import { SETS, setsDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
 import { md } from "./md.js";
 import { pageHtml as scrapHtml, bindPage as bindScrap } from "./scrapbook.js";
+import { seasonFor, SEASON_NAME } from "../engine/season.js";
 import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
 
@@ -287,6 +288,7 @@ export function makePanels(app) {
     if (!lim || lim.pct < 60) return "";
     return `<p class="hint ${lim.pct >= 90 ? "bad-t" : ""}" style="margin:-6px 0 12px">${icon("alert", 13)} ${esc(P(st).name)} has used ${Math.round(lim.pct)}% of its ${esc(lim.label)} week${lim.resets_at ? ` (back ${esc(dayTime(lim.resets_at))})` : ""}.${lim.pct >= 90 ? " The divider sends a lane for it elsewhere." : ""}</p>`;
   }
+  const seasonNow = () => seasonFor(new Date());
   const modelFam = (m) => ((m || "").match(/opus|sonnet|haiku|fable|gpt|codex/i) || ["other"])[0].toLowerCase();
   const PHASE_ICON = { exploring: "search", building: "tool", testing: "target", debugging: "bug", "wrapping up": "send" };
   // One fix per kind of problem, so every item in Needs you has a next step.
@@ -1109,7 +1111,8 @@ export function makePanels(app) {
     const done = setsDone(al);
     const counts = Object.keys(RARITY).map(k => { const all = STICKERS.filter(s => s.rarity === k), got = all.filter(s => al[s.id]).length;
       return `<div class="alb-set ${done.has(k) ? "on" : ""}" style="--rar:${RARITY[k].color}"><span class="as-ic">${icon(done.has(k) ? "trophy" : "lock", 15)}</span>
-        <span class="grow"><b>${esc(RARITY[k].name)} ${got}/${all.length} · ${esc(SETS[k].name)}</b><small>${done.has(k) ? "On the floor now: " : "Finish the set: "}${esc(SETS[k].desc.charAt(0).toLowerCase() + SETS[k].desc.slice(1))}</small></span>
+        <span class="grow"><b>${esc(RARITY[k].name)} ${got}/${all.length} · ${esc(SETS[k].name)}</b><small>${k === "seasonal" ? (done.has(k) ? "A full year of stickers." : `Each turns up only in its season${seasonNow() ? `: ${esc(SEASON_NAME[seasonNow()])} is on now` : " (Halloween, Diwali, the winter holidays)"}.`)
+          : `${done.has(k) ? "On the floor now: " : "Finish the set: "}${esc(SETS[k].desc.charAt(0).toLowerCase() + SETS[k].desc.slice(1))}`}</small></span>
         <span class="as-bar"><i style="width:${Math.round(got / all.length * 100)}%"></i></span></div>`; }).join("");
     // The happy hour, as it stands now: coming up today, on, or (once it is over) tomorrow's.
     const hn = happyNow(), tm = new Date(); tm.setDate(tm.getDate() + 1);

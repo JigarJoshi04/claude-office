@@ -150,10 +150,10 @@ test("the weekly challenge beats last week by 10%, Monday to Sunday", async () =
   assert.ok(weekly(mk("2026-10-18", 14, (d) => d.getDate() >= 12 ? 9 : 1)).done);
 });
 
-test("stickers: 24 pieces of 12×12 art in four rarities, rolled by weight", async () => {
+test("stickers: 28 pieces of 12×12 art in four rarities and a seasonal set, rolled by weight", async () => {
   const { STICKERS, RARITY, rollSticker } = await import("../../web/engine/stickers.js");
-  assert.equal(STICKERS.length, 24);
-  assert.equal(new Set(STICKERS.map(s => s.id)).size, 24);
+  assert.equal(STICKERS.length, 28);
+  assert.equal(new Set(STICKERS.map(s => s.id)).size, 28);
   for (const s of STICKERS) {
     assert.ok(RARITY[s.rarity], s.id);
     assert.equal(s.art.length, 12, s.id);
@@ -163,6 +163,9 @@ test("stickers: 24 pieces of 12×12 art in four rarities, rolled by weight", asy
   assert.equal(rollSticker(seq([0, 0])).rarity, "common");
   assert.equal(rollSticker(seq([0.99, 0])).rarity, "legendary");
   assert.equal(rollSticker(seq([0.7, 0])).rarity, "rare");                      // 62 + 27: rare runs to 0.89
+  i = 0; assert.equal(rollSticker(seq([0.1, 0]), "halloween").id, "pumpkin");    // one in five, in its season
+  i = 0; assert.notEqual(rollSticker(seq([0.5, 0.99, 0]), "halloween").rarity, "seasonal");
+  for (let k = 0; k < 200; k++) assert.notEqual(rollSticker(Math.random).rarity, "seasonal");   // never out of season
 });
 
 test("gifts: a pity timer, a cap on waiting gifts, a daily delivery and swaps", async () => {
@@ -240,7 +243,7 @@ test("gifts: grants go past the cap a little; sets finish with every sticker of 
   const commons = Object.fromEntries(STICKERS.filter(s => s.rarity === "common").map(s => [s.id, { n: 1 }]));
   assert.deepEqual([...setsDone(commons)], ["common"]);
   assert.equal(setsDone({ ...commons, rocket: { n: 2 } }).has("rare"), false);
-  assert.equal(setsDone(Object.fromEntries(STICKERS.map(s => [s.id, { n: 1 }]))).size, 4);
+  assert.equal(setsDone(Object.fromEntries(STICKERS.map(s => [s.id, { n: 1 }]))).size, 5);
 });
 
 test("the week in review sums the last seven days and what was collected in them", async () => {

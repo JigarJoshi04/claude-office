@@ -11,6 +11,7 @@ export const RARITY = {
   rare: { name: "Rare", weight: 27, color: "#4f9cf0" },
   epic: { name: "Epic", weight: 9, color: "#a77bff" },
   legendary: { name: "Legendary", weight: 2, color: "#ffc94a" },
+  seasonal: { name: "Seasonal", weight: 0, color: "#ff8f3d" },     // never by weight: only in its season (rollSticker)
 };
 
 const DUCK = [
@@ -316,6 +317,58 @@ export const STICKERS = [
     "..c..cc..c..",
     ".c...cc...c.",
     "............"] },
+  { id: "pumpkin", name: "Pumpkin", rarity: "seasonal", season: "halloween", art: [
+    "............",
+    ".....GG.....",
+    "......G.....",
+    "..oooooooo..",
+    ".oooooooooo.",
+    ".ooyoooyooo.",
+    ".oooooooooo.",
+    ".ooyyyyyyoo.",
+    ".oooyoyoooo.",
+    "..oooooooo..",
+    "...oooooo...",
+    "............"] },
+  { id: "diya", name: "Diya", rarity: "seasonal", season: "diwali", art: [
+    "............",
+    ".....o......",
+    "....oyo.....",
+    "....yhy.....",
+    ".....y......",
+    "..r......r..",
+    ".rrrrrrrrrr.",
+    ".rddddddddr.",
+    "..rrrrrrrr..",
+    "...RRRRRR...",
+    "............",
+    "............"] },
+  { id: "snowflake", name: "Snowflake", rarity: "seasonal", season: "winter", art: [
+    "............",
+    ".....c......",
+    "..c..c..c...",
+    "...c.c.c....",
+    "....ccc.....",
+    ".ccccwcccc..",
+    "....ccc.....",
+    "...c.c.c....",
+    "..c..c..c...",
+    ".....c......",
+    "............",
+    "............"] },
+  { id: "firework", name: "Firework", rarity: "seasonal", season: "winter", art: [
+    "............",
+    "..y..r..y...",
+    "...y.r.y....",
+    "....yry.....",
+    ".rrrrhrrrr..",
+    "....yry.....",
+    "...y.r.y....",
+    "..y..r..y...",
+    "............",
+    "......v.....",
+    "......v.....",
+    "......V....."] },
   { id: "goldduck", name: "Golden duck", rarity: "legendary", art: DUCK, gold: true },
 ];
 
@@ -355,8 +408,11 @@ export function hydrateStickers(root) {
   });
 }
 
-// Pick a sticker: a rarity by weight, then one sticker of it. rand is a function returning [0, 1).
-export function rollSticker(rand = Math.random) {
+// Pick a sticker: a rarity by weight, then one sticker of it. rand is a function returning [0, 1). In a season
+// (engine/season.js) one gift in five is that season's sticker instead; they come back every year.
+export function rollSticker(rand = Math.random, season = null) {
+  const inSeason = season ? STICKERS.filter(s => s.season === season) : [];
+  if (inSeason.length && rand() < 0.2) return inSeason[Math.min(inSeason.length - 1, Math.floor(rand() * inSeason.length))];
   const total = Object.values(RARITY).reduce((a, r) => a + r.weight, 0);
   let roll = rand() * total, rarity = "common";
   for (const [k, r] of Object.entries(RARITY)) { if (roll < r.weight) { rarity = k; break; } roll -= r.weight; }

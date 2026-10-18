@@ -4,6 +4,7 @@
 // comes back to the floor as room frees up. The last 50 openings are logged (where each sticker came from).
 // Waiting gifts and the album live in this browser, like badges; the demo office keeps them in memory only.
 import { STICKERS, RARITY, rollSticker } from "../engine/stickers.js";
+import { seasonFor } from "../engine/season.js";
 
 export const MAX_WAITING = 3;          // more than this on the floor is clutter: later gifts wait in the mailroom
 export const KEEP_S = 24 * 3600;       // an unopened gift goes to the mailroom after a day
@@ -37,6 +38,7 @@ export const SETS = {
   rare: { name: "Lava lamps", desc: "A lava lamp on every desk." },
   epic: { name: "Close encounters", desc: "A UFO crosses the sky now and then." },
   legendary: { name: "The golden duck", desc: "The golden duck sits on the CEO's desk." },
+  seasonal: { name: "Through the year", desc: "Every season's sticker: they only turn up in their season." },
 };
 export function setsDone(album) {
   return new Set(Object.keys(RARITY).filter(k => STICKERS.filter(s => s.rarity === k).every(s => album[s.id])));
@@ -118,10 +120,11 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
       const list = waiting(), m = mailroom(), g = list.find(x => x.id === id) || m.find(x => x.id === id);
       if (!g) return null;
       if (list.includes(g)) set("gifts", list.filter(x => x.id !== id)); else set("mailroom", m.filter(x => x.id !== id));
-      const min = ORDER.indexOf(g.min || "common");
-      let st = rollSticker(rand);
-      for (let i = 0; i < 50 && ORDER.indexOf(st.rarity) < min; i++) st = rollSticker(rand);
-      if (ORDER.indexOf(st.rarity) < min) st = STICKERS.find(s => s.rarity === g.min);
+      const min = ORDER.indexOf(g.min || "common"), season = seasonFor(new Date(now() * 1000));
+      const rank = (x) => (x.rarity === "seasonal" ? 1 : ORDER.indexOf(x.rarity));     // a seasonal sticker counts as rare
+      let st = rollSticker(rand, season);
+      for (let i = 0; i < 50 && rank(st) < min; i++) st = rollSticker(rand, season);
+      if (rank(st) < min) st = STICKERS.find(s => s.rarity === g.min);
       const al = { ...album() }, had = al[st.id];
       al[st.id] = { n: (had ? had.n : 0) + 1, first: had ? had.first : now() };
       set("album", al);
