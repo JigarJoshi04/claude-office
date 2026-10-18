@@ -469,7 +469,7 @@ function onNews(e) {
     case "report": {
       const ok = e.level === "good";
       const sid = findSessionByText(e.text);
-      if (ok) { office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); }
+      if (ok) { office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); comboHit(e); }
       else sound.play("bad");
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
       break;
@@ -494,7 +494,7 @@ function onNews(e) {
     }
     case "reply": sound.play("arrive"); toast(text, "good"); notify("A session replied", text); for (const k of chats.keys()) chats.get(k).at = 0; break;
     case "lane":
-      if (e.level === "good") { office.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); }
+      if (e.level === "good") { office.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); comboHit(e); }
       else if (e.level === "bad") { sound.play("bad"); notify("Office lane failed", text); }
       if (e.level !== "info") toast(text, e.level);
       break;
@@ -502,6 +502,44 @@ function onNews(e) {
   }
   loadStats(null, true);
 }
+// The combo: reports and finished lanes within 15 minutes of each other chain up (×2, ×3, …). The floor shows the
+// combo with a bar draining toward its end; the day's best combo is kept per browser.
+const COMBO_WINDOW = 15 * 60;
+let combo = store.get("combo", { n: 0, until: 0, best: 0, day: "" });
+function comboHit(e) {
+  const now = e.ts || Date.now() / 1000, day = new Date().toDateString();
+  if (combo.day !== day) combo = { n: 0, until: 0, best: 0, day };
+  combo.n = now < combo.until ? combo.n + 1 : 1;
+  combo.until = now + COMBO_WINDOW;
+  const best = combo.n > combo.best && combo.n >= 2;
+  combo.best = Math.max(combo.best, combo.n);
+  store.set("combo", combo);
+  if (combo.n >= 2) {
+    setTimeout(() => sound.play("combo", combo.n), 700);
+    const word = combo.n >= 5 ? "Unstoppable!" : combo.n >= 4 ? "On fire!" : combo.n >= 3 ? "Hot streak!" : "Combo!";
+    if (combo.n >= 3 && prefs.view === "floor") office.banner(`Combo ×${combo.n}`, word + (best ? " A new best today." : ""), "#ff7a45");
+    toast(`Combo ×${combo.n}: ${word}`, "good", { ic: "flame", ms: 4500 });
+  }
+  renderCombo();
+}
+function renderCombo() {
+  let el = document.querySelector(".combo");
+  const now = Date.now() / 1000, live = combo.n >= 2 && now < combo.until;
+  if (!live) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement("div"); el.className = "combo"; el.setAttribute("role", "status");
+    el.title = "Reports and finished lanes within 15 minutes of each other keep the combo going";
+    document.querySelector(".floor-frame").appendChild(el);
+  }
+  const left = Math.max(0, combo.until - now), f = left / COMBO_WINDOW;
+  const html = `<span class="cb-x">×${combo.n}</span><span class="cb-w"><b>Combo</b><small>${Math.ceil(left / 60)} min left${combo.best > combo.n ? ` · best ×${combo.best}` : ""}</small></span>`;
+  if (el.dataset.html !== html) { el.innerHTML = html + '<i class="cb-bar"><i></i></i>'; el.dataset.html = html; }
+  el.querySelector(".cb-bar i").style.width = (f * 100).toFixed(1) + "%";
+  el.classList.toggle("hot", combo.n >= 3);
+}
+setInterval(renderCombo, 5000);
+setTimeout(renderCombo, 1500);
+
 function findSessionByText(text) {
   for (const s of snap.seats) for (const x of s.sessions) if (text && text.startsWith(x.name)) return x.id;
   return null;

@@ -23,6 +23,8 @@ const SFX = {
   limit: () => { note(196, 0, 0.18, "sawtooth", 0.05); note(147, 0.16, 0.3, "sawtooth", 0.05); },
   bad: () => { for (let i = 0; i < 3; i++) note(880, i * 0.16, 0.08, "square", 0.05); },
   click: () => note(1200, 0, 0.03, "square", 0.025),
+  // A combo climbs: each step of the combo plays the run a little higher.
+  combo: (n = 2) => { const k = Math.pow(2, Math.min(8, n - 1) / 12); [659, 784, 988, 1319].forEach((f, i) => note(f * k, i * 0.05, 0.09, "square", 0.05)); },
   hire: () => { note(392, 0, 0.08); note(523, 0.08, 0.08); note(784, 0.16, 0.16, "triangle"); },
   // Level up: a rising run that lands on a held chord, the classic "you got stronger" fanfare.
   levelup: () => {
@@ -39,11 +41,11 @@ export const sound = {
   preview(name) {                       // the Settings "Play" button: one sound, without switching effects on
     try { if (SFX[name]) SFX[name](); } catch { /* audio is a nicety */ }
   },
-  play(name) {
+  play(name, arg) {
     if (!on || !SFX[name]) return;
     const t = performance.now();
     if (name !== "click" && t - last < 350) return;      // never a cacophony
     last = t;
-    try { SFX[name](); } catch { /* audio is a nicety */ }
+    try { SFX[name](arg); } catch { /* audio is a nicety */ }
   },
 };
