@@ -1256,7 +1256,7 @@ export function makePanels(app) {
   function reviewQueueHtml(m) {
     if (!m || (!m.review.length && !m.authored)) return "";
     const priv = app.privacy();
-    return `<section class="b-sec"><h3 class="b-h">${icon("users", 16)}Your review queue<span class="count">${m.review.length}</span><span class="grow"></span>${m.authored ? `<button class="btn sm ghost" data-go="prs">${m.authored} of yours open</button>` : ""}</h3>
+    return `<section class="b-sec"><h3 class="b-h">${icon("users", 16)}Your review queue<span class="count">${m.review.length}</span><span class="grow"></span>${m.authored ? `<button class="btn sm ghost" data-go="prs">${m.authored >= 50 ? "50+" : m.authored} of yours open</button>` : ""}</h3>
       ${m.review.length ? m.review.slice(0, 4).map(p => `<div class="rq"><span class="grow"><b>${priv ? `PR #${p.number}` : esc(p.title || `PR #${p.number}`)}</b><small>${priv ? "a repository" : esc(p.repo)} #${p.number}${p.author && !priv ? " · " + esc(p.author) : ""}${p.updated ? " · " + relTime(Date.parse(p.updated) / 1000) : ""}${p.draft ? " · draft" : ""}</small></span>
         <a class="btn sm ghost" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${icon("external", 14)}Open</a><button class="btn sm" data-review-lane="${esc(JSON.stringify([p.repo, p.number, p.title || "", p.workdir || ""]))}" title="Fill the hiring desk with a read-only review brief (nothing starts until you hire)">${icon("bot", 14)}Reviewer</button></div>`).join("")
         : `<p class="hint">Nobody is waiting on your review.</p>`}${m.review.length > 4 ? `<p class="hint">and ${m.review.length - 4} more.</p>` : ""}</section>`;

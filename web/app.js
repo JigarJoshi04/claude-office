@@ -1206,7 +1206,12 @@ function bindCommon(p) {
   }));
   p.querySelectorAll("[data-gift-seek]").forEach(b => b.addEventListener("click", () => giftBox.seek()));
   p.querySelectorAll("button[data-lane], .need[data-lane]").forEach(b => b.addEventListener("click", () => go({ kind: "lane", id: b.dataset.lane })));
-  p.querySelectorAll(".member[data-seat], .act.click[data-seat]").forEach(r => r.addEventListener("click", () => go({ kind: "seat", seat: r.dataset.seat })));
+  p.querySelectorAll(".member[data-seat], .act.click[data-seat]").forEach(r => {   // buttons for the keyboard too (Tab, Enter or Space)
+    const open = () => go({ kind: "seat", seat: r.dataset.seat });
+    if (!r.hasAttribute("tabindex")) { r.tabIndex = 0; r.setAttribute("role", "button"); }
+    r.addEventListener("click", open);
+    r.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+  });
   p.querySelectorAll(".sess").forEach(r => r.addEventListener("click", () => go({ kind: "session", seat: r.dataset.seat, id: r.dataset.id })));
   p.querySelectorAll(".need:not([data-lane])").forEach(a => a.addEventListener("click", () => {
     if (a.dataset.id) go({ kind: "session", seat: a.dataset.seat, id: a.dataset.id });

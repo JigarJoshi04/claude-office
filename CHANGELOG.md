@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.116.0] - 2026-10-19
+
+### Fixed
+- The office in words works from the keyboard: the Team view (the floor as text: each character, their plan left and
+  who is doing what) had characters and sessions you could only click. They, the news rows and the trophy rows are
+  buttons now: Tab reaches them, Enter or Space opens them, with a visible focus ring and a spoken name.
+- The review queue says "50+ of yours open" when the search hit its limit.
+
 ## [3.115.0] - 2026-10-19
 
 ### Added

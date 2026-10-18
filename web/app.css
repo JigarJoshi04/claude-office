@@ -1741,3 +1741,5 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .rq + .rq { margin-top: 6px; } .rq b { display: block; font-size: 14px; } .rq small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
 .rq .grow { min-width: 0; } .rq b, .rq small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @container panel (max-width: 420px) { .rq { flex-wrap: wrap; } .rq .grow { flex-basis: 100%; } .rq b, .rq small { white-space: normal; } .rq .btn { margin-left: auto; } .rq .btn + .btn { margin-left: 0; } }
+.tcard .sess:focus-visible, .tcard .who:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+.act.click:focus-visible, .member:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

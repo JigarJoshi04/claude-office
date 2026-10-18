@@ -34,20 +34,22 @@ export function renderBoard(el, app) {
         ${w && w.resets_at ? `<div class="hint" style="margin-top:4px">resets ${dayTime(w.resets_at)}</div>` : ""}</div>`;
     };
     return `<div class="tcard" style="--seat:${s.color}">
-      <div class="who" data-seat="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0))}
+      <div class="who" data-seat="${esc(s.id)}" role="button" tabindex="0" aria-label="Open ${esc(p.name)}">${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0))}
         <div><h3>${esc(p.name)}</h3><div class="role">${esc(p.role)} · ${esc(s.label)}</div></div>
         <span class="pill ${vo.tone}">${esc(vo.word)}</span></div>
       <div class="moodline">“${esc(vo.line)}”</div>
       ${s.career ? `<div class="tlevel"><span class="lvchip">Lv ${s.career.level}</span><span>${esc(s.career.title)}</span><div class="xpbar"><i style="width:${Math.round(s.career.progress * 100)}%"></i></div><span class="tro">${icon("trophy", 13)}${Object.keys(s.career.unlocked).length}</span></div>` : ""}
       ${meter("five_hour", "5-hour window")}${meter("weekly", "This week")}
-      <div style="margin-top:14px">${L.length ? L.map(x => `<div class="sess" data-seat="${esc(s.id)}" data-id="${esc(x.id)}">${avatar(x.id, s.color, x.kind === "desk" ? "headset" : "")}
+      <div style="margin-top:14px">${L.length ? L.map(x => `<div class="sess" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" role="button" tabindex="0" aria-label="Open ${esc(x.name)}, ${esc(STATE_LABEL[x.state] || x.state)}">${avatar(x.id, s.color, x.kind === "desk" ? "headset" : "")}
         <span class="nm"><span class="sdot ${x.state}"></span>${esc(x.name)}</span><span class="pill">${esc(STATE_LABEL[x.state] || x.state)}</span>
         <span class="ac">${app.privacy() && x.kind === "desk" ? "<span class='private'>hidden</span>" : esc(x.activity || "")}</span></div>`).join("") : `<div class="muted" style="font-size:14px">Nobody at the desk.</div>`}</div>
     </div>`;
   }).join("")}</div>`;
   hydratePortraits(el, 4);
-  el.querySelectorAll(".sess").forEach(r => r.addEventListener("click", () => app.go({ kind: "session", seat: r.dataset.seat, id: r.dataset.id })));
-  el.querySelectorAll(".who[data-seat]").forEach(r => r.addEventListener("click", () => app.go({ kind: "seat", seat: r.dataset.seat })));
+  // The rows are buttons for the keyboard too: Tab reaches them, Enter or Space opens them.
+  const activate = (r, fn) => { r.addEventListener("click", fn); r.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } }); };
+  el.querySelectorAll(".sess").forEach(r => activate(r, () => app.go({ kind: "session", seat: r.dataset.seat, id: r.dataset.id })));
+  el.querySelectorAll(".who[data-seat]").forEach(r => activate(r, () => app.go({ kind: "seat", seat: r.dataset.seat })));
 }
 
 export function renderStats(el, app) {
