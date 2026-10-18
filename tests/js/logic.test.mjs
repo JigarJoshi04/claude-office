@@ -119,3 +119,13 @@ test("a personality picked in Settings sets the voice and room style", async () 
   assert.equal(personaFor({ id: "a", kind: "claude", style: "Nonsense" }, 0).archetype, auto.archetype);          // unknown → automatic
   assert.equal(personaFor({ id: "x", kind: "claude" }, -1).name, personaFor({ id: "x", kind: "claude" }, 0).name);  // a seat not in the list
 });
+
+test("banter is two filled-in lines that fit the moment", async () => {
+  const { banter } = await import("../../web/ui/personas.js");
+  for (let i = 0; i < 200; i++) {
+    const o = { a: "Atlas", b: "Vega", c: "Orion", napping: i % 3 === 0, busy: i % 5, recentReport: i % 4 === 0, lowPlan: i % 7 === 0, night: i % 6 === 0 };
+    const [x, y] = banter(o);
+    assert.ok(x && y && !/[{}]/.test(x + y), `filled: ${x} / ${y}`);
+    if (!o.napping) assert.ok(!/napping|out of plan/i.test(x), "never says someone is napping when nobody is");
+  }
+});

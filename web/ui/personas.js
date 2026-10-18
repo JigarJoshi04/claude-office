@@ -185,3 +185,24 @@ function words(n) { return ["Zero", "One", "Two", "Three", "Four", "Five", "Six"
 
 // The personalities a seat can take (Settings → Characters): each brings its own voice, room floor and furniture.
 export const PERSONALITIES = [...ARCHETYPES, CODEX].map(a => ({ role: a.role, motto: a.motto }));
+
+// Banter: now and then two characters at their desks trade a line about what is going on. `a` speaks first, `b`
+// answers; {a}, {b} and {c} (a third character the lines are about) are names. The first exchange whose condition
+// holds is a candidate; one is picked at random among the candidates.
+const BANTER = [
+  { when: (o) => o.napping, lines: [["{c}'s napping again.", "Let them. They earned it."], ["Is {c} out of plan?", "Back after the reset. More coffee for us."]] },
+  { when: (o) => o.busy >= 3, lines: [["Busy floor today.", "Heads down. Ship it."], ["Three builds at once?", "Four if you count mine."], ["How many sessions are we running?", "Enough that the elevator's tired."]] },
+  { when: (o) => o.recentReport, lines: [["Did you see {c}'s report?", "Clean work. Raising the bar."], ["Another one shipped.", "That's the combo going."]] },
+  { when: (o) => o.lowPlan, lines: [["{c}'s running low.", "Send the next lane my way."], ["Pace yourself, {c}.", "Says the one at 90%."]] },
+  { when: (o) => o.night, lines: [["Still here?", "The best work happens when it's quiet."], ["Night shift crew.", "Somebody has to keep the lights on."]] },
+  { when: () => true, lines: [["Coffee?", "Always."], ["What are you on?", "Same thing as you, but with tests."], ["The cat's on my keyboard again.", "That's not a bug, that's Pixel."],
+    ["Any word from the CEO?", "Only good news so far."], ["Nice desk upgrade.", "Level ups have perks."], ["Lunch at the lounge?", "After this build."]] },
+];
+export function banter(o) {
+  const pool = BANTER.filter(b => b.when(o)).flatMap(b => b.lines.map(l => ({ l, w: b.when === BANTER[BANTER.length - 1].when ? 1 : 3 })));
+  const total = pool.reduce((n, x) => n + x.w, 0);
+  let r = Math.random() * total;
+  const pick = pool.find(x => (r -= x.w) < 0) || pool[0];
+  const fill = (s) => s.replace("{a}", o.a).replace("{b}", o.b).replace("{c}", o.c || o.b);
+  return [fill(pick.l[0]), fill(pick.l[1])];
+}

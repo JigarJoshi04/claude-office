@@ -6,7 +6,7 @@ import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
-import { pulse, line, reaction, voice, binding, leftOf } from "./ui/personas.js";
+import { pulse, line, reaction, voice, binding, leftOf, banter } from "./ui/personas.js";
 import { goals, streak } from "./ui/goals.js";
 import { makeReplay } from "./ui/replay.js";
 import { dayCard } from "./ui/daycard.js";
@@ -482,6 +482,25 @@ function teammateReacts(e, kind) {
   setTimeout(() => office.sayAtSeat(mate.id, reaction(kind, panels.persona(about).name), 6000), 1800);
 }
 
+// Banter: every couple of minutes two characters at their desks trade a line (ui/personas.js banter). Never during
+// replay or reduced motion, and never over another reaction.
+let lastReport = 0;
+setInterval(() => {
+  if (!snap || replay.active() || prefs.motion === "reduced" || document.hidden || prefs.view !== "floor" || Date.now() - lastReaction < 15000) return;
+  const awake = snap.seats.filter(s => !["limited", "offline", "benched"].includes(s.status) && live(s).length);
+  if (awake.length < 2 || Math.random() < 0.4) return;
+  const [a, b] = awake.sort(() => Math.random() - 0.5);
+  const others = snap.seats.filter(s => s !== a && s !== b);
+  const napping = snap.seats.find(s => s.status === "limited"), low = snap.seats.find(s => { const x = binding(s); return x.left != null && x.left < 20 && s.status !== "limited"; });
+  const h = new Date().getHours(), name = (s) => panels.persona(s).name;
+  const c = napping || low || others[0] || b;
+  const [l1, l2] = banter({ a: name(a), b: name(b), c: name(c), napping: !!napping, lowPlan: !!low, busy: snap.seats.flatMap(s => live(s)).filter(x => x.state === "working").length,
+    recentReport: Date.now() - lastReport < 10 * 60000, night: h >= 22 || h < 5 });
+  lastReaction = Date.now();
+  office.sayAtSeat(a.id, l1, 5000);
+  setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
+}, 45000);
+
 function onNews(e) {
   const key = e.ts + "|" + e.text;
   if (seenNews.has(key)) return;
@@ -496,7 +515,7 @@ function onNews(e) {
     case "report": {
       const ok = e.level === "good";
       const sid = findSessionByText(e.text);
-      if (ok) { office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); comboHit(e); }
+      if (ok) { lastReport = Date.now(); office.celebrate(e.seat, sid, "Shipped!"); if (who) office.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); comboHit(e); }
       else sound.play("bad");
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
       break;
