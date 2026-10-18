@@ -84,6 +84,7 @@ const app = {
   privacy: () => prefs.privacy,
   liveMode: () => liveMode,
   go,
+  openStandup: () => openStandup(),
   setView: (v) => setView(v),
   rerender: (force) => renderPanel(force),
   refresh: () => pollOnce(),
@@ -859,6 +860,23 @@ function renderRightNow() {
 // "Save a picture of the office": the floor as a poster, sized for a post (ui/poster.js).
 function savePicture() { openPoster(app, office, (s) => panels.persona(s)); }
 
+// This morning's standup (office/standup.py): Yesterday, Today and Blockers from the office's own records, with the
+// characters' names, in a dialog to copy into Slack. Share-safe blurs it on screen; copying still gives the words.
+async function openStandup() {
+  let d;
+  try { const r = await fetch("/api/standup"); d = r.ok ? await r.json() : null; } catch { d = null; }
+  if (!d) { toast("Could not write the standup.", "bad"); return; }
+  const text = panels.humanise(d.text);
+  $("dialogBody").innerHTML = `<div class="dh"><b>This morning's standup</b><button class="btn sm ghost" id="suClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="db"><pre class="standup ${prefs.privacy ? "private" : ""}">${esc(text)}</pre>
+    <p class="hint">Written from the office's own records: yesterday's reports, merges and commits, what runs today, and what Needs you holds. Bold and bullets as Slack writes them.</p>
+    <div class="row" style="margin-top:10px;gap:8px"><button class="btn primary" id="suCopy">${icon("copy", 15)}Copy for Slack</button></div></div>`;
+  $("dialog").showModal();
+  $("suClose").addEventListener("click", () => $("dialog").close());
+  $("suCopy").addEventListener("click", () => navigator.clipboard.writeText(text).then(() => toast("The standup is on the clipboard.", "good"), () => toast("Could not copy.", "warn")));
+  $("suCopy").focus();
+}
+
 // The day card (ui/daycard.js): shown in a dialog with Save and Copy, so it can go straight into a post or a channel.
 async function shareDay() {
   const stats = app.statsCache(null);
@@ -1149,6 +1167,7 @@ function paletteItems() {
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
     { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
+    { icon: icon("news", 16), label: "This morning's standup", keywords: "standup slack yesterday today blockers daily", run: openStandup },
     { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },
     { icon: icon("volume", 16), label: prefs.sound ? "Mute sound effects" : "Turn on sound effects", run: () => setPref("sound", !prefs.sound) },

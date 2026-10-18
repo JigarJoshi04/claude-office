@@ -170,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.78.0"
+    server_version = "ClaudeOffice/3.79.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -251,6 +251,8 @@ class Handler(BaseHTTPRequestHandler):
                 if rng not in tokens.RANGES and not re.fullmatch(r"m:\d{4}-(0[1-9]|1[0-2])", rng):
                     raise ValueError("range must be today, 7, 30, 90, all or m:YYYY-MM")
                 return self._json(200, self.office.tokens_view(rng, seat, q.get("sessions") == "all"))
+            if url.path == "/api/standup":
+                return self._json(200, self.office.standup())
             if url.path == "/api/tokens/project":
                 name, days = q.get("name", ""), _number(q.get("days", "30"), "days must be 7, 30 or 90")
                 if not 1 <= len(name) <= 200 or days not in (7, 30, 90):

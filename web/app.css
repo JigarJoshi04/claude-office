@@ -1623,3 +1623,4 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .prj-list .tb-bar { display: block; margin-top: 4px; } .prj-list .tb-bar i { background: var(--seat); }
 .tok-prj { cursor: pointer; border-radius: 8px; } .tok-prj:hover { background: var(--surface-2); } .tok-prj:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .poster-img { max-height: 56vh; object-fit: contain; background: #0a0c12; }
+.standup { margin: 0; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); font: 13px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 52vh; overflow: auto; }

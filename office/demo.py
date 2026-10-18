@@ -273,6 +273,15 @@ class DemoOffice(LiveOffice):
             self._tokens = _demo_token_ledger()
         return self._tokens.view(self.get().get("seats", []), rng=rng, seat=seat, all_sessions=all_sessions)
 
+    def standup(self) -> dict:
+        from . import standup
+        y = time.time() - 86400
+        ev = [{"ts": y, "kind": "report", "level": "good", "text": "checkout-tests filed its report: STATUS: DONE - flaky retry test fixed"},
+              {"ts": y + 60, "kind": "report", "level": "good", "text": "docs-refresh filed its report: STATUS: DONE - API docs regenerated"},
+              {"ts": y + 120, "kind": "shipped", "level": "good", "text": "api-gateway: PR #477 merged"},
+              {"ts": y + 180, "kind": "limit", "level": "warn", "text": "Vega is out of plan"}]
+        return standup.build(self.get(), ev, {"commits": 41, "prs_opened": 6, "prs_merged": 4})
+
     def tokens_project(self, name: str, days: int = 30) -> dict:
         if not hasattr(self, "_tokens"):
             self._tokens = _demo_token_ledger()
@@ -484,7 +493,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.78.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.79.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

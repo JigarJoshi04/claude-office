@@ -16,7 +16,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, cabinet, checkpoint, config, divider, lanes, loose, prs, seats as seatmod, sessions, weeks
+from . import asks, cabinet, checkpoint, config, divider, lanes, loose, prs, seats as seatmod, sessions, standup, weeks
 from .career import CATALOGUE, Career
 from .presence import Presence
 from .history import DayLedger, HistoryStore
@@ -478,7 +478,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.78.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.79.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -773,6 +773,15 @@ class Office(LiveOffice):
     def tokens_view(self, rng: str = "all", seat: str | None = None, all_sessions: bool = False) -> dict:
         snap = self.get() or {}
         return self.tokens.view(snap.get("seats", []), rng=rng, seat=seat, all_sessions=all_sessions)
+
+    def standup(self) -> dict:
+        """This morning's standup (standup.py): yesterday from the news and the ledger, today and blockers from now."""
+        snap, now = self.get() or {}, time.time()
+        day = standup.yesterday_of(now)
+        seats = snap.get("seats", [])
+        shipped = self.tokens.shipped_on(day, {s["id"] for s in seats}, next((s["id"] for s in seats if s.get("kind") == "codex"), None)) \
+            if self.tokens.scanned_at else None
+        return standup.build(snap, standup.events_between(self._events_path, *standup.day_bounds(day)), shipped, now)
 
     def tokens_project(self, name: str, days: int = 30) -> dict:
         """One project's drill-down (TokenLedger.view_project), with the office lanes whose sessions worked on it."""

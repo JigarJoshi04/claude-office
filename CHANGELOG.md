@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.79.0] - 2026-10-19
+
+### Added
+- This morning's standup: Yesterday (reports filed, PRs merged, commits, limits hit), Today (lanes running and
+  scheduled, terminal sessions at work) and Blockers (what Needs you holds), every line from the office's own
+  records, with the characters' names, ready to copy into Slack. From the morning card ("Standup") or the palette.
+  `GET /api/standup`.
+
 ## [3.78.0] - 2026-10-19
 
 ### Fixed

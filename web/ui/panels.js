@@ -128,7 +128,7 @@ export function makePanels(app) {
       const recap = y && (y.reports || y.active_min) ? `Yesterday: ${y.reports} report${y.reports === 1 ? "" : "s"} and ${hrs(y.active_min)} of agent work.` : "A fresh day.";
       return `<div class="rhythm am">${icon("sun", 20)}<div class="grow"><b>Good morning${ceo && ceo !== "CEO" ? ", " + esc(ceo) : ""}.</b>
         <span>${esc(recap)}${app.prefs().game === "off" || !goals(st) ? "" : ` Today's goals: ${goals(st).map(g => esc(g.label.toLowerCase())).join(", ")}.`}${app.prefs().game === "off" ? "" : (() => { const w = weekly(wk); return w && !w.calibrating && !w.done ? ` This week: ${w.have} of ${w.target} reports, ${w.daysLeft + 1} day${w.daysLeft ? "s" : ""} to go.` : ""; })()}${app.gifts && app.gifts.waiting().some(g => g.from === "daily") ? ` <button class="linkish" data-gift-seek>${icon("gift", 13)}Your delivery is at the desk</button>` : ""}</span></div>
-        <button class="btn sm ghost icon" data-rhythm="am-${esc(st.day)}" aria-label="Dismiss" title="Dismiss">${icon("x", 15)}</button></div>`;
+        <button class="btn sm" data-standup>${icon("news", 14)}Standup</button><button class="btn sm ghost icon" data-rhythm="am-${esc(st.day)}" aria-label="Dismiss" title="Dismiss">${icon("x", 15)}</button></div>`;
     }
     if (h >= 18 && !seen["pm-" + st.day] && ((st.office || {}).reports || sum(st, "active_min"))) {
       return `<div class="rhythm pm">${icon("moon", 20)}<div class="grow"><b>That's a wrap.</b>
@@ -286,6 +286,7 @@ export function makePanels(app) {
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
+        root.querySelectorAll("[data-standup]").forEach(b => b.addEventListener("click", () => app.openStandup()));
         root.querySelectorAll("[data-rhythm]").forEach(b => b.addEventListener("click", () => { store.set("rhythm", { ...store.get("rhythm", {}), [b.dataset.rhythm]: 1 }); app.rerender(true); }));
         root.querySelectorAll("[data-unused]").forEach(b => b.addEventListener("click", () => { store.set("unusedSeen", { ...store.get("unusedSeen", {}), [b.dataset.unused]: 1 }); app.rerender(true); }));
         root.querySelectorAll("[data-hire-for]").forEach(b => b.addEventListener("click", () => { hireDraft = { ...hireDraft, seat: b.dataset.hireFor }; store.set("hireDraft", hireDraft); app.go({ kind: "hire" }); }));
