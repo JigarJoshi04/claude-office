@@ -512,7 +512,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.117.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.118.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
@@ -560,6 +560,7 @@ class DemoOffice(LiveOffice):
             self.emit("levelup" if aid == "levelup" else "achievement", text, seat, "good")
         for x in seats:
             x["career"] = self.career.view(x["id"])
+            x["career"]["bond"] = self.career.closest(x["id"])
         snap["achievements"] = CATALOGUE
         if not getattr(self, "_seeded", False):
             self._seed_history(snap)
@@ -674,4 +675,6 @@ def _demo_career() -> Career:
                     tokens=tokens, unlocked={a: now - (i + 1) * 86400 * 2.5 for i, a in enumerate(reversed(unlocked))},
                     days=[time.strftime("%Y-%m-%d", time.localtime(now - d * 86400)) for d in range(streak)])
         c.seats[sid] = seat
+    c.bonds = {"claude2|claude3": {"pts": 46, "level": 2, "cowork_s": 9 * 3600, "reports": 7, "covers": 2},    # Atlas and Vega
+               "claude2|claude4": {"pts": 14, "level": 1, "cowork_s": 4 * 3600, "reports": 1, "covers": 0}}
     return c

@@ -223,9 +223,12 @@ export const PERSONALITIES = [...ARCHETYPES, CODEX].map(a => ({ role: a.role, mo
 // Banter: now and then two characters at their desks trade a line about what is going on. `a` speaks first, `b`
 // answers. {a} and {b} are their names; the lines can be about a third character, never one of the two: {n} who is
 // napping, {l} whose plan runs low, {r} who just filed a report, {t} the top burner today. The facts of the day come
-// in too: {g} goals left, {m} PRs merged. Every exchange whose condition holds is a candidate; one is picked at random
+// in too: {g} goals left, {m} PRs merged, and how close the two are (o.bond, career.py teammate bonds). Every exchange whose condition holds is a candidate; one is picked at random
 // among the candidates, skipping the ones said lately.
 const BANTER = [
+  { when: (o) => o.bond >= 1, lines: [["Good to be on this with you, {b}.", "Same repo, same coffee."], ["Want to pair on this one?", "Always do."]] },
+  { when: (o) => o.bond >= 2, lines: [["Remember when you covered my limit?", "Anytime. You'd do the same."], ["Best team on the floor.", "Don't tell the others."]] },
+  { when: (o) => o.bond >= 3, lines: [["Best friends, officially.", "Took us long enough."], ["Who reviews your work?", "{a} does. Nobody else gets it."]] },
   { when: (o) => o.napper, lines: [["{n}'s napping again.", "Let them. They earned it."], ["Is {n} out of plan?", "Back after the reset. More coffee for us."]] },
   { when: (o) => o.leader, lines: [["{t} is burning through tokens today.", "Someone get {t} a fire extinguisher."], ["Who's top of the burner board?", "{t}. Again."]] },
   { when: (o) => o.goalsLeft > 0, lines: [["{g} goals left today.", "We've got this."], ["Did anyone look at today's goals?", "{g} to go. Pick one."]] },

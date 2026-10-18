@@ -108,3 +108,38 @@ class CareerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BondTests(unittest.TestCase):
+    """Teammate bonds from shared history: the same repository, reports close together, covering a limit."""
+
+    def snap(self, now, sessions=(), lanes=()):
+        seats = {}
+        for sid, repo, state, report in sessions:
+            seats.setdefault(sid, []).append({"id": f"{sid}-{repo}", "name": "x", "live": True, "state": state, "kind": "lane",
+                                              "git": {"repo": repo, "branch": "b"} if repo else None, "report_status": report,
+                                              "tool_calls": 1, "tokens_total": 1, "started_at": now - 3600})
+        return {"now": now, "seats": [{"id": k, "label": k, "kind": "claude", "status": "ok", "sessions": v} for k, v in seats.items()], "lanes": list(lanes)}
+
+    def test_working_in_one_repository_reporting_together_and_covering(self):
+        from office.career import Career
+        c = Career(None)
+        t = 1_800_000_000.0
+        c.observe(self.snap(t, [("a", "api", "working", None), ("b", "api", "working", None), ("c", "web", "working", None)]))
+        for i in range(1, 70):                                    # 35 minutes on the same repository, 30 s at a time
+            c.observe(self.snap(t + i * 30, [("a", "api", "working", None), ("b", "api", "working", None), ("c", "web", "working", None)]))
+        self.assertEqual(c.bonds["a|b"]["pts"], 2)
+        self.assertNotIn("a|c", c.bonds)                           # at the same time, not the same work
+        now = t + 70 * 30
+        c.observe(self.snap(now, [("a", "api", "working", "STATUS: DONE"), ("b", "api", "working", None)]))
+        news = c.observe(self.snap(now + 60, [("a", "api", "working", "STATUS: DONE"), ("b", "api", "working", "STATUS: DONE")]))
+        self.assertEqual(c.bonds["a|b"]["reports"], 1)
+        lane = {"id": "l1", "runs": [{"seat": "a", "ended_by": "limit"}, {"seat": "b"}]}
+        for k in range(2):                                         # counted once, however often it is seen
+            news += c.observe(self.snap(now + 120 + k, [("a", "api", "working", None)], [lane]))
+        self.assertEqual(c.bonds["a|b"]["covers"], 1)
+        self.assertEqual(c.bonds["a|b"]["pts"], 10)
+        self.assertIn(("a", "bond", "a and b are teammates now"), news)
+        cl = c.closest("b")
+        self.assertEqual((cl["with"], cl["level"], cl["name"], cl["next"]), ("a", 1, "Teammates", 30))
+        self.assertIsNone(c.closest("c"))

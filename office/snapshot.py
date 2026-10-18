@@ -530,7 +530,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.117.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.118.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -604,6 +604,7 @@ class Office(LiveOffice):
             self.emit(kind, text, seat_id, "good")
         for s in snap["seats"]:
             s["career"] = self.career.view(s["id"])
+            s["career"]["bond"] = self.career.closest(s["id"])     # the teammate it is closest to (career.Career._bonds)
         snap["achievements"] = CATALOGUE
         if self._prev:
             self._diff(self._prev, snap)

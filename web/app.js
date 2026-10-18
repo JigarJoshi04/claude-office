@@ -554,7 +554,10 @@ setInterval(() => {
   if (!snap || replay.active() || prefs.motion === "reduced" || prefs.game !== "full" || document.hidden || prefs.view !== "floor" || Date.now() - lastReaction < 15000) return;
   const awake = snap.seats.filter(s => !["limited", "offline", "benched"].includes(s.status) && live(s).length);
   if (awake.length < 2 || Math.random() < 0.4) return;
-  const [a, b] = awake.sort(() => Math.random() - 0.5);
+  let [a, b] = awake.sort(() => Math.random() - 0.5);
+  const pair = awake.find(s => s.career && s.career.bond && s.career.bond.level && awake.some(o => o.id === s.career.bond.with));
+  if (pair && Math.random() < 0.5) [a, b] = [pair, awake.find(o => o.id === pair.career.bond.with)];   // teammates chat more
+  const bondOf = (x, y) => (x.career && x.career.bond && x.career.bond.with === y.id ? x.career.bond.level : y.career && y.career.bond && y.career.bond.with === x.id ? y.career.bond.level : 0);
   const third = (s) => s && s !== a && s !== b;        // the lines can be about someone, never about one of the speakers
   const napping = snap.seats.find(s => third(s) && s.status === "limited");
   const low = snap.seats.find(s => { const x = binding(s); return third(s) && x.left != null && x.left < 20 && s.status !== "limited"; });
@@ -565,7 +568,7 @@ setInterval(() => {
   const [l1, l2] = banter({ a: name(a), b: name(b), napper: name(napping), low: name(low), reporter: name(reporter), leader: name(leader),
     busy: snap.seats.flatMap(s => live(s)).filter(x => x.state === "working").length, recentReport: recent, night: h >= 22 || h < 5,
     goalsLeft: gl ? gl.filter(g => !g.done).length : undefined, happy: giftBox.happy(), merges: (snap.office.shipped_today || {}).prs_merged || 0,
-    weekday: now.getDay(), season: office.season() }, banterSaid);
+    weekday: now.getDay(), season: office.season(), bond: bondOf(a, b) }, banterSaid);
   lastReaction = Date.now();
   office.sayAtSeat(a.id, l1, 5000);
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
@@ -644,6 +647,7 @@ function onNews(e) {
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
     case "reset": toast(text, "good"); fx.celebrate(e.seat, null, "Fresh plan!"); sound.play("arrive"); if (who) fx.sayAtSeat(e.seat, line(who, "reset"), 6000); teammateReacts(e, "reset"); break;
     case "stuck": if (who) fx.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
+    case "bond": if (prefs.game !== "off") { fx.celebrate(e.seat, null, "Teammates!"); sound.play("achievement"); toast(text, "good", { ic: "heart" }); } break;
     case "risk": case "collision": sound.play("bad"); toast(text, "bad"); notify(e.kind === "risk" ? "Risky action" : "Two sessions, one working tree", text); break;
     case "levelup":
     case "achievement": {

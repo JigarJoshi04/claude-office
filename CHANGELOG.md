@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.118.0] - 2026-10-19
+
+### Added
+- Teammate bonds, from real shared history: two characters grow closer for every half hour they work in the same
+  repository (not merely at the same time), for reports filed within 15 minutes of each other, and when one takes
+  over a lane the other's limit cut short. Bonds go Teammates, Good friends, Best friends (at 10, 30 and 80
+  points), with confetti and a toast; each character's Career tab shows its closest teammate and why, and bonded
+  pairs chat more, about each other.
+
 ## [3.117.0] - 2026-10-19
 
 ### Added

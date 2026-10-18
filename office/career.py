@@ -102,6 +102,22 @@ def new_seat(now: float) -> dict:
             "days": [], "unlocked": {}, "since": now}
 
 
+BOND_LEVELS = (10, 30, 80)
+BOND_NAMES = {0: "Colleagues", 1: "Teammates", 2: "Good friends", 3: "Best friends"}
+
+
+def bond_key(a: str, b: str) -> str:
+    return "|".join(sorted((a, b)))
+
+
+def new_bond() -> dict:
+    return {"pts": 0, "level": 0, "cowork_s": 0.0, "reports": 0, "covers": 0}
+
+
+def bond_level(pts: float) -> int:
+    return sum(1 for t in BOND_LEVELS if pts >= t)
+
+
 class Career:
     """Accumulates each seat's career from the snapshots. ``observe`` returns the news it produced."""
 
@@ -115,11 +131,16 @@ class Career:
         self._last = None
         self._saved = 0.0
         self._dirty = False
+        self.bonds: dict[str, dict] = {}     # "a|b" -> {pts, level, cowork_s, reports, covers}: teammate bonds
+        self.covers_seen: list[str] = []     # lane hand-offs already counted ("lane:run")
+        self._report_at: dict[str, float] = {}
         d = config.read_state(path)                    # a damaged file is set aside, never written over
         if isinstance(d, dict):
             try:
                 self.seats = {k: dict(new_seat(v.get("since") or clock()), **v) for k, v in d.get("seats", {}).items()}
                 self.sess = d.get("sessions", {})
+                self.bonds = {k: v for k, v in (d.get("bonds") or {}).items() if isinstance(v, dict)}
+                self.covers_seen = [x for x in d.get("covers_seen") or [] if isinstance(x, str)]
             except (AttributeError, TypeError):
                 pass
 
@@ -128,6 +149,7 @@ class Career:
         now = snap.get("now")
         now = self.clock() if now is None else now
         news: list[tuple[str, str, str]] = []
+        reported: list[str] = []          # seats that filed a good report in this look (for bonds)
         with self.lock:
             quiet = self._last is None   # the first look credits work done so far, without a flood of news
             dt = 0.0 if self._last is None else max(0.0, min(30.0, now - self._last))
@@ -171,6 +193,8 @@ class Career:
                         if not report_blocked(str(x["report_status"])):
                             c["reports"] += 1
                             gained += XP_REPORT
+                            if not quiet:
+                                reported.append(sid)
                             if not quiet and x.get("started_at") and now - x["started_at"] <= 600:
                                 news += self._unlock(c, sid, s, "speed_run", now)
                 if working and dt:
@@ -202,6 +226,7 @@ class Career:
                 if after > before_level:
                     news.append((sid, "levelup", f"{s.get('label', sid)} reached level {after}: {title_for(after)}"))
                     self._dirty = True
+            news += self._bonds(snap, now, dt, quiet, reported)
             # Forget sessions not seen for three days.
             self.sess = {k: v for k, v in self.sess.items() if now - v.get("seen", now) < 3 * 86400}
             if self._dirty and (quiet or now - self._saved > 60):
@@ -238,6 +263,71 @@ class Career:
                     if ok:
                         out += self._unlock(c, sid, s, aid, now)
         return [] if quiet else out
+
+    def _bonds(self, snap: dict, now: float, dt: float, quiet: bool, reported: list[str]) -> list:
+        """Teammate bonds from real shared history: +2 for every half hour two seats work in the same repository, +3
+        when they file good reports within 15 minutes of each other, +5 when one takes over a lane the other's limit
+        cut short. Bonds level up at 10, 30 and 80 points (news, once each)."""
+        labels = {s["id"]: s.get("label") or s["id"] for s in snap.get("seats", [])}
+        gained: dict[str, float] = {}
+        add = lambda a, b, pts, what: (gained.__setitem__(bond_key(a, b), gained.get(bond_key(a, b), 0) + pts),
+                                       self.bonds.setdefault(bond_key(a, b), new_bond()).__setitem__(what, self.bonds[bond_key(a, b)].get(what, 0) + 1))
+        repos: dict[str, set] = {}                 # repository -> seats working in it now
+        for s in snap.get("seats", []):
+            for x in s.get("sessions", []):
+                g = x.get("git") or {}
+                if x.get("live", True) and x.get("state") in ("working", "waiting") and g.get("repo") and g.get("branch"):
+                    repos.setdefault(g["repo"], set()).add(s["id"])
+        if dt:
+            pairs = {bond_key(a, b) for ids in repos.values() for a in ids for b in ids if a < b}
+            for k in pairs:
+                b = self.bonds.setdefault(k, new_bond())
+                before = int(b.get("cowork_s", 0) // 1800)
+                b["cowork_s"] = b.get("cowork_s", 0) + dt
+                if int(b["cowork_s"] // 1800) > before:
+                    gained[k] = gained.get(k, 0) + 2
+        for sid in reported:                       # reports within 15 minutes of a teammate's
+            for other, at in self._report_at.items():
+                if other != sid and now - at <= 900:
+                    add(sid, other, 3, "reports")
+            self._report_at[sid] = now
+        seen = set(self.covers_seen)
+        for l in snap.get("lanes") or []:          # a lane that moved seats after a limit: the new seat covered
+            runs = l.get("runs") or []
+            for i in range(1, len(runs)):
+                key = f"{l.get('id')}:{i}"
+                if key in seen or runs[i - 1].get("ended_by") != "limit" or not runs[i].get("seat") or runs[i]["seat"] == runs[i - 1].get("seat"):
+                    continue
+                self.covers_seen.append(key)
+                seen.add(key)
+                if not quiet:
+                    add(runs[i]["seat"], runs[i - 1]["seat"], 5, "covers")
+        out = []
+        for k, pts in gained.items():
+            b = self.bonds.setdefault(k, new_bond())
+            b["pts"] = b.get("pts", 0) + pts
+            lv = bond_level(b["pts"])
+            self._dirty = True
+            if lv > b.get("level", 0):
+                b["level"] = lv
+                a, c = k.split("|")
+                if not quiet:
+                    out.append((a, "bond", f"{labels.get(a, a)} and {labels.get(c, c)} are {BOND_NAMES[lv].lower()} now"))
+        return out
+
+    def closest(self, sid: str) -> dict | None:
+        """The teammate a seat has the strongest bond with: {with, pts, level, name, cowork_h, reports, covers}."""
+        with self.lock:
+            best = max(((k, b) for k, b in self.bonds.items() if sid in k.split("|") and b.get("pts", 0) > 0),
+                       key=lambda kb: kb[1].get("pts", 0), default=None)
+        if not best:
+            return None
+        k, b = best
+        other = next(x for x in k.split("|") if x != sid) if k.count(sid) == 1 else sid
+        lv = bond_level(b.get("pts", 0))
+        return {"with": other, "pts": round(b.get("pts", 0)), "level": lv, "name": BOND_NAMES[lv],
+                "cowork_h": round(b.get("cowork_s", 0) / 3600, 1), "reports": b.get("reports", 0), "covers": b.get("covers", 0),
+                "next": next((t for t in BOND_LEVELS if t > b.get("pts", 0)), None)}
 
     def _milestones(self, c: dict, sid: str, s: dict, now: float, working: int) -> list:
         out = []
@@ -281,7 +371,7 @@ class Career:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             fd, tmp = tempfile.mkstemp(prefix=".career-", dir=self.path.parent)
             with os.fdopen(fd, "w") as f:
-                json.dump({"seats": self.seats, "sessions": self.sess}, f, separators=(",", ":"))
+                json.dump({"seats": self.seats, "sessions": self.sess, "bonds": self.bonds, "covers_seen": self.covers_seen[-500:]}, f, separators=(",", ":"))
             os.replace(tmp, self.path)
             self._saved, self._dirty = now, False
         except OSError:

@@ -131,6 +131,11 @@ test("banter is two filled-in lines that fit the moment", async () => {
     if (/report\?/.test(x)) assert.ok(x.includes("Main"), "a report line names who reported");
     assert.ok(!/(^|\W)(Atlas|Vega)'s/.test(x), "never talks about one of the two speakers");
   }
+  const bondLines = /pair on this|covered my limit|Best (team|friends)|Same repo/;
+  for (let i = 0; i < 100; i++) assert.ok(!bondLines.test(banter({ a: "Atlas", b: "Vega", bond: 0 }).join(" ")), "no bond talk without a bond");
+  let heard = 0;
+  for (let i = 0; i < 300; i++) { const [x, y] = banter({ a: "Atlas", b: "Vega", bond: 3 }); assert.ok(!/[{}]/.test(x + y)); if (bondLines.test(x + " " + y)) heard++; }
+  assert.ok(heard > 30, "bonded pairs talk about it");
 });
 
 test("the weekly challenge beats last week by 10%, Monday to Sunday", async () => {
