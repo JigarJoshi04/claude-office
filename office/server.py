@@ -167,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.60.0"
+    server_version = "ClaudeOffice/3.61.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -434,8 +434,9 @@ class Handler(BaseHTTPRequestHandler):
                                          body.get("seat") or "auto", body.get("model") or ld["model"],
                                          body.get("permission_mode") or ld["permission_mode"], seat_ids, cfg,
                                          allow_messages=body.get("allow_messages") is not False,   # the form's switch
+                                         schedule=lanes.schedule_from(body.get("start")),
                                          chain=lanes.chain_from(body.get("chain"), " ".join(str(body.get("title", "")).split())[:60]))
-                self.office.emit("lane", f"CEO hired office lane '{lane['title']}' ({lane['seat_pref']})", level="good")
+                self.office.emit("lane", f"CEO hired office lane '{lane['title']}' ({lane['seat_pref']})" + (" to start later" if lane.get("schedule") else ""), level="good")
                 return self._json(200, {"ok": True, "lane": lane})
             if path == "/api/lanes/stop-all":               # the panic button: every office lane that is not finished
                 stopped = [lanes.stop_lane(l["id"])["id"] for l in lanes.list_lanes() if l.get("status") in ("running", "waiting", "queued")]

@@ -85,9 +85,10 @@ export function makePanels(app) {
     </div>`;
   }
   function laneRow(l) {
-    const tn = { done: "good", finished: "good", running: "info", blocked: "warn", failed: "bad", waiting: "warn" }[l.status] || "info";
-    return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop" }[l.status] || "briefcase", 16)}</span>
-      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status)}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
+    const tn = { done: "good", finished: "good", running: "info", blocked: "warn", failed: "bad", waiting: "warn", scheduled: "info" }[l.status] || "info";
+    const when = l.status === "scheduled" && l.schedule ? (l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
+    return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop", scheduled: "calendar" }[l.status] || "briefcase", 16)}</span>
+      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status)}${when}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}</div></div></div>`;
   }
 
   // ---------------------------------------------------------------------------------------- briefing
@@ -1114,6 +1115,11 @@ export function makePanels(app) {
         <label class="f">Permissions<select id="hPerm" ${isCodex ? "disabled" : ""}>
           <option value="acceptEdits" ${(d.permission_mode || ld.permission_mode) === "acceptEdits" ? "selected" : ""}>Edit files, run listed tools</option>
           <option value="bypassPermissions" ${(d.permission_mode || ld.permission_mode) === "bypassPermissions" ? "selected" : ""}>Full trust (skips every permission check)</option></select></label>
+        <div class="grid2"><label class="f">Start<select id="hStart">
+          <option value="" ${!d.start ? "selected" : ""}>Now</option>
+          <option value="at" ${d.start === "at" ? "selected" : ""}>At a time…</option>
+          <option value="left" ${d.start === "left" ? "selected" : ""}>When a seat has 30% of its window left</option></select></label>
+          ${d.start === "at" ? `<label class="f">At<input type="datetime-local" id="hStartAt" value="${esc(d.startAt || "")}"></label>` : "<span></span>"}</div>
         <label class="f">Then, in the same folder<select id="hThen">
           <option value="" ${!d.chain ? "selected" : ""}>Nothing: it reports and stops</option>
           <option value="review" ${d.chain === "review" ? "selected" : ""}>A second lane reviews its work</option>
@@ -1127,11 +1133,14 @@ export function makePanels(app) {
       ${section("Office lanes", `<div id="laneList">${laneListHtml()}</div>`)}`,
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
-        const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "" }; store.set("hireDraft", hireDraft); };
+        const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
+          start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "" }; store.set("hireDraft", hireDraft); };
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen"].forEach(id => q(id).addEventListener("input", save));
         q("hBrief").addEventListener("input", () => { q("hCheck").innerHTML = briefCheck(q("hBrief").value); });
         q("hMsg").addEventListener("change", save);
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
+        q("hStart").addEventListener("change", () => { save(); app.rerender(true); });
+        if (q("hStartAt")) q("hStartAt").addEventListener("input", save);
         const useTpl = (t) => {
           save();
           const mine = (hireDraft.title.trim() || hireDraft.brief.trim()) && ![...TEMPLATES, ...myTemplates()].some(x => x.brief === hireDraft.brief);
@@ -1172,7 +1181,9 @@ export function makePanels(app) {
           if (hireDraft.permission_mode === "bypassPermissions" && !confirm("Full trust lets the lane run any command without asking. Start it?")) return;
           q("hGo").disabled = true;
           try {
-            const r = await app.post("/api/lanes", hireDraft);
+            const startAt = hireDraft.start === "at" && hireDraft.startAt ? Date.parse(hireDraft.startAt) / 1000 : null;
+            if (hireDraft.start === "at" && !startAt) { q("hGo").disabled = false; toast("Pick when it should start.", "warn"); return; }
+            const r = await app.post("/api/lanes", { ...hireDraft, start: hireDraft.start === "at" ? { at: startAt } : hireDraft.start === "left" ? { left: 30 } : null });
             if (r.demo) toast("Demo office: no lane was started.");
             else { sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true, chain: "" }; store.set("hireDraft", hireDraft); }
             app.refresh(); app.rerender(true);

@@ -204,9 +204,67 @@ def chain_from(body_chain, title: str) -> list[dict]:
     return out
 
 
+def schedule_from(body_start, now: float | None = None) -> dict | None:
+    """When a hired lane starts: None (now), {"at": epoch} within the next week, or {"left": N} (as soon as some
+    Claude seat has N% of its 5-hour window left, and is not out of its week)."""
+    if not body_start:
+        return None
+    now = now or time.time()
+    if not isinstance(body_start, dict):
+        raise ValueError("start must be an object")
+    if "at" in body_start:
+        at = body_start["at"]
+        if isinstance(at, bool) or not isinstance(at, (int, float)) or not now - 60 <= at <= now + 7 * 86400:
+            raise ValueError("A lane can be scheduled up to a week ahead")
+        return {"at": float(at)}
+    if "left" in body_start:
+        n = body_start["left"]
+        if isinstance(n, bool) or not isinstance(n, int) or not 5 <= n <= 100:
+            raise ValueError("left must be a percentage from 5 to 100")
+        return {"left": n}
+    raise ValueError("start needs at or left")
+
+
+def due(lane: dict, seats: list[dict], now: float) -> bool:
+    """Whether a scheduled lane should start now."""
+    sch = lane.get("schedule") or {}
+    if "at" in sch:
+        return now >= sch["at"]
+    if "left" in sch:
+        for s in seats:
+            u = s.get("usage") or {}
+            five, week = (u.get("five_hour") or {}).get("pct"), (u.get("weekly") or {}).get("pct")
+            if s.get("kind") == "claude" and s.get("status") != "limited" and five is not None and 100 - five >= sch["left"] \
+                    and (week is None or week < 95):
+                return True
+    return False
+
+
+def start_scheduled(seats: list[dict], now: float | None = None) -> list[dict]:
+    """Start every scheduled lane that is due; returns the lanes started."""
+    now = now or time.time()
+    started = []
+    for lane in list_lanes():
+        if lane.get("status") == "scheduled" and due(lane, seats, now):
+            full = load_lane(lane["id"])
+            if not full:
+                continue
+            full["status"] = "queued"
+            save_lane(full)
+            try:
+                start_unit(full["id"])
+                started.append(full)
+            except (ValueError, OSError) as e:
+                full["status"] = "scheduled"
+                save_lane(full)
+                _log(full["id"], f"could not start on schedule: {e}")
+    return started
+
+
 def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, permission_mode: str,
                 seat_ids: list[str], cfg: dict, launch: bool = True, allow_messages: bool = True,
-                resume_session: str | None = None, chain: list[dict] | None = None, chain_of: dict | None = None) -> dict:
+                resume_session: str | None = None, chain: list[dict] | None = None, chain_of: dict | None = None,
+                schedule: dict | None = None) -> dict:
     title = " ".join(str(title).split())[:80]
     if not title or not str(brief).strip():
         raise ValueError("A lane needs a title and a brief")
@@ -237,9 +295,12 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         "resume_session": resume_session,
         "chain": chain or [],                                  # the stages still to come after this one
         "chain_of": chain_of or ({"step": 1, "of": 1 + len(chain), "first": lane_id} if chain else None),
+        "schedule": schedule,
     }
+    if schedule:                                       # starts later: the office starts it when it is due
+        lane["status"] = "scheduled"
     save_lane(lane)
-    if launch:
+    if launch and not schedule:
         start_unit(lane_id)
     return load_lane(lane_id) or lane
 

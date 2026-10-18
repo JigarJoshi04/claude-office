@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.61.0] - 2026-10-18
+
+### Added
+- Scheduled hires: a lane can start at a time you pick (up to a week ahead) or as soon as some Claude seat has 30% of
+  its 5-hour window left, so work waits for plan instead of stalling on an empty seat. It waits as "scheduled" in the
+  lane list, with when it starts, and the office starts it within a minute of it being due. `POST /api/lanes` takes
+  `start` (`{"at": epoch}` or `{"left": 30}`).
+
 ## [3.60.0] - 2026-10-18
 
 ### Added

@@ -173,3 +173,21 @@ class ChainTests(unittest.TestCase):
                 lanes._next_stage(blocked, cfg)                       # a blocked stage stops the chain
                 self.assertNotIn("chain_next", lanes.load_lane(second["id"]))
 
+
+
+class ScheduleTests(unittest.TestCase):
+    def test_when_a_scheduled_lane_starts(self):
+        from office import lanes
+        now = 1_000_000.0
+        self.assertIsNone(lanes.schedule_from(None))
+        self.assertEqual(lanes.schedule_from({"at": now + 3600}, now), {"at": now + 3600})
+        self.assertEqual(lanes.schedule_from({"left": 30}, now), {"left": 30})
+        for bad in ({"at": now + 8 * 86400}, {"at": True}, {"left": 2}, {"left": "30"}, {"when": 1}, "soon"):
+            with self.assertRaises(ValueError):
+                lanes.schedule_from(bad, now)
+        seat = lambda five, status="idle", week=10: {"kind": "claude", "status": status, "usage": {"five_hour": {"pct": five}, "weekly": {"pct": week}}}
+        self.assertFalse(lanes.due({"schedule": {"at": now + 60}}, [], now))
+        self.assertTrue(lanes.due({"schedule": {"at": now - 1}}, [], now))
+        self.assertFalse(lanes.due({"schedule": {"left": 30}}, [seat(80), seat(95, "limited")], now))
+        self.assertTrue(lanes.due({"schedule": {"left": 30}}, [seat(80), seat(60)], now))
+        self.assertFalse(lanes.due({"schedule": {"left": 30}}, [seat(10, week=99)], now))      # out of its week

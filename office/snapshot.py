@@ -409,7 +409,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.60.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.61.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -590,6 +590,11 @@ class Office(LiveOffice):
             snap = self.get() or {}
             live = {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
             config.backup_state()                          # once a day: the state files, the last 7 days kept
+            try:                                           # lanes hired for later: start the ones that are due
+                for l in lanes.start_scheduled((self.get() or {}).get("seats", [])):
+                    self.emit("lane", f"Scheduled lane '{l['title']}' is starting", None, "good")
+            except Exception:
+                pass
             try:
                 self.tokens.scan(live)
                 seats = {s["id"]: s for s in snap.get("seats", [])}
