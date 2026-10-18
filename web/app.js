@@ -522,7 +522,7 @@ function apply(next) {
   snap = next; setNow(snap.now);
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
-  if (!DEMO) { checkBadges(); cheerWeekly(); }   // the demo office never hands out badges
+  if (!DEMO) { checkBadges(); cheerWeekly(); anniversaries(); }   // the demo office never hands out badges
   if (first) { visitStreak(); setTimeout(whatsNew, 1500); }
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
@@ -649,6 +649,28 @@ function visitStreak() {
   el.title = `${n} days in a row: you have checked on the office every day.`;
   el.setAttribute("aria-label", el.title);
   if (n >= 7 && !DEMO) badge(award("regular"));
+}
+
+// Work anniversaries: a character's first week, month, 100 days and year at the office (from its career's start) get a
+// banner, confetti in its room and a line from it, once each (per browser), never in the demo.
+const ANNIVERSARIES = [[7, "one week"], [30, "one month"], [100, "100 days"], [365, "one year"]];
+function anniversaries() {
+  if (DEMO || replay.active()) return;
+  const seen = store.get("anniversaries", {});
+  for (const s of snap.seats) {
+    const since = s.career && s.career.since;
+    if (!since) continue;
+    const days = Math.floor((snap.now - since) / 86400);
+    const hit = ANNIVERSARIES.filter(([d]) => days >= d && days < d + 2).pop();   // on the day (or the day after)
+    if (!hit || seen[`${s.id}:${hit[0]}`]) continue;
+    seen[`${s.id}:${hit[0]}`] = 1; store.set("anniversaries", seen);
+    const who = panels.persona(s);
+    office.celebrate(s.id, null, "Anniversary!");
+    if (prefs.view === "floor") office.banner("Happy anniversary!", `${who.name}: ${hit[1]} at the office`, s.color);
+    office.sayAtSeat(s.id, `${hit[1][0].toUpperCase() + hit[1].slice(1)} here. Thanks, boss!`, 6000);
+    toast(`${who.name} has been at the office for ${hit[1]}.`, "good", { ic: "calendar", ms: 6000 });
+    break;                                            // one at a time
+  }
 }
 
 function checkBadges() {
