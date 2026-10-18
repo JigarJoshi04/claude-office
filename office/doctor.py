@@ -68,6 +68,11 @@ def checkup(office, snap: dict) -> list[dict]:
     if stuck:
         out.append(_check("Waiting lanes", "warn", f"{len(stuck)} lane{'s have' if len(stuck) > 1 else ' has'} waited more than 6 hours for a seat",
                           "Check the divider (benched seats, weights) or stop the lanes you no longer need."))
+    errs = [e for e in getattr(office, "client_errors", []) or [] if now - e["ts"] < 86400]
+    if errs:
+        out.append(_check("The page", "warn", f"It reported {len(errs)} error{'s' if len(errs) > 1 else ''} in the last day; the latest: {errs[-1]['message']}"
+                          + (f" ({errs[-1]['where']})" if errs[-1].get("where") else ""),
+                          "Reload the page. If it keeps happening, report it with these words."))
     out.append(_check("Version", "ok", f"Claude Office {snap.get('office', {}).get('version', '?')} on Python {sys.version.split()[0]}"))
     order = {"bad": 0, "warn": 1, "info": 2, "ok": 3}
     return sorted(out, key=lambda c: order.get(c["state"], 4))

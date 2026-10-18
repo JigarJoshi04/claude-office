@@ -512,6 +512,18 @@ setInterval(() => {
 
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {}, plane() {} };
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
+// A page error says so once, quietly, and reports itself to the office (the doctor lists it). Errors from browser
+// extensions and the harmless ResizeObserver notice are left alone; at most a few reports a minute.
+const pageErrors = new Set();
+function pageError(message, where) {
+  const msg = String(message || "Unknown error").slice(0, 300);
+  if (/ResizeObserver loop/.test(msg) || pageErrors.has(msg) || pageErrors.size > 8) return;
+  pageErrors.add(msg);
+  toast("Something went wrong on this page. It keeps working; reload if something looks off.", "warn", { ms: 6000 });
+  app.post("/api/client-error", { message: msg, where: where ? String(where).slice(0, 200) : null }).catch(() => {});
+}
+window.addEventListener("error", (e) => { if (!e.filename || e.filename.startsWith(location.origin)) pageError(e.message, e.filename ? `${e.filename.replace(location.origin, "")}:${e.lineno}` : null); });
+window.addEventListener("unhandledrejection", (e) => { const r = e.reason; if (r && /Failed to fetch|NetworkError|aborted/i.test(String(r.message || r))) return; pageError(r && r.message ? r.message : String(r), r && r.stack ? String(r.stack).split("\n")[1] : null); });
 function safeNews(e) { try { onNews(e); } catch (err) { console.error("office news:", err); } }
 function onNews(e) {
   const fx = replay.active() ? NOFX : office;     // while replaying, the floor shows the past: live news only toasts

@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.58.0] - 2026-10-18
+
+### Added
+- When something breaks on the page, it says so once, quietly ("It keeps working; reload if something looks off"),
+  and reports the error to the office, where the doctor lists it. Errors from browser extensions and network blips
+  are left alone; at most 20 reports a minute (`POST /api/client-error`).
+
 ## [3.57.0] - 2026-10-18
 
 ### Added

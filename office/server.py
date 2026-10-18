@@ -127,6 +127,7 @@ _EVENTS: list = []
 
 
 _ASKS: list = []
+_PAGE_ERRORS: list = []
 
 
 def _event_budget(now: float | None = None, limit: int = 30, bucket: list | None = None) -> bool:
@@ -166,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.57.0"
+    server_version = "ClaudeOffice/3.58.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -388,6 +389,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, ask_question(self.office, body))
             if path in ("/api/ask/answer", "/api/ask/dismiss"):
                 return self._json(200, answer_question(self.office, body, path.endswith("dismiss"), self.demo))
+            if path == "/api/client-error":               # the page broke somewhere: the doctor says so
+                msg = body.get("message")
+                if not isinstance(msg, str) or not 1 <= len(msg) <= 300:
+                    raise ValueError("message must be 1-300 characters")
+                where = body.get("where")
+                where = where[:200] if isinstance(where, str) else None
+                errs = getattr(self.office, "client_errors", None)
+                if errs is None:
+                    errs = self.office.client_errors = []
+                if not _event_budget(limit=20, bucket=_PAGE_ERRORS):
+                    return self._json(429, {"error": "Too many reports"})
+                errs.append({"ts": time.time(), "message": msg, "where": where})
+                del errs[:-20]
+                return self._json(200, {"ok": True})
             if path == "/api/event":                      # a script's news: a deploy, a cron job, a CI run
                 ev = inbound_event(body, [s["id"] for s in self.office.get().get("seats", [])])
                 if not _event_budget():
