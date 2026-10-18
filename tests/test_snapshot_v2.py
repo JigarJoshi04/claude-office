@@ -62,3 +62,21 @@ class SnapshotV2Tests(unittest.TestCase):
             self.assertEqual(list(other.news), list(client.news))
             self.assertIn('"kind": "report"', (Path(tmp)/"state/events.jsonl").read_text())
             office.announcer.announce.assert_called_once_with(office.events[-1], office.cfg, demo=False)
+
+
+class GhostUseTests(unittest.TestCase):
+    def test_plan_use_this_machine_did_not_make(self):
+        from office.snapshot import ghost_use
+        now = 100_000.0
+        rows = [[now - 2400 + i * 300, 40 + i, 10] for i in range(9)]          # +1% every 5 minutes for 40 minutes
+        g = ghost_use(rows, last_local=now - 3 * 3600, working=False, now=now)
+        self.assertEqual((g["rise"], g["minutes"]), (8, 40))
+        self.assertIsNone(ghost_use(rows, last_local=now - 3 * 3600, working=True, now=now))     # a session here is at it
+        self.assertIsNone(ghost_use(rows, last_local=now - 60, working=False, now=now))          # a call here explains it
+        late = ghost_use(rows, last_local=now - 1500, working=False, now=now)                      # only what came after
+        self.assertEqual(late["rise"], 4)
+        flat = [[now - 2400 + i * 300, 40, 10] for i in range(9)]
+        self.assertIsNone(ghost_use(flat, None, False, now))
+        reset = [[now - 2400, 95, 10], [now - 2100, 97, 10], [now - 1800, 2, 10], [now - 1500, 4, 10]]
+        self.assertIsNone(ghost_use(reset, None, False, now))                                    # a reset is not use
+        self.assertIsNone(ghost_use([[now - 300, None, 1], [now, None, 2]], None, False, now))

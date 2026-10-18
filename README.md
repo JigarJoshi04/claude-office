@@ -91,6 +91,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   ran each session.
 - **Shipped work earns XP**: commits (25), pushes (5), opened (50) and merged (150) pull requests, read from the
   transcripts, with "+3 commits" rising from the desk and five shipping achievements.
+- **Ghost use**: a ghost floats in a room when its plan use climbs with nothing running on this machine (claude.ai,
+  the desktop app or another computer on the same login).
 - **Task lists**: a session's own task list as a progress bar on the back of its screen and a checklist on its page.
 - **Prompt cache countdown**: a waiting session shows how long its prompt cache stays warm ("Cache warm 4:12") and
   what a reply saves before it cools; its mug steams on the floor until then.

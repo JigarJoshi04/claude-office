@@ -291,6 +291,8 @@ class DemoOffice(LiveOffice):
                 self.emit("report", "visitor-lane filed its report: STATUS: DONE - docs fixed", "claude4", "good")
                 self.emit("leave", "visitor-lane left claude4", "claude4")
         self._visiting = visiting
+        if not visiting:                                  # someone on claude.ai uses Orion's login while its desk is empty
+            seats[3]["ghost"] = {"rise": 6.0, "minutes": 22, "since": now - 1320}
         # Commits land now and then (a real office reads them from the transcripts every minute).
         beat = int(now // 20)
         if getattr(self, "_commit_beat", beat) != beat and beat % 3 == 0:
@@ -347,7 +349,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.34.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.35.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

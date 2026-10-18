@@ -323,6 +323,15 @@ export function drawMug(ctx, x, y, t, steam, color = P.white) {
   }
 }
 
+// A ghost in the room: plan use that this machine did not make (claude.ai, the desktop app, another computer).
+export function drawGhost(ctx, x, y, t, still) {
+  y += still ? 0 : Math.round(Math.sin(t / 520) * 1.5);
+  const W = "rgba(236,240,255,0.82)", E = "#1b1f2e", ph = still ? 0 : Math.floor(t / 260) % 2;
+  rect(ctx, x + 2, y, 5, 1, W); rect(ctx, x + 1, y + 1, 7, 1, W); rect(ctx, x, y + 2, 9, 6, W);
+  for (let i = ph; i < 9; i += 2) rect(ctx, x + i, y + 8, 1, 1, W);          // a hem that ripples
+  rect(ctx, x + 2, y + 3, 1, 2, E); rect(ctx, x + 6, y + 3, 1, 2, E); rect(ctx, x + 4, y + 5, 1, 1, E);
+}
+
 export function drawDeskLamp(ctx, x, y, on) {
   rect(ctx, x, y + 6, 5, 1, "#2a2f40"); rect(ctx, x + 2, y + 1, 1, 5, "#3a4052");
   rect(ctx, x, y, 5, 2, on ? "#ffd27a" : "#4a5168");

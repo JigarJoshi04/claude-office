@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.35.0] - 2026-10-18
+
+### Added
+- Ghost use: when a seat's 5-hour use rises 3 points or more while no session on this machine makes an API call, the
+  office says someone else is using the login (claude.ai, the desktop app or another computer). A ghost floats in the
+  seat's room, Needs you and the character page say what happened, and the news and timeline mark it (once an hour).
+
+### Fixed
+- Character names no longer replace a seat id inside a domain or a path ("claude.ai", "~/.claude").
+
 ## [3.34.0] - 2026-10-18
 
 ### Added

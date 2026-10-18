@@ -43,7 +43,8 @@ export function makePanels(app) {
     let t = String(text || "");
     for (const s of S().seats) {
       const n = P(s).name;   // seat labels and seat ids both read as the character's name
-      for (const k of new Set([s.label, s.id])) if (k && k !== n) t = t.replace(new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b(?![-\\w])`, "g"), n);
+      // …but never inside a domain or a path: "claude.ai" and "~/.claude" stay as they are.
+      for (const k of new Set([s.label, s.id])) if (k && k !== n) t = t.replace(new RegExp(`(?<![./])\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b(?![-\\w]|\\.\\w)`, "g"), n);
     }
     // Plain words for the machine-shaped lines: "wt-x filed its report: STATUS: READY #12" reads "x finished: ready for review · #12".
     return t.replace(/\bwt-(?=\w)/g, "")
@@ -336,6 +337,7 @@ export function makePanels(app) {
       </div>
       <div class="prings">${planRing("five_hour", "5 hours")}${planRing("weekly", "This week")}</div>
       ${(() => { const pc = weekPace(s, S().now); return pc ? `<div class="pace-week ${pc.tone}">${icon(pc.tone === "bad" ? "zap" : pc.tone === "warn" ? "flame" : "check", 15)}<span>${esc(pc.text)}</span></div>` : ""; })()}
+      ${s.ghost ? `<div class="pace ghostnote">${icon("eye", 17)}<span><b>Someone else is using this login.</b> Its 5-hour use rose ${Math.round(s.ghost.rise)}% in ${s.ghost.minutes} min with nothing running on this machine: claude.ai, the desktop app or another computer.</span></div>` : ""}
       <div class="pace ${paceText.cls}">${icon(paceText.ic, 17)}<span>${esc(paceText.t)}</span>${s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}" title="Read the plan now" aria-label="Read the plan now">${icon("refresh", 14)}</button>` : ""}</div>
       <div class="stabs" role="tablist" aria-label="${esc(p.name)}">${tabs.filter(([k]) => k !== "career" || s.career).map(([k, label, ic]) => `<button role="tab" data-seat-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? "on" : ""}">${icon(ic, 15)}${label}</button>`).join("")}</div>
       <div class="stabs-body" role="tabpanel">${body}</div>`,

@@ -31,6 +31,25 @@ THRESHOLDS = (50, 80, 95)
 FORECAST_WINDOWS = {"five_hour": 3600, "weekly": 6 * 3600}   # how far back the burn rate looks
 
 
+GHOST_WINDOW, GHOST_RISE = 40 * 60, 3.0     # a 5-hour window that rises 3 points in 40 minutes with nothing running here
+
+
+def ghost_use(rows: list, last_local: float | None, working: bool, now: float) -> dict | None:
+    """Plan use that this machine did not make: the 5-hour reading rose while no session here made an API call, so
+    claude.ai, the desktop app, another computer or a shared login is using the seat. rows: [fetched_at, 5h %, week %].
+    None when the rise is explained, too small, or crosses a reset."""
+    if working:
+        return None
+    since = max(now - GHOST_WINDOW, (last_local or 0) + 120)     # usage readings lag the calls that cause them
+    pts = [(r[0], r[1]) for r in rows if r[1] is not None and r[0] >= since]
+    if len(pts) < 2 or any(b[1] < a[1] - 1 for a, b in zip(pts, pts[1:])):   # a drop is a reset: start again
+        return None
+    rise = pts[-1][1] - pts[0][1]
+    if rise < GHOST_RISE:
+        return None
+    return {"rise": round(rise, 1), "minutes": max(1, round((pts[-1][0] - pts[0][0]) / 60)), "since": pts[0][0]}
+
+
 class UsageHistory:
     """Usage readings over time, so the office can say whether a seat lasts until its reset."""
 
@@ -208,6 +227,7 @@ class Office(LiveOffice):
         self.cache = sessions.TranscriptCache()
         self.usage = seatmod.UsagePoller(self.claude_seats, self.cfg.get("usage_poll_seconds", 150))
         self.history = UsageHistory()
+        self._ghost_said: dict = {}                 # seat -> when its ghost use last made news (once an hour)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
         self._load_events()
@@ -386,7 +406,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.34.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.35.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -397,6 +417,14 @@ class Office(LiveOffice):
             "next_pick": {"seat": evaluation["pick"], "why": evaluation["why"], "ranking": evaluation["ranking"]},
             "suggested_weights": divider.suggest(seats_out, div),
         }
+        last = self.tokens.last_call()
+        for s in seats_out:                                # plan use that nothing on this machine made
+            if s.get("kind") == "claude":
+                s["ghost"] = ghost_use(self.history.data.get(s["id"]) or [], last.get(s["id"]),
+                                       any(x.get("state") in ("working", "waiting") for x in s["sessions"] if x.get("live", True)), now)
+                if s["ghost"] and now - self._ghost_said.get(s["id"], 0) > 3600:
+                    self._ghost_said[s["id"]] = now
+                    self.emit("ghost", f"{s['label']}'s 5-hour use rose {s['ghost']['rise']:.0f}% in {s['ghost']['minutes']} min with nothing running on this machine", s["id"], "warn")
         snap["attention"] = self._attention(snap)
         snap["totals"] = self._totals(snap)
         for seat_id, kind, text in self.career.observe(snap):
@@ -451,6 +479,11 @@ class Office(LiveOffice):
                         if left < 2 * 86400 else f"{round(left / 86400)} days"
                     items.append({"level": "bad" if left < 12 * 3600 else "warn", "seat": s["id"],
                                   "text": f"{label}'s login lapses in {when}: run /login on it", "lapses_at": rexp})
+            g = s.get("ghost")
+            if g:
+                items.append({"level": "warn", "seat": s["id"], "ghost": True,
+                              "text": f"{label}'s 5-hour use rose {g['rise']:.0f}% in {g['minutes']} min with nothing running here: "
+                                      "claude.ai, the desktop app or another computer is using this login"})
             u = s.get("usage") or {}
             for key, name in (("five_hour", "5-hour"), ("weekly", "weekly")):
                 w = u.get(key) or {}

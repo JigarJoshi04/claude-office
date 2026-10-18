@@ -624,6 +624,11 @@ export function createOffice(stage, handlers) {
     S.drawRug(ctx, desk.x - 12, pod.y + 8, desk.w + 24, desk.two ? 92 : 64, s.color);
     S.drawDeskIsland(ctx, desk.x, desk.y, desk.w, desk.h, desk.two);
     S.drawDeskLamp(ctx, desk.x + 1, pod.y + 34, busy);
+    if (s.ghost) {                                   // someone else is using this login: a ghost floats by the wall
+      const gx = pod.room.x + pod.room.w - 30, gy = pod.room.y + 34;
+      S.drawGhost(ctx, gx, gy, t + s.id.length * 900, reduced);
+      lights.push({ x: gx + 4, y: gy + 4, r: 14, c: "#c8d4ff", i: 0.35 });
+    }
     if (busy) lights.push({ x: mid, y: pod.y + 54, r: 62, c: "#ffd59a", i: 0.5 });
     const lv = s.career ? s.career.level : 1;
     if (lv >= 3) S.drawDeskPerks(ctx, desk, lv, s.color, t);

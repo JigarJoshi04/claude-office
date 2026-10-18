@@ -495,6 +495,19 @@ class TokenLedger:
         self.data["codex"][key] = [pos, t0, c0, o0]
         return changed
 
+    def last_call(self) -> dict:
+        """When each seat last made an API call from this machine (epoch seconds), from the transcripts read so far."""
+        with self.lock:
+            if getattr(self, "_last_call", None) and self._last_call[0] == self.scanned_at:
+                return self._last_call[1]
+            out: dict = {}
+            for r in self.data["sessions"].values():
+                k, at = r.get("s"), r.get("l")
+                if k and at and at > out.get(k, 0):
+                    out[k] = at
+            self._last_call = (self.scanned_at, out)
+            return out
+
     def shipped_by_seat(self, known: set, codex: str | None = None) -> dict:
         """All-time (commits, PRs merged) per seat, for the shipping achievements."""
         out: dict = {}
