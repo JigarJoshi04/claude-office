@@ -289,14 +289,17 @@ class HistoryStore:
             result = self._stats(snapshot, day, start, end, rows, points, events)
             self.stats_cache = {k: v for k, v in self.stats_cache.items() if now - v[0] < 60}
             self.stats_cache[day] = (now, result)
-        if self.ledger and day == today:
-            self.ledger.note(result)
+        if self.ledger and (day == today or not self.ledger.get(day)):
+            self.ledger.note(result)                  # today as it goes; an earlier day still in history, once
         return result
 
     def week(self, snapshot, n=7, events=()):
         """The last n days for the week chart: today live, earlier days from the ledger."""
         self.stats(snapshot, None, events)
         today = datetime.fromtimestamp(self.clock()).date().isoformat()
+        yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
+        if self.ledger and not self.ledger.get(yesterday):
+            self.stats(snapshot, yesterday, events)     # history still holds part of yesterday: better than a zero
         return (self.ledger or DayLedger(None)).week(today, n)
 
     def _stats(self, snapshot, day, start, end, rows, points, events):

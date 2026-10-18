@@ -83,3 +83,16 @@ class StoreLedgerTests(unittest.TestCase):
         self.assertEqual(h.stats(snap(start + 300), "2026-10-15")["office"]["reports"], 9)
         self.assertEqual(h.week(snap(start + 300), 2)[0]["reports"], 9)
         self.assertEqual(h.week(snap(start + 300), 2)[1]["day"], "2026-10-16")
+
+    def test_yesterday_is_backfilled_from_history_when_the_ledger_lacks_it(self):
+        from datetime import datetime
+        from office.history import HistoryStore
+        start = datetime(2026, 10, 16).timestamp()
+        clock = [start + 6 * 3600]
+        h = HistoryStore(clock=lambda: clock[0], ledger=DayLedger(None))
+        for i in range(10):                         # ten working minutes late on the 15th
+            h.record(snap(start - 3600 + i * 60, tools=2 + i))
+        h.record(snap(start + 3600))
+        week = h.week(snap(start + 6 * 3600), 2)
+        self.assertEqual(week[0]["day"], "2026-10-15")
+        self.assertGreater(week[0]["active_min"], 0)
