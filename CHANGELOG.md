@@ -3,6 +3,18 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.98.0] - 2026-10-19
+
+### Added
+- Divider v2. A third mode, Spend the week evenly: each seat's share follows how far its week is from being spent
+  evenly, so a seat with plenty left and a reset coming gets more lanes (use it or lose it) and one ahead of its week
+  gets fewer, still within its 5-hour window. The seat rows and the ranking say "on pace", "1.6× behind its week" or
+  "ahead of its week".
+- Keep free: per seat, hours when no new lane goes to it (9:00–18:00, 10:00–19:00, all day…), so a seat stays yours
+  for interactive work; the ranking says "kept free for you until 18:00".
+- A lane that names its model is kept off a seat whose own weekly cap for that model (Opus, say) is past the weekly
+  guard. `claude-office pick-seat --model opus` does the same from scripts.
+
 ## [3.97.0] - 2026-10-19
 
 ### Added

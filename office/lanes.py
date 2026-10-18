@@ -553,7 +553,7 @@ def _choose_seat(lane: dict, exclude: tuple = ()) -> tuple[str | None, str, floa
                 return None, f"{lane['seat_pref']} has used all of its {key.replace('_', '-')} plan", w.get("resets_at")
         return lane["seat_pref"], "pinned by the CEO", None
     ev = divider.evaluate(seats, cfg, exclude=exclude, limited_until=read_limits(),
-                          kind="claude" if lane.get("resume_session") else None)
+                          kind="claude" if lane.get("resume_session") else None, model=lane.get("model"))
     return ev["pick"], ev["why"], ev.get("next_reset")
 
 

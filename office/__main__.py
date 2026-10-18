@@ -2,7 +2,7 @@
 
   serve [--port N] [--demo]        open the office at http://127.0.0.1:7420
   status                           one line per seat: usage, sessions, what they are doing
-  pick-seat [--kind claude|codex] [--exclude a,b] [--json]
+  pick-seat [--kind claude|codex] [--exclude a,b] [--model opus] [--json]
                                    the seat the load divider gives the next lane (exit 3 when none can)
   hire --title T --brief-file F [--workdir D] [--seat auto|ID] [--model opus]
                                    start an office lane
@@ -50,7 +50,7 @@ def cmd_pick(args) -> int:
     seats = quick_seats()
     cfg = divider.load([s["id"] for s in seats])
     ev = divider.evaluate(seats, cfg, kind=args.kind, exclude=tuple(filter(None, (args.exclude or "").split(","))),
-                          limited_until=lanes.read_limits())
+                          limited_until=lanes.read_limits(), model=args.model)
     if args.json:
         cdir = next((s["config_dir"] for s in seats if s["id"] == ev["pick"]), None)
         print(json.dumps(dict(ev, config_dir=cdir), default=str))
@@ -177,6 +177,7 @@ def main(argv=None) -> int:
     pk = sub.add_parser("pick-seat")
     pk.add_argument("--kind", choices=["claude", "codex"])
     pk.add_argument("--exclude")
+    pk.add_argument("--model", help="the lane's model (opus, sonnet, …): keeps it off a seat whose week for that model is spent")
     pk.add_argument("--json", action="store_true")
     h = sub.add_parser("hire")
     h.add_argument("--title", required=True)

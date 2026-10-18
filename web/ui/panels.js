@@ -1182,11 +1182,21 @@ export function makePanels(app) {
     paintPick();
   }, 250);
   function markDirty() { dvDirty = true; previewSoon(); const sb = document.getElementById("dvSave"), rb = document.getElementById("dvReset"); if (sb) sb.disabled = false; if (rb) rb.disabled = false; }
+  // A seat's week against spending it evenly (divider.py pace): plan left per share of the week left.
+  const FREE_HOURS = [["", "Never"], ["9-18", "9:00–18:00"], ["10-19", "10:00–19:00"], ["8-20", "8:00–20:00"], ["9-23", "9:00–23:00"], ["0-24", "All day"]];
+  function seatPace(s) {
+    const w = (s.usage || {}).weekly;
+    if (!w || w.pct == null || !w.resets_at) return null;
+    const leftT = Math.min(1, Math.max(0.02, (w.resets_at - Date.now() / 1000) / (7 * 86400)));
+    return Math.max(0, Math.min(3, (100 - w.pct) / 100 / leftT));
+  }
+  const paceWords = (p) => p <= 0 ? "its week spent" : p >= 0.85 && p <= 1.15 ? "on pace for its week"
+    : p > 1 ? `${p.toFixed(1)}× behind its week` : "ahead of its week";
   function pickHtml() {
     const np = dvPreview || S().next_pick, who = np.seat || np.pick;
     return `<div class="pick ${who ? "" : "none"}"><b>${who ? `Next lane → ${esc(nameOf(who))}` : "No seat can take a lane"}</b>${dvPreview ? ` ${pill("preview")}` : ""}
       <div class="why">${esc(humanise(np.why))}</div><div style="margin-top:8px">
-      ${(np.ranking || []).map(r => `<div class="rk"><span>${r.eligible ? icon("check", 14) : icon("x", 14)}</span><span>${esc(nameOf(r.seat))}</span><span>${r.eligible ? `target ${Math.round((r.target ?? r.share) * 100)}% · runs ${r.lanes} · ${Math.round(r.headroom * 100)}% plan left` : esc(r.blockers.join(", "))}</span></div>`).join("")}</div></div>`;
+      ${(np.ranking || []).map(r => `<div class="rk"><span>${r.eligible ? icon("check", 14) : icon("x", 14)}</span><span>${esc(nameOf(r.seat))}</span><span>${r.eligible ? `target ${Math.round((r.target ?? r.share) * 100)}% · runs ${r.lanes} · ${Math.round(r.headroom * 100)}% plan left${(dvPreview ? dv.mode : S().divider.mode) === "pace" && r.pace != null ? " · " + paceWords(r.pace) : ""}` : esc(r.blockers.join(", "))}</span></div>`).join("")}</div></div>`;
   }
   function paintPick() { const el = document.getElementById("dvPick"); if (el) el.innerHTML = pickHtml(); }
   function divider() {
@@ -1198,17 +1208,18 @@ export function makePanels(app) {
       ${section("Split", `<div class="split" id="split">${S().seats.map(s => { const c = dv.seats[s.id], on = c.enabled && c.weight > 0;
           return `<div class="seg ${on ? "" : "off"} ${c.weight < 14 ? "narrow" : ""}" title="${esc(P(s).name)} ${c.weight}%" data-seg="${esc(s.id)}" style="--seat:${s.color};flex:0 0 calc(${on ? c.weight : 0}% - 3px)"><i data-portrait="mascot-${esc(s.id)}|${esc(s.color)}|"></i><span>${esc(P(s).name)}<small>${c.weight}%</small></span></div>`; }).join("")}
           ${ids.slice(0, -1).map((id, i) => `<div class="handle" tabindex="0" role="slider" aria-label="Border after ${esc(nameOf(id))}" aria-valuemin="0" aria-valuemax="100" data-h="${i}"></div>`).join("")}</div>
-        <div class="row between wrap" style="margin-top:12px"><div class="seg-ctl" role="group" aria-label="Mode"><button data-mode="headroom" class="${dv.mode === "headroom" ? "on" : ""}">Adapt to plan left</button><button data-mode="fixed" class="${dv.mode === "fixed" ? "on" : ""}">Fixed split</button></div>
+        <div class="row between wrap" style="margin-top:12px"><div class="seg-ctl" role="group" aria-label="Mode"><button data-mode="headroom" class="${dv.mode === "headroom" ? "on" : ""}">Adapt to plan left</button><button data-mode="pace" class="${dv.mode === "pace" ? "on" : ""}">Spend the week evenly</button><button data-mode="fixed" class="${dv.mode === "fixed" ? "on" : ""}">Fixed split</button></div>
           <button class="btn sm" id="dvSuggest">${icon("sparkles", 15)}Suggest</button></div>
-        <div class="hint" style="margin-top:8px">${dv.mode === "headroom" ? "A seat's share shrinks as its plan runs out, so a nearly spent seat gets less." : "Shares are kept exactly as set, until a guard stops a seat."}</div>`)}
+        <div class="hint" style="margin-top:8px">${dv.mode === "headroom" ? "A seat's share shrinks as its plan runs out, so a nearly spent seat gets less." : dv.mode === "pace" ? "Each seat's share follows its week: one behind (plenty left, reset soon) gets more so its plan is not wasted, one ahead of its week gets less." : "Shares are kept exactly as set, until a guard stops a seat."}</div>`)}
       <div id="dvPick" style="margin-top:14px">${pickHtml()}</div>
       ${section("Seats", S().seats.map(s => { const c = dv.seats[s.id], u = s.usage || {};
         return `<div class="dseat">${avatar("mascot-" + s.id, s.color, c.enabled ? "" : "dim")}
-          <div><b>${esc(P(s).name)}</b> <span class="hint">${esc(SEAT_LABEL[s.status] || s.status)} · 5-hour ${pct(u, "five_hour") == null ? "–" : Math.round(100 - pct(u, "five_hour")) + "% left"} · week ${pct(u, "weekly") == null ? "–" : Math.round(100 - pct(u, "weekly")) + "% left"}</span></div>
+          <div><b>${esc(P(s).name)}</b> <span class="hint">${esc(SEAT_LABEL[s.status] || s.status)} · 5-hour ${pct(u, "five_hour") == null ? "–" : Math.round(100 - pct(u, "five_hour")) + "% left"} · week ${pct(u, "weekly") == null ? "–" : Math.round(100 - pct(u, "weekly")) + "% left"}${dv.mode === "pace" && seatPace(s) != null ? " · " + paceWords(seatPace(s)) : ""}</span></div>
           <label class="switch" title="On duty"><input type="checkbox" data-duty="${esc(s.id)}" ${c.enabled ? "checked" : ""} aria-label="${esc(P(s).name)} on duty"><span></span></label>
           <div class="ctl"><label>Share <input type="number" min="0" max="100" value="${c.weight}" data-w="${esc(s.id)}" ${c.enabled ? "" : "disabled"}> %</label>
             <label>At most <input type="number" min="0" max="16" value="${c.max_lanes}" data-cap="${esc(s.id)}"> lanes</label><span>running ${s.lanes}</span></div>
-          <div class="ctl"><input type="text" placeholder="Note, e.g. keep free for interactive work" value="${esc(c.note || "")}" data-note="${esc(s.id)}" maxlength="200"></div></div>`; }).join(""))}
+          <div class="ctl"><label>Keep free <select data-free="${esc(s.id)}" title="No new lanes on this seat in these hours, so it is yours for interactive work">${FREE_HOURS.map(([v, l]) => `<option value="${v}" ${(c.free_hours || []).join("-") === v ? "selected" : ""}>${l}</option>`).join("")}${c.free_hours && !FREE_HOURS.some(([v]) => v === c.free_hours.join("-")) ? `<option value="${c.free_hours.join("-")}" selected>${c.free_hours[0]}:00–${c.free_hours[1]}:00</option>` : ""}</select></label>
+            <input type="text" placeholder="Note, e.g. keep free for interactive work" value="${esc(c.note || "")}" data-note="${esc(s.id)}" maxlength="200"></div></div>`; }).join(""))}
       ${section("Guards", `<div class="grid2">
         <label class="f">Stop new lanes at 5-hour use of<input type="number" min="10" max="100" id="dv5" value="${dv.five_hour_guard}"></label>
         <label class="f">Stop new lanes at weekly use of<input type="number" min="10" max="100" id="dvW" value="${dv.weekly_guard}"></label>
@@ -1267,6 +1278,7 @@ export function makePanels(app) {
         }));
         root.querySelectorAll("[data-cap]").forEach(inp => inp.addEventListener("change", () => { inp.value = dv.seats[inp.dataset.cap].max_lanes = Math.max(0, Math.min(16, Math.round(+inp.value) || 0)); markDirty(); }));
         root.querySelectorAll("[data-note]").forEach(inp => inp.addEventListener("input", () => { dv.seats[inp.dataset.note].note = inp.value; markDirty(); }));
+        root.querySelectorAll("[data-free]").forEach(sel => sel.addEventListener("change", () => { dv.seats[sel.dataset.free].free_hours = sel.value ? sel.value.split("-").map(Number) : null; markDirty(); }));
         for (const [id, key, lo, hi] of [["dv5", "five_hour_guard", 10, 100], ["dvW", "weekly_guard", 10, 100], ["dvG", "global_max_lanes", 0, 32]]) {
           const el = root.querySelector("#" + id); el.addEventListener("change", () => { el.value = dv[key] = Math.max(lo, Math.min(hi, Math.round(+el.value) || 0)); markDirty(); });
         }

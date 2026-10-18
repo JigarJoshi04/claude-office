@@ -1,4 +1,5 @@
 """Pure divider tests: no account discovery, credentials, or external services."""
+import time
 import unittest
 from unittest.mock import patch
 
@@ -29,7 +30,7 @@ class DividerTests(unittest.TestCase):
         self.assertEqual(cfg["updated_at"], 1234)
         self.assertEqual(set(cfg["seats"]), {"a", "b"})
         self.assertEqual(cfg["seats"]["a"], {
-            "enabled": False, "weight": 0, "max_lanes": 16, "note": "x" * 200})
+            "enabled": False, "weight": 0, "max_lanes": 16, "note": "x" * 200, "free_hours": None})
         self.assertEqual(cfg["seats"]["b"]["weight"], 100)
         self.assertEqual(cfg["seats"]["b"]["max_lanes"], 0)
 
@@ -137,3 +138,61 @@ class DividerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaceModeTests(unittest.TestCase):
+    """Divider v2: spend each seat's week evenly, keep seats free in chosen hours, mind a model's own weekly cap."""
+    NOW = 1_800_000_000.0
+
+    def seat(self, sid, pw, days_left, p5=10.0, scoped=()):
+        return {"id": sid, "kind": "claude", "lanes": 0, "health": {"state": "ok"},
+                "usage": {"five_hour": {"pct": p5, "resets_at": self.NOW + 3600},
+                          "weekly": {"pct": pw, "resets_at": self.NOW + days_left * 86400}, "scoped": list(scoped)}}
+
+    def cfg(self, mode="pace", **seats):
+        c = divider.validate({"mode": mode, "seats": {k: dict({"weight": 50}, **v) for k, v in seats.items()}}, list(seats))
+        return c
+
+    def test_pace_is_plan_left_per_share_of_the_week_left(self):
+        self.assertAlmostEqual(divider.pace(self.seat("a", 50, 3.5), self.NOW), 1.0)
+        self.assertAlmostEqual(divider.pace(self.seat("a", 40, 1), self.NOW), 3.0)          # 60% left, a day to go: capped
+        self.assertAlmostEqual(divider.pace(self.seat("a", 80, 5), self.NOW), 0.28, places=2)
+        self.assertIsNone(divider.pace({"id": "x", "usage": {}}, self.NOW))
+        self.assertEqual(divider.pace(self.seat("a", 100, 2), self.NOW), 0.0)
+
+    def test_pace_mode_sends_the_lane_to_the_seat_behind_its_week(self):
+        seats = [self.seat("ahead", 70, 5), self.seat("behind", 50, 1.5)]
+        headroom = divider.evaluate(seats, self.cfg("headroom", ahead={}, behind={}), now=self.NOW)
+        paced = divider.evaluate(seats, self.cfg("pace", ahead={}, behind={}), now=self.NOW)
+        self.assertEqual(paced["pick"], "behind")
+        self.assertIn("behind its week", paced["why"])
+        self.assertGreater(next(r["target"] for r in paced["ranking"] if r["seat"] == "behind"),
+                           next(r["target"] for r in headroom["ranking"] if r["seat"] == "behind"))
+
+    def test_free_hours_block_inside_them_and_wrap_past_midnight(self):
+        lt = time.localtime(self.NOW)
+        h = lt.tm_hour
+        inside = [h, (h + 2) % 24 or 24]
+        outside = [(h + 2) % 24, (h + 4) % 24 or 24]
+        self.assertIsNotNone(divider.kept_free(inside, self.NOW))
+        self.assertIsNone(divider.kept_free(outside, self.NOW))
+        self.assertIsNotNone(divider.kept_free([0, 24], self.NOW))
+        self.assertIsNotNone(divider.kept_free([(h - 1) % 24, (h + 1) % 24 or 24], self.NOW))   # wraps when h is 0
+        ev = divider.evaluate([self.seat("a", 10, 3)], self.cfg(a={"free_hours": inside}), now=self.NOW)
+        self.assertIsNone(ev["pick"])
+        self.assertTrue(any("kept free for you until" in b for b in ev["ranking"][0]["blockers"]))
+
+    def test_free_hours_are_checked(self):
+        for bad in ([9], [9, 9], [25, 3], ["9", "18"], [True, 18], "9-18", [0, 0]):
+            self.assertIsNone(divider._hours(bad), bad)
+        self.assertEqual(divider._hours([22, 6]), [22, 6])
+        self.assertEqual(divider._hours([0, 24]), [0, 24])
+
+    def test_a_model_whose_week_is_spent_keeps_the_lane_off_that_seat(self):
+        seats = [self.seat("a", 20, 3, scoped=[{"label": "Opus", "pct": 96.0}]), self.seat("b", 60, 3)]
+        cfg = self.cfg("headroom", a={}, b={})
+        self.assertEqual(divider.evaluate(seats, cfg, now=self.NOW)["pick"], "a")
+        ev = divider.evaluate(seats, cfg, now=self.NOW, model="claude-opus-5-5")
+        self.assertEqual(ev["pick"], "b")
+        self.assertIn("its Opus week at 96%", next(r for r in ev["ranking"] if r["seat"] == "a")["blockers"])
+        self.assertEqual(divider.evaluate(seats, cfg, now=self.NOW, model="sonnet")["pick"], "a")
