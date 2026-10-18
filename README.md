@@ -55,6 +55,23 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   opens their chat and flies the camera to their desk.
 - Zoom and pan the camera, double-click a room to fly to it. Point at a character anywhere (the team list, the dock,
   a room) and their room lights up on the floor while their row lights up in the list.
+- Every room has its own weather: its window rains while the seat is out of plan and clouds over while its plan runs
+  low.
+- **Replay** (`R`): the floor plays back the last 6 or 24 hours from the office's own history, at up to 900×. People
+  come and go, reports burst into confetti and level-ups get their banner as they happened; scrub with the timeline,
+  `Space` pauses, the arrows step, `Esc` returns to live.
+- **TV mode** (`V`, or open `/?tv=1` on a spare screen): the floor alone, full screen, with a status strip and a clock,
+  while a slow tour lights up each room and shows its card.
+
+**The office levels up**
+- Everyone's XP adds up to an office level (the gold ring next to the name). Each level unlocks something on the floor:
+  lobby palms, a robot vacuum, flowers in every room, a delivery drone, gold elevator doors, Biscuit the office dog, a
+  neon show, a hot-air balloon, fireworks at night, gold nameplates and a golden statue of you. "Your office" lists
+  them all, what comes next and who built the most.
+- **Combos**: reports and finished lanes within 15 minutes of each other chain into a combo (×2, ×3, …) with a timer
+  draining on the floor and rising chimes.
+- **Today's card**: one picture of the day (reports, hours, tool calls, employee of the day, goals, streak and the
+  team) to save or copy into a post or a channel. Only names, levels and counts go in.
 
 **Every seat is a character**
 - A name, a role, a motto and a few traits ("Atlas, The Investigator: *Show me the evidence.*"). You can rename them

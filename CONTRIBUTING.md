@@ -8,6 +8,7 @@ working systemd user manager and the relevant CLI.
 python3 -m office serve --demo
 python3 -m unittest discover -s tests -v
 find web -type f -name '*.js' -print0 | xargs -0 -r -n 1 node --check
+node --test tests/js/*.test.mjs
 bash .github/scripts/smoke.sh
 ```
 

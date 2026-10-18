@@ -30,6 +30,8 @@ jobs:
           node-version: '22'
       - name: Check every JavaScript file
         run: find web -type f -name '*.js' -print0 | xargs -0 -r -n 1 node --check
+      - name: Unit tests for the floor and game logic
+        run: node --test tests/js/*.test.mjs
 
   smoke:
     runs-on: ubuntu-latest

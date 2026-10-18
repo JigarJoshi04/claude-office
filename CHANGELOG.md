@@ -3,6 +3,26 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.4.0] - 2026-10-18
+
+### Added
+- Replay: the floor plays back the last 6 or 24 hours from the office history (60× to 900×), with news firing as it
+  happened, a scrubber with the day's events and keyboard control.
+- TV mode for a spare screen (`V` or `?tv=1`): the floor full screen with a status strip, a clock and a room tour.
+- Office levels from everyone's XP, with eleven unlocks drawn on the floor and a "Your office" page.
+- Mood weather: rain in a room's window while its seat is out of plan, clouds while its plan runs low.
+- Combos for reports and finished lanes within 15 minutes of each other.
+- Today's card: a 1200×630 picture of the day to save or copy.
+
+### Changed
+- Calmer frame rate while nothing moves, no painting while the floor is hidden, compositor-only pulses.
+
+### Fixed
+- Seven floor bugs from the 3.3.0 QA pass: the room peek off screen under large text, the legend clipped on phones,
+  the Needs-you badge count, walkers crossing corner furniture, people jumping when a desk resizes, Esc with the legend
+  open, and the peek staying up after a click.
+- Character lookups broke on copied seat objects.
+
 ## [3.3.0] - 2026-10-17
 
 ### Changed
