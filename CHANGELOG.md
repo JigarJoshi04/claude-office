@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.75.0] - 2026-10-19
+
+### Added
+- A page for each project: click a project on the Tokens page (or open `#project=NAME`) for its tokens and API
+  value per day over 7, 30 or 90 days, who worked on it and with which models, its biggest sessions, the office
+  lanes that worked on it, what it shipped and its all-time totals. "Copy the days as CSV" puts the days on the
+  clipboard, for billing or the week's notes. `GET /api/tokens/project?name=&days=`.
+
 ## [3.74.0] - 2026-10-19
 
 ### Added

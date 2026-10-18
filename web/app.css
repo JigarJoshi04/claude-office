@@ -1613,3 +1613,12 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .empty-st .es-code { display: block; margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--surface-3); font: 12px/1.5 var(--mono); color: var(--text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
 .empty-st .es-act { margin-top: 10px; }
 .wk .hatch-line { fill: var(--line, rgba(255,255,255,.12)); } .wk-bar.norec .hatch { opacity: .7; }
+/* One project's drill-down (panels.js project) */
+.prj-bars { width: 100%; height: 110px; display: block; } .prj-bars rect { fill: #ff9b6a; } .prj-bars rect:hover { fill: #ffbd94; }
+.prj-axis { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.prj-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.prj-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13.5px; }
+.prj-list li .grow { min-width: 0; } .prj-list li b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prj-list li small { display: block; font-size: 11.5px; color: var(--muted); } .prj-list li em { font: 700 12.5px var(--mono); font-style: normal; white-space: nowrap; }
+.prj-list .tb-bar { display: block; margin-top: 4px; } .prj-list .tb-bar i { background: var(--seat); }
+.tok-prj { cursor: pointer; border-radius: 8px; } .tok-prj:hover { background: var(--surface-2); } .tok-prj:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

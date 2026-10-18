@@ -273,6 +273,16 @@ class DemoOffice(LiveOffice):
             self._tokens = _demo_token_ledger()
         return self._tokens.view(self.get().get("seats", []), rng=rng, seat=seat, all_sessions=all_sessions)
 
+    def tokens_project(self, name: str, days: int = 30) -> dict:
+        if not hasattr(self, "_tokens"):
+            self._tokens = _demo_token_ledger()
+        out = self._tokens.view_project(name, self.get().get("seats", []), days=days)
+        for r in out["sessions"]:
+            r.pop("session", None)
+        out["lanes"] = [{"id": l["id"], "title": l.get("title"), "status": l.get("status"), "spent": l.get("spent")}
+                        for l in self.get().get("lanes", []) if name in (l.get("workdir") or "")]
+        return out
+
     def demo_lane_detail(self, lane_id):
         """Made-up lane pages: the demo never reads the real lanes folder."""
         lane = next((l for l in self.snapshot.get("lanes", []) if l.get("id") == lane_id), None)
@@ -474,7 +484,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.74.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.75.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

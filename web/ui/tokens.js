@@ -261,7 +261,7 @@ function renderTokensInner(el, app) {
   const list = (items, fn) => items.length ? `<ol>${items.map(fn).join("")}</ol>` : `<p class="muted">Nothing ${esc(rangeWord[rng])}.</p>`;
   const sessions = list((t.sessions || []).slice(0, 8), (s, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(s.project || "a session")}</b>
     <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""}</small></span><em>${fmt(val(s))}</em></li>`);
-  const projects = list((t.projects || []).slice(0, 8), (p, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(p.project)}</b>
+  const projects = list((t.projects || []).slice(0, 8), (p, i) => `<li class="tok-prj" data-project="${esc(p.project)}" role="button" tabindex="0" title="Open ${esc(p.project)}: per day, who worked on it, what it shipped"><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(p.project)}</b>
     <small>${p.sessions} session${p.sessions === 1 ? "" : "s"}${p.top_seat && !seat ? ` · mostly ${esc(who(p.top_seat))}` : ""}</small></span><em>${fmt(val(p))}</em></li>`);
   const mmax = Math.max(1, ...(t.models || []).map(val));
   const models = list((t.models || []).filter(m => val(m) > 0).slice(0, 8), (m) => `<li><span class="grow"><b>${esc(modelName(m.model))}</b><span class="tb-bar"><i style="width:${(val(m) / mmax * 100).toFixed(1)}%"></i></span></span><em>${fmt(val(m))}</em></li>`);
@@ -296,6 +296,11 @@ function renderTokensInner(el, app) {
 
   function bind() {
     const rerender = () => renderTokens(el, app);
+    el.querySelectorAll("[data-project]").forEach(b => {         // a project opens its drill-down in the inspector
+      const go = () => app.go({ kind: "project", name: b.dataset.project });
+      b.addEventListener("click", go);
+      b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+    });
     el.querySelectorAll("[data-tp-range]").forEach(b => b.addEventListener("click", () => { app.setPref("tokRange", b.dataset.tpRange); rerender(); }));
     el.querySelectorAll("[data-tok-metric]").forEach(b => b.addEventListener("click", () => { app.setPref("tokenMetric", b.dataset.tokMetric); rerender(); }));
     el.querySelectorAll("[data-tp-seat]").forEach(b => {

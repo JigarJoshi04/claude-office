@@ -11,7 +11,7 @@ import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
 import { SETS, setsDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
 import { md } from "./md.js";
-import { money } from "./tokens.js";
+import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
 
 const TEMPLATES = [
@@ -834,6 +834,41 @@ export function makePanels(app) {
       ${repos}`,
       bind(root) { const b = root.querySelector("[data-loose-refresh]"); if (b) b.addEventListener("click", () => { app.looseCache(true); b.disabled = true; }); } };
   }
+  // ------------------------------------------------------------------------------------------- one project
+  // Every session that worked in a folder of this name: tokens and API value per day, who worked on it, with which
+  // models, its biggest sessions and lanes, what it shipped; and the days as CSV, for billing or for the week's notes.
+  let prjDays = 30;
+  function project(v) {
+    const d = app.projectCache(v.name, prjDays), pv = app.privacy();
+    const big = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + " B" : n >= 1e6 ? (n / 1e6).toFixed(1) + " M" : fmtTok(n));
+    const head = `${crumbs("Project")}<h2 class="${pv ? "private" : ""}">${esc(v.name)}</h2><p class="lede">Every session that worked in a folder of this name: what it cost at API prices, who worked on it and what it shipped.</p>
+      <div class="seg-ctl" role="group" aria-label="Range" style="margin-top:12px">${[7, 30, 90].map(n => `<button data-prj-days="${n}" class="${prjDays === n ? "on" : ""}">${n} days</button>`).join("")}</div>`;
+    const bind = (root) => root.querySelectorAll("[data-prj-days]").forEach(b => b.addEventListener("click", () => { prjDays = +b.dataset.prjDays; app.rerender(true); }));
+    if (!d) return { html: head + `<div class="skeleton" style="margin-top:14px"></div><div class="skeleton" style="width:70%"></div>`, bind };
+    if (!d.all_time.sessions) return { html: head + emptyState("search", "No sessions with this project", "The office knows a project by the name of the folder its sessions worked in."), bind };
+    const t = d.total, max = Math.max(1, ...d.days.map(x => x.all)), n = d.days.length, bw = 100 / n;
+    const bars = d.days.map((x, i) => { const h = x.all ? Math.max(1.5, x.all / max * 92) : 0;
+      return `<rect x="${(i * bw + bw * 0.15).toFixed(2)}" y="${(100 - h).toFixed(2)}" width="${(bw * 0.7).toFixed(2)}" height="${h.toFixed(2)}" rx="0.6"><title>${esc(new Date(x.day + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${big(x.all)} tokens · ${money(x.usd)}</title></rect>`; }).join("");
+    const seatRow = (x) => { const st = x.seat && seatById(x.seat), w = (x.all / Math.max(1, d.seats[0].all) * 100).toFixed(1);
+      return `<li style="--seat:${esc(st ? st.color : "#888")}"><span class="grow"><b>${esc(st ? P(st).name : "Unknown seat")}</b><span class="tb-bar"><i style="width:${w}%"></i></span></span><em>${big(x.all)} · ${esc(money(x.usd))}</em></li>`; };
+    const sess = d.sessions.map(x => { const st = x.seat && seatById(x.seat);
+      return `<li><span class="grow"><b>${esc(st ? P(st).name : "Unknown seat")} · ${esc(x.id)}</b><small>${x.last ? esc(relTime(x.last)) : ""}</small></span><em>${big(x.all)} · ${esc(money(x.usd))}</em></li>`; }).join("");
+    const sh = d.shipped || {};
+    const csv = ["day,tokens,fresh,output,usd", ...d.days.map(x => [x.day, x.all, x.fresh, x.output, x.usd.toFixed(2)].join(","))].join("\n");
+    return { html: head + `
+      <div class="tiles" style="margin-top:14px"><div class="tile"><div class="v">${big(t.all)}</div><div class="tk">tokens in ${prjDays} days</div></div>
+        <div class="tile"><div class="v">${esc(money(t.usd))}</div><div class="tk">at API prices</div></div><div class="tile"><div class="v">${t.sessions}</div><div class="tk">session${t.sessions === 1 ? "" : "s"}</div></div>
+        <div class="tile"><div class="v">${sh.commits || 0}</div><div class="tk">commits${sh.prs_merged ? `, ${sh.prs_merged} PR${sh.prs_merged === 1 ? "" : "s"} merged` : ""}</div></div></div>
+      ${section("Per day", `<svg class="prj-bars" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Tokens per day">${bars}</svg>
+        <div class="prj-axis"><span>${esc(new Date(d.since + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short" }))}</span><span>today</span></div>`)}
+      ${d.seats.length ? section("Who worked on it", `<ul class="prj-list">${d.seats.map(seatRow).join("")}</ul>`) : ""}
+      ${d.models.length ? section("Models", `<ul class="prj-list">${d.models.slice(0, 6).map(m => `<li><span class="grow"><b>${esc(modelName(m.model))}</b></span><em>${big(m.all)}</em></li>`).join("")}</ul>`) : ""}
+      ${sess ? section("Biggest sessions", `<ul class="prj-list">${sess}</ul>`) : ""}
+      ${(d.lanes || []).length ? section("Office lanes", d.lanes.map(l => `<button class="need info" data-lane-go="${esc(l.id)}" style="width:100%;text-align:left"><span class="ico">${icon("briefcase", 16)}</span><div class="grow"><div class="t">${esc(l.title || l.id)}</div><div class="d">${esc(l.status || "")}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))}` : ""}</div></div></button>`).join("")) : ""}
+      <p class="hint" style="margin-top:12px">All time: ${big(d.all_time.all)} tokens, ${esc(money(d.all_time.usd))} at API prices, in ${d.all_time.sessions} session${d.all_time.sessions === 1 ? "" : "s"}${d.all_time.first ? ` since ${esc(new Date(d.all_time.first * 1000).toLocaleDateString([], { day: "numeric", month: "short" }))}` : ""}.</p>
+      <div class="row" style="margin-top:8px"><button class="btn sm" data-copy="${esc(csv)}" data-copy-note="The days are on the clipboard as CSV.">${icon("copy", 14)}Copy the days as CSV</button></div>`,
+      bind(root) { bind(root); root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo }))); } };
+  }
   const PROG_SNIPPET = '"programmes": [{"match": "apollo", "name": "Apollo launch", "url": "https://example.com/board"}]';
   function programmes() {
     return { html: `${crumbs("Meeting room")}<h2>Programmes</h2><p class="lede">Live work grouped by programme. Names and links come from your config.</p>
@@ -1377,7 +1412,7 @@ export function makePanels(app) {
   }
   return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
-    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"
       || (k === "inbox" && ([...askDrafts.values()].some(v => v.trim()) || !!(document.activeElement && document.activeElement.matches("[data-ask-draft]")))) };
 }

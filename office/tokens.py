@@ -150,6 +150,21 @@ def _when(ts: str | None) -> tuple[str | None, str | None]:
     return t.date().isoformat(), f"{t.weekday()}-{t.hour}"
 
 
+def _usd_days(r: dict) -> dict:
+    """A session's list price per day, in USD: as priced response by response, or estimated from its models for a
+    session counted before costs were kept."""
+    if r.get("$"):
+        return {d: v / 1e6 for d, v in r["$"].items()}
+    ms, out = r.get("m") or {}, {}
+    whole = sum(ms.values()) or 1
+    for d, v in (r.get("d") or {}).items():
+        f, c, o = v if isinstance(v, list) else [0, v, 0]
+        x = [prices.estimate(m, f * w / whole, c * w / whole, o * w / whole) for m, w in ms.items()]
+        if any(y is not None for y in x):
+            out[d] = sum(y for y in x if y is not None)
+    return out
+
+
 def wait_median(hist) -> int | None:
     """The median wait (seconds) from a histogram over WAIT_EDGES, read off linearly inside its bucket."""
     n = sum(hist)
@@ -787,6 +802,59 @@ class TokenLedger:
                 pass
             stop.wait(every)
 
+    # -- one project ----------------------------------------------------------------------------------------------
+    def view_project(self, name: str, seats: list[dict], today: str | None = None, days: int = 30) -> dict:
+        """One project (the folder its sessions worked in): tokens, API value and shipped work per day, the seats and
+        models that worked on it and its biggest sessions, over the last `days` days, with its all-time totals."""
+        t = datetime.fromisoformat(today or datetime.now().date().isoformat()).date()
+        keep = [(t - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
+        inside = set(keep)
+        codex = next((x["id"] for x in seats if x.get("kind") == "codex"), None)
+        known = {x["id"] for x in seats}
+        seat_of = lambda r: codex if r.get("s") == "@codex" else (r.get("s") if r.get("s") in known else None)
+        with self.lock:
+            src = self._serve or self.data
+            mine = {sid: dict(r) for sid, r in src["sessions"].items() if r.get("p") == name}
+        per_day = {d: [0, 0, 0, 0.0] for d in keep}                        # fresh, cache, output, USD
+        tot, ever, ship = [0, 0, 0, 0.0], [0, 0, 0, 0.0], [0] * len(SHIP)
+        by_seat, models, rows = {}, {}, []
+        for sid, r in mine.items():
+            usd, k, sess = _usd_days(r), seat_of(r), [0, 0, 0, 0.0]
+            for d, v in (r.get("d") or {}).items():
+                f, c, o = v if isinstance(v, list) else [0, v, 0]
+                ever[0] += f; ever[1] += c; ever[2] += o
+                if d in inside:
+                    x = per_day[d]; x[0] += f; x[1] += c; x[2] += o
+                    sess[0] += f; sess[1] += c; sess[2] += o
+            for d, v in usd.items():
+                ever[3] += v
+                if d in inside:
+                    per_day[d][3] += v; sess[3] += v
+            for d, v in (r.get("g") or {}).items():
+                if d in inside:
+                    for i, n in enumerate(v):
+                        ship[i] += n
+            if not sess[0] + sess[1]:
+                continue
+            for i in range(4):
+                tot[i] += sess[i]
+            b = by_seat.setdefault(k, {"seat": k, "all": 0, "usd": 0.0, "sessions": 0})
+            b["all"] += sess[0] + sess[1]; b["usd"] += sess[3]; b["sessions"] += 1
+            whole = max(1, r.get("f", 0) + r.get("c", 0))
+            for m, v in (r.get("m") or {}).items():                       # the range's share, split by the session's models
+                models[m] = models.get(m, 0) + round((sess[0] + sess[1]) * v / whole)
+            rows.append({"id": short_id(sid), "session": sid, "seat": k, "first": r.get("fi"), "last": r.get("l"),
+                         "all": sess[0] + sess[1], "usd": round(sess[3], 2)})
+        rows.sort(key=lambda x: -x["all"])
+        return {"project": name, "range_days": days, "since": keep[0],
+                "days": [{"day": d, "all": v[0] + v[1], "fresh": v[0], "output": v[2], "usd": round(v[3], 2)} for d, v in per_day.items()],
+                "total": {"all": tot[0] + tot[1], "fresh": tot[0], "output": tot[2], "usd": round(tot[3], 2), "sessions": len(rows)},
+                "all_time": {"all": ever[0] + ever[1], "usd": round(ever[3], 2), "sessions": len(mine),
+                             "first": min((r.get("fi") for r in mine.values() if r.get("fi")), default=None)},
+                "seats": sorted(({**b, "usd": round(b["usd"], 2)} for b in by_seat.values()), key=lambda x: -x["all"]),
+                "models": sorted(({"model": m, "all": v} for m, v in models.items() if v), key=lambda x: -x["all"]),
+                "sessions": rows[:12], "shipped": dict(zip(SHIP, ship))}
+
     # -- the view -------------------------------------------------------------------------------------------------
     def view(self, seats: list[dict], today: str | None = None, days: int = 60, rng: str = "all", seat: str | None = None,
              all_sessions: bool = False) -> dict:
@@ -829,21 +897,9 @@ class TokenLedger:
         mine = {sid: r for sid, r in sessions.items() if seat is None or seat_of(r) == seat}
         priced: dict = {}
         def usd_days(sid, r):                                             # a session's list price per day, in USD
-            if sid in priced:
-                return priced[sid]
-            if r.get("$"):
-                out = {d: v / 1e6 for d, v in r["$"].items()}
-            else:                                                         # counted before costs were kept: estimated
-                ms = r.get("m") or {}
-                whole = sum(ms.values()) or 1
-                out = {}
-                for d, v in (r.get("d") or {}).items():
-                    f, c, o = trip(v)
-                    x = [prices.estimate(m, f * w / whole, c * w / whole, o * w / whole) for m, w in ms.items()]
-                    if any(y is not None for y in x):
-                        out[d] = sum(y for y in x if y is not None)
-            priced[sid] = out
-            return out
+            if sid not in priced:
+                priced[sid] = _usd_days(r)
+            return priced[sid]
         usd_in = lambda sid, r, keep: sum(v for d, v in usd_days(sid, r).items() if keep is None or d in keep)
         def ship_sum(r, keep):                                            # a session's shipped work over a set of days
             tot = [0] * len(SHIP)

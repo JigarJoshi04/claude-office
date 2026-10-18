@@ -411,3 +411,25 @@ class WaitTests(unittest.TestCase):
             self.assertTrue(60 <= v["median_s"] <= 300)
         self.assertEqual(wait_median([0, 0, 2, 0]), 25)
         self.assertIsNone(wait_median([0, 0, 0]))
+
+
+class ProjectViewTests(unittest.TestCase):
+    def test_one_projects_days_seats_models_and_sessions(self):
+        led = TokenLedger(None, [])
+        led.data["sessions"] = {
+            "s1": {"p": "api", "s": "claude2", "fi": 1.0, "l": 5.0, "m": {"claude-opus-5-5": 1100}, "f": 100, "c": 1000,
+                   "d": {"2026-10-18": [60, 600, 6], "2026-10-19": [40, 400, 4]}, "$": {"2026-10-18": 2_000_000, "2026-10-19": 1_000_000},
+                   "g": {"2026-10-19": [2, 1, 1, 1, 10, 2]}},
+            "s2": {"p": "api", "s": "@codex", "fi": 2.0, "l": 3.0, "m": {"codex": 50}, "f": 50, "c": 0, "d": {"2026-09-01": [50, 0, 5]}},
+            "s3": {"p": "web", "s": "claude2", "m": {}, "f": 9, "c": 9, "d": {"2026-10-19": [9, 9, 0]}},
+        }
+        seats = [{"id": "claude2", "kind": "claude"}, {"id": "astra", "kind": "codex"}]
+        v = led.view_project("api", seats, today="2026-10-19", days=7)
+        self.assertEqual(len(v["days"]), 7)
+        self.assertEqual(v["days"][-1], {"day": "2026-10-19", "all": 440, "fresh": 40, "output": 4, "usd": 1.0})
+        self.assertEqual((v["total"]["all"], v["total"]["usd"], v["total"]["sessions"]), (1100, 3.0, 1))   # s2 is outside the week
+        self.assertEqual((v["all_time"]["all"], v["all_time"]["sessions"], v["all_time"]["first"]), (1150, 2, 1.0))
+        self.assertEqual(v["seats"], [{"seat": "claude2", "all": 1100, "usd": 3.0, "sessions": 1}])
+        self.assertEqual(v["models"], [{"model": "claude-opus-5-5", "all": 1100}])
+        self.assertEqual((v["sessions"][0]["seat"], v["shipped"]["commits"], v["shipped"]["prs_merged"]), ("claude2", 2, 1))
+        self.assertEqual(led.view_project("nothing", seats, today="2026-10-19")["all_time"]["sessions"], 0)

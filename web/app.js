@@ -39,6 +39,7 @@ let week = null;
 let loose = null;          // the last /api/loose answer and when it came
 let prsData = null;        // the last /api/prs answer and when it came
 const cabinet = new Map();   // "q|seat|offset" -> {data, at}: the filing cabinet's searches
+const projects = new Map();  // "name|days" -> {data, at}: project drill-downs
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
 const seenNews = new Set();
 let lastEventTs = 0;
@@ -120,6 +121,19 @@ const app = {
         if (cabinet.size > 40) cabinet.delete(cabinet.keys().next().value);
         if (view.kind === "cabinet") renderPanel(true);
       }).catch(() => { cabinet.set(k, { data: null, at: Date.now() }); inflight.delete("cab" + k); });
+    }
+    return c ? c.data : null;
+  },
+  // One project's drill-down (/api/tokens/project), per range.
+  projectCache: (name, days = 30) => {
+    const k = `${name}|${days}`, c = projects.get(k);
+    if ((!c || Date.now() - c.at > 120000) && !inflight.has("prj" + k)) {
+      inflight.add("prj" + k);
+      fetch(`/api/tokens/project?name=${encodeURIComponent(name)}&days=${days}`).then(r => r.ok ? r.json() : null).then(d => {
+        projects.set(k, { data: d, at: Date.now() }); inflight.delete("prj" + k);
+        if (projects.size > 20) projects.delete(projects.keys().next().value);
+        if (view.kind === "project") renderPanel(true);
+      }).catch(() => { projects.set(k, { data: null, at: Date.now() }); inflight.delete("prj" + k); });
     }
     return c ? c.data : null;
   },
@@ -355,6 +369,7 @@ function hashFor(v) {
   if (v.kind === "seat") return "#seat=" + encodeURIComponent(v.seat);
   if (v.kind === "session") return "#session=" + encodeURIComponent(v.seat) + "/" + encodeURIComponent(v.id);
   if (v.kind === "lane") return "#lane=" + encodeURIComponent(v.id);
+  if (v.kind === "project") return "#project=" + encodeURIComponent(v.name);
   return v.kind === "ceo" ? "#" : "#" + v.kind;
 }
 function viewFromHash() {
@@ -362,7 +377,8 @@ function viewFromHash() {
   try { h = decodeURIComponent(location.hash.slice(1)); } catch { return { kind: "ceo" }; }   // a malformed link opens the briefing
   if (!h) return { kind: "ceo" };
   const at = h.indexOf("="), k = at < 0 ? h : h.slice(0, at), rest = at < 0 ? "" : h.slice(at + 1);
-  if (["seat", "session", "lane"].includes(k) && !rest) return { kind: "ceo" };
+  if (["seat", "session", "lane", "project"].includes(k) && !rest) return { kind: "ceo" };
+  if (k === "project") return { kind: "project", name: rest.slice(0, 200) };
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };

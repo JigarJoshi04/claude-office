@@ -476,7 +476,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.74.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.75.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -769,6 +769,17 @@ class Office(LiveOffice):
     def tokens_view(self, rng: str = "all", seat: str | None = None, all_sessions: bool = False) -> dict:
         snap = self.get() or {}
         return self.tokens.view(snap.get("seats", []), rng=rng, seat=seat, all_sessions=all_sessions)
+
+    def tokens_project(self, name: str, days: int = 30) -> dict:
+        """One project's drill-down (TokenLedger.view_project), with the office lanes whose sessions worked on it."""
+        snap = self.get() or {}
+        out = self.tokens.view_project(name, snap.get("seats", []), days=days)
+        sids = {r["session"] for r in out["sessions"]} | {sid for sid, r in ((self.tokens._serve or self.tokens.data)["sessions"]).items() if r.get("p") == name}
+        out["lanes"] = [{"id": l["id"], "title": l.get("title"), "status": l.get("status"), "spent": l.get("spent")}
+                        for l in snap.get("lanes", []) if any(r.get("session_id") in sids for r in l.get("runs") or [])]
+        for r in out["sessions"]:
+            r.pop("session", None)                       # the page gets the short id only
+        return out
 
     def get(self) -> dict:
         with self._lock:
