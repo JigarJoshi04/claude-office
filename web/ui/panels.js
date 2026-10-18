@@ -8,6 +8,7 @@ import { sound } from "./sound.js";
 import { goals, goalsFor, streak, weekly } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned } from "./badges.js";
+import { STICKERS, RARITY } from "../engine/stickers.js";
 import { md } from "./md.js";
 
 const TEMPLATES = [
@@ -137,8 +138,8 @@ export function makePanels(app) {
       <div class="hint">Starts once the office has a week on record: then the goal is to beat last week.</div></div></div>`;
     return `<div class="weekly ${w.done ? "done" : ""}"><span class="wk-ic">${icon(w.done ? "trophy" : "flame", 18)}</span>
       <div class="grow"><div class="wk-t"><b>${w.done ? "Record week!" : "Beat last week"}</b><span>${w.have} of ${w.target} reports${w.done ? "" : ` · ${w.daysLeft === 0 ? "last day" : w.daysLeft + " day" + (w.daysLeft === 1 ? "" : "s") + " left"}`}</span></div>
-      <div class="wk-bar"><i style="width:${Math.round(w.f * 100)}%"></i></div>
-      <div class="hint">${w.done ? `Beat last week's ${w.last}. Keep going.` : `Last week: ${w.last} reports. The target is 10% more.`}</div></div></div>`;
+      <div class="wkc-bar"><i style="width:${Math.round(w.f * 100)}%"></i></div>
+      <div class="hint">${w.done ? `Beat last week's ${w.last}. Keep going.` : `Last week: ${w.last} report${w.last === 1 ? "" : "s"}. ${w.target > Math.ceil(w.last * 1.1) ? `Every week aims for at least ${w.target}.` : "The target is 10% more."}`}</div></div></div>`;
   }
   // Today's goals as three small rings (web/ui/goals.js); a finished day folds into one gold line.
   function goalsHtml() {
@@ -279,7 +280,7 @@ export function makePanels(app) {
       const when = w && w.resets_at ? `${s.status === "limited" && key === binding(s).key ? "Back" : "Resets"} ${dayTime(w.resets_at)}` : w && w.reset_since_read ? "Reset since the last reading" : left == null ? "No reading yet" : "Reset time unknown";
       return `<div class="pring">${ring(left, s.color, 58)}<div><b>${label}</b><small>${when}</small>${w && w.resets_at ? `<small>${inWords(w.resets_at)}</small>` : ""}</div></div>`;
     };
-    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : `gpt -w -C <folder> "task"`;
+    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || "codex -C <folder>";
     const tabs = [["now", "Now", "clock"], ["career", "Career", "trophy"], ["settings", "Settings", "sliders"]];
     const tab = tabs.some(([k]) => k === seatTab) && (s.career || seatTab !== "career") ? seatTab : "now";
     const body = tab === "career" ? `${levelRow(s)}${careerHtml(s)}`
@@ -597,7 +598,23 @@ export function makePanels(app) {
         return section(`Your badges · ${n} of ${BADGES.length}`, `<div class="ol-grid">${BADGES.map(b => { const at = have[b.id];
           return `<div class="ol-card ${at ? "on" : ""}"><span class="ol-ic">${icon(at ? b.icon : "lock", 18)}</span><b>${esc(b.name)}</b><span>${esc(b.desc)}${at ? ` · ${esc(dayTime(at))}` : ""}</span></div>`; }).join("")}</div>
           <div class="hint" style="margin-top:8px">${app.demo ? "The demo office never awards badges. " : ""}Badges are kept in this browser.</div>`); })()}
-      ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, "lv" + (s.career ? s.career.level : 0))}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}` };
+      ${album()}
+      ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, "lv" + (s.career ? s.career.level : 0))}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}`,
+      bind(root) { const b = root.querySelector("[data-swap]"); if (b) b.addEventListener("click", () => { if (app.gifts.swap()) app.rerender(true); }); } };
+  }
+  // The sticker album: every sticker a gift can hold, found ones in colour with how many, the rest as shadows.
+  function album() {
+    const g = app.gifts;
+    if (!g) return "";
+    const al = g.album(), have = STICKERS.filter(s => al[s.id]).length, spares = g.spares(), waiting = g.waiting().length;
+    const tiles = STICKERS.map(s => { const x = al[s.id], r = RARITY[s.rarity];
+      return `<div class="alb ${x ? "on" : ""} r-${s.rarity}" style="--rar:${r.color}" title="${esc(x ? `${s.name} · ${r.name}${x.n > 1 ? ` · ×${x.n}` : ""}` : `${r.name} · not found yet`)}">
+        <i data-sticker="${esc(s.id)}|4|${x ? "" : "sil"}"></i><b>${esc(x ? s.name : "?")}</b>${x && x.n > 1 ? `<em>×${x.n}</em>` : ""}</div>`; }).join("");
+    const counts = Object.keys(RARITY).map(k => { const all = STICKERS.filter(s => s.rarity === k), got = all.filter(s => al[s.id]).length;
+      return `<span class="alb-r" style="--rar:${RARITY[k].color}"><i></i>${RARITY[k].name} ${got}/${all.length}</span>`; }).join("");
+    return `<div id="album">${section(`Sticker album · ${have} of ${STICKERS.length}`, `<div class="alb-top">${counts}</div><div class="alb-grid">${tiles}</div>
+      <div class="alb-foot"><span class="hint">Your agents sometimes leave a gift when they file a report or finish a lane, and every morning a delivery waits at the CEO desk.${waiting ? ` <b>${waiting} waiting on the floor.</b>` : ""}${app.demo ? " The demo office keeps stickers until you reload." : " Stickers are kept in this browser."}</span>
+        <button class="btn sm" data-swap ${spares >= 5 ? "" : "disabled"} title="Five spare stickers for one gift that is rare or better">${icon("gift", 14)}Swap 5 spares${spares ? ` (${spares})` : ""}</button></div>`)}</div>`;
   }
   function trophies() {
     const seats = S().seats.filter(s => s.career), cat = S().achievements || [];
@@ -910,27 +927,27 @@ export function makePanels(app) {
     const p = app.prefs(), sd = settingsData && !settingsData.unavailable ? settingsData : null, voice = sd ? sd.voice || {} : {};
     const VOICE = [["report", "Reports filed"], ["limit", "Usage limits"], ["login", "Logouts"], ["lane", "Office lanes finished"], ["usage", "A seat nearly empty"], ["stuck", "Quiet lanes"]];
     const row = (title, sub, ctl) => `<div class="setrow"><div class="grow">${title}<small>${sub}</small></div>${ctl}</div>`;
-    const sw = (key, on) => `<label class="switch"><input type="checkbox" data-pref="${key}" ${on ? "checked" : ""} aria-label="${key}"><span></span></label>`;
+    const sw = (key, on, label) => `<label class="switch"><input type="checkbox" data-pref="${key}" ${on ? "checked" : ""} aria-label="${esc(label)}"><span></span></label>`;
     return { html: `${crumbs("Settings")}<h2>Settings</h2>
       ${section("This screen", [
         row("Theme", "Night is the default.", `<div class="seg-ctl">${[["dark", "Night"], ["light", "Day"], ["system", "System"]].map(([t, l]) => `<button data-theme-set="${t}" class="${p.theme === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
         row("Text size", (() => { const ts = app.textSize(); return ts.pref === "auto" ? `Auto shows text at ${Math.round(ts.zoom * 100)}% on this screen.` : "Bigger text for big or far-away screens."; })(),
           `<div class="seg-ctl">${[["auto", "Auto"], ["s", "S"], ["m", "M"], ["l", "L"], ["xl", "XL"]].map(([t, l]) => `<button data-text-set="${t}" class="${(p.textSize || "auto") === t ? "on" : ""}" aria-label="${esc(app.textSize().label[t])}">${l}</button>`).join("")}</div>`),
-        row("Seasonal decorations", "Pumpkins for Halloween, lamps for Diwali, a tree and snow in December.", sw("seasonal", p.seasonal !== false)),
+        row("Seasonal decorations", "Pumpkins for Halloween, lamps for Diwali, a tree and snow in December.", sw("seasonal", p.seasonal !== false, "Seasonal decorations")),
         row("Motion", "Reduced stops walking, confetti and fades.", `<div class="seg-ctl">${[["full", "Full"], ["reduced", "Reduced"]].map(([t, l]) => `<button data-motion-set="${t}" class="${p.motion === t ? "on" : ""}">${l}</button>`).join("")}</div>`),
-        row("Sound effects", "Little chimes for arrivals, reports and limits.", `<button class="btn sm ghost" data-test-sound>Play</button>${sw("sound", p.sound)}`),
-        row("Desktop notifications", "Reports, limits and logouts while this tab is in the background.", sw("notify", p.notify)),
-        row("Share-safe", "Blur what terminal sessions are about, and account emails.", sw("privacy", app.privacy())),
+        row("Sound effects", "Little chimes for arrivals, reports and limits.", `<button class="btn sm ghost" data-test-sound>Play</button>${sw("sound", p.sound, "Sound effects")}`),
+        row("Desktop notifications", "Reports, limits and logouts while this tab is in the background.", sw("notify", p.notify, "Desktop notifications")),
+        row("Share-safe", "Blur what terminal sessions are about, and account emails.", sw("privacy", app.privacy(), "Share-safe")),
       ].join(""))}
       ${!sd ? section("Office", `<div class="hint">${settingsLoading ? "Loading…" : "Office settings are not available from this server."}</div>`) : `
       ${section("Office", `<div class="grid2"><label class="f">Office name<input type="text" id="setOffice" maxlength="40" value="${esc(sd.office_name || "")}"></label><label class="f">Your name<input type="text" id="setCeo" maxlength="40" value="${esc(sd.ceo_name || "")}"></label></div>`)}
       ${section("Characters", Object.entries(sd.seats || {}).map(([id, st]) => {
         const seat = seatById(id), per = seat ? P(seat) : { name: st.nickname || id, role: st.role || "", motto: st.motto || "" };
         return `<div class="persona-edit"><div class="head">${avatar("mascot-" + id, st.color || "#888888")}<div class="grow"><b>${esc(per.name)}</b> <span class="hint">${esc(st.label || id)}</span></div><input type="color" data-color="${esc(id)}" value="${esc(st.color || "#888888")}" aria-label="${esc(id)} colour"></div>
-          <label class="f">Name<input type="text" data-nick="${esc(id)}" maxlength="24" placeholder="${esc(per.name)}" value="${esc(st.nickname || "")}"></label>
-          <label class="f">Role<input type="text" data-role="${esc(id)}" maxlength="40" placeholder="${esc(per.role)}" value="${esc(st.role || "")}"></label>
-          <label class="f full">Motto<input type="text" data-motto="${esc(id)}" maxlength="90" placeholder="${esc(per.motto)}" value="${esc(st.motto || "")}"></label>
-          <label class="f full">Personality: voice and room<select data-style="${esc(id)}"><option value="">Automatic (${esc(seat ? personaFor({ ...seat, style: null }, S().seats.findIndex(x => x.id === id)).archetype : "by order")})</option>${PERSONALITIES.map(x => `<option value="${esc(x.role)}" ${st.style === x.role ? "selected" : ""}>${esc(x.role)} · ${esc(x.motto)}</option>`).join("")}</select></label></div>`; }).join(""))}
+          <label class="f">Name<input type="text" data-nick="${esc(id)}" aria-label="Name for ${esc(st.label || id)}" maxlength="24" placeholder="${esc(per.name)}" value="${esc(st.nickname || "")}"></label>
+          <label class="f">Role<input type="text" data-role="${esc(id)}" aria-label="Role for ${esc(per.name)}" maxlength="40" placeholder="${esc(per.role)}" value="${esc(st.role || "")}"></label>
+          <label class="f full">Motto<input type="text" data-motto="${esc(id)}" aria-label="Motto for ${esc(per.name)}" maxlength="90" placeholder="${esc(per.motto)}" value="${esc(st.motto || "")}"></label>
+          <label class="f full">Personality: voice and room<select data-style="${esc(id)}" aria-label="Personality for ${esc(per.name)}: voice and room"><option value="">Automatic (${esc(seat ? personaFor({ ...seat, style: null }, S().seats.findIndex(x => x.id === id)).archetype : "by order")})</option>${PERSONALITIES.map(x => `<option value="${esc(x.role)}" ${st.style === x.role ? "selected" : ""}>${esc(x.role)} · ${esc(x.motto)}</option>`).join("")}</select></label></div>`; }).join(""))}
       ${section("Jarvis voice", `${row("Announce out loud", sd.voice_available ? "Speaks short alerts through jarvis-say. Off by default." : "jarvis-say was not found on this machine.", `<label class="switch"><input type="checkbox" id="setVoice" ${voice.enabled ? "checked" : ""} ${sd.voice_available ? "" : "disabled"} aria-label="Voice"><span></span></label>`)}
         <div class="row wrap" style="gap:6px;margin:10px 0">${VOICE.map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-vev="${k}" ${(voice.events || []).includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div>
         <div class="grid2"><label class="f">Quiet from (hour)<input type="number" min="0" max="23" id="setQ1" value="${(voice.quiet_hours || [23, 8])[0]}"></label><label class="f">Until (hour)<input type="number" min="0" max="23" id="setQ2" value="${(voice.quiet_hours || [23, 8])[1]}"></label></div>`)}

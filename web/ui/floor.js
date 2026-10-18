@@ -101,7 +101,7 @@ export function makeFloor(ctx) {
     const s = snap && snap.seats.find(z => z.id === id);
     if (!s) return;
     const p = panels.persona(s), duty = s.divider ? s.divider.enabled !== false : s.status !== "benched";
-    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : `gpt -w -C <folder> "task"`;
+    const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || "codex -C <folder>";
     const items = [
       ["open", "users", `Open ${p.name}`], ["zoom", "target", "Zoom in on the room"], ["hire", "plus", `Hire a lane for ${p.name}`],
       ["duty", duty ? "sun" : "briefcase", duty ? "Send on holiday" : "Back on duty"], ["copy", "copy", s.kind === "claude" ? "Copy the terminal command" : "Copy the Codex command"],
@@ -153,7 +153,7 @@ export function makeFloor(ctx) {
       <div class="lg-sec">People</div>
       <div class="lg-grid"><span>💭 Thinking</span><span>⌨ Typing (the screen shows what)</span><span>☕ Idle at the desk</span><span>? Quiet for a while</span><span>z Asleep: out of plan</span><span>🛸 A helper subagent</span></div>
       <div class="lg-sec">Signs</div>
-      <div class="lg-grid"><span>🌧 Rain in a window: out of plan</span><span>☁ Clouds: under 20% left</span><span>🧢 Caps, shades, gold headphones: the character's level</span><span>🐶 Pets, palms, a vacuum: office level unlocks</span></div>
+      <div class="lg-grid"><span>🌧 Rain in a window: out of plan</span><span>☁ Clouds: under 20% left</span><span>🧢 Caps, shades, gold headphones: the character's level</span><span>🐶 Pets, palms, a vacuum: office level unlocks</span><span>🎁 A gift box: click it for a sticker</span></div>
       <div class="lg-sec">Lobby</div>
       <div class="lg-grid"><span>Elevator: office news</span><span>Cabinet: trophies</span><span>Gold frame: today's star</span><span>Screen: load divider</span><span>Green desk: hire a lane</span><span>Racks: background services</span></div>
       <div class="lg-foot">Hover a room for a peek · right-click it for actions · double-click to zoom · drag to pan · 0 fits the office</div>`;

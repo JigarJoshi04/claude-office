@@ -22,12 +22,19 @@ from . import checkpoint, config, divider, lanes, messaging, sessions, talk, set
 MAX_BODY = 256 * 1024
 
 
+def _number(value: str, message: str) -> int:
+    """A query number in plain ASCII digits; int() alone also takes "７" or "٣" and has its own message for "²"."""
+    if not (value.isascii() and value.isdigit() and len(value) <= 6):
+        raise ValueError(message)
+    return int(value)
+
+
 class Handler(BaseHTTPRequestHandler):
     office = None          # set by serve()
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.7.0"
+    server_version = "ClaudeOffice/3.9.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -96,16 +103,14 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/stream":
                 return self._stream()
             if url.path == "/api/history":
-                return self._json(200, self.office.samples.query(self.office.get(), int(q.get("hours", "6")),
-                                                               list(self.office.events)))
+                hours = _number(q.get("hours", "6"), "hours must be an integer from 1 to 24")
+                return self._json(200, self.office.samples.query(self.office.get(), hours, list(self.office.events)))
             if url.path == "/api/stats":
                 return self._json(200, self.office.samples.stats(self.office.get(), q.get("day"),
                                                                list(self.office.events)))
             if url.path == "/api/week":
-                days = q.get("days", "7")
-                if not days.isdigit():
-                    raise ValueError("days must be an integer from 1 to 90")
-                return self._json(200, {"days": self.office.samples.week(self.office.get(), int(days), list(self.office.events))})
+                days = _number(q.get("days", "7"), "days must be an integer from 1 to 90")
+                return self._json(200, {"days": self.office.samples.week(self.office.get(), days, list(self.office.events))})
             if url.path == "/api/settings":
                 return self._json(200, settings.view(self.office.cfg, self.office.get().get("seats", [])))
             if url.path == "/api/session":

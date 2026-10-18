@@ -61,7 +61,8 @@ export function renderStats(el, app) {
   const maxMin = Math.max(1, ...rows.map(r => r.active_min));
   const mvpSeat = st.mvp && seatOf(st.mvp.seat);
   const o = st.office || {};
-  const shift = (n) => { const d = new Date((st.day || localDay()) + "T12:00:00"); d.setDate(d.getDate() + n); return localDay(d); };
+  const shift0 = (day, n) => { const d = new Date(day + "T12:00:00"); d.setDate(d.getDate() + n); return localDay(d); };
+  const shift = (n) => shift0(st.day || localDay(), n);
   const now = new Date(), todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const human = (t) => { let x = String(t); for (const s of snap.seats) { const n = nameOf(s.id); if (n !== s.label) x = x.replace(new RegExp(`\\b${s.label}\\b`, "g"), n); } return x; };
   const hours = Math.round(rows.reduce((a, r) => a + r.active_min, 0) / 6) / 10;
@@ -71,7 +72,7 @@ export function renderStats(el, app) {
   const won = snap.seats.flatMap(s => Object.entries((s.career || {}).unlocked || {}).filter(([id, at]) => cat[id] && at >= d0 && at < d0 + 86400)
     .map(([id, at]) => ({ s, a: cat[id], at }))).sort((a, b) => a.at - b.at);
   el.innerHTML = `<div class="stats-grid">
-    <div class="view-head"><div class="grow"><h3>${st.day === todayStr ? "Today" : esc(st.day)}</h3><p>Who did what, from the office's own records.</p></div>
+    <div class="view-head"><div class="grow"><h3>${st.day === todayStr ? "Today" : st.day === shift0(todayStr, -1) ? "Yesterday" : esc(new Date(st.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }))}</h3><p>Who did what, from the office's own records.</p></div>
       <button class="btn sm" data-day="${shift(-1)}">${icon("chevronRight", 14, "flip")}Day before</button>${st.day !== todayStr ? `<button class="btn sm" data-day="${shift(1)}">Next day</button><button class="btn sm" data-day="">Today</button>` : ""}</div>
     <div class="stats-top">
       ${mvpSeat ? `<div class="mvp">${avatar("mascot-" + mvpSeat.id, mvpSeat.color, "crown")}<div><div class="eyebrow">Employee of the day</div><h3>${esc(nameOf(mvpSeat.id))}</h3><div class="muted">${esc(st.mvp.why)}</div></div></div>`
@@ -103,6 +104,7 @@ export function renderStats(el, app) {
   </div>`;
   hydratePortraits(el, 4);
   bindWeek(el, app);
+  if (refocus) { const f = el.querySelector(refocus); if (f) { f.focus({ preventScroll: true }); refocus = null; } }
   el.querySelectorAll("[data-trophies]").forEach(b => b.addEventListener("click", () => app.go({ kind: "trophies" })));
   el.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { app.setPref("statsDay", b.dataset.day || null); app.loadStats(b.dataset.day || null, true); }));
 }
@@ -111,7 +113,7 @@ export function renderStats(el, app) {
 // The last seven days as bars, one measure at a time (no second axis): reports, agent hours or tool calls. The day on
 // show is highlighted; hovering a bar shows that day's numbers; the header compares with the seven days before.
 const WEEK_METRICS = { reports: ["Reports", (d) => d.reports, (v) => String(v)], hours: ["Agent hours", (d) => d.active_min / 60, (v) => v >= 10 ? Math.round(v) + " h" : v.toFixed(1) + " h"],
-  calls: ["Tool calls", (d) => d.tool_calls, (v) => v >= 10000 ? Math.round(v / 1000) + "k" : v.toLocaleString()] };
+  calls: ["Tool calls", (d) => d.tool_calls, (v) => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 10000 ? Math.round(v / 1000) + "k" : v.toLocaleString()] };
 function weekCard(app, shown) {
   const days = app.weekCache();
   if (!days) return `<div class="view-card"><div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`;
@@ -124,38 +126,43 @@ function weekCard(app, shown) {
   const wd = (d) => new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short" });
   const bars = last.map((d, i) => {
     const v = get(d), h = v > 0 ? Math.max(3, Math.round(v / max * H)) : 0, x = i * 64 + 14, on = d.day === shown, B = H + T;
-    const tip = `${new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })} · ${d.reports} report${d.reports === 1 ? "" : "s"} · ${WEEK_METRICS.hours[2](d.active_min / 60)} · ${d.tool_calls.toLocaleString()} tool calls · ${d.sessions} sessions`;
+    const tip = `${new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })} · ${d.reports} report${d.reports === 1 ? "" : "s"} · ${WEEK_METRICS.hours[2](d.active_min / 60)} · ${d.tool_calls.toLocaleString()} tool calls · ${d.sessions} session${d.sessions === 1 ? "" : "s"}`;
     return `<g class="wk-bar ${on ? "on" : ""}" data-week-day="${d.day}" tabindex="0" role="button" aria-label="${tip}">
       <rect class="hit" x="${x - 8}" y="0" width="52" height="${B + 26}" fill="transparent"/>
       ${h ? `<path class="val" d="M${x} ${B} V${B - h + 4} q0 -4 4 -4 h28 q4 0 4 4 V${B} Z"/>` : `<rect class="zero" x="${x}" y="${B - 2}" width="36" height="2" rx="1"/>`}
       ${(on || v === max) && v > 0 ? `<text class="lbl" x="${x + 18}" y="${B - h - 6}" text-anchor="middle">${fmt(v)}</text>` : ""}
       <text class="ax" x="${x + 18}" y="${B + 18}" text-anchor="middle">${wd(d.day)}</text><title>${tip}</title></g>`;
   }).join("");
-  return `<div class="view-card week"><div class="section-h"><h4>This week</h4>
+  const empty = last.every(d => !d.sessions && !d.reports && !d.tool_calls);
+  return `<div class="view-card week"><div class="section-h"><h4>Last 7 days</h4>
       <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(WEEK_METRICS).map(([k, [l]]) => `<button data-week-metric="${k}" class="${k === key ? "on" : ""}">${l}</button>`).join("")}</div></div>
     <div class="wk-head"><b>${fmt(now)}</b><span>${label.toLowerCase()} in the last 7 days</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% vs the week before</em>`}</div>
     <div class="wk-body"><svg class="wk" viewBox="0 0 ${W} ${H + T + 26}" role="img" aria-label="${label} per day for the last seven days"><line class="base" x1="0" x2="${W}" y1="${H + T}" y2="${H + T}"/>${bars}</svg>
       ${weekFacts(app, last)}</div>
-    <div class="hint">Click a day to open it. Earlier days come from the office's day ledger.</div></div>`;
+    <div class="hint">${empty ? "Nothing on record yet: the bars fill in as your agents work. " : ""}Click a day to open it. Earlier days come from the office's day ledger.</div></div>`;
 }
 // Beside the chart: the best day, the star of the week (most days as employee of the day) and the week's totals.
 function weekFacts(app, last) {
   const snap = app.snap(), best = [...last].sort((a, b) => b.reports - a.reports || b.active_min - a.active_min)[0];
   const stars = {}; for (const d of last) if (d.mvp) stars[d.mvp] = (stars[d.mvp] || 0) + 1;
-  const top = Object.entries(stars).sort((a, b) => b[1] - a[1])[0], seat = top && snap.seats.find(s => s.id === top[0]);
+  const most = Math.max(0, ...Object.values(stars));                 // a tie shares the title
+  const tied = Object.keys(stars).filter(id => stars[id] === most).map(id => snap.seats.find(s => s.id === id)).filter(Boolean);
+  const top = most ? [null, most] : null, seat = tied[0];
   const hrs = last.reduce((a, d) => a + d.active_min, 0) / 60, calls = last.reduce((a, d) => a + d.tool_calls, 0), active = last.filter(d => d.sessions).length;
   const row = (ic, k, v) => `<div class="wf"><span class="wf-ic">${icon(ic, 16)}</span><span class="wf-k">${k}</span><b>${v}</b></div>`;
   return `<div class="wk-facts">
     ${best && best.reports ? row("trophy", "Best day", `${esc(new Date(best.day + "T12:00:00").toLocaleDateString([], { weekday: "long" }))} · ${best.reports} report${best.reports === 1 ? "" : "s"}`) : ""}
-    ${seat ? row("star", "Star of the week", `<span class="wf-who" style="--seat:${esc(seat.color)}"><i></i>${esc(personaFor(seat, snap.seats.findIndex(x => x.id === seat.id)).name)}</span> · ${top[1]} day${top[1] === 1 ? "" : "s"} on top`) : ""}
+    ${seat ? row("star", tied.length > 1 ? "Stars of the week" : "Star of the week", `${tied.slice(0, 3).map(s => `<span class="wf-who" style="--seat:${esc(s.color)}"><i></i>${esc(personaFor(s, snap.seats.findIndex(x => x.id === s.id)).name)}</span>`).join(" and ")} · ${top[1]} day${top[1] === 1 ? "" : "s"} on top`) : ""}
     ${row("clock", "Agent hours", hrs >= 10 ? Math.round(hrs) + " h" : hrs.toFixed(1) + " h")}
     ${row("tool", "Tool calls", calls.toLocaleString())}
     ${row("calendar", "Days with work", `${active} of 7`)}</div>`;
 }
+// The view re-renders whole, so a bar or measure button used from the keyboard is focused again once it is back.
+let refocus = null;
 function bindWeek(el, app) {
-  el.querySelectorAll("[data-week-metric]").forEach(b => b.addEventListener("click", () => { app.setPref("weekMetric", b.dataset.weekMetric); renderStats(el, app); }));
+  el.querySelectorAll("[data-week-metric]").forEach(b => b.addEventListener("click", () => { refocus = `[data-week-metric="${b.dataset.weekMetric}"]`; app.setPref("weekMetric", b.dataset.weekMetric); renderStats(el, app); }));
   el.querySelectorAll("[data-week-day]").forEach(g => {
-    const open = () => { const d = g.dataset.weekDay, day = d === app.weekCache().slice(-1)[0].day ? null : d; app.setPref("statsDay", day); app.loadStats(day, true); };
+    const open = () => { const d = g.dataset.weekDay, day = d === app.weekCache().slice(-1)[0].day ? null : d; refocus = `[data-week-day="${d}"]`; app.setPref("statsDay", day); app.loadStats(day, true); };
     g.addEventListener("click", open);
     g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
   });

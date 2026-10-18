@@ -13,6 +13,8 @@ import { dayCard } from "./ui/daycard.js";
 import { award, bump } from "./ui/badges.js";
 import { startTour } from "./ui/tour.js";
 import { makeFloor } from "./ui/floor.js";
+import { makeGiftBox } from "./ui/giftbox.js";
+import { hydrateStickers } from "./engine/stickers.js";
 import { officeLevel, UNLOCKS } from "./engine/unlocks.js";
 const UNLOCKS_BY_LEVEL = (from, to) => UNLOCKS.filter(u => u.level > from && u.level <= to);
 
@@ -117,6 +119,7 @@ const office = createOffice($("stage"), {
   onRoomMenu: (id, x, y, el) => floor.roomMenu(id, x, y, el),
   needsFor: (id) => panels.needsBySeat()[id] || 0,
   onLegend: (btn) => floor.legend(btn),
+  onGift: (id) => giftBox.open(id),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
 });
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
@@ -203,11 +206,16 @@ applyPanel();
 
 // The guided tour (ui/tour.js): from the first-visit hint, the menu or the palette. It needs the floor and the briefing.
 function tour() {
-  setView("floor"); if (!prefs.panel) setPref("panel", true); go({ kind: "ceo" });
-  setTimeout(() => startTour(), 300);
+  const hadPanel = prefs.panel;                 // the tour shows the inspector, then leaves it as it was
+  setView("floor"); if (!hadPanel) setPref("panel", true); go({ kind: "ceo" });
+  setTimeout(() => startTour({ onDone: () => { if (!hadPanel) setPref("panel", false); } }), 300);
 }
 
 const floor = makeFloor({ app, office, panels, replay, prefs, QS, DEMO, go, setView, badge: (b) => badge(b), award, zoomNow });
+const giftBox = makeGiftBox({ app, office, panels, replay, store, DEMO, setView, badge: (b) => badge(b), award, onAlbum: () => openAlbum() });
+app.gifts = giftBox;
+// "Your office", scrolled to the sticker album.
+function openAlbum() { go({ kind: "office" }); requestAnimationFrame(() => { const a = document.getElementById("album"); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }); }
 
 // ------------------------------------------------------------------------------------------------ prefs
 function setPref(k, v) {
@@ -373,10 +381,11 @@ function apply(next) {
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   if (!DEMO) { checkBadges(); cheerWeekly(); anniversaries(); }   // the demo office never hands out badges
-  if (first) { visitStreak(); setTimeout(whatsNew, 1500); }
+  if (first) { visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); }
+  if (!replay.active()) giftBox.daily();       // the first visit of a day finds a gift at the CEO desk
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
-  else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) onNews(e);
+  else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) safeNews(e);
   lastEventTs = Math.max(lastEventTs, ...(snap.events || []).map(e => e.ts));
   if (view.kind === "session") { loadDetail("s:" + view.seat + "/" + view.id); app.chatFor(view.seat, view.id); }
   if (view.kind === "lane") loadDetail("l:" + view.id);
@@ -398,18 +407,19 @@ function teammateReacts(e, kind) {
 
 // Banter: every couple of minutes two characters at their desks trade a line (ui/personas.js banter). Never during
 // replay or reduced motion, and never over another reaction.
-let lastReport = 0;
+let lastReport = 0, lastReportSeat = null;
 setInterval(() => {
   if (!snap || replay.active() || prefs.motion === "reduced" || document.hidden || prefs.view !== "floor" || Date.now() - lastReaction < 15000) return;
   const awake = snap.seats.filter(s => !["limited", "offline", "benched"].includes(s.status) && live(s).length);
   if (awake.length < 2 || Math.random() < 0.4) return;
   const [a, b] = awake.sort(() => Math.random() - 0.5);
-  const others = snap.seats.filter(s => s !== a && s !== b);
-  const napping = snap.seats.find(s => s.status === "limited"), low = snap.seats.find(s => { const x = binding(s); return x.left != null && x.left < 20 && s.status !== "limited"; });
-  const h = new Date().getHours(), name = (s) => panels.persona(s).name;
-  const c = napping || low || others[0] || b;
-  const [l1, l2] = banter({ a: name(a), b: name(b), c: name(c), napping: !!napping, lowPlan: !!low, busy: snap.seats.flatMap(s => live(s)).filter(x => x.state === "working").length,
-    recentReport: Date.now() - lastReport < 10 * 60000, night: h >= 22 || h < 5 });
+  const third = (s) => s && s !== a && s !== b;        // the lines can be about someone, never about one of the speakers
+  const napping = snap.seats.find(s => third(s) && s.status === "limited");
+  const low = snap.seats.find(s => { const x = binding(s); return third(s) && x.left != null && x.left < 20 && s.status !== "limited"; });
+  const recent = Date.now() - lastReport < 10 * 60000, reporter = recent && snap.seats.find(s => third(s) && s.id === lastReportSeat);
+  const h = new Date().getHours(), name = (s) => (s ? panels.persona(s).name : "");
+  const [l1, l2] = banter({ a: name(a), b: name(b), napper: name(napping), low: name(low), reporter: name(reporter),
+    busy: snap.seats.flatMap(s => live(s)).filter(x => x.state === "working").length, recentReport: recent, night: h >= 22 || h < 5 });
   lastReaction = Date.now();
   office.sayAtSeat(a.id, l1, 5000);
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
@@ -417,6 +427,8 @@ setInterval(() => {
 
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {} };
 const fxNow = () => (replay.active() ? NOFX : office);   // floor effects for live news: none while replaying
+// One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
+function safeNews(e) { try { onNews(e); } catch (err) { console.error("office news:", err); } }
 function onNews(e) {
   const fx = replay.active() ? NOFX : office;     // while replaying, the floor shows the past: live news only toasts
   const key = e.ts + "|" + e.text;
@@ -432,7 +444,7 @@ function onNews(e) {
     case "report": {
       const ok = e.level === "good";
       const sid = findSessionByText(e.text);
-      if (ok) { lastReport = Date.now(); fx.celebrate(e.seat, sid, "Shipped!"); if (who) fx.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); comboHit(e); }
+      if (ok) { lastReport = Date.now(); lastReportSeat = e.seat; fx.celebrate(e.seat, sid, "Shipped!"); if (who) fx.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); comboHit(e); giftBox.earn(e.seat, "report"); }
       else sound.play("bad");
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
       break;
@@ -457,7 +469,7 @@ function onNews(e) {
     }
     case "reply": sound.play("arrive"); toast(text, "good"); notify("A session replied", text); for (const k of chats.keys()) chats.get(k).at = 0; break;
     case "lane":
-      if (e.level === "good") { fx.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); }
+      if (e.level === "good") { fx.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); giftBox.earn(e.seat, "lane"); }
       else if (e.level === "bad") { sound.play("bad"); notify("Office lane failed", text); }
       if (e.level !== "info") toast(text, e.level);
       break;
@@ -490,9 +502,9 @@ function visitStreak() {
   const d = new Date(), key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
   const days = new Set(store.get("visits", []));
   days.add(key(d));
-  store.set("visits", [...days].sort().slice(-60));
   let n = 0; const c = new Date(d);
   while (days.has(key(c))) { n++; c.setDate(c.getDate() - 1); }
+  store.set("visits", [...days].sort().slice(-n));   // only the current run matters, however long it gets
   const el = $("visits");
   el.hidden = n < 2;
   el.innerHTML = `${icon("flame", 14)}${n}`;
@@ -590,7 +602,7 @@ function connect() {
   if (!("EventSource" in window) || sseFails >= 3 || QS.has("poll")) { startPolling(); return; }
   try { es = new EventSource("/api/stream"); } catch { startPolling(); return; }
   es.addEventListener("state", (ev) => { sseFails = 0; stopPolling(); setLive("live"); try { apply(JSON.parse(ev.data)); } catch { /* skip a bad frame */ } });
-  es.addEventListener("news", (ev) => { try { onNews(JSON.parse(ev.data)); } catch { /* ignore */ } });
+  es.addEventListener("news", (ev) => { let e; try { e = JSON.parse(ev.data); } catch { return; } safeNews(e); });
   es.onerror = () => {
     sseFails++;
     if (es.readyState === EventSource.CLOSED || sseFails >= 3) { es.close(); es = null; startPolling(); setTimeout(() => { if (!es) { sseFails = 0; connect(); } }, 30000); }
@@ -785,11 +797,12 @@ app.shareDay = shareDay;
 // What's new: after an update, people who used an earlier version get a short list of what changed (once). A first
 // visit gets the tour instead.
 const WHATS_NEW = [
+  ["gift", "Gifts and a sticker album", "Reports and finished lanes sometimes leave a gift box on the floor, and a delivery waits every morning. Open them for 24 stickers in four rarities."],
   ["star", "The office levels up", "Everyone's XP adds up to an office level that unlocks palms, a vacuum, a dog, fireworks and more. Click the gold ring."],
   ["rewind", "Replay the day", "Press R and the floor plays back the last hours."],
   ["tv", "TV mode", "Press V for the floor alone, full screen, with a news ticker."],
   ["flame", "Goals, combos and a weekly challenge", "Three new goals every day, combos for reports in a row, and a challenge to beat last week."],
-  ["calendar", "This week", "Today now charts the last seven days."],
+  ["calendar", "Last 7 days", "Today now charts the last seven days."],
   ["sparkles", "Gear, seasons and banter", "Team caps and shades come with levels, Halloween is on the floor, and characters chat."],
   ["users", "Right-click a room", "Open, zoom, hire a lane for that seat, or send it on holiday."],
 ];
@@ -933,6 +946,7 @@ function renderPanel(force, keepScroll) {
   p.innerHTML = `<div class="panel-in">${out.html}</div>`;
   p.dataset.html = out.html; p.dataset.vk = vk;
   hydratePortraits(p, 4);
+  hydrateStickers(p);
   bindCommon(p);
   if (out.bind) out.bind(p);
   const nc = chatScroll && p.querySelector(".chat");
@@ -1016,6 +1030,8 @@ function paletteItems() {
     { icon: icon("sliders", 16), label: "Load divider", hint: "D", keywords: "split weights bench", run: () => go({ kind: "divider" }) },
     { icon: icon("floor", 16), label: "Floor", hint: "F", run: () => setView("floor") },
     { icon: icon("star", 16), label: "Your office: level and unlocks", keywords: "office level unlocks xp progress", run: () => go({ kind: "office" }) },
+    { icon: icon("gift", 16), label: "Sticker album", keywords: "stickers album gifts collection swap", run: () => openAlbum() },
+    ...(giftBox.waiting().length ? [{ icon: icon("gift", 16), label: `Find the gift on the floor (${giftBox.waiting().length} waiting)`, keywords: "gift open present box", run: () => giftBox.seek() }] : []),
     { icon: icon("sparkles", 16), label: "Take the tour", keywords: "help onboarding guide tutorial how", run: () => tour() },
     { icon: icon("star", 16), label: "Share today's card", keywords: "share picture day summary post card wrapped", run: () => shareDay() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },

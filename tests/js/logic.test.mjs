@@ -123,10 +123,13 @@ test("a personality picked in Settings sets the voice and room style", async () 
 test("banter is two filled-in lines that fit the moment", async () => {
   const { banter } = await import("../../web/ui/personas.js");
   for (let i = 0; i < 200; i++) {
-    const o = { a: "Atlas", b: "Vega", c: "Orion", napping: i % 3 === 0, busy: i % 5, recentReport: i % 4 === 0, lowPlan: i % 7 === 0, night: i % 6 === 0 };
+    const o = { a: "Atlas", b: "Vega", napper: i % 3 === 0 ? "Orion" : "", busy: i % 5, recentReport: i % 4 === 0, reporter: i % 8 === 0 ? "Main" : "",
+      low: i % 7 === 0 ? "Codex" : "", night: i % 6 === 0 };
     const [x, y] = banter(o);
     assert.ok(x && y && !/[{}]/.test(x + y), `filled: ${x} / ${y}`);
-    if (!o.napping) assert.ok(!/napping|out of plan/i.test(x), "never says someone is napping when nobody is");
+    if (!o.napper) assert.ok(!/napping|out of plan/i.test(x), "never says someone is napping when nobody is");
+    if (/report\?/.test(x)) assert.ok(x.includes("Main"), "a report line names who reported");
+    assert.ok(!/(^|\W)(Atlas|Vega)'s/.test(x), "never talks about one of the two speakers");
   }
 });
 
@@ -145,4 +148,50 @@ test("the weekly challenge beats last week by 10%, Monday to Sunday", async () =
   const fresh = mk("2026-10-18", 14, () => 0).map((d, i) => i < 12 ? { ...d, sessions: 0 } : d);
   assert.equal(weekly(fresh).calibrating, true);                                   // no record of last week: nothing to beat yet
   assert.ok(weekly(mk("2026-10-18", 14, (d) => d.getDate() >= 12 ? 9 : 1)).done);
+});
+
+test("stickers: 24 pieces of 12×12 art in four rarities, rolled by weight", async () => {
+  const { STICKERS, RARITY, rollSticker } = await import("../../web/engine/stickers.js");
+  assert.equal(STICKERS.length, 24);
+  assert.equal(new Set(STICKERS.map(s => s.id)).size, 24);
+  for (const s of STICKERS) {
+    assert.ok(RARITY[s.rarity], s.id);
+    assert.equal(s.art.length, 12, s.id);
+    for (const row of s.art) assert.equal(row.length, 12, s.id);
+  }
+  let i = 0; const seq = (xs) => () => xs[i++ % xs.length];
+  assert.equal(rollSticker(seq([0, 0])).rarity, "common");
+  assert.equal(rollSticker(seq([0.99, 0])).rarity, "legendary");
+  assert.equal(rollSticker(seq([0.7, 0])).rarity, "rare");                      // 62 + 27: rare runs to 0.89
+});
+
+test("gifts: a pity timer, a cap on waiting gifts, a daily delivery and swaps", async () => {
+  const { makeGifts, MAX_WAITING, PITY, KEEP_S, SWAP } = await import("../../web/ui/gifts.js");
+  const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? mem.get(k) : d), set: (k, v) => mem.set(k, v) };
+  let t = 1_000_000, r = 0.99;
+  const g = makeGifts({ store, now: () => t, rand: () => r });
+  for (let n = 1; n < PITY; n++) assert.equal(g.earn("s1"), null);               // unlucky…
+  assert.ok(g.earn("s1"));                                                        // …but never PITY reports without one
+  r = 0;
+  while (g.waiting().length < MAX_WAITING) assert.ok(g.earn("s2"));
+  assert.equal(g.earn("s2"), null);                                               // the floor holds three at most
+  t += KEEP_S + 1;
+  assert.equal(g.waiting().length, 0);                                            // unopened gifts go back after a day
+  assert.ok(g.daily("2026-10-18"));
+  assert.equal(g.daily("2026-10-18"), null);                                      // one morning delivery a day
+  const opened = g.open(g.waiting()[0].id);
+  assert.equal(opened.sticker.rarity, "common");
+  assert.ok(opened.isNew);
+  assert.equal(g.open(opened.gift.id), null);                                     // a gift opens once
+  for (let k = 0; k < SWAP; k++) { assert.ok(g.earn("s1")); g.open(g.waiting()[0].id); }
+  assert.equal(g.spares(), SWAP);                                                 // the same common each time
+  const sw = g.swap();
+  assert.equal(sw.min, "rare");
+  assert.equal(g.spares(), 0);
+  r = 0.01; const got = g.open(sw.id);                                            // a roll that would be common is lifted
+  assert.notEqual(got.sticker.rarity, "common");
+  const demo = makeGifts({ store, demo: true, now: () => t, rand: () => 0 });
+  const before = JSON.stringify([...mem]);
+  demo.earn("s1"); demo.open(demo.waiting()[0].id);
+  assert.equal(JSON.stringify([...mem]), before);                                 // the demo never writes to the browser
 });

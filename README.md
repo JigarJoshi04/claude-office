@@ -9,8 +9,8 @@ working and who is stuck, talk to any task, split new work across seats, and hir
 desk.
 
 And the office grows with the work: characters level up and earn gear, the office itself levels up and unlocks palms,
-a robot vacuum, a dog and fireworks, and there are daily goals, a weekly "beat last week" challenge, combos and
-badges to chase. Replay the day on the floor, put it on a spare screen in TV mode, or share a picture of the day.
+a robot vacuum, a dog and fireworks, and there are daily goals, a weekly "beat last week" challenge, combos, gifts
+with stickers to collect and badges to chase. Replay the day on the floor, put it on a spare screen in TV mode, or share a picture of the day.
 
 ![Claude Office in demo mode: a visitor lane walks in from the elevator, a character card opens, then a session's Chat, the Team view and the Timeline](docs/demo.gif)
 
@@ -81,7 +81,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   them all, what comes next and who built the most.
 - **Beat last week**: a weekly challenge to file 10% more reports than last week, with a Record week celebration.
 - **The day's rhythm**: a morning card recaps yesterday and names today's goals; an evening card wraps the day up.
-- **Badges for you**: twelve of them, from *Inbox zero* and *Hiring manager* to *Time traveller* and *Night owl*.
+- **Gifts and a sticker album**: a report or a finished lane sometimes leaves a gift box in that character's room,
+  and a delivery waits at the CEO desk every morning. Open them for 24 pixel-art stickers in four rarities; five
+  spares swap for a rare-or-better gift. Only one sticker is Legendary.
+- **Badges for you**: sixteen of them, from *Inbox zero* and *Hiring manager* to *Collector* and *Night owl*.
 - **Seasons**: pumpkins and bats for Halloween, lamps and a rangoli for Diwali, a tree and snow in December.
 - **Combos**: reports and finished lanes within 15 minutes of each other chain into a combo (×2, ×3, …) with a timer
   draining on the floor and rising chimes.

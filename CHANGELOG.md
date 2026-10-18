@@ -3,6 +3,28 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.9.0] - 2026-10-18
+
+### Added
+- Gifts: a report or a finished lane sometimes leaves a gift box in that character's room (never three reports in a
+  row without one), and the first visit of each day finds a delivery at the CEO desk. Click a box to open it.
+- A sticker album on "Your office": 24 pixel-art stickers in four rarities (Common, Rare, Epic, and one Legendary).
+  Five spare stickers swap for a gift that is rare or better. Two new badges: Collector and Golden duck.
+- A gift chip in the top bar that flies the camera to the next waiting gift.
+
+### Changed
+- The Codex seat's commands use the `gpt` wrapper when it is installed and the standard `codex` CLI otherwise.
+- The week chart is called "Last 7 days" (the weekly challenge stays Monday to Sunday); a tie for star of the week
+  names everyone tied; earlier days are titled with their date.
+
+### Fixed
+- Ten bugs from the 3.6 QA pass: the tour stranded phones at step 3 (now it scrolls to each target and keeps its card on
+  screen), the tour card overflowed phones at large text, Enter on Skip or Back went forward, shortcuts ran under the
+  tour, the tour left a hidden inspector open, right-clicking a person gave the browser's menu, Enter on a week bar
+  dropped focus, the visit streak stopped at 60, `/api/week` and `/api/history` accepted non-ASCII digits, and the
+  weekly hint misstated a target of 5.
+- Banter talked about one of the two speakers; a failing news item could stop the rest of a snapshot.
+
 ## [3.8.0] - 2026-10-18
 
 ### Added

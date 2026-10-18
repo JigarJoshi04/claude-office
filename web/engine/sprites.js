@@ -694,3 +694,15 @@ export function drawFirework(ctx, x, y, t, seed) {
   if (cycle > 0.85) return;
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; rect(ctx, x + Math.round(Math.cos(a) * r), y + Math.round(Math.sin(a) * r), 1, 1, c); }
 }
+// A gift box about 11 wide and 11 tall at (x, y): wrapped in `color` with a light ribbon and a bow. Now and then it
+// hops, so it is easy to spot; `seed` keeps several boxes out of step.
+export function drawGift(ctx, x, y, color, ribbon, t, seed = 0) {
+  const ph = ((t || 0) / 1000 + seed * 0.37) % 3.2, hop = ph < 0.36 ? Math.round(Math.sin(ph / 0.36 * Math.PI) * 3) : 0;
+  y -= hop;
+  rect(ctx, x + 1, y + 11 + hop, 10, 2, "rgba(0,0,0,0.28)");
+  rect(ctx, x + 1, y + 4, 10, 7, color); rect(ctx, x + 1, y + 10, 10, 1, shade(color, 0.7));
+  rect(ctx, x, y + 2, 12, 3, shade(color, 1.18)); rect(ctx, x, y + 4, 12, 1, shade(color, 0.8));
+  rect(ctx, x + 5, y + 2, 2, 9, ribbon);
+  rect(ctx, x + 2, y, 3, 2, ribbon); rect(ctx, x + 7, y, 3, 2, ribbon); rect(ctx, x + 5, y + 1, 2, 1, shade(ribbon, 0.8));
+  if (Math.floor(((t || 0) + seed * 400) / 260) % 6 === 0) rect(ctx, x + 11, y - 1, 1, 1, "#fff8c0");   // a twinkle
+}

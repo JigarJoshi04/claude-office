@@ -31,6 +31,14 @@ const SFX = {
     [392, 523, 659, 784, 1047].forEach((f, i) => note(f, i * 0.07, 0.1, "square", 0.05));
     [1047, 1319, 1568].forEach(f => note(f, 0.38, 0.55, "triangle", 0.045));
   },
+  // A gift opens: a quick rattle, a pop, then a run that climbs higher (and longer) the rarer the sticker.
+  gift: (rarity = "common") => {
+    const k = { common: 0, rare: 1, epic: 2, legendary: 3 }[rarity] || 0;
+    [220, 247, 220].forEach((f, i) => note(f, i * 0.05, 0.04, "square", 0.03));
+    note(880, 0.18, 0.06, "square", 0.05);
+    [784, 988, 1175, 1568, 1976, 2349].slice(0, 3 + k).forEach((f, i) => note(f, 0.26 + i * 0.07, 0.12, "triangle", 0.05));
+    if (k >= 2) [1568, 1976, 2349].forEach(f => note(f, 0.3 + (3 + k) * 0.07, 0.5, "triangle", 0.035));
+  },
   // Achievement: two bright chimes and a sparkle.
   achievement: () => { note(1319, 0, 0.12, "triangle", 0.06); note(1760, 0.11, 0.22, "triangle", 0.06); [2637, 3136].forEach((f, i) => note(f, 0.3 + i * 0.05, 0.08, "square", 0.02)); },
 };

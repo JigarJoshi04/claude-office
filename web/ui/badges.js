@@ -15,6 +15,8 @@ export const BADGES = [
   { id: "consistent", icon: "calendar", name: "Consistent", desc: "Finish every goal three days in a row." },
   { id: "record_week", icon: "flame", name: "Record week", desc: "Beat last week's reports." },
   { id: "regular", icon: "flame", name: "Regular", desc: "Check on the office seven days in a row." },
+  { id: "collector", icon: "gift", name: "Collector", desc: "Collect 12 different stickers from gifts." },
+  { id: "golden", icon: "sparkles", name: "Golden duck", desc: "Find the legendary golden duck." },
   { id: "night_owl", icon: "moon", name: "Night owl", desc: "Check on the office between midnight and 4 AM." },
   { id: "early_bird", icon: "sun", name: "Early bird", desc: "Check on the office between 5 and 7 AM." },
 ];

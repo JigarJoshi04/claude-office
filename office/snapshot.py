@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import shutil
 import subprocess
 import threading
 import time
@@ -137,6 +138,8 @@ def _codex_seat(meta: dict, now: float) -> dict:
             w = view.get(key)
             if w and w.get("resets_at") and w["resets_at"] < now:
                 view[key] = {"pct": 0.0, "resets_at": None, "reset_since_read": True}
+    # The gpt wrapper around Codex when it is installed (as lanes.py finds it), otherwise the Codex CLI itself.
+    wrapper = shutil.which("gpt") or (config.HOME / ".local" / "bin" / "gpt").exists()
     sess = []
     for s in data.get("sessions") or []:
         if not s.get("live") and (now - (s.get("updated_at") or 0)) > 3 * 3600:
@@ -153,9 +156,10 @@ def _codex_seat(meta: dict, now: float) -> dict:
             "model": s.get("model"),
             "tool_calls": None, "recent": [], "tokens_total": (s.get("tokens") or {}).get("total"),
             "state_file": None, "report_file": None, "report_status": None, "transcript": s.get("rollout"),
-            "resume_cmd": f"gpt -R {s.get('id')} \"...\"" if s.get("id") else None,
+            "resume_cmd": (f"gpt -R {s.get('id')} \"...\"" if wrapper else f"codex resume {s.get('id')}") if s.get("id") else None,
         })
-    return dict(meta, account={"name": "ChatGPT plan", "email": None, "org": None, "role": None},
+    return dict(meta, start_cmd='gpt -w -C <folder> "task"' if wrapper else "codex -C <folder>",
+                account={"name": "ChatGPT plan", "email": None, "org": None, "role": None},
                 health={"state": "ok" if data.get("available", True) else "login",
                         "detail": data.get("error") or "Codex CLI", "tier": data.get("model") or meta.get("model"),
                         "subscription": "chatgpt"},
@@ -378,7 +382,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.7.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.9.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,

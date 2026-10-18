@@ -144,8 +144,11 @@ class StreamTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
             self.assertLessEqual(keys, json.loads(response.read()).keys())
         for path in ("/api/history?hours=0", "/api/history?hours=25", "/api/history?hours=no", "/api/history?hours=1.5", "/api/stats?day=no",
-                     "/api/week?days=0", "/api/week?days=91", "/api/week?days=-1", "/api/week?days=1.5", "/api/week?days=x"):
-            self.assertEqual(self.open(path).status, 400)
+                     "/api/week?days=0", "/api/week?days=91", "/api/week?days=-1", "/api/week?days=1.5", "/api/week?days=x",
+                     "/api/week?days=%C2%B2", "/api/week?days=%EF%BC%97", "/api/week?days=%D9%A3", "/api/history?hours=%EF%BC%96"):
+            response = self.open(path)
+            self.assertEqual(response.status, 400, path)
+            self.assertRegex(json.loads(response.read())["error"], r"must be an integer from 1 to (24|90)|day must be YYYY-MM-DD")
         week = json.loads(self.open("/api/week?days=14").read())["days"]
         self.assertEqual(len(week), 14)
         self.assertEqual(set(week[0]), {"day", "reports", "sessions", "active_min", "tool_calls", "limits", "lanes_hired", "mvp"})
@@ -177,4 +180,4 @@ class StreamTests(unittest.TestCase):
             self.office.emit("report", "Demo report")
             self.office.build()
         self.assertEqual(self.office.get()["office"]["started_at"], before)
-        self.assertEqual(self.office.get()["office"]["version"], "3.7.0")
+        self.assertEqual(self.office.get()["office"]["version"], "3.9.0")

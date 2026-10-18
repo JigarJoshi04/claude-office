@@ -58,11 +58,12 @@ export function createOffice(stage, handlers) {
   let snap = null, L = null, W = 768, H = 340, F = 1, RES = 1, staticKey = "", ovKey = "";
   let plan = { cols: 3, roomH: ROOM_H };   // rooms per row and room height, re-planned to fill the frame (resize)
   let selected = null, privacy = false, reduced = false, mvp = null, hoverId = null, persona = null;
-  let spot = null;
+  let spot = null;                     // a seat being pointed at in the inspector or on the floor: its room lights up
   let skyKey = "";
-  let walkBoost = 1;
+  let walkBoost = 1;                   // replay speeds walking up so arrivals reach their desks in replay time
   let clockAt = null;                  // replay's time (seconds), or null for now
-  let seasonal = true;                 // Settings → Seasonal decorations                   // replay speeds walking up so arrivals reach their desks in replay time                     // a seat being pointed at in the inspector or on the floor: its room lights up
+  let seasonal = true;                 // Settings → Seasonal decorations
+  let gifts = [];                      // gift boxes waiting on the floor: {id, seat, from, label}
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
   let leavers = [];                   // agents walking out
@@ -230,6 +231,7 @@ export function createOffice(stage, handlers) {
       drawSeason(ctx, L, season, reduced ? 0 : t, env.night, lights);
       if (season === "winter") for (const pod of L.pods) { const wr = windowRect(pod.room); drawSnow(ctx, wr.x, wr.y, wr.w, wr.h, reduced ? 0 : t); }
     }
+    drawGifts(t);
     const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers].sort((a, b) => a.y - b.y);
     for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
     S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
@@ -258,6 +260,22 @@ export function createOffice(stage, handlers) {
     const frame = (i, col, alpha) => { ctx.globalAlpha = alpha; S.rect(ctx, x + i, y + i, w - 2 * i, 1, col); S.rect(ctx, x + i, y + h - 1 - i, w - 2 * i, 1, col); S.rect(ctx, x + i, y + i, 1, h - 2 * i, col); S.rect(ctx, x + w - 1 - i, y + i, 1, h - 2 * i, col); };
     frame(0, "#ffffff", a); frame(1, c, a); frame(2, c, a); frame(3, c, a * 0.45); frame(4, c, a * 0.2);   // white rim, the seat's colour, a soft inner glow
     ctx.globalAlpha = 1;
+  }
+
+  // Gift boxes: a seat's in its room, above the nameplate (clear of the seasonal pumpkin); the morning delivery, swaps
+  // and gifts from a seat that has left the plan wait in front of the CEO desk.
+  function giftSpots() {
+    const out = [], per = new Map();
+    for (const g of gifts) {
+      const pod = g.seat && L.pods.find(p => p.seat.id === g.seat), key = pod ? g.seat : "", k = per.get(key) || 0;
+      per.set(key, k + 1);
+      out.push(pod ? { g, x: pod.room.x + 26 + k * 15, y: pod.room.y + pod.room.h - 48, color: pod.seat.color, ribbon: "#ffffff" }
+        : { g, x: 104 + k * 16, y: L.ceo.y + 84, color: g.from === "swap" ? "#7d5cff" : "#e8475a", ribbon: "#ffd24a" });
+    }
+    return out;
+  }
+  function drawGifts(t) {
+    giftSpots().forEach((p, i) => S.drawGift(ctx, p.x, p.y, p.color, p.ribbon, reduced ? 0 : t, i));
   }
 
   // The lobby wall: the neon sign (a page element), the elevator, the trophy cabinet and the employee-of-the-day frame.
@@ -620,7 +638,7 @@ export function createOffice(stage, handlers) {
 
   function overlaySig() {
     return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
-      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id),
+      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label),
       [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
       snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, s.career && s.career.level, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
   }
@@ -657,6 +675,7 @@ export function createOffice(stage, handlers) {
     place(div("plate hire-plate", "Hiring desk", 0, 0), L.hire.x + 24, L.hire.y + 98, POD_W - 48, null);
     waiting().forEach((l, i) => { const tg = div("tag queue", "⏳ " + short(l.title, 12), L.hire.x + 39 + i * 14, L.hire.y + 80); tg.title = l.waiting_reason || "Waiting for a seat"; });
     for (const pod of L.pods) renderPod(pod);
+    for (const p of giftSpots()) { const b = hot("gift", p.g.label || "A gift: open it", p.x - 3, p.y - 4, 18, 18, () => handlers.onGift && handlers.onGift(p.g.id)); b.dataset.k = "gift:" + p.g.id; }
     for (const a of leavers) a.tagEl = div("tag ghost", short(a.sess.name), a.x + 5, a.y + 19);
     if (fk) { const back = [...overlay.querySelectorAll("[data-k]")].find(e => e.dataset.k === fk); if (back) back.focus({ preventScroll: true }); }
     renderBubbles();
@@ -684,8 +703,9 @@ export function createOffice(stage, handlers) {
     overlay.appendChild(plate);
     const podHot = hot("pod", `${who.name}'s desks`, pod.room.x + 2, pod.room.y + 2, pod.room.w - 4, pod.room.h - 30, () => handlers.openSeat(s.id), () => focusSeat(s.id));
     podHot.dataset.k = "pod:" + s.id;
+    const roomMenu = (el) => el.addEventListener("contextmenu", (e) => { if (!handlers.onRoomMenu) return; e.preventDefault(); e.stopPropagation(); peek(null); handlers.onRoomMenu(s.id, e.clientX, e.clientY, el); });
     for (const el of [podHot, plate]) {
-      el.addEventListener("contextmenu", (e) => { if (!handlers.onRoomMenu) return; e.preventDefault(); e.stopPropagation(); peek(null); handlers.onRoomMenu(s.id, e.clientX, e.clientY, el); });
+      roomMenu(el);
       el.addEventListener("mouseenter", () => { spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); peek(s.id, podHot); });
       el.addEventListener("mouseleave", () => { if (spot === s.id) spot = null; if (handlers.onHoverSeat) handlers.onHoverSeat(null); peek(null); });
     }
@@ -697,6 +717,7 @@ export function createOffice(stage, handlers) {
       const b = hot("worker" + (isSel ? " sel" : ""), `${sess.name}, ${sess.state}: open`,
         sp.cx - 4, sp.top ? sp.seatY - 4 : sp.seatY - 6, 18, sp.top ? 24 : 22, () => handlers.openSession(s.id, sess.id), () => focusSession(sess.id));
       b.dataset.k = "worker:" + sess.id;
+      roomMenu(b);                               // people sit mid-room: a right-click on them is a right-click on the room
       const tg = div("tag" + (isSel ? " show" : ""), short(sess.name), sp.cx + 5, sp.top ? pod.y + 45 : pod.y + 86);
       b.addEventListener("mouseenter", () => { hoverId = sess.id; tg.classList.add("show"); renderBubbles(); spot = s.id; if (handlers.onHoverSeat) handlers.onHoverSeat(s.id); peek(s.id, podHot); });
       b.addEventListener("mouseleave", () => { hoverId = null; if (!isSel) tg.classList.remove("show"); renderBubbles(); if (spot === s.id) spot = null; if (handlers.onHoverSeat) handlers.onHoverSeat(null); peek(null); });
@@ -1068,6 +1089,9 @@ export function createOffice(stage, handlers) {
     officeLevel: () => ol,
     spotlight(id) { spot = id || null; },
     setSeasonal(on) { seasonal = !!on; },
+    setGifts(list) { gifts = list || []; ovKey = ""; renderOverlay(); },
+    // Confetti where a gift was, as it opens.
+    unwrap(id) { const p = L && giftSpots().find(x => x.g.id === id); if (p && !reduced) burst(p.x + 6, p.y + 4, 40, "confetti"); },
     season: () => (seasonal ? seasonFor(new Date()) : null),
     setClock(ts) { clockAt = ts || null; },
     setWalkBoost(k) { walkBoost = Math.max(1, Math.min(8, k || 1)); },
