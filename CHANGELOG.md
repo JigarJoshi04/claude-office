@@ -3,6 +3,20 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.5.0] - 2026-10-18
+
+### Added
+- Seasonal decorations: pumpkins and bats for Halloween, lamps and a rangoli for Diwali, a tree, lights and snow in
+  December (Settings to turn off).
+- CEO badges: twelve badges for the person at the screen (Inbox zero, Hiring manager, Time traveller, Clean sweep,
+  Night owl, …), listed on "Your office".
+- A five-step guided tour from the first-visit hint, the menu or the palette.
+- Pick each character's personality (voice, room floor and furniture) in Settings, or keep it automatic.
+- Banter: characters at their desks trade a line about what is going on.
+- A news ticker in TV mode.
+- A new set of three daily goals every day, from six kinds at three difficulties.
+- JavaScript unit tests for the floor and game logic, run in CI.
+
 ## [3.4.0] - 2026-10-18
 
 ### Added

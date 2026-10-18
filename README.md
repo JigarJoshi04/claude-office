@@ -72,6 +72,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   lobby palms, a robot vacuum, flowers in every room, a delivery drone, gold elevator doors, Biscuit the office dog, a
   neon show, a hot-air balloon, fireworks at night, gold nameplates and a golden statue of you. "Your office" lists
   them all, what comes next and who built the most.
+- **Badges for you**: twelve of them, from *Inbox zero* and *Hiring manager* to *Time traveller* and *Night owl*.
+- **Seasons**: pumpkins and bats for Halloween, lamps and a rangoli for Diwali, a tree and snow in December.
 - **Combos**: reports and finished lanes within 15 minutes of each other chain into a combo (×2, ×3, …) with a timer
   draining on the floor and rising chimes.
 - **Today's card**: one picture of the day (reports, hours, tool calls, employee of the day, goals, streak and the
@@ -82,8 +84,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   and change their colours in Settings.
 - They talk about themselves in their own voice ("Napping until 11:10. The clues will keep.", "3 builds going. Hard
   hat on.") and write a one-line diary of their day.
+- Pick a personality for each one in Settings (or keep the automatic one): it sets their voice, their floor and their
+  furniture.
 - They speak up when it matters: when they arrive, when they ship, when they hit a limit, and when a fresh window
-  opens. Teammates react too: they cheer a report or a level-up, and offer to cover when someone runs out of plan.
+  opens. Now and then two of them trade a line about what is going on. Teammates react too: they cheer a report or a level-up, and offer to cover when someone runs out of plan.
 - A career that grows with real work. XP comes from tool calls (1 each), minutes at work (2), sessions (10) and
   filed reports (100). Levels run from Intern to Legend, with a "LEVEL UP!" banner across the floor and "+XP"
   rising from busy desks.
