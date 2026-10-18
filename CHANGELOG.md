@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.51.0] - 2026-10-18
+
+### Added
+- When the office restarts on a newer version, an open page says so ("Claude Office was updated to 3.51.0") with a
+  Reload button, instead of running yesterday's code against today's server.
+
 ## [3.50.0] - 2026-10-18
 
 ### Added

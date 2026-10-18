@@ -658,7 +658,23 @@ function renderBurn() {
   b.classList.toggle("hot", n >= 50e6);
 }
 $("burn").addEventListener("click", () => setView("tokens"));
+// This page's code is the version it loaded with; when the office restarts on a newer one, a bar offers a reload.
+let pageVersion = null;
+function staleCheck() {
+  const v = snap.office.version;
+  if (!pageVersion) { pageVersion = v; return; }
+  let bar = $("staleBar");
+  if (v === pageVersion) { if (bar) bar.remove(); return; }
+  if (bar) return;
+  bar = document.createElement("div");
+  bar.id = "staleBar"; bar.className = "stalebar"; bar.setAttribute("role", "status");
+  bar.innerHTML = `${icon("refresh", 15)}<span>Claude Office was updated to ${esc(v)}. Reload to get what is new.</span><button class="btn sm primary" type="button">Reload</button><button class="btn sm ghost icon" type="button" aria-label="Not now">${icon("x", 14)}</button>`;
+  bar.querySelector(".primary").addEventListener("click", () => location.reload());
+  bar.querySelector(".icon").addEventListener("click", () => { bar.remove(); pageVersion = v; });
+  document.body.appendChild(bar);
+}
 function renderTop() {
+  staleCheck();
   renderBurn();
   $("officeName").textContent = snap.office.name || "Claude Office";
   const bad = snap.attention.some(a => a.level === "bad"), warn = snap.attention.length > 0;
