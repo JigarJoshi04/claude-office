@@ -227,8 +227,8 @@ export function createOffice(stage, handlers) {
     drawHire(t, lights);
     const season = seasonal ? seasonFor(now) : null;
     if (season) {
-      drawSeason(ctx, L, season, t, env.night, lights);
-      if (season === "winter") for (const pod of L.pods) { const wr = windowRect(pod.room); drawSnow(ctx, wr.x, wr.y, wr.w, wr.h, t); }
+      drawSeason(ctx, L, season, reduced ? 0 : t, env.night, lights);
+      if (season === "winter") for (const pod of L.pods) { const wr = windowRect(pod.room); drawSnow(ctx, wr.x, wr.y, wr.w, wr.h, reduced ? 0 : t); }
     }
     const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers].sort((a, b) => a.y - b.y);
     for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
@@ -440,7 +440,7 @@ export function createOffice(stage, handlers) {
   // seat naps, is on holiday or is logged out, and dark-ish when nobody is in.
   function drawRoom(pod, t, lights, env) {
     const s = pod.seat, room = pod.room, wr = windowRect(room), st = s.status;
-    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night, weatherOf(s), windowExtras());
+    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, reduced ? 0 : t, env.night, weatherOf(s), windowExtras());   // still under reduced motion
     if (env.night) lights.push({ x: wr.x + wr.w / 2, y: wr.y + wr.h + 6, r: 24, c: "#9bb8ff", i: 0.2 });
     const live = s.sessions.filter(x => x.live !== false);
     const dark = st === "offline" ? 0.5 : st === "limited" ? 0.42 : st === "benched" ? 0.3 : !live.length ? 0.2 : 0;
