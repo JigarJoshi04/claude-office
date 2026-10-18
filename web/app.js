@@ -49,9 +49,9 @@ let lastEventTs = 0;
 let away = null;
 const AWAY_AFTER = 3600;
 function markSeen() { if (snap && !document.hidden) store.set("lastSeen", snap.now); }
-async function checkAway() {
-  const since = store.get("lastSeen", null);
-  if (!snap || !since || snap.now - since < AWAY_AFTER) return;
+async function checkAway(from) {
+  const since = from || store.get("lastSeen", null);
+  if (!snap || !since || (!from && snap.now - since < AWAY_AFTER)) return;
   const hours = Math.max(1, Math.min(24, Math.ceil((snap.now - since) / 3600)));
   try {
     const r = await fetch(`/api/history?hours=${hours}`);
@@ -62,6 +62,15 @@ async function checkAway() {
   } catch { /* the briefing works without it */ }
 }
 document.addEventListener("visibilitychange", () => { if (document.hidden) markSeen(); else checkAway().then(markSeen); });
+// The desktop says when the CEO steps away (snap.ceo, office/presence.py): the CEO's chair empties on the floor and
+// banners wait; back after ten minutes or more, "While you were away" tells that absence, even with the page left open.
+let wasPresent = null;
+function presenceStep(ceo) {
+  const present = ceo ? ceo.present : null;
+  office.setCeoAway(present === false && !replay.active());
+  if (wasPresent === false && present === true && ceo.last_away && ceo.last_away.to - ceo.last_away.from >= 600) checkAway(ceo.last_away.from).then(markSeen);
+  wasPresent = present;
+}
 setInterval(markSeen, 30000);
 
 const app = {
@@ -488,6 +497,7 @@ function apply(next) {
   if (!replay.active()) giftBox.daily(game.visits()); // the first visit of a day finds a gift at the CEO desk
   app.tokensCache();                                  // the odometer, the belt and milestones (fetched every 2 minutes)
   configureGoals({ store, days: app.weekCache(), seats: snap.seats.filter(s => (s.divider || {}).enabled !== false && s.status !== "offline").length });   // today's goals follow the office's pace
+  presenceStep(snap.ceo);
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) safeNews(e);

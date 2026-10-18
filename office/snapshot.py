@@ -18,6 +18,7 @@ from pathlib import Path
 
 from . import asks, cabinet, checkpoint, config, divider, lanes, loose, prs, seats as seatmod, sessions, weeks
 from .career import CATALOGUE, Career
+from .presence import Presence
 from .history import DayLedger, HistoryStore
 from .tokens import TokenLedger
 from .live import LiveOffice, public
@@ -296,6 +297,7 @@ class Office(LiveOffice):
         self._ledger_at = 0.0
         self.career = Career(config.STATE_DIR / "career.json")
         self.weeks = weeks.Weeks(config.STATE_DIR / "weeks.json")
+        self.presence = Presence()
         self.tokens = TokenLedger(config.STATE_DIR / "tokens.json", [], config.HOME / ".codex" / "sessions")
         self.snapshot: dict = {}
         self._prev: dict | None = None
@@ -476,7 +478,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.75.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.76.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -510,6 +512,7 @@ class Office(LiveOffice):
         snap["attention"] = self._attention(snap)
         quiet = self.quiet.get()                          # snoozed items wait; do not disturb is on every screen
         snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > now)
+        snap["ceo"] = self.presence.get()                  # at the computer or away (presence.py)
         snap["attention"] = [a for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) <= now]
         snap["office"]["dnd_until"] = quiet["dnd_until"] if quiet["dnd_until"] > now else None
         snap["totals"] = self._totals(snap)
@@ -658,6 +661,7 @@ class Office(LiveOffice):
     def run(self) -> None:
         threading.Thread(target=self.usage.run, args=(self.stop,), daemon=True, name="usage").start()
         threading.Thread(target=self._tokens_run, daemon=True, name="tokens").start()
+        threading.Thread(target=self.presence.run, args=(self.stop,), daemon=True, name="presence").start()
         while not self.stop.is_set():
             try:
                 self.build()

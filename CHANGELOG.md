@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.76.0] - 2026-10-19
+
+### Added
+- A presence-aware office: it reads from the desktop whether you are at the computer (GNOME's screensaver and idle
+  monitor over D-Bus, else logind's idle hint, every half minute; nothing leaves the machine). While you are away (the
+  screen locked, or five minutes without input) the CEO's chair is empty with a card on the desk, and banners wait
+  to play when you are back. Back after ten minutes or more, "While you were away" tells that absence even with the
+  page left open. `ceo` in the snapshot; on a desktop it cannot read, nothing changes.
+
 ## [3.75.0] - 2026-10-19
 
 ### Added
