@@ -221,6 +221,7 @@ export function makePanels(app) {
         if (use) { g.pct = +use[2]; g.win = use[1]; }
         if (eta) { g.eta = eta[2]; g.win = g.win || eta[1]; }
         g.resets_at = g.resets_at || a.resets_at;
+        g.key = g.key || a.key;
         if (!nearly.has(st.id)) { nearly.set(st.id, g); out.push(g); }
         continue;
       }
@@ -228,6 +229,7 @@ export function makePanels(app) {
         const g = spent.get(st.id) || { level: "bad", seat: st.id, paused: 0, resets_at: null, grouped: true };
         if (/stopped by the usage limit/i.test(a.text)) g.paused++;
         g.resets_at = g.resets_at || a.resets_at;
+        g.key = g.key || a.key;
         if (!spent.has(st.id)) { spent.set(st.id, g); out.push(g); }
         continue;
       }
@@ -265,7 +267,8 @@ export function makePanels(app) {
       </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
       ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
-          <span class="grow"><span class="t">${esc(a.ask && app.privacy() ? "An agent asks you a question" : humanise(a.text))}</span>${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}</div>`).join("")}
+          <span class="grow"><span class="t">${esc(a.ask && app.privacy() ? "An agent asks you a question" : humanise(a.text))}</span>${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? `<button class="btn sm ghost icon snz" data-snooze="${esc(a.key)}" title="Snooze for an hour, on every screen" aria-label="Snooze for an hour">${icon("sleep", 14)}</button>` : ""}</div>`).join("")}
+          ${S().snoozed ? `<p class="hint">${S().snoozed} snoozed for now.</p>` : ""}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
       ${unusedHtml()}
@@ -282,6 +285,11 @@ export function makePanels(app) {
         root.querySelectorAll("[data-unused]").forEach(b => b.addEventListener("click", () => { store.set("unusedSeen", { ...store.get("unusedSeen", {}), [b.dataset.unused]: 1 }); app.rerender(true); }));
         root.querySelectorAll("[data-hire-for]").forEach(b => b.addEventListener("click", () => { hireDraft = { ...hireDraft, seat: b.dataset.hireFor }; store.set("hireDraft", hireDraft); app.go({ kind: "hire" }); }));
         const at = root.querySelector("[data-away-toggle]"); if (at) at.addEventListener("click", () => { awayOpen = !awayOpen; app.rerender(true); });
+        root.querySelectorAll("[data-snooze]").forEach(b => b.addEventListener("click", async () => {
+          b.disabled = true;
+          try { await app.post("/api/snooze", { key: b.dataset.snooze, minutes: 60 }); app.refresh(); toast("Snoozed for an hour.", "info"); }
+          catch (e) { b.disabled = false; toast("Could not snooze: " + e.message, "bad"); }
+        }));
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
         root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));

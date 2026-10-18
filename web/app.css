@@ -1542,3 +1542,8 @@ ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
 .lk-st.on { background: var(--accent-2); color: #fff; }
 :root[data-theme="light"] .lc.good { color: #0b6a35; } :root[data-theme="light"] .lc.warn { color: #7a4c00; } :root[data-theme="light"] .lc.bad { color: #a51c2b; }
 :root[data-theme="light"] .lc.info { color: #1d4ea8; } :root[data-theme="light"] .lc { color: #3c4256; }
+/* do not disturb (3.62) */
+.dndchip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; border-radius: 99px; cursor: pointer; font: 600 12.5px var(--font, inherit);
+  color: #b9c8ff; background: rgba(122,150,255,.14); box-shadow: inset 0 0 0 1px rgba(122,150,255,.35); }
+.dndchip[hidden] { display: none; } :root[data-theme="light"] .dndchip { color: #2f4bb0; }
+.g-need .snz { flex: none; opacity: .65; } .g-need .snz:hover, .g-need .snz:focus-visible { opacity: 1; }

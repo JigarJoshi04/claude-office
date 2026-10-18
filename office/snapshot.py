@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import re
 import shutil
 import subprocess
 import threading
@@ -31,6 +32,17 @@ THRESHOLDS = (50, 80, 95)
 FORECAST_WINDOWS = {"five_hour": 3600, "weekly": 6 * 3600}   # how far back the burn rate looks
 
 
+def attention_key(a: dict) -> str:
+    """What a Needs-you item is about, without the numbers that change as it ticks ("usage at 91%" stays one item)."""
+    if a.get("ask"):
+        return "ask:" + a["ask"]
+    for k in ("lane", "unit"):
+        if a.get(k):
+            return f"{k}:{a[k]}"
+    kind = "ci" if a.get("ci") else "ghost" if a.get("ghost") else "loop" if a.get("loop") else re.sub(r"[\d.,:%~]+", "#", a.get("text", ""))[:60]
+    return f"{kind}:{a.get('seat') or ''}:{a.get('session') or ''}"
+
+
 GHOST_WINDOW, GHOST_RISE = 40 * 60, 3.0     # a 5-hour window that rises 3 points in 40 minutes with nothing running here
 
 
@@ -48,6 +60,45 @@ def ghost_use(rows: list, last_local: float | None, working: bool, now: float) -
     if rise < GHOST_RISE:
         return None
     return {"rise": round(rise, 1), "minutes": max(1, round((pts[-1][0] - pts[0][0]) / 60)), "since": pts[0][0]}
+
+
+class Quiet:
+    """Do not disturb (until when) and snoozed Needs-you items (key -> until when), shared by every screen."""
+
+    def __init__(self, path: Path | None):
+        self.path, self.lock = path, threading.Lock()
+        d = config.read_state(path) if path else None
+        self.data = {"dnd_until": 0, "snoozed": {}}
+        if isinstance(d, dict):
+            self.data["dnd_until"] = float(d.get("dnd_until") or 0)
+            self.data["snoozed"] = {k: float(v) for k, v in (d.get("snoozed") or {}).items() if isinstance(v, (int, float))}
+
+    def get(self) -> dict:
+        with self.lock:
+            return {"dnd_until": self.data["dnd_until"], "snoozed": dict(self.data["snoozed"])}
+
+    def _save(self) -> None:
+        now = time.time()
+        self.data["snoozed"] = {k: v for k, v in self.data["snoozed"].items() if v > now}
+        if self.path:
+            try:
+                self.path.write_text(json.dumps(self.data))
+            except OSError:
+                pass
+
+    def dnd(self, minutes: int) -> float:
+        with self.lock:
+            self.data["dnd_until"] = time.time() + minutes * 60 if minutes else 0
+            self._save()
+            return self.data["dnd_until"]
+
+    def snooze(self, key: str, minutes: int) -> None:
+        with self.lock:
+            if minutes:
+                self.data["snoozed"][key] = time.time() + minutes * 60
+            else:
+                self.data["snoozed"].pop(key, None)
+            self._save()
 
 
 class UsageHistory:
@@ -230,6 +281,7 @@ class Office(LiveOffice):
         self.prs = prs.PullRequests()
         self.asks = asks.Asks(config.STATE_DIR / "asks.json")
         self.cabinet = cabinet.Cabinet()
+        self.quiet = Quiet(config.STATE_DIR / "quiet.json")
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -409,7 +461,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.61.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.62.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -438,6 +490,10 @@ class Office(LiveOffice):
                     self.emit("ghost", f"{s['label']}'s 5-hour use rose {s['ghost']['rise']:.0f}% in {s['ghost']['minutes']} min with nothing running on this machine", s["id"], "warn")
         snap["asks"] = self.asks.view(30)
         snap["attention"] = self._attention(snap)
+        quiet = self.quiet.get()                          # snoozed items wait; do not disturb is on every screen
+        snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > now)
+        snap["attention"] = [a for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) <= now]
+        snap["office"]["dnd_until"] = quiet["dnd_until"] if quiet["dnd_until"] > now else None
         snap["totals"] = self._totals(snap)
         for seat_id, kind, text in self.career.observe(snap):
             self.emit(kind, text, seat_id, "good")
@@ -550,6 +606,8 @@ class Office(LiveOffice):
         for u in snap["units"]:
             if u["active"] == "failed":
                 items.append({"level": "bad", "unit": u["unit"], "text": f"Service {u['unit']} failed"})
+        for a in items:                                    # a key that stays the same while the item does, to snooze it
+            a["key"] = attention_key(a)
         return items
 
     @staticmethod

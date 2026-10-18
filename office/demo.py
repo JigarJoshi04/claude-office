@@ -426,7 +426,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.61.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.62.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,
@@ -434,6 +434,13 @@ class DemoOffice(LiveOffice):
                 "suggested_weights": divider.suggest(seats, div)}
         snap["asks"] = self.asks.view(30)
         snap["attention"] = Office._attention(snap)
+        if not hasattr(self, "quiet"):
+            from .snapshot import Quiet
+            self.quiet = Quiet(None)                   # the demo's quiet lives in memory
+        quiet, t = self.quiet.get(), time.time()
+        snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > t)
+        snap["attention"] = [a for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) <= t]
+        snap["office"]["dnd_until"] = quiet["dnd_until"] if quiet["dnd_until"] > t else None
         snap["totals"] = Office._totals(snap)
         # Every couple of minutes someone levels up or unlocks something, so the demo shows the celebration.
         if self._unlocks and now - self._unlock_at >= 120:

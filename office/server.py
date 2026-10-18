@@ -167,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.61.0"
+    server_version = "ClaudeOffice/3.62.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -389,6 +389,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, ask_question(self.office, body))
             if path in ("/api/ask/answer", "/api/ask/dismiss"):
                 return self._json(200, answer_question(self.office, body, path.endswith("dismiss"), self.demo))
+            if path in ("/api/dnd", "/api/snooze"):          # quiet: shared by every screen
+                minutes = body.get("minutes")
+                if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 <= minutes <= 24 * 60:
+                    raise ValueError("minutes must be a whole number from 0 to 1440")
+                quiet = getattr(self.office, "quiet", None)
+                if quiet is None:
+                    quiet = self.office.quiet = __import__("office.snapshot", fromlist=["Quiet"]).Quiet(None)
+                if path == "/api/dnd":
+                    until = quiet.dnd(minutes)
+                else:
+                    key = body.get("key")
+                    if not isinstance(key, str) or not 1 <= len(key) <= 200:
+                        raise ValueError("key must be 1-200 characters")
+                    quiet.snooze(key, minutes)
+                    until = None
+                self.office.build()
+                return self._json(200, {"ok": True, "until": until})
             if path == "/api/client-error":               # the page broke somewhere: the doctor says so
                 msg = body.get("message")
                 if not isinstance(msg, str) or not 1 <= len(msg) <= 300:

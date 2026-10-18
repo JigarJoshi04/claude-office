@@ -112,7 +112,11 @@ export function drawLogo(canvas) {
 }
 
 let toastEl = null;
+// Do not disturb (app.js): while it is on, only serious toasts show.
+let toastGate = null;
+export function setToastGate(fn) { toastGate = fn; }
 export function toast(msg, level = "info", opts = 4200) {
+  if (toastGate && !toastGate(level)) return;
   const { ms = 4200, ic = null } = typeof opts === "number" ? { ms: opts } : opts || {};
   toastEl = toastEl || $("toasts");
   const t = document.createElement("div");

@@ -1,6 +1,6 @@
 // Claude Office: the controller. Live data in; floor, inspector and views out.
 import { createOffice } from "./office.js";
-import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss } from "./ui/util.js";
+import { $, esc, store, toast, debounce, setNow, live, hydratePortraits, drawLogo, relTime, dayTime, SEAT_LABEL, fmtTok, mmss, setToastGate, clock } from "./ui/util.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
 import { openPalette } from "./ui/palette.js";
@@ -616,6 +616,7 @@ function findSessionByText(text) {
 // A click on a notification brings the office forward on the thing it is about (set by onNews for its own news).
 let notifyTarget = null;
 function notify(title, body) {
+  if (dndOn()) return;
   if (!prefs.notify || !("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
   const target = notifyTarget;
   try {
@@ -674,6 +675,27 @@ function renderBurn() {
   b.classList.toggle("hot", n >= 50e6);
 }
 $("burn").addEventListener("click", () => setView("tokens"));
+// Do not disturb, shared by every screen (POST /api/dnd): no sounds, no notifications, only serious toasts.
+const dndOn = () => !!(snap && snap.office.dnd_until && snap.office.dnd_until > Date.now() / 1000);
+setToastGate((level) => !dndOn() || level === "bad");
+{ const play = sound.play.bind(sound); sound.play = (...a) => { if (!dndOn()) play(...a); }; }
+async function setDnd(minutes) {
+  try {
+    await app.post("/api/dnd", { minutes });
+    pollOnce();
+    if (!minutes) toast("Do not disturb is off.", "good");
+  } catch (e) { toast("Could not change do not disturb: " + e.message, "bad"); }
+}
+const untilNine = () => { const d = new Date(); d.setDate(d.getDate() + (d.getHours() >= 9 ? 1 : 0)); d.setHours(9, 0, 0, 0); return Math.min(1440, Math.ceil((d - Date.now()) / 60000)); };
+function renderDnd() {
+  const chip = $("dndChip"), on = dndOn();
+  chip.hidden = !on;
+  if (!on) return;
+  const html = `${icon("moon", 14)}<span>Quiet until ${esc(clock(snap.office.dnd_until))}</span>`;
+  if (chip.dataset.html !== html) { chip.innerHTML = html; chip.dataset.html = html; }
+  chip.title = "Do not disturb: no sounds or notifications, only serious toasts, on every screen. Click to end it.";
+}
+$("dndChip").addEventListener("click", () => setDnd(0));
 // This page's code is the version it loaded with; when the office restarts on a newer one, a bar offers a reload.
 let pageVersion = null;
 function staleCheck() {
@@ -691,6 +713,7 @@ function staleCheck() {
 }
 function renderTop() {
   staleCheck();
+  renderDnd();
   renderBurn();
   $("officeName").textContent = snap.office.name || "Claude Office";
   const bad = snap.attention.some(a => a.level === "bad"), warn = snap.attention.length > 0;
@@ -898,6 +921,7 @@ function openMenu(focusItem) {
     + item("privacy", prefs.privacy ? "eyeOff" : "eye", "Share-safe mode", prefs.privacy ? "On" : "Off", prefs.privacy)
     + item("theme", prefs.theme === "light" ? "sun" : prefs.theme === "system" ? "monitor" : "moon", "Theme", { dark: "Night", light: "Day", system: "System" }[prefs.theme])
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
+    + item("dnd", "moon", "Do not disturb", dndOn() ? `Until ${clock(snap.office.dnd_until)}` : "Off", dndOn())
     + "<hr>" + item("daycard", "star", "Share today's card") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
@@ -919,6 +943,7 @@ function openMenu(focusItem) {
     else if (k === "privacy") setPref("privacy", !prefs.privacy);
     else if (k === "theme") setPref("theme", { dark: "light", light: "system", system: "dark" }[prefs.theme] || "dark");
     else if (k === "text") setPref("textSize", { auto: "s", s: "m", m: "l", l: "xl", xl: "auto" }[prefs.textSize] || "auto");
+    else if (k === "dnd") setDnd(dndOn() ? 0 : 60);
     else if (k === "checkpoint") checkpoint();
     else if (k === "tv") floor.setTv(true);
     else if (k === "daycard") shareDay();
@@ -1123,6 +1148,9 @@ function paletteItems() {
     { icon: icon("settings", 16), label: "Settings", run: () => go({ kind: "settings" }) },
     { icon: icon("sliders", 16), label: "Keyboard shortcuts", hint: "?", keywords: "keys help hotkeys", run: shortcuts },
     { icon: icon("server", 16), label: "Server room", run: () => go({ kind: "services" }) },
+    { icon: icon("moon", 16), label: "Do not disturb for an hour", keywords: "quiet mute dnd silence focus", run: () => setDnd(60) },
+    { icon: icon("moon", 16), label: "Do not disturb until 9 tomorrow", keywords: "quiet mute dnd night silence", run: () => setDnd(untilNine()) },
+    { icon: icon("volume", 16), label: "End do not disturb", keywords: "quiet dnd off unmute", run: () => setDnd(0) },
     { icon: icon("heart", 16), label: "Office doctor: health checks", keywords: "health check problems fix diagnose", run: () => go({ kind: "doctor" }) },
     { icon: icon("stop", 16), label: "Stop every office lane", keywords: "panic stop all lanes halt", run: () => panels.stopAllLanes() },
     { icon: icon("files", 16), label: "Filing cabinet: past sessions", keywords: "history search old sessions resume archive", run: () => go({ kind: "cabinet" }) },

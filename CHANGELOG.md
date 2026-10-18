@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.62.0] - 2026-10-18
+
+### Added
+- Do not disturb, on every screen at once: from the menu or the palette (an hour, or until 9 tomorrow), it stops
+  sounds and desktop notifications and lets only serious toasts through; a "Quiet until…" chip in the top bar ends it.
+- Snooze a Needs-you item for an hour, on every screen; Needs you says how many are snoozed. An item keeps its key
+  while its numbers tick ("usage at 91%" and "at 94%" are one item). `POST /api/dnd` and `POST /api/snooze`.
+
 ## [3.61.0] - 2026-10-18
 
 ### Added

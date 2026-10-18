@@ -169,3 +169,20 @@ class StateSafetyTests(unittest.TestCase):
                 self.assertEqual(len(days), 7)                                          # the last week only
                 self.assertTrue((Path(tmp) / "backups" / days[-1] / "career.json").exists())
                 self.assertIsNone(config.backup_state(now=1_790_000_000 + 8 * 86400))    # once a day
+
+
+class QuietTests(unittest.TestCase):
+    def test_keys_stay_while_numbers_tick_and_snoozes_expire(self):
+        import time
+        from office.snapshot import Quiet, attention_key
+        a = {"seat": "c", "text": "claude3 5-hour usage at 91%", "level": "warn"}
+        b = dict(a, text="claude3 5-hour usage at 94%")
+        self.assertEqual(attention_key(a), attention_key(b))                       # the same item as its number moves
+        self.assertEqual(attention_key({"ask": "x1", "text": "?"}), "ask:x1")
+        q = Quiet(None)
+        q.snooze(attention_key(a), 60)
+        self.assertGreater(q.get()["snoozed"][attention_key(a)], time.time())
+        q.snooze(attention_key(a), 0)
+        self.assertEqual(q.get()["snoozed"], {})
+        self.assertGreater(q.dnd(30), time.time() + 29 * 60)
+        self.assertEqual(q.dnd(0), 0)
