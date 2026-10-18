@@ -28,6 +28,7 @@ export function makeBurn(ctx) {
   function onAll(d) {
     if (!d || !d.total) return;
     office.setTopBurner(topBurner(d));
+    office.setBurnBoard(d.seats || []);                  // the lobby TV's all-time channel
     office.setOdometer(d.total.all ? big(d.total.all) : null);
     const b = beltHolders(d.weeks);
     office.setBelt(b.holder);

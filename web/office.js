@@ -420,12 +420,65 @@ export function createOffice(stage, handlers) {
     return cupsCache;
   }
 
-  // The capacity board: plan left on every seat, as bars. It stands in the CEO corner.
+  // The capacity board in the CEO corner flips channels every 8 seconds: plan left on every seat, tokens burned in the
+  // last hour, the all-time burners, and who gets the next lane. A label under it names the channel.
   const TV = () => ({ x: 8, y: L.ceo.y + 8, w: 58, h: 30 });
+  const TV_CHANNELS = ["Plan left", "Burn 1 h", "Top burners", "Next lane"];
+  let burnBoard = [], tvLabel = null, tvShown = -1;
+  const tvChannel = () => Math.floor(Date.now() / 8000) % TV_CHANNELS.length;
   function drawTV(t, lights) {
     const { x, y, w, h } = TV();
     S.rect(ctx, x + w / 2 - 2, y + h + 2, 4, 14, "#2b2f3a"); S.rect(ctx, x + w / 2 - 10, y + h + 15, 20, 3, "#2b2f3a");
     S.rect(ctx, x - 2, y - 2, w + 4, h + 4, "#0a0b10"); S.rect(ctx, x, y, w, h, "#0f1424");
+    const ch = tvChannel();
+    if (tvLabel && ch !== tvShown) { tvShown = ch; tvLabel.textContent = tvText(ch); }
+    if (!reduced && Date.now() % 8000 < 260) {            // a moment of static between channels
+      for (let i = 0; i < 90; i++) { const k = (i * 7919 + Math.floor(t / 40) * 104729) % (w * h); S.rect(ctx, x + (k % w), y + Math.floor(k / w), 1, 1, i % 3 ? "#8a93a8" : "#d7dce8"); }
+      lights.push({ x: x + w / 2, y: y + h / 2, r: 40, c: "#9aa6c4", i: 0.4 });
+      return;
+    }
+    for (let i = 0; i < TV_CHANNELS.length; i++) S.rect(ctx, x + w - 3 - (TV_CHANNELS.length - 1 - i) * 3, y + 1, 2, 1, i === ch ? "#ffffff" : "#3a4258");
+    if (ch === 1) drawTvBurn(x, y, w, h);
+    else if (ch === 2) drawTvBoard(x, y, w, h);
+    else if (ch === 3) drawTvNext(x, y, w, h, t);
+    else drawTvPlan(x, y, w, h);
+    S.rect(ctx, x, y + (Math.floor(t / 40) % h), w, 1, "rgba(255,255,255,0.05)");
+    lights.push({ x: x + w / 2, y: y + h / 2, r: 40, c: "#5b8def", i: 0.45 });
+  }
+  function tvText(ch) {
+    if (ch === 3) { const p = snap.next_pick && snap.next_pick.seat, s = p && snap.seats.find(x => x.id === p); return s ? `Next: ${persona ? persona(s).name : s.label}` : "No seat free"; }
+    return TV_CHANNELS[ch];
+  }
+  // Tokens each seat burned in the last hour, as bars against the hungriest.
+  function drawTvBurn(x, y, w, h) {
+    const seats = snap.seats, max = Math.max(1, ...seats.map(s => s.tokens_1h_all || 0));
+    const bw = Math.max(4, Math.floor((w - 6) / Math.max(1, seats.length)) - 3), hh = h - 9;
+    seats.forEach((s, i) => {
+      const bx = x + 4 + i * (bw + 3), v = s.tokens_1h_all || 0, bh = v > 0 ? Math.max(1, Math.round(hh * v / max)) : 0;
+      S.rect(ctx, bx, y + 3, bw, hh, "#1b2236");
+      if (bh) { S.rect(ctx, bx, y + 3 + hh - bh, bw, bh, s.color); S.rect(ctx, bx, y + 3 + hh - bh, bw, 1, "#ffb35c"); }
+      S.rect(ctx, bx, y + h - 4, bw, 2, s.color);
+    });
+  }
+  // The all-time board: the top four burners as bars, longest first.
+  function drawTvBoard(x, y, w, h) {
+    const rows = burnBoard.slice(0, 4), max = Math.max(1, ...rows.map(r => r.all));
+    rows.forEach((r, i) => {
+      const s = snap.seats.find(z => z.id === r.seat), by = y + 4 + i * 6, bw = Math.max(2, Math.round((w - 12) * r.all / max));
+      S.rect(ctx, x + 3, by, 2, 4, i === 0 ? "#ffd24a" : "#3a4258");
+      S.rect(ctx, x + 7, by, bw, 4, s ? s.color : "#82889f");
+    });
+  }
+  // The next lane's seat: its colour and a pixel arrow pointing at it.
+  function drawTvNext(x, y, w, h, t) {
+    const p = snap.next_pick && snap.next_pick.seat, s = p && snap.seats.find(z => z.id === p);
+    if (!s) { S.rect(ctx, x + w / 2 - 6, y + h / 2 - 1, 12, 2, "#3a4258"); return; }
+    S.rect(ctx, x + 4, y + 5, w - 8, h - 12, s.color);
+    S.rect(ctx, x + 5, y + 6, w - 10, h - 14, "rgba(0,0,0,0.25)");
+    const ax = x + w / 2 - 4 + (reduced ? 0 : Math.round(Math.sin(t / 300) * 2)), ay = y + h / 2 - 4;
+    for (let r = 0; r < 4; r++) S.rect(ctx, ax + r, ay + r, 2, 8 - 2 * r, "#ffffff");
+  }
+  function drawTvPlan(x, y, w, h) {
     const seats = snap.seats;
     const bw = Math.max(4, Math.floor((w - 6) / Math.max(1, seats.length)) - 3);
     seats.forEach((s, i) => {
@@ -443,8 +496,6 @@ export function createOffice(stage, handlers) {
       }
       S.rect(ctx, bx, y + h - 4, bw, 2, s.color);
     });
-    S.rect(ctx, x, y + (Math.floor(t / 40) % h), w, 1, "rgba(255,255,255,0.05)");
-    lights.push({ x: x + w / 2, y: y + h / 2, r: 40, c: "#5b8def", i: 0.45 });
   }
 
   // The meeting room's whiteboard: one row per programme, with its sessions as ticks.
@@ -798,6 +849,8 @@ export function createOffice(stage, handlers) {
     for (const o of L.open) div("room-label", "GARDEN", o.x + 8, o.y + BACK_LABEL);
 
     const neon = div("neon" + (has("neon") ? " show" : ""), snap.office.name || "Claude Office", 6, 8); place(neon, 6, 8, 70, 22);
+    tvLabel = div("tv-label", tvText(tvChannel()), 4, 0); place(tvLabel, 2, L.ceo.y + 38, 70, null); tvShown = tvChannel();
+    tvLabel.setAttribute("aria-hidden", "true");
     if (odometer) {
       const od = div("odometer", null, 6, 31);
       od.innerHTML = `<b class="${odometer !== odoShown ? "roll" : ""}">${esc(odometer)}</b> tokens`; odoShown = odometer;   // rolls in once per number
@@ -1275,6 +1328,7 @@ export function createOffice(stage, handlers) {
     setOdometer(text) { if (text !== odometer) { odometer = text || null; ovKey = ""; renderOverlay(); } },
     setLean(id) { if (id !== lean) { lean = id || null; ovKey = ""; renderOverlay(); } },
     setBelt(id) { if (id !== belt) { belt = id || null; ovKey = ""; renderOverlay(); } },
+    setBurnBoard(rows) { burnBoard = (rows || []).filter(r => r.seat && r.all > 0); },
     setTopBurner(id) { if (id !== burner) { burner = id || null; ovKey = ""; renderOverlay(); } },
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },

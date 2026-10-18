@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.36.0] - 2026-10-18
+
+### Added
+- The lobby TV flips channels every 8 seconds, with a flash of static between them: plan left on every seat, tokens
+  burned in the last hour, the all-time top burners, and who gets the next lane in its colour. Dots on the screen
+  show which channel is on and a label under it names it.
+
 ## [3.35.1] - 2026-10-18
 
 ### Fixed

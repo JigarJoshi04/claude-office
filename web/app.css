@@ -1469,3 +1469,5 @@ table.ship small { color: var(--muted); }
 /* plan use made elsewhere (3.35) */
 .pace.ghostnote { box-shadow: inset 0 0 0 1px rgba(200,212,255,.35); background: linear-gradient(110deg, rgba(200,212,255,.12), var(--surface-2) 70%); }
 .pace.ghostnote > .ic { color: #c8d4ff; } :root[data-theme="light"] .pace.ghostnote > .ic { color: #3b55a8; }
+/* the lobby TV's channel name, under the screen (3.36) */
+.tv-label { position: absolute; text-align: center; pointer-events: none; font: 400 max(8px, calc(3.6px * var(--f)))/1.2 Silkscreen, var(--pixel, monospace); color: #9fb4e8; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 0 #000; }
