@@ -358,6 +358,15 @@ export function makePanels(app) {
     first_report: (c) => [c.stats.reports, 1, "report"], hands_1k: (c) => [c.stats.tool_calls, 1000, "tool calls"],
     hands_10k: (c) => [c.stats.tool_calls, 10000, "tool calls"], tokens_10m: (c) => [c.stats.tokens, 1e7, "tokens"],
     regular: (c) => [c.streak, 3, "days in a row"], week_streak: (c) => [c.streak, 7, "days in a row"], level_10: (c) => [c.level, 10, "levels"] };
+  // All time, from the token ledger (it reaches back past careers): this character's tokens and its rank.
+  function allTimeTokens(s) {
+    const t = app.tokensCache && app.tokensCache();
+    const rows = t && t.seats ? t.seats.filter(x => x.seat && x.all > 0) : [], i = rows.findIndex(x => x.seat === s.id);
+    if (i < 0) return "";
+    const r = rows[i], b = (n) => (n >= 1e9 ? (n / 1e9).toFixed(1) + " B" : n >= 1e6 ? (n / 1e6).toFixed(1) + " M" : fmtTok(n));
+    return `<button class="alltok ${i === 0 ? "top" : ""}" data-view-go="stats" data-anchor="tokens" title="All-time tokens in the Today view">${icon("flame", 15)}
+      <span class="grow"><b>${b(r.all)} tokens all time</b><span>#${i + 1} of ${rows.length}${i === 0 ? ", the office's top burner" : ""} · ${b(r.output)} written · ${r.sessions} sessions</span></span>${icon("chevronRight", 14)}</button>`;
+  }
   function careerHtml(s) {
     const c = s.career, cat = S().achievements || [];
     if (!c) return "";
@@ -371,6 +380,7 @@ export function makePanels(app) {
     const info = sel ? `<div class="badge-info"><b>${esc(sel.name)}</b> · ${esc(sel.desc)}${c.unlocked[sel.id] ? ` · unlocked ${esc(dayTime(c.unlocked[sel.id]))}` : " · not yet"}</div>` : "";
     return `<div class="career" style="--seat:${esc(s.color)}">` + section(`Achievements · ${got.length} of ${cat.length}`,
       `<div class="cstats">${tiles.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("")}</div>
+      ${allTimeTokens(s)}
       ${next ? `<div class="nextup">${icon("target", 16)}<div class="grow"><div><b>Next up: ${esc(next.a.name)}</b> <span>${big(Math.floor(next.have))} of ${big(next.need)} ${esc(next.unit)}</span></div><div class="xpbar"><i style="width:${Math.round(next.f * 100)}%"></i></div></div></div>` : ""}
       <div class="badges" role="list">${order.map(a => { const at = c.unlocked[a.id];
         return `<button class="badge ${at ? "on" : ""} ${a.id === badgeSel ? "sel" : ""}" data-badge="${esc(a.id)}" role="listitem" title="${esc(a.name)}: ${esc(a.desc)}" aria-label="${esc(a.name)}, ${at ? "unlocked" : "locked"}: ${esc(a.desc)}"><span class="b-ic">${icon(at ? a.icon : "lock", 18)}</span><b>${esc(a.name)}</b></button>`; }).join("")}</div>

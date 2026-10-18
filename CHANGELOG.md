@@ -3,6 +3,19 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.19.0] - 2026-10-18
+
+### Added
+- All-time tokens (Today view): every token the models processed since the oldest transcript on this machine, with
+  cache reads, fresh tokens and output apart; who burns the most (characters, with a Top burner flame), the hungriest
+  sessions, projects and models, the last 60 days and month totals. One measure at a time: All, Fresh or Output.
+- A token ledger on the server (`office/tokens.py`, `state/tokens.json`, `GET /api/tokens`): reads the transcripts once
+  (about 15 s for 7 GB), then only what was appended, every 2 minutes. Sessions are attributed to the seat whose config
+  dir holds their `session-env` folder, so it works when seats share one projects dir. Codex rollouts count for the
+  Codex seat. Totals are kept after Claude Code deletes old transcripts.
+- The top burner's nameplate on the floor carries a flame; each character's Career tab shows its all-time tokens and
+  rank.
+
 ## [3.18.0] - 2026-10-18
 
 ### Fixed

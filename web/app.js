@@ -18,6 +18,7 @@ import { makeWeekReview } from "./ui/weekreview.js";
 import { makeArcade } from "./ui/arcade.js";
 import { makeRadio } from "./ui/radio.js";
 import { makeCards } from "./ui/charcard.js";
+import { topBurner } from "./ui/tokens.js";
 import { hydrateStickers } from "./engine/stickers.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
@@ -28,6 +29,7 @@ const prefs = Object.assign({ theme: "dark", motion: matchMedia("(prefers-reduce
   sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true, seasonal: true }, store.get("prefs", {}));
 let snap = null, view = { kind: "ceo" }, liveMode = "connecting";
 const details = new Map(), histCache = new Map(), statsCache = new Map(), inflight = new Set();
+let tokens = null;
 let week = null;
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
 const seenNews = new Set();
@@ -83,6 +85,20 @@ const app = {
     return week ? week.data : null;
   },
   weekMetric: () => prefs.weekMetric || "reports",
+  tokensCache: () => {   // all-time tokens (/api/tokens): every 2 minutes, every 5 s while the first read runs
+    const stale = !tokens || Date.now() - tokens.at > (tokens.data && tokens.data.scanning ? 5000 : 120000);
+    if (stale && !inflight.has("tokens")) {
+      inflight.add("tokens");
+      fetch("/api/tokens").then(r => r.ok ? r.json() : null).then(d => {
+        tokens = { data: d, at: Date.now() }; inflight.delete("tokens");
+        office.setTopBurner(topBurner(d));
+        if (prefs.view === "stats") renderMain();
+        if (view.kind === "seat") renderPanel(true);
+      }).catch(() => { tokens = { data: null, at: Date.now() }; inflight.delete("tokens"); });
+    }
+    return tokens ? tokens.data : null;
+  },
+  tokenMetric: () => prefs.tokenMetric || "all",
   statsCache: (day) => { const k = day || "today"; const c = statsCache.get(k); if (!c || Date.now() - c.at > 60000) loadStats(day); return c ? c.data : null; },
   loadHistory: (h, force) => loadHistory(h, force),
   loadStats: (d, force) => loadStats(d, force),
@@ -385,7 +401,7 @@ function apply(next) {
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
   renderTop(); game.renderOfficeLevel(); renderLatest(); renderRightNow(); renderMain(true);
   if (!DEMO) { game.checkBadges(); game.cheerWeekly(); game.anniversaries(); }   // the demo office never hands out badges
-  if (first) { game.visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
+  if (first) { app.tokensCache(); game.visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
   if (!replay.active()) giftBox.daily(game.visits()); // the first visit of a day finds a gift at the CEO desk
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
@@ -838,7 +854,7 @@ function renderPanel(force, keepScroll) {
 }
 function bindCommon(p) {
   p.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => go({ kind: b.dataset.go })));
-  p.querySelectorAll("[data-view-go]").forEach(b => b.addEventListener("click", () => setView(b.dataset.viewGo)));
+  p.querySelectorAll("[data-view-go]").forEach(b => b.addEventListener("click", () => { setView(b.dataset.viewGo); if (b.dataset.anchor) setTimeout(() => { const a = document.getElementById(b.dataset.anchor); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }, 120); }));
   p.querySelectorAll("[data-seat-go]").forEach(b => b.addEventListener("click", () => go({ kind: "seat", seat: b.dataset.seatGo })));
   p.querySelectorAll("[data-card]").forEach(b => b.addEventListener("click", () => cards.open(b.dataset.card)));
   p.querySelectorAll("[data-gift-seek]").forEach(b => b.addEventListener("click", () => giftBox.seek()));

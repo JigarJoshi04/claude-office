@@ -85,6 +85,9 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   and a delivery waits at the CEO desk every morning. Open them for 24 pixel-art stickers in four rarities; five
   spares swap for a rare-or-better gift. Only one sticker is Legendary. Finishing all goals, a big combo or a level
   up always brings a gift, a daily happy hour doubles the odds, and each finished rarity puts something on the floor.
+- **All-time tokens**: every token since the oldest transcript on the machine, who burns the most (characters,
+  sessions, projects, models), and the last 60 days, counted from the transcripts and attributed to the seat that ran
+  each session.
 - **Character cards**: each character as a collectible card, framed Bronze to Holo by level, to save or post.
 - **Your week in review**: on Mondays (or from the menu) the last seven days play as a short story, ending in a
   picture to post: reports against the week before, agent hours, the star of the week and what you collected.
@@ -233,6 +236,7 @@ samples, the news, the message log and each seat's career. Lanes and checkpoints
 | Live sessions | `<seat>/sessions/<pid>.json`. A session counts only if its pid runs and its kernel start time matches. |
 | What a session is doing | Its transcript, read incrementally |
 | History and stats | One sample a minute, kept for 24 hours |
+| All-time tokens | The `usage` of every response in the transcripts, read once and then incrementally; a session's seat from its `session-env` folder |
 | Codex seat | `~/.codex/sessions` rollouts and the rate limits Codex records. Codex lanes run `codex exec` with a workspace-write sandbox (or a `gpt` wrapper, when one is installed). |
 
 ## Safety

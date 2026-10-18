@@ -131,7 +131,7 @@ class StreamTests(unittest.TestCase):
         self.wait_slots(0)
 
     def test_host_and_origin_checks_cover_all_new_gets(self):
-        for path in ("/api/stream", "/api/history", "/api/stats", "/api/settings", "/api/week"):
+        for path in ("/api/stream", "/api/history", "/api/stats", "/api/settings", "/api/week", "/api/tokens"):
             for header in ({"Host": "attacker.example"}, {"Origin": "http://attacker.example"}):
                 self.assertEqual(self.open(path, header).status, 403)
         self.wait_slots(0)
@@ -180,4 +180,4 @@ class StreamTests(unittest.TestCase):
             self.office.emit("report", "Demo report")
             self.office.build()
         self.assertEqual(self.office.get()["office"]["started_at"], before)
-        self.assertEqual(self.office.get()["office"]["version"], "3.18.0")
+        self.assertEqual(self.office.get()["office"]["version"], "3.19.0")

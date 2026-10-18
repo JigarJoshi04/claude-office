@@ -4,6 +4,7 @@ import { timeline, bindTips } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, leftOf, voice, diary } from "./personas.js";
 import { localDay } from "./goals.js";
+import { tokensCard, bindTokens } from "./tokens.js";
 
 export function renderTimeline(el, app) {
   const hours = app.prefs().tlHours || 6;
@@ -87,6 +88,7 @@ export function renderStats(el, app) {
       </div>
     </div>
     ${weekCard(app, st.day || todayStr)}
+    ${tokensCard(app)}
     ${(st.digest || []).length ? `<div class="view-card"><div class="section-h"><h4>The day in a few lines</h4></div><ul class="digest">${st.digest.map(x => `<li>${esc(human(x))}</li>`).join("")}</ul></div>` : ""}
     <div class="view-card"><div class="section-h"><h4>Diaries</h4></div><div class="diaries">${rows.map(r => { const p = personaFor(r.seat, snap.seats.findIndex(x => x.id === r.seat.id));
       return `<div class="diary-row" style="--seat:${esc(r.seat.color)}"><i data-portrait="mascot-${esc(r.id)}|${esc(r.seat.color)}|"></i><div><b>${esc(p.name)}</b><span>${esc(diary(p, r))}</span></div></div>`; }).join("")}</div></div>
@@ -104,6 +106,7 @@ export function renderStats(el, app) {
   </div>`;
   hydratePortraits(el, 4);
   bindWeek(el, app);
+  bindTokens(el, app, () => renderStats(el, app));
   if (refocus) { const f = el.querySelector(refocus); if (f) { f.focus({ preventScroll: true }); refocus = null; } }
   el.querySelectorAll("[data-trophies]").forEach(b => b.addEventListener("click", () => app.go({ kind: "trophies" })));
   el.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { app.setPref("statsDay", b.dataset.day || null); app.loadStats(b.dataset.day || null, true); }));

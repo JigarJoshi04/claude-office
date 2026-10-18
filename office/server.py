@@ -34,7 +34,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.18.0"
+    server_version = "ClaudeOffice/3.19.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -108,6 +108,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/stats":
                 return self._json(200, self.office.samples.stats(self.office.get(), q.get("day"),
                                                                list(self.office.events)))
+            if url.path == "/api/tokens":
+                return self._json(200, self.office.tokens_view())
             if url.path == "/api/week":
                 days = _number(q.get("days", "7"), "days must be an integer from 1 to 90")
                 return self._json(200, {"days": self.office.samples.week(self.office.get(), days, list(self.office.events))})

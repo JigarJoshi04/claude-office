@@ -18,6 +18,7 @@ from pathlib import Path
 from . import config, divider, lanes, seats as seatmod, sessions
 from .career import CATALOGUE, Career
 from .history import DayLedger, HistoryStore
+from .tokens import TokenLedger
 from .live import LiveOffice, public
 from .voice import Announcer
 
@@ -214,6 +215,7 @@ class Office(LiveOffice):
                                     lanes_path=config.DATA_DIR / "lanes", ledger=DayLedger(config.STATE_DIR / "days.json"))
         self._ledger_at = 0.0
         self.career = Career(config.STATE_DIR / "career.json")
+        self.tokens = TokenLedger(config.STATE_DIR / "tokens.json", [], config.HOME / ".codex" / "sessions")
         self.snapshot: dict = {}
         self._prev: dict | None = None
         self._reported: set[str] = set()
@@ -305,6 +307,7 @@ class Office(LiveOffice):
         cfg = self.cfg = config.load_config()
         self.claude_seats = config.discover_claude_seats(cfg)
         self.usage.seats = self.claude_seats
+        self.tokens.claude_dirs = [(s["id"], Path(s["config_dir"])) for s in self.claude_seats]
         meta = config.codex_seat_meta(cfg)
         if meta != self.codex_meta:
             self._codex = None
@@ -382,7 +385,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.18.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.19.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -499,12 +502,25 @@ class Office(LiveOffice):
 
     def run(self) -> None:
         threading.Thread(target=self.usage.run, args=(self.stop,), daemon=True, name="usage").start()
+        threading.Thread(target=self._tokens_run, daemon=True, name="tokens").start()
         while not self.stop.is_set():
             try:
                 self.build()
             except Exception as e:  # keep serving the last good picture
                 self.emit("error", f"Snapshot failed: {type(e).__name__}: {e}", level="bad")
             self.stop.wait(4)
+
+    def _tokens_run(self) -> None:
+        """The all-time token ledger: a first full read once the seats are known, then what was appended, every 2 min."""
+        self.stop.wait(3)
+        def live():   # sessions the office has seen live, by seat: covers sessions whose session-env is gone
+            snap = self.get() or {}
+            return {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
+        self.tokens.run(self.stop, live)
+
+    def tokens_view(self) -> dict:
+        snap = self.get() or {}
+        return self.tokens.view(snap.get("seats", []))
 
     def get(self) -> dict:
         with self._lock:
