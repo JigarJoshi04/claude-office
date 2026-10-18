@@ -605,6 +605,12 @@ function onNews(e) {
       notify(merged ? "PR merged" : "PR opened", text);
       break;
     }
+    case "par": {                                      // a seat's weekly plan closed, scored like a round of golf
+      const good = /: (Eagle|Birdie|Par) \(/.test(e.text);
+      if (good && e.seat) fx.celebrate(e.seat, null, (/: (Eagle|Birdie|Par) \(/.exec(e.text) || [])[1] + "!");
+      if (prefs.game !== "off") toast(text, good ? "good" : "info", { ic: "flag", ms: 7000 });
+      break;
+    }
     case "reply": sound.play("arrive"); toast(text, "good"); notify("A session replied", text); for (const k of chats.keys()) chats.get(k).at = 0; break;
     case "lane":
       if (e.level === "good") { fx.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); giftBox.earn(e.seat, "lane"); }

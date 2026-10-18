@@ -193,6 +193,25 @@ def _demo_token_ledger() -> TokenLedger:
     return led
 
 
+def _demo_par(s: dict, now: float) -> dict:
+    """A made-up scorecard: the last six weekly windows and this one so far."""
+    from .weeks import grade
+    peaks = {"claude": [22, 8, 3, 15, 30, 12], "claude2": [96, 100, 91, 88, 99, 93], "claude3": [100, 74, 100, 82, 95, 67],
+             "claude4": [55, 64, 71, 48, 90, 77]}.get(s["id"], [60] * 6)
+    limited = {"claude2": {1: 300}, "claude3": {0: 500, 2: 80}}.get(s["id"], {})
+    wk = (s.get("usage") or {}).get("weekly") or {}
+    ends = round((wk.get("resets_at") or now + 3 * 86400) / 3600) * 3600
+    benched = s["id"] == "claude"
+    past = [dict(grade(pk, 1 if i in limited else 0, limited.get(i, 0), benched), ends=ends - (6 - i) * 7 * 86400, peak=pk,
+                 limits=1 if i in limited else 0, five_hour_walls=(i * 3 + len(s["id"])) % 4) for i, pk in enumerate(peaks)]
+    so_far = wk.get("pct") or 0
+    elapsed = round(min(1.0, max(0.0, 1 - (ends - now) / (7 * 86400))), 2)
+    nw = dict(grade(so_far, benched=benched), ends=ends, peak=so_far, five_hour_walls=1, elapsed=elapsed, benched=benched,
+              heading=None if benched else ("Bogey" if so_far / elapsed > 100 else grade(so_far / elapsed)["name"]) if elapsed >= 0.15 else None)
+    scores = [x["score"] for x in past if x["score"] is not None]
+    return {"now": nw, "past": past, "season": sum(scores) if scores else None, "rounds": len(scores)}
+
+
 class DemoOffice(LiveOffice):
     is_demo = True
 
@@ -404,6 +423,8 @@ class DemoOffice(LiveOffice):
             s["tokens_1h"] = sum(x["tokens_1h"]["fresh"] for x in s["sessions"])
             s["tokens_1h_all"] = s["tokens_1h"] + sum(x["tokens_1h"]["cached"] for x in s["sessions"])
             s["status"] = Office._seat_status(s, sc, s["sessions"])
+            if s["kind"] == "claude":                     # par for the week: a made-up season per seat
+                s["par"] = _demo_par(s, now)
             for x in s["sessions"]:
                 x["talk"] = "none" if s["kind"] == "codex" else ("direct" if x["kind"] == "lane" else "review")
                 x["programme"] = ({"name": "Apollo launch", "url": "https://example.com/mission-control", "key": "apollo"}
@@ -453,7 +474,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.69.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.70.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

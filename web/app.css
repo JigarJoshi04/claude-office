@@ -1591,3 +1591,17 @@ ul.cabs li b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2;
 .tv-slide .tvs-note { margin: 1em 0 0; font-size: clamp(16px, 1.8vw, 26px); color: rgba(238,240,246,.7); }
 body.tv.tv-idle, body.tv.tv-idle * { cursor: none !important; }
 body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8); }
+/* Par for the week (views.js parCard) */
+.par-card td, .par-card th { text-align: center; } .par-card td:first-child, .par-card th:first-child { text-align: left; }
+.par { display: inline-grid; place-items: center; min-width: 30px; height: 24px; padding: 0 6px; border-radius: 7px; font: 700 12.5px var(--mono); background: var(--surface-2); color: var(--text-2); }
+.par.eagle { background: rgba(255,210,74,.2); color: #ffd24a; box-shadow: inset 0 0 0 1px rgba(255,210,74,.5); }
+.par.birdie { background: rgba(61,220,132,.16); color: #3ddc84; }
+.par.par { background: var(--surface-2); color: var(--text); }
+.par.bogey { background: rgba(255,170,60,.15); color: #ffb35c; }
+.par.double { background: rgba(255,97,112,.15); color: #ff8a96; }
+.par.rest { color: var(--faint); }
+:root[data-theme="light"] .par.eagle { color: #8a6500; } :root[data-theme="light"] .par.birdie { color: #11703c; }
+:root[data-theme="light"] .par.bogey { color: #9a5200; } :root[data-theme="light"] .par.double { color: #b3202f; }
+.par-now b { display: block; font: 700 13px var(--mono); } .par-now small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.par-total { font: 800 14px var(--mono); } .par-total.under { color: #3ddc84; } .par-total.over { color: #ffb35c; }
+:root[data-theme="light"] .par-total.under { color: #11703c; } :root[data-theme="light"] .par-total.over { color: #9a5200; }

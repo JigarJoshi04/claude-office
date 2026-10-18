@@ -24,7 +24,7 @@ const TEMPLATES = [
 ];
 const KIND_ICON = { type: "terminal", read: "search", think: "sparkles", talk: "chat", delegate: "bot", wait: "clock" };
 const EVENT_ICON = { levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert",
-  stuck: "clock", lane: "briefcase", divider: "sliders", checkpoint: "pin", message: "send", reply: "chat", error: "alert" };
+  stuck: "clock", lane: "briefcase", divider: "sliders", checkpoint: "pin", message: "send", reply: "chat", error: "alert", par: "flag" };
 
 export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;

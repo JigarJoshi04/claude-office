@@ -16,7 +16,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, cabinet, checkpoint, config, divider, lanes, loose, prs, seats as seatmod, sessions
+from . import asks, cabinet, checkpoint, config, divider, lanes, loose, prs, seats as seatmod, sessions, weeks
 from .career import CATALOGUE, Career
 from .history import DayLedger, HistoryStore
 from .tokens import TokenLedger
@@ -295,6 +295,7 @@ class Office(LiveOffice):
                                     lanes_path=config.DATA_DIR / "lanes", ledger=DayLedger(config.STATE_DIR / "days.json"))
         self._ledger_at = 0.0
         self.career = Career(config.STATE_DIR / "career.json")
+        self.weeks = weeks.Weeks(config.STATE_DIR / "weeks.json")
         self.tokens = TokenLedger(config.STATE_DIR / "tokens.json", [], config.HOME / ".codex" / "sessions")
         self.snapshot: dict = {}
         self._prev: dict | None = None
@@ -435,6 +436,13 @@ class Office(LiveOffice):
             for x in s["sessions"]:
                 prog = programme_for(cfg, x.get("unit"), x.get("name"), x.get("cwd"), x.get("task"))
                 x["programme"] = prog
+        for seat_id, w in self.weeks.observe(seats_out, now, seed=weeks.seed_from_history(config.STATE_DIR / "history.jsonl")):
+            label = next((s.get("label") for s in seats_out if s["id"] == seat_id), seat_id)
+            if w.get("score") is not None:                 # a week closed: its score is news
+                self.emit("par", f"{label} finished the week: {w['name']} ({w['why']})", seat_id, "good" if w["score"] <= 0 else "info")
+        for s in seats_out:
+            if s.get("kind") == "claude":
+                s["par"] = self.weeks.card(s["id"], (s.get("forecast") or {}).get("weekly"), now)
         if now - self._units_at > 10:
             self._units = list_units(cfg.get("watch_units") or [])
             self._units_at = now
@@ -468,7 +476,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.69.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.70.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,

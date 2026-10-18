@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.70.0] - 2026-10-19
+
+### Added
+- Par for the week: each seat's weekly plan is played like a round of golf. Using most of it without running out
+  scores par (60%), a birdie (90%) or an eagle (97%); running out of the week is a bogey (a double after six hours
+  waiting), and so is leaving most of it unused. A seat on holiday rests. Today shows the last six weeks, this week
+  so far with where its pace is heading, and the season total; a week that closes is news. The 5-hour wall is noted,
+  not scored. Kept in `state/weeks.json` (and in the daily backup); `par` on each Claude seat in the snapshot.
+
 ## [3.69.0] - 2026-10-19
 
 ### Added

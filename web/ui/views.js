@@ -89,6 +89,7 @@ export function renderStats(el, app) {
       </div>
     </div>
     ${weekCard(app, st.day || todayStr)}
+    ${parCard(app)}
     ${limitsCard(app)}
     ${st.day === todayStr || !st.day ? waitCard(app.tokensCache("today"), { label: "today", who: (id) => (id ? nameOf(id) : "Unknown seat"), priv: app.privacy(), section: true }) : ""}
     ${tokensCard(app)}
@@ -143,6 +144,27 @@ export function dayText(st, app, nameOf) {
 // show is highlighted; hovering a bar shows that day's numbers; the header compares with the seven days before.
 const WEEK_METRICS = { reports: ["Reports", (d) => d.reports, (v) => String(v)], hours: ["Agent hours", (d) => d.active_min / 60, (v) => v >= 10 ? Math.round(v) + " h" : v.toFixed(1) + " h"],
   calls: ["Tool calls", (d) => d.tool_calls, (v) => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 10000 ? Math.round(v / 1000) + "k" : v.toLocaleString()] };
+// Par for the week: each seat's weekly plan window scored like a round of golf (office/weeks.py), the last six and
+// this one so far, with the season total. Using most of the plan without running out is the good round.
+const PAR_TONE = { "-2": "eagle", "-1": "birdie", "0": "par", "1": "bogey", "2": "double" };
+export const parMark = (score) => (score == null ? "–" : score === 0 ? "E" : score < 0 ? "−" + Math.abs(score) : "+" + score);
+function parCard(app) {
+  const snap = app.snap(), seats = snap.seats.filter(s => s.par && (s.par.past.length || s.par.now));
+  if (!seats.length) return "";
+  const nameOf = (s) => personaFor(s, snap.seats.findIndex(x => x.id === s.id)).name;
+  const cols = Math.max(...seats.map(s => s.par.past.length));
+  const ref = seats.find(s => s.par.past.length === cols);
+  const day = (ts) => new Date(ts * 1000).toLocaleDateString([], { day: "numeric", month: "short" });
+  const cell = (w) => `<td><span class="par ${PAR_TONE[String(w.score)] || "rest"}" title="${esc(`${w.name}: ${w.why}${w.five_hour_walls ? ` · hit the 5-hour wall ${w.five_hour_walls}×` : ""} · ended ${day(w.ends)}`)}">${parMark(w.score)}</span></td>`;
+  const nowCell = (n) => !n ? "<td>–</td>" : `<td class="par-now"><b>${Math.round(n.peak || 0)}%</b><small>${n.benched ? "on holiday" : n.heading ? `heading for ${esc(n.heading.toLowerCase())}` : "too early to call"}</small></td>`;
+  return `<div class="view-card"><div class="section-h"><h4>Par for the week</h4><span class="hint">each weekly plan, played like a round of golf</span></div>
+    <div class="table-scroll"><table class="league par-card"><thead><tr><th>Seat</th>${Array.from({ length: cols }, (_, i) => `<th class="num">${ref ? esc(day(ref.par.past[i].ends)) : ""}</th>`).join("")}<th>This week</th><th class="num">Season</th></tr></thead>
+    <tbody>${seats.map(s => { const pad = cols - s.par.past.length;
+      return `<tr style="--seat:${esc(s.color)}"><td><span class="who"><i data-portrait="mascot-${esc(s.id)}|${esc(s.color)}|"></i>${esc(nameOf(s))}</span></td>${"<td></td>".repeat(pad)}${s.par.past.map(cell).join("")}${nowCell(s.par.now)}
+        <td class="num"><b class="par-total ${s.par.season == null ? "" : s.par.season <= 0 ? "under" : "over"}">${s.par.season == null ? "–" : parMark(s.par.season)}</b></td></tr>`; }).join("")}</tbody></table></div>
+    <p class="hint" style="margin-top:10px">Use most of a week's plan without running out: 60% is par, 90% a birdie, 97% an eagle. Running out of the week is a bogey (a double after 6 hours waiting), and so is leaving most of it unused. Hitting the 5-hour wall is noted, not scored; a seat on holiday rests.</p></div>`;
+}
+
 // Hours lost to limits, the last 7 days: how long each seat sat out of plan, and how long no Claude seat could take work.
 function limitsCard(app) {
   const days = (app.weekCache() || []).slice(-7), snap = app.snap();
