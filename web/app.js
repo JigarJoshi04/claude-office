@@ -6,7 +6,7 @@ import { openPoster } from "./ui/poster.js";
 import { makeDirector } from "./ui/director.js";
 import { makePanels } from "./ui/panels.js";
 import { renderTimeline, renderBoard, renderStats } from "./ui/views.js";
-import { openPalette } from "./ui/palette.js";
+import { openPalette, paletteCommands } from "./ui/palette.js";
 import { sound } from "./ui/sound.js";
 import { icon } from "./ui/icons.js";
 import { pulse, line, reaction, voice, binding, leftOf, banter } from "./ui/personas.js";
@@ -1234,6 +1234,14 @@ function broadcast(preset = "") {
     toast(`Sent to ${ok + held} lane${ok + held === 1 ? "" : "s"}${held ? `, ${held} waiting for approval` : ""}${failed ? `; ${failed} failed` : ""}.`, failed ? "warn" : "good");
   });
 }
+function commandItems(q) {
+  return paletteCommands(q).map(c => c.kind === "remind"
+    ? { icon: icon("bell", 16), label: `Remind me ${c.when}: ${c.text}`, hint: "↵ to set", run: async () => {
+        try { await app.post("/api/reminders", { text: c.text, trigger: { kind: "at", at: c.at }, label: `at ${clock(c.at)}` }); toast(`Reminder set, ${c.when}.`, "good", { ic: "bell" }); pollOnce(); }
+        catch (e) { toast("Could not set it: " + e.message, "bad"); } } }
+    : c.kind === "hire" ? { icon: icon("briefcase", 16), label: `Hire a lane: ${c.title}`, hint: "the hiring desk, with this title", run: () => { panels.draftHire({ title: c.title }); go({ kind: "hire" }); } }
+    : { icon: icon("layers", 16), label: `Project ${c.name}`, hint: "its page", run: () => go({ kind: "project", name: c.name }) });
+}
 function paletteItems() {
   const items = [
     { icon: icon("coffee", 16), label: "Briefing", hint: "Esc", run: () => go({ kind: "ceo" }) },
@@ -1308,7 +1316,7 @@ document.querySelectorAll(".tab").forEach(t => {
 });
 // After a palette command, keyboard focus lands in the inspector instead of falling back to the page.
 const landFocus = (items) => items.map(it => ({ ...it, run: () => { it.run(); setTimeout(() => { if (document.activeElement === document.body) $("panel").focus({ preventScroll: true }); }, 0); } }));
-$("btnPalette").addEventListener("click", () => snap && openPalette(landFocus(paletteItems())));
+$("btnPalette").addEventListener("click", () => snap && openPalette(landFocus(paletteItems()), commandItems));
 $("btnHire").addEventListener("click", () => go({ kind: "hire" }));
 $("btnMenu").addEventListener("click", (e) => { e.stopPropagation(); openMenu(); });
 // Game intensity: Full, Calm (no banners, confetti, banter, party lights or game chimes) or Off (no game at all:
@@ -1343,7 +1351,7 @@ document.addEventListener("keydown", (e) => {
   setTimeout(() => office.setHappy(giftBox.happy()), 20000);   // back to normal (or to the real happy hour)
 });
 document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap) openPalette(landFocus(paletteItems())); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap) openPalette(landFocus(paletteItems()), commandItems); return; }
   // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).
   if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back, dialog[open]")) return;
   const k = e.key;

@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.93.0] - 2026-10-19
+
+### Added
+- Plain-language commands in the palette (Ctrl/⌘ K): type "remind me in 20 min to check the PR", "remind me at
+  5:30pm to reply to Vega", "hire fix the flaky export test" (the hiring desk with that title) or "project
+  api-gateway" (its page), and the action comes first; Enter does it.
+
 ## [3.92.0] - 2026-10-19
 
 ### Fixed

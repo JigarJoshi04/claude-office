@@ -509,3 +509,19 @@ test("the week's quests aim a little past last week, three different kinds, the 
   assert.equal(punch({ "2026-10": ["a", "b"] }, "2026-10"), 2);
   assert.equal(PUNCH, 4);
 });
+
+test("plain-language commands in the palette", async () => {
+  const { paletteCommands: pc } = await import("../../web/ui/palette.js");
+  const now = new Date(2026, 9, 19, 14, 0, 0);
+  const a = pc("remind me in 20 min to check the PR", now)[0];
+  assert.deepEqual([a.kind, a.text, a.at - now.getTime() / 1000], ["remind", "check the PR", 1200]);
+  assert.equal(pc("remind me in 2h stand up", now)[0].at - now.getTime() / 1000, 7200);
+  const b = pc("remind me at 5:30pm to reply to Vega", now)[0];
+  assert.equal(new Date(b.at * 1000).getHours(), 17);
+  const c = pc("remind me at 9 call mum", now)[0];                                  // 9 o'clock has passed today: tomorrow
+  assert.equal(new Date(c.at * 1000).getDate(), 20);
+  assert.deepEqual(pc("hire fix the flaky export test", now), [{ kind: "hire", title: "Fix the flaky export test" }]);
+  assert.deepEqual(pc("project api-gateway", now), [{ kind: "project", name: "api-gateway" }]);
+  assert.deepEqual(pc("tokens", now), []);
+  assert.deepEqual(pc("remind me in 20 min", now), []);                               // nothing to remind of
+});

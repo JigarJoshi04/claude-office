@@ -1553,6 +1553,7 @@ export function makePanels(app) {
   }
   return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
+    draftHire: (d) => { hireDraft = { ...hireDraft, ...d }; store.set("hireDraft", hireDraft); },
     needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"
       || (k === "inbox" && ([...askDrafts.values()].some(v => v.trim()) || !!(document.activeElement && document.activeElement.matches("[data-ask-draft]")))) };
