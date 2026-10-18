@@ -102,7 +102,7 @@ test("seasons: Halloween, Diwali and the winter holidays", async () => {
   assert.equal(at("2026-11-11"), "diwali");
   assert.equal(at("2026-11-20"), null);
   assert.equal(at("2026-12-24"), "winter");
-  assert.equal(at("2027-01-01"), "winter");
+  assert.equal(at("2027-01-02"), "winter");
   assert.equal(at("2027-01-05"), null);
   assert.equal(at("2027-10-29"), "diwali");                // in 2027 Diwali falls inside the Halloween weeks and wins
   assert.equal(at("2026-07-01"), null);

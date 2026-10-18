@@ -10,8 +10,8 @@ export function seasonFor(d = new Date()) {
   const y = d.getFullYear(), md = (m, day) => new Date(y, m - 1, day);
   const dw = DIWALI[y] && new Date(`${y}-${DIWALI[y]}T12:00:00`);
   if (dw && d >= new Date(dw.getTime() - 4 * 864e5) && d <= new Date(dw.getTime() + 3 * 864e5)) return "diwali";
-  if (d >= md(10, 15) && d <= md(11, 1)) return "halloween";
-  if (d >= md(12, 10) || d <= new Date(y, 0, 2)) return "winter";
+  if (d >= md(10, 15) && d < md(11, 2)) return "halloween";          // through the whole of 1 November
+  if (d >= md(12, 10) || d < new Date(y, 0, 3)) return "winter";      // through the whole of 2 January
   return null;
 }
 
