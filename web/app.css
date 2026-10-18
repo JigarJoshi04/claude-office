@@ -939,7 +939,7 @@ body.tv .peek { width: 340px; }
       linear-gradient(180deg, color-mix(in srgb, var(--sky-a, #070b26) 45%, #070b26), color-mix(in srgb, var(--sky-b, #18204a) 40%, #0b0e22)); }
   .panel, .splitter { position: relative; top: auto; height: auto; max-height: none; min-height: 0; }
   .panel { overscroll-behavior: contain; }
-  .rn-grid { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: minmax(260px, 1fr); overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; padding-bottom: 2px; }
+  .rn-grid { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: minmax(260px, 440px); justify-content: start; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; padding-bottom: 2px; }
   .rn { scroll-snap-align: start; }
   .rn-grid.more { mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
   body.panel-off .main { grid-template-columns: minmax(0, 1fr) 0 0; }
