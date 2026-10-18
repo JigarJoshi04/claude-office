@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.131.0] - 2026-10-19
+
+### Fixed
+- The brief coach found almost no similar lanes among real, long briefs: plain word overlap rated a lane sharing most
+  of a brief's words near zero. It now measures how much of the new brief a past one covers, weighting rare words above
+  ones every brief has, and blends in how alike the titles are, so a long brief does not outrank the same kind of job.
+  Short words such as QA, UI and PR count.
+
 ## [3.130.0] - 2026-10-19
 
 ### Added

@@ -6,6 +6,7 @@ suggests a model. Only the brief and the past lanes' titles and outcomes are sen
 """
 from __future__ import annotations
 
+import math
 import re
 import statistics
 
@@ -13,13 +14,14 @@ from . import askabout, brain, lanes
 from .sessions import redact, report_blocked
 
 MIN_BRIEF, MAX_BRIEF = 20, 8000
-MIN_SCORE, SHOW, SCAN = 0.12, 5, 400
+MIN_SCORE, MIN_SHARED, SHOW, SCAN = 0.3, 3, 5, 400
 ESTIMATE_FROM = 3                    # fewer similar lanes than this say nothing about size
 _STOP = set("""the and for with that this from into onto then than them they their there what when where which while
 will would should could have has had not but all any can its it's our your you are was were been being does did done
 make sure each also just only very more most some such like over under about after before again once here out use using
-lane lanes brief task work file files code please must need needs want""".split())
-_WORD = re.compile(r"[a-z][a-z0-9_]{2,}")
+lane lanes brief task work file files code please must need needs want to of in on it is be as at by or an do if we
+up so no my me us am he she his her one two get got""".split())
+_WORD = re.compile(r"[a-z][a-z0-9_]+")             # two letters and up: qa, ui, ci and pr say a lot
 SCHEMA = {"type": "object", "properties": {
     "findings": {"type": "array", "items": {"type": "object", "properties": {
         "kind": {"type": "string", "enum": ["missing", "vague", "risky", "too big", "good"]}, "text": {"type": "string"}},
@@ -45,9 +47,12 @@ def words(text: str) -> set[str]:
     return {_stem(w) for w in _WORD.findall(str(text or "").lower()) if w not in _STOP}
 
 
-def score(a: set[str], b: set[str]) -> float:
-    """How much two briefs share (Jaccard over their words)."""
-    return len(a & b) / len(a | b) if a and b else 0.0
+def score(mine: set[str], theirs: set[str], idf: dict[str, float], top: float, least: int = MIN_SHARED) -> float:
+    """How much of this brief a past one covers: its shared words over all of its words, each weighted by how rare it
+    is among past briefs (a word every brief has says little)."""
+    if not mine or len(mine & theirs) < least:
+        return 0.0
+    return sum(idf.get(w, top) for w in mine & theirs) / sum(idf.get(w, top) for w in mine)
 
 
 def outcome(lane: dict) -> str:
@@ -60,10 +65,11 @@ def outcome(lane: dict) -> str:
 
 def similar(title: str, brief: str, spent=None) -> list[dict]:
     """The finished lanes whose briefs share the most words with this one, best first, each with its size and end."""
-    mine = words(title) | words(brief)
+    head = words(title)
+    mine = head | words(brief)
     d = lanes.lanes_dir()
     dirs = sorted(d.iterdir() if d.is_dir() else [], key=lambda p: p.stat().st_mtime, reverse=True)[:SCAN]
-    out = []
+    cands = []
     for p in dirs:
         lane = lanes.load_lane(p.name)
         if not lane or lane.get("status") not in ("done", "blocked", "stopped", "failed", "finished"):
@@ -72,7 +78,19 @@ def similar(title: str, brief: str, spent=None) -> list[dict]:
             text = (p / "brief.md").read_text(errors="replace")[:20_000]
         except OSError:
             continue
-        s = score(mine, words(lane.get("title")) | words(text))
+        th = words(lane.get("title"))
+        cands.append((p, lane, th | words(text), th))
+    df: dict[str, int] = {}
+    for _, _, w, _ in cands:
+        for t in w & mine:
+            df[t] = df.get(t, 0) + 1
+    idf = {t: math.log((len(cands) + 1) / (n + 1)) + 1 for t, n in df.items()}
+    top = math.log(len(cands) + 1) + 1                 # a word no past brief has
+    out = []
+    for p, lane, w, th in cands:
+        s = score(mine, w, idf, top)
+        if head:                                       # titles name the kind of job: a long brief covers much by chance
+            s = 0.6 * s + 0.4 * score(head, th, idf, top, 1) if s else 0.0
         if s < MIN_SCORE:
             continue
         runs = lane.get("runs") or []

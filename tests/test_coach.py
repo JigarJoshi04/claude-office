@@ -46,11 +46,12 @@ class CoachTests(unittest.TestCase):
         return SimpleNamespace(brain=b, cfg={}, get=lambda: {"seats": [SEAT], "next_pick": {"seat": "claude2"}},
                                tokens=SimpleNamespace(spent=spent or (lambda sids: {"tokens": 2_000_000})))
 
-    def test_words_drop_short_and_common_words(self):
+    def test_words_drop_common_words_and_keep_short_telling_ones(self):
         self.assertEqual(coach.words("Fix the flaky export tests in export.py, and make sure it passes"),
-                         {"fix", "flaky", "export", "test", "pass"})
+                         {"fix", "flaky", "export", "test", "py", "pass"})
+        self.assertEqual(coach.words("QA the UI before the PR"), {"qa", "ui", "pr"})
         self.assertEqual(coach.words("retries fixes runs status"), {"retry", "fix", "run", "status"})
-        self.assertEqual(coach.score(set(), {"a"}), 0.0)
+        self.assertEqual(coach.score(set(), {"a"}, {}, 1.0), 0.0)
 
     def test_similar_ranks_by_shared_words_and_skips_unfinished(self):
         self.lane("1018-000001-a", "Fix the flaky export test", "The export test fails one run in five. Fix the flake.", report="STATUS: DONE - fixed")
@@ -63,6 +64,14 @@ class CoachTests(unittest.TestCase):
         self.assertEqual(got[1]["outcome"], "blocked")
         self.assertEqual((got[0]["minutes"], got[0]["tokens"]), (30, 5))
         self.assertEqual(coach.similar("x", "nothing in common whatsoever here"), [])
+
+    def test_a_long_past_brief_does_not_outrank_the_same_kind_of_job(self):
+        filler = " ".join(f"word{i}" for i in range(300))
+        self.lane("1018-000001-long", "QA pass of the v3 UI", "Office smoke check start page load report " + filler, report="STATUS: DONE - ok")
+        self.lane("1018-000002-smoke", "Office smoke test", "Start the office and check the page loads.", report="STATUS: DONE - ok")
+        got = coach.similar("Smoke test", "Run a smoke test of the office: start it, check the page loads, report.")
+        self.assertEqual(got[0]["id"], "1018-000002-smoke")
+        self.assertEqual(coach.score({"a", "b"}, {"a", "b"}, {}, 1.0), 0.0)               # fewer than three shared words
 
     def test_estimate_needs_three_and_uses_medians(self):
         rows = [{"minutes": 10, "tokens": 1, "outcome": "done", "model": "opus"}, {"minutes": 30, "tokens": 3, "outcome": "blocked", "model": "opus"}]
