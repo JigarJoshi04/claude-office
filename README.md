@@ -236,6 +236,26 @@ Everything personal stays outside the repo, in `~/.config/claude-office/`:
 The office keeps its own records in `~/.local/state/claude-office/`: the usage cache, 24 hours of minute
 samples, the news, the message log and each seat's career. Lanes and checkpoints go in `~/.local/share/claude-office/`.
 
+## News from your scripts
+
+Deploy scripts, make targets, cron jobs and CI runners can put news on the floor: a toast, a line in the news, a
+marker on the seat's timeline, and with `--banner` a banner across the floor.
+
+```sh
+python3 -m office post "Prod deploy done: v2.4.1" --level good --source deploy --banner
+python3 -m office post "Nightly build failed" --level bad --source CI --seat claude2
+```
+
+Or straight over HTTP, with the per-install token (readable only by you):
+
+```sh
+curl -X POST http://127.0.0.1:7420/api/event -H "Content-Type: application/json" \
+  -H "X-Office-Token: $(cat ~/.config/claude-office/token)" \
+  -d '{"text": "Backup finished", "level": "good", "source": "cron"}'
+```
+
+`level` is good, info, warn or bad; `seat` puts it at a character's desk; at most 30 events a minute.
+
 ## A status line for your terminal
 
 `GET /api/status.txt` returns one line: how many sessions work, what needs you, the burn and the tightest plan

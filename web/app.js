@@ -487,6 +487,15 @@ function onNews(e) {
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : "Lane blocked", text);
       break;
     }
+    case "external": {                                 // a script's news (POST /api/event, python3 -m office post)
+      const tone = { good: "good", warn: "warn", bad: "bad" }[e.level] || "info";
+      if (e.seat && e.level === "good") fx.celebrate(e.seat, null, e.source || "Done!");
+      if (e.banner && prefs.view === "floor") fx.banner(e.source || "News", text, { good: "#3ddc84", warn: "#ffc24b", bad: "#ff6170" }[e.level] || "#7aa8ff");
+      sound.play(e.level === "bad" ? "bad" : e.level === "good" ? "report" : "arrive");
+      toast(`${e.source ? e.source + ": " : ""}${text}`, tone, { ic: "bell", ms: 6000 });
+      if (e.level === "bad" || e.level === "warn") notify(e.source || "Office news", text);
+      break;
+    }
     case "commit": {                                   // commits read from a session's transcript, one line per read
       const n = +(/: (\d+) commits?$/.exec(e.text) || [])[1] || 1;
       fx.shipPop(e.seat, `+${n} commit${n === 1 ? "" : "s"}`);

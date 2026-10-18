@@ -234,8 +234,8 @@ class Office(LiveOffice):
         except (OSError, ValueError):
             pass
 
-    def emit(self, kind: str, text: str, seat: str | None = None, level: str = "info", ts: float | None = None):
-        ev = public({"ts": time.time() if ts is None else ts, "kind": kind, "text": text, "seat": seat, "level": level})
+    def emit(self, kind: str, text: str, seat: str | None = None, level: str = "info", ts: float | None = None, extra: dict | None = None):
+        ev = public({"ts": time.time() if ts is None else ts, "kind": kind, "text": text, "seat": seat, "level": level, **(extra or {})})
         with self.condition:
             self.events.append(ev)
             self.notify_news(ev)
@@ -386,7 +386,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.32.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.33.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,

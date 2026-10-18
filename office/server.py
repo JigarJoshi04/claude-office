@@ -60,12 +60,46 @@ def _number(value: str, message: str) -> int:
     return int(value)
 
 
+_EVENTS: list = []
+
+
+def _event_budget(now: float | None = None, limit: int = 30) -> bool:
+    """At most `limit` inbound events a minute, so a runaway script cannot flood the floor."""
+    now = time.time() if now is None else now
+    _EVENTS[:] = [t for t in _EVENTS if now - t < 60]
+    if len(_EVENTS) >= limit:
+        return False
+    _EVENTS.append(now)
+    return True
+
+
+def inbound_event(body: dict, seat_ids: list) -> dict:
+    """Validate POST /api/event: {"text", "level"?, "seat"?, "source"?, "banner"?}."""
+    if not isinstance(body, dict):
+        raise ValueError("Expected an object")
+    text = body.get("text")
+    if not isinstance(text, str) or not 1 <= len(text.strip()) <= 140:
+        raise ValueError("text must be 1-140 characters")
+    level = body.get("level", "info")
+    if level not in ("good", "info", "warn", "bad"):
+        raise ValueError("level must be good, info, warn or bad")
+    seat = body.get("seat")
+    if seat is not None and seat not in seat_ids:
+        raise ValueError("Unknown seat")
+    source = body.get("source")
+    if source is not None and (not isinstance(source, str) or not re.fullmatch(r"[\w .:/-]{1,24}", source)):
+        raise ValueError("source must be 1-24 letters, digits, spaces or . : / -")
+    if not isinstance(body.get("banner", False), bool):
+        raise ValueError("banner must be true or false")
+    return {"text": " ".join(text.split()), "level": level, "seat": seat, "source": source, "banner": body.get("banner", False)}
+
+
 class Handler(BaseHTTPRequestHandler):
     office = None          # set by serve()
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.32.0"
+    server_version = "ClaudeOffice/3.33.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -270,6 +304,12 @@ class Handler(BaseHTTPRequestHandler):
                 settings.save(body)
                 self.office.build()
                 return self._json(200, dict(settings.view(self.office.cfg, self.office.get().get("seats", [])), ok=True))
+            if path == "/api/event":                      # a script's news: a deploy, a cron job, a CI run
+                ev = inbound_event(body, [s["id"] for s in self.office.get().get("seats", [])])
+                if not _event_budget():
+                    return self._json(429, {"error": "Too many events: at most 30 a minute"})
+                self.office.emit("external", ev["text"], ev["seat"], ev["level"], extra={"source": ev["source"], "banner": ev["banner"]})
+                return self._json(200, {"ok": True})
             if self.demo and path not in ("/api/checkpoint", "/api/divider/preview"):
                 return self._json(200, {"ok": True, "demo": True, "note": "Demo office: nothing was changed"})
             snap = self.office.get()

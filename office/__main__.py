@@ -8,6 +8,8 @@
                                    start an office lane
   lanes | stop ID | resume ID [--seat ID]
   checkpoint                       write the office down (resume commands for every session)
+  post TEXT [--level good|info|warn|bad] [--seat ID] [--source NAME] [--banner]
+                                   put a script's news on the floor ("Prod deploy done")
   run-lane ID                      (internal) the lane supervisor that systemd runs
 """
 from __future__ import annotations
@@ -69,6 +71,30 @@ def cmd_hire(args) -> int:
     return 0
 
 
+def cmd_post(args) -> int:
+    """POST /api/event to the running office, with the per-install token (only this user can read it)."""
+    import urllib.error
+    import urllib.request
+    port = args.port or config.load_config().get("port", config.DEFAULT_PORT)
+    body = {"text": args.text, "level": args.level, "banner": args.banner}
+    if args.seat:
+        body["seat"] = args.seat
+    if args.source:
+        body["source"] = args.source
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/event", data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", "X-Office-Token": config.api_token()})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            r.read()
+        return 0
+    except urllib.error.HTTPError as e:
+        print(json.loads(e.read() or b"{}").get("error") or f"HTTP {e.code}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"The office is not running on port {port}: {e}", file=sys.stderr)
+        return 1
+
+
 def cmd_lanes(_args) -> int:
     for l in lanes.list_lanes():
         when = time.strftime("%d %b %H:%M", time.localtime(l["created_at"]))
@@ -103,6 +129,13 @@ def main(argv=None) -> int:
     rs.add_argument("id")
     rs.add_argument("--seat")
     sub.add_parser("checkpoint")
+    po = sub.add_parser("post", help="put a script's news on the floor")
+    po.add_argument("text")
+    po.add_argument("--level", choices=["good", "info", "warn", "bad"], default="info")
+    po.add_argument("--seat")
+    po.add_argument("--source", help="who says it: deploy, cron, CI (1-24 characters)")
+    po.add_argument("--banner", action="store_true", help="also a banner across the floor (at Full game intensity)")
+    po.add_argument("--port", type=int)
     rl = sub.add_parser("run-lane")
     rl.add_argument("id")
     args = p.parse_args(argv)
@@ -132,6 +165,8 @@ def main(argv=None) -> int:
         from .snapshot import Office
         print(checkpoint.write(Office().build(), config.load_config()))
         return 0
+    if args.cmd == "post":
+        return cmd_post(args)
     if args.cmd == "run-lane":
         return lanes.run_lane(args.id)
     return 2

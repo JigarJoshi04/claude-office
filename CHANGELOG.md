@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.33.0] - 2026-10-18
+
+### Added
+- News from your scripts: `python3 -m office post "Prod deploy done" --level good --source deploy --banner`, or
+  `POST /api/event` with the per-install token. A toast, a line in the news, a timeline marker at the seat's desk,
+  confetti at the seat for good news, a desktop notification for bad, and with `--banner` a banner across the floor.
+  Text is 1 to 140 characters; at most 30 events a minute.
+
 ## [3.32.0] - 2026-10-18
 
 ### Added

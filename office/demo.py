@@ -204,8 +204,8 @@ class DemoOffice(LiveOffice):
         ]):
             self.events.append({"ts": t - 600 + i * 90, "kind": "demo", "text": txt, "seat": seat, "level": lvl})
 
-    def emit(self, kind, text, seat=None, level="info", ts=None):
-        event = public({"ts": time.time() if ts is None else ts, "kind": kind, "text": text, "seat": seat, "level": level})
+    def emit(self, kind, text, seat=None, level="info", ts=None, extra=None):
+        event = public({"ts": time.time() if ts is None else ts, "kind": kind, "text": text, "seat": seat, "level": level, **(extra or {})})
         with self.condition:
             self.events.append(event)
             self.notify_news(event)
@@ -329,7 +329,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.32.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.33.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,
