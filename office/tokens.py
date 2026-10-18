@@ -639,6 +639,7 @@ class TokenLedger:
                       "messages": sum((r.get("n", 0) for r in mine.values())) if cur is None else None,
                       "sessions": len(listed)},
             "prev_total": ({"all": sum(sum(series.get(d, [0, 0, 0])[:2]) for d in prev)} if prev is not None else None),
+            "prev_partial": bool(prev is not None and day_rows and min(day_rows) > min(prev)),   # the period before is not all on record
             "today": sum(series.get(today, [0, 0, 0])[:2]),
             "today_by": by(series.get(today, [0, 0, 0])),
             "seats": board,

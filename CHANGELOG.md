@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.29.2] - 2026-10-18
+
+### Fixed
+- No more "▲ 1111% on the 30 days before" when the transcripts start inside that period: the Tokens tab says the
+  period before is not all on record, and Wrapped says the month before is only partly on record.
+  `/api/tokens` has `prev_partial`.
+
 ## [3.29.1] - 2026-10-18
 
 ### Fixed

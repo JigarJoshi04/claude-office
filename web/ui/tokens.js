@@ -138,7 +138,7 @@ function renderTokensInner(el, app) {
     ${seat ? `<button class="btn sm" data-tp-seat="">${icon("x", 14)}All characters</button>` : ""}<button class="btn sm" data-tp-csv>${icon("download", 14)}CSV</button><button class="btn sm" data-tp-share>${icon("star", 14)}Picture</button></div>`;
   if (!t) { el.innerHTML = `<div class="view-card">${head}<div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`; bind(); return; }
   const total = val(t.total), prev = t.prev_total ? t.prev_total.all : null;
-  const delta = key === "all" && prev ? Math.round((total - prev) / prev * 100) : null;
+  const delta = key === "all" && prev && !t.prev_partial ? Math.round((total - prev) / prev * 100) : null;
   const liveNow = snap.seats.filter(s => !seat || s.id === seat).reduce((a, s) => a + (s.tokens_1h_all || 0), 0);
   // the leaderboard, with how each character moved since the period before
   const board = (t.seats || []).filter(s => val(s) > 0), max = Math.max(1, ...board.map(val)), sum = board.reduce((a, s) => a + val(s), 0);
@@ -207,7 +207,8 @@ function renderTokensInner(el, app) {
   el.innerHTML = `<div class="tokpage">
     <div class="view-card">${head}
       <div class="tp-hero"><div><b>${big(total)}</b><span>${esc(label.toLowerCase())} ${esc(rangeWord[rng])}</span></div>
-        ${delta != null ? `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% on ${esc(prevWord[rng])}</em>` : ""}
+        ${delta != null ? `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% on ${esc(prevWord[rng])}</em>`
+          : t.prev_partial && prevWord[rng] ? `<em class="same" title="The transcripts on this machine start ${esc(t.since || "")}">${esc(prevWord[rng][0].toUpperCase() + prevWord[rng].slice(1))}: not all on record</em>` : ""}
         <em class="live" title="All tokens the sessions at work processed in the last hour, cache reads included">${icon("flame", 13)}${big(liveNow)} in the last hour</em>
         ${rng !== "today" && todayOf(t) ? `<em>${big(todayOf(t))} today</em>` : ""}</div>
       <div class="tok-parts"><span>${icon("refresh", 13)}${big(t.total.cache)} cache reads</span><span>${icon("zap", 13)}${big(t.total.fresh)} fresh</span><span>${icon("send", 13)}${big(t.total.output)} output</span><span>${icon("chat", 13)}${(t.total.sessions || 0).toLocaleString()} sessions</span></div></div>

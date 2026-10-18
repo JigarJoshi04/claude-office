@@ -205,6 +205,14 @@ class TokenViewTests(unittest.TestCase):
         self.assertEqual(date.fromisoformat(cal[0]["day"]).weekday(), 0)
         self.assertEqual(len({(date.fromisoformat(d["day"]) - date.fromisoformat(cal[0]["day"])).days // 7 for d in cal}), 26)
 
+    def test_a_period_before_the_first_transcript_is_marked_partial(self):
+        from office.demo import _demo_token_ledger
+        led = _demo_token_ledger()                                      # about 120 days on record
+        seats = [{"id": "claude", "kind": "claude"}]
+        self.assertFalse(led.view(seats, rng="30")["prev_partial"])
+        self.assertTrue(led.view(seats, rng="90")["prev_partial"])     # 91 to 180 days back: only partly on record
+        self.assertFalse(led.view(seats, rng="all")["prev_partial"])
+
     def test_today_by_measure(self):
         from office.demo import _demo_token_ledger
         led = _demo_token_ledger()

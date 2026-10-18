@@ -23,7 +23,7 @@ export function makeWrapped(ctx) {
     let t;
     try { t = await (await fetch(`/api/tokens?range=${encodeURIComponent(rng)}`)).json(); } catch { t = null; }
     if (!t || !t.total || !t.total.all) { toast(`Nothing on record for ${monthName(month)} yet.`, "info"); return false; }
-    const prev = t.prev_total ? t.prev_total.all : 0, delta = prev ? Math.round((t.total.all - prev) / prev * 100) : null;
+    const prev = t.prev_total && !t.prev_partial ? t.prev_total.all : 0, delta = prev ? Math.round((t.total.all - prev) / prev * 100) : null;
     const days = t.days || [], bd = days.reduce((a, d) => (d.all > (a ? a.all : 0) ? d : a), null);
     const top3 = (t.seats || []).filter(s => s.seat && s.all > 0).slice(0, 3), sh = t.shipped || {};
     const slides = [];
@@ -31,7 +31,7 @@ export function makeWrapped(ctx) {
       <div class="wr-team">${app.snap().seats.slice(0, 8).map(s => avatar("mascot-" + s.id, s.color, s.career ? "lv" + s.career.level : "")).join("")}</div>
       <p class="wr-hint">${(t.total.sessions || 0).toLocaleString()} sessions this month.</p>`);
     slides.push(`<div class="wr-eyebrow">Tokens</div><div class="wr-big">${esc(big(t.total.all).split(" ")[0])}<small> ${esc(big(t.total.all).split(" ")[1] || "")}</small></div>
-      <p class="wr-sub">${delta == null ? "Your first month on record." : delta >= 0 ? `<b class="up">▲ ${delta}%</b> on the month before.` : `<b class="down">▼ ${-delta}%</b> on the month before.`}</p>
+      <p class="wr-sub">${delta == null ? (t.prev_partial && t.prev_total && t.prev_total.all ? "The month before is only partly on record." : "Your first month on record.") : delta >= 0 ? `<b class="up">▲ ${delta}%</b> on the month before.` : `<b class="down">▼ ${-delta}%</b> on the month before.`}</p>
       <p class="wr-hint">About ${esc(big(t.total.all / Math.max(1, days.filter(d => d.all > 0).length)))} on a working day. ${esc(big(t.total.output))} of it written by the models.</p>`);
     if (top3.length) {
       const order = top3.length === 3 ? [top3[1], top3[0], top3[2]] : top3.length === 2 ? [top3[1], top3[0]] : [top3[0]];
