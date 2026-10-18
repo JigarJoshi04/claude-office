@@ -18,7 +18,8 @@ import { makeWeekReview } from "./ui/weekreview.js";
 import { makeArcade } from "./ui/arcade.js";
 import { makeRadio } from "./ui/radio.js";
 import { makeCards } from "./ui/charcard.js";
-import { topBurner, renderTokens } from "./ui/tokens.js";
+import { renderTokens } from "./ui/tokens.js";
+import { makeBurn } from "./ui/burn.js";
 import { hydrateStickers } from "./engine/stickers.js";
 
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
@@ -94,7 +95,7 @@ const app = {
       inflight.add("t" + k);
       fetch(`/api/tokens?range=${encodeURIComponent(rng)}${seat ? "&seat=" + encodeURIComponent(seat) : ""}`).then(r => r.ok ? r.json() : null).then(d => {
         tokens.set(k, { data: d, at: Date.now() }); inflight.delete("t" + k);
-        if (k === "all|") office.setTopBurner(topBurner(d));
+        if (k === "all|") burn.onAll(d);
         if (prefs.view === "stats" || prefs.view === "tokens") renderMain();
         if (k === "all|" && view.kind === "seat") renderPanel(true);
       }).catch(() => { tokens.set(k, { data: null, at: Date.now() }); inflight.delete("t" + k); });
@@ -263,6 +264,7 @@ if (prefs.radio) {
   addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
 }
 const cards = makeCards({ app, panels, prefs });
+const burn = makeBurn({ app, office, panels, store, DEMO, prefs, giftBox, toast, sound });
 app.openCard = (id) => cards.open(id);
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
 // "Your office", scrolled to the sticker album.
@@ -409,6 +411,7 @@ function apply(next) {
   if (!DEMO) { game.checkBadges(); game.cheerWeekly(); game.anniversaries(); }   // the demo office never hands out badges
   if (first) { app.tokensCache(); game.visitStreak(); setTimeout(whatsNew, 1500); giftBox.sync(); setTimeout(() => (QS.has("week") ? weekReview.play() : weekReview.maybeMonday()), 3500); }
   if (!replay.active()) giftBox.daily(game.visits()); // the first visit of a day finds a gift at the CEO desk
+  app.tokensCache();                                  // the odometer, the belt and milestones (fetched every 2 minutes)
   renderPanel(false);
   if (first) { (snap.events || []).forEach(e => seenNews.add(e.ts + "|" + e.text)); app.statsCache(null); checkAway().then(markSeen); }
   else if (liveMode !== "live") for (const e of snap.events || []) if (e.ts > lastEventTs) safeNews(e);

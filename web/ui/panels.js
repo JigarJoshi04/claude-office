@@ -643,8 +643,18 @@ export function makePanels(app) {
             ${p && p[0] > 0 ? `<span class="ol-prog"><i style="width:${Math.min(100, Math.round(p[0] / p[1] * 100))}%"></i></span><em class="ol-pn">${Math.min(p[0], p[1])} of ${p[1]}</em>` : ""}</div>`; }).join("")}</div>
           <div class="hint" style="margin-top:8px">${app.demo ? "The demo office never awards badges. " : ""}Badges are kept in this browser.</div>`); })()}
       ${album()}
+      ${plaques()}
       ${byXp.length ? section("Who built it", byXp.map(s => `<div class="ol-who" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}">${avatar("mascot-" + s.id, s.color, "lv" + (s.career ? s.career.level : 0))}<b>${esc(P(s).name)}</b><span class="ol-wbar"><i style="width:${Math.round(s.career.xp / top * 100)}%"></i></span><em>${s.career.xp.toLocaleString()} XP</em></div>`).join("")) : ""}`,
       bind(root) { const b = root.querySelector("[data-swap]"); if (b) b.addEventListener("click", () => { if (app.gifts.swap()) app.rerender(true); }); } };
+  }
+  // Token milestones on the 1-2-5 ladder, as brass plaques with the day each was crossed.
+  function plaques() {
+    const t = app.tokensCache && app.tokensCache(), list = (t && t.milestones) || [];
+    if (!list.length) return "";
+    const words = (n) => n >= 1e12 ? `${n / 1e12} T` : n >= 1e9 ? `${n / 1e9} B` : `${n / 1e6} M`;
+    return section(`Milestones · ${list.length}`, `<div class="plaques">${list.slice(-12).reverse().map(m => `<div class="plaque"><b>${words(m.at)}</b><span>tokens</span>
+      <small>${esc(new Date(m.day + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }))}</small></div>`).join("")}</div>
+      <div class="hint" style="margin-top:8px">The office's running total of tokens, from its transcripts. Each new one gets a ceremony and a gift.</div>`);
   }
   // The sticker album: every sticker a gift can hold, found ones in colour with how many, the rest as shadows.
   function album() {

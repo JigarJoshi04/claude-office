@@ -19,7 +19,8 @@ export function makeGiftBox(ctx) {
   // What a gift is called on the floor, and on its reveal card.
   const KINDS = { daily: ["Morning delivery", "This morning's delivery"], swap: ["A swapped gift, rare or better", "Swapped for five spares"],
     goals: ["A gift for today's goals, rare or better", "For finishing today's goals"], office: ["An office level-up gift, epic or better", "For the office's level up"],
-    week: ["A record-week gift, epic or better", "For a record week"], arcade: ["An arcade prize", "For a new best at Bug Squash"] };
+    week: ["A record-week gift, epic or better", "For a record week"], arcade: ["An arcade prize", "For a new best at Bug Squash"],
+    milestone: ["A milestone gift, epic or better", "For a token milestone"] };
   const label = (g) => {
     const who = nameOf(g.seat, g);
     if (g.from === "daily" && g.min) return `Morning delivery, day ${g.streak} of your streak (${g.min} or better): open it`;

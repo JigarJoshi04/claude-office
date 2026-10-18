@@ -323,3 +323,13 @@ test("weekly pace: ahead, behind, running out before the reset", async () => {
   assert.match(slow.text, /30% behind pace/); assert.match(slow.text, /about 60% left/);
   assert.match(weekPace(seat(2, 6.9), now, fmt).text, /fresh week/);
 });
+
+test("the Burner Belt goes to last week's top seat; milestones climb 1-2-5", async () => {
+  const { beltHolders } = await import("../../web/ui/tokens.js");
+  const { rungWords } = await import("../../web/ui/burn.js");
+  const weeks = [{ week: "2026-10-05", seats: { a: 9, b: 5 } }, { week: "2026-10-12", seats: { b: 7, a: 6 } }, { week: "2026-10-19", seats: { c: 1 } }];
+  assert.deepEqual(beltHolders(weeks), { holder: "b", week: "2026-10-12", leader: "c" });
+  assert.deepEqual(beltHolders([]), { holder: null, week: null, leader: null });
+  assert.equal(rungWords(50e9), "50 billion");
+  assert.equal(rungWords(2e6), "2 million");
+});

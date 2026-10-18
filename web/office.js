@@ -72,6 +72,8 @@ export function createOffice(stage, handlers) {
   let sets = new Set();                // finished album sets (rarities): their rewards on the floor
   let radioOn = false;
   let burner = null;                   // the seat with the most tokens of all time: a flame on its nameplate
+  let odometer = null;                 // the office's all-time tokens, on the lobby wall under the neon
+  let belt = null;                     // last week's heaviest burner: a belt on its nameplate
   let game = "full";                   // game intensity: "full", "calm" (no banners, confetti, banter or party) or "off"                 // the office radio is playing: notes rise from the boombox on the CEO desk
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
@@ -733,7 +735,7 @@ export function createOffice(stage, handlers) {
 
   function overlaySig() {
     return JSON.stringify([F, selected, privacy, snap.office.name, persona ? snap.seats.map(s => persona(s).name) : 0, mvp && mvp.seat, (snap.programmes || []).map(p => p.name),
-      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner,
+      (snap.units || []).map(x => x.unit + x.active), waiting().map(l => l.id), gifts.map(g => g.id + g.label), radioOn, burner, belt, odometer, game,
       [...agents.values()].map(a => [a.id, a.slot, a.mode, a.sess.state, a.sess.name, a.sess.kind]), leavers.map(a => a.id),
       snap.seats.map(s => { const us = s.usage || {}; return [s.id, s.label, s.nickname, s.color, s.status, s.career && s.career.level, us.five_hour && Math.round(us.five_hour.pct), us.weekly && Math.round(us.weekly.pct), (s.tokens_1h || 0) > 400000, s.sessions.filter(x => x.live !== false).length]; })]);
   }
@@ -763,6 +765,7 @@ export function createOffice(stage, handlers) {
     for (const o of L.open) div("room-label", "GARDEN", o.x + 8, o.y + BACK_LABEL);
 
     const neon = div("neon" + (has("neon") ? " show" : ""), snap.office.name || "Claude Office", 6, 8); place(neon, 6, 8, 70, 22);
+    if (odometer) { const od = div("odometer", null, 6, 31); od.innerHTML = `<b>${esc(odometer)}</b> tokens`; od.title = `The office has processed ${odometer} tokens (the Tokens tab has the story)`; place(od, 6, 31, 70, 7); }
     overlay.classList.toggle("gold-plates", has("goldplates"));
     if (mvp) place(div("mvp-tag", "MVP", 172, 36), 172, 36, 24, null);
     const closet = closetUnits();
@@ -789,7 +792,8 @@ export function createOffice(stage, handlers) {
     place(plate, pod.room.x + 12, pod.room.y + pod.room.h - 31, pod.room.w - 24, null);
     const line = plateLine(s, live);
     const lv = (s.career ? `<em class="lv" title="Level ${s.career.level} ${esc(s.career.title)}">${s.career.level}</em>` : "")
-      + (burner === s.id ? `<em class="pl-burn" title="The office's top token burner, all time">${icon("flame", 12)}</em>` : "");
+      + (burner === s.id ? `<em class="pl-burn" title="The office's top token burner, all time">${icon("flame", 12)}</em>` : "")
+      + (belt === s.id && game !== "off" ? `<em class="pl-belt" title="Burner Belt: the most tokens last week">${icon("belt", 12)}</em>` : "");
     const need = handlers.needsFor ? handlers.needsFor(s.id) : (snap.attention || []).filter(a => a.seat === s.id).length;   // as Needs you groups them
     if (need) plate.classList.add("needs");
     plate.innerHTML = `<span class="pl-line"><b><i></i>${esc(who.name)}${lv}</b><span class="pl-chip ${line.tone}">${esc(line.main)}</span></span>` +
@@ -1213,6 +1217,8 @@ export function createOffice(stage, handlers) {
     // Off: also no gifts, level-up pops or game chrome.
     setGameLevel(level) { game = ["full", "calm", "off"].includes(level) ? level : "full"; if (game !== "full") happy = false; ovKey = ""; renderOverlay(); },
     gameLevel: () => game,
+    setOdometer(text) { if (text !== odometer) { odometer = text || null; ovKey = ""; renderOverlay(); } },
+    setBelt(id) { if (id !== belt) { belt = id || null; ovKey = ""; renderOverlay(); } },
     setTopBurner(id) { if (id !== burner) { burner = id || null; ovKey = ""; renderOverlay(); } },
     setRadio(on) { radioOn = !!on; ovKey = ""; renderOverlay(); },
     setSets(s) { sets = new Set(s || []); },

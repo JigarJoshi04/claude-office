@@ -1399,3 +1399,17 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .g-unused > .ic { color: var(--info); flex: none; } .g-unused b { display: block; font-size: 14px; } .g-unused span span { display: block; font-size: 12.5px; color: var(--muted); }
 .g-unused .grow { flex: 1 1 200px; min-width: 0; }
 .unused { display: grid; gap: 8px; }
+/* the lobby odometer under the neon sign, and the Burner Belt on a nameplate */
+.odometer { position: absolute; display: flex; align-items: center; justify-content: center; gap: calc(1.2px * var(--f)); pointer-events: auto;
+  font: 400 calc(4.4px * var(--f))/1 Silkscreen, var(--pixel, monospace); color: #ffb35c; letter-spacing: .04em; text-transform: uppercase;
+  background: #120d18; border: calc(.5px * var(--f)) solid #3a2a12; border-radius: calc(1px * var(--f)); box-shadow: 0 0 calc(4px * var(--f)) rgba(255,160,60,.25); white-space: nowrap; }
+.odometer b { font-weight: 400; color: #ffd27a; text-shadow: 0 0 calc(2px * var(--f)) rgba(255,190,90,.8); animation: odoin .6s ease; }
+@keyframes odoin { from { opacity: 0; transform: translateY(-40%); } to { opacity: 1; transform: none; } }
+:root[data-motion="reduced"] .odometer b { animation: none; }
+.plate .pl-belt { display: inline-flex; margin-left: 3px; color: #ffd24a; vertical-align: -1px; }
+.tp-belt { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; padding: 8px 12px; border-radius: 12px; font-size: 13px; color: var(--text-2);
+  background: linear-gradient(110deg, rgba(255,210,74,.14), var(--surface-2) 70%); } .tp-belt > .ic { color: #ffd24a; flex: none; }
+.plaques { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.plaque { display: grid; justify-items: center; gap: 1px; padding: 10px 8px; border-radius: 10px; text-align: center;
+  background: linear-gradient(160deg, #d9b25a, #9a7426); color: #2a1c05; box-shadow: inset 0 0 0 2px rgba(255,240,190,.5), 0 2px 0 #6b4f17; }
+.plaque b { font: 800 18px/1.1 Inter, sans-serif; } .plaque span { font: 700 10.5px var(--mono); text-transform: uppercase; letter-spacing: .1em; } .plaque small { font-size: 11px; opacity: .8; }

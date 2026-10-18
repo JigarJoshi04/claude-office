@@ -18,6 +18,12 @@ export const modelName = (m) => {
   return x ? `${x[1][0].toUpperCase() + x[1].slice(1)} ${x[2]}${x[3] && x[3].length < 3 ? "." + x[3] : ""}` : m;
 };
 
+// The Burner Belt: last week's (the last complete Monday-to-Sunday week's) top seat, and this week's leader so far.
+export function beltHolders(weeks) {
+  const top = (w) => (w && Object.keys(w.seats || {})[0]) || null;
+  return { holder: top(weeks && weeks[weeks.length - 2]), week: weeks && weeks.length > 1 ? weeks[weeks.length - 2].week : null, leader: top(weeks && weeks[weeks.length - 1]) };
+}
+
 // The seat with the most tokens of all time (for the flame on the floor and the character page), or null.
 export function topBurner(t) {
   const s = t && t.seats && t.seats.find(x => x.seat);
@@ -158,6 +164,7 @@ export function renderTokens(el, app) {
         ${rng !== "today" && t.today ? `<em>${big(t.today)} today</em>` : ""}</div>
       <div class="tok-parts"><span>${icon("refresh", 13)}${big(t.total.cache)} cache reads</span><span>${icon("zap", 13)}${big(t.total.fresh)} fresh</span><span>${icon("send", 13)}${big(t.total.output)} output</span><span>${icon("chat", 13)}${(t.total.sessions || 0).toLocaleString()} sessions</span></div></div>
     <div class="tp-grid"><div class="view-card"><h5>${seat ? "Where it ranks" : "Who burns the most"} · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tb-list">${rows}</div>
+        ${(() => { const b = beltHolders(t.weeks); return b.holder ? `<p class="tp-belt">${icon("belt", 15)}<span><b>Burner Belt: ${esc(who(b.holder))}</b>, the most tokens last week${b.leader && b.leader !== b.holder ? ` · ${esc(who(b.leader))} leads this week` : b.leader ? " and leads this week too" : ""}.</span></p>` : ""; })()}
         ${!seat && board.length ? `<p class="hint">Click a character to see only theirs.${rng === "all" ? "" : " Arrows: places moved since " + esc(prevWord[rng]) + "."}</p>` : ""}</div>
       <div class="view-card"><h5>Per day${firstDay ? ` · from ${esc(firstDay)}` : ""}</h5><svg class="tp-bars" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${esc(label)} per day">${bars}</svg>
         <div class="tok-months">${(t.months || []).slice(-4).map(m => `<span><b>${big(val(m))}</b>${esc(new Date(m.month + "-15T12:00:00").toLocaleDateString([], { month: "long" }))}</span>`).join("")}</div></div></div>

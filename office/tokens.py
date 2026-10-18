@@ -27,6 +27,12 @@ RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 MAX_SESSIONS = 20000          # far beyond a busy year; the oldest drop off first
 
 
+def next_rung(n: int) -> int:
+    """The milestone after n on the 1-2-5 ladder: 1 M, 2 M, 5 M, 10 M, 20 M, 50 M, 100 M, …"""
+    lead = int(str(n)[0])
+    return n // lead * {1: 2, 2: 5, 5: 10}[lead]
+
+
 def _when(ts: str | None) -> tuple[str | None, str | None]:
     """(local day, "weekday-hour" with Monday 0) for a transcript timestamp."""
     if not ts:
@@ -426,6 +432,25 @@ class TokenLedger:
             wh = max(heat, key=heat.get)
             records["busiest_hour"] = {"weekday": int(wh.split("-")[0]), "hour": int(wh.split("-")[1])}
         cal_from = (t.date() - timedelta(days=7 * 26 - 1 + t.date().weekday())).isoformat()
+        # the last 8 weeks, Monday to Sunday, per seat (for the Burner Belt): the last entry is this week so far
+        monday = t.date() - timedelta(days=t.date().weekday())
+        weeks = []
+        for back in range(7, -1, -1):
+            start = monday - timedelta(days=7 * back)
+            keep = {(start + timedelta(days=i)).isoformat() for i in range(7)}
+            per = {}
+            for r in sessions.values():
+                f, c, _ = sums(r, keep)
+                if f + c and seat_of(r):
+                    per[seat_of(r)] = per.get(seat_of(r), 0) + f + c
+            weeks.append({"week": start.isoformat(), "seats": dict(sorted(per.items(), key=lambda kv: -kv[1]))})
+        # milestones: the first day the office's running total crossed 1, 2 and 5 times each power of ten from a million
+        milestones, run_total, rung = [], 0, 1_000_000
+        for d in sorted(day_rows):
+            run_total += day_rows[d].get("f", 0) + day_rows[d].get("c", 0)
+            while run_total >= rung:
+                milestones.append({"at": rung, "day": d})
+                rung = next_rung(rung)
         return {
             "scanning": scanning or not scanned_at, "scanned_at": scanned_at or None,
             "since": min(day_rows) if day_rows else None, "range": rng, "seat": seat,
@@ -448,4 +473,6 @@ class TokenLedger:
                           "messages": r.get("n", 0), "first": r.get("fi"), "last": r.get("l")}
                          for sid, r, f, c, o, k in (top if all_sessions else top[:12])],
             "records": records,
+            "weeks": weeks,
+            "milestones": milestones,
         }

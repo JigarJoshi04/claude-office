@@ -717,7 +717,7 @@ export function drawUfo(ctx, x, y, t, beam) {
 }
 
 // Gift wrapping by where a gift came from (a seat's gifts wear that seat's colour).
-export const GIFT_BOX = { daily: "#e8475a", swap: "#7d5cff", goals: "#e0a92a", office: "#18a39a", week: "#ff7a45", arcade: "#3fb68b" };
+export const GIFT_BOX = { daily: "#e8475a", swap: "#7d5cff", goals: "#e0a92a", office: "#18a39a", week: "#ff7a45", arcade: "#3fb68b", milestone: "#c9962a" };
 // A gift box about 11 wide and 11 tall at (x, y): wrapped in `color` with a light ribbon and a bow. Now and then it
 // hops, so it is easy to spot; `seed` keeps several boxes out of step.
 export function drawGift(ctx, x, y, color, ribbon, t, seed = 0) {

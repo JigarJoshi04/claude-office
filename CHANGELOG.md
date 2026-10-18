@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.23.0] - 2026-10-18
+
+### Added
+- The Burner Belt: last week's heaviest token burner (Monday to Sunday) wears a belt on its nameplate, the Tokens tab
+  says who holds it and who leads this week, and a handover gets a banner and confetti.
+- A token odometer on the lobby wall under the neon sign: the office's all-time total.
+- Milestones on the 1-2-5 ladder (1 M, 2 M, 5 M, 10 M, …): crossing one gets a banner, confetti in every room and an
+  epic gift, and every milestone hangs as a dated brass plaque on "Your office".
+- Record ceremonies: a new biggest day, hungriest session or longest run of days gets a banner (once a day each).
+- `/api/tokens` returns the last eight weeks per seat and the milestones.
+
 ## [3.22.0] - 2026-10-18
 
 ### Added
