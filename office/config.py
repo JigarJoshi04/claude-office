@@ -49,6 +49,9 @@ DEFAULTS: dict = {
             "explicitly asks for it. Keep git worktrees under your working directory, never /tmp."
         ),
     },
+    # What an unattended lane may do. Empty roots let it work anywhere; full trust is never given in / or the home
+    # folder itself. Every lane's systemd unit gets the memory and process caps ("" or 0 for none).
+    "lane_policy": {"roots": [], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
     "usage_poll_seconds": 150,
     "codex": {"enabled": True, "label": "Astra", "seat_id": "astra"},
 }

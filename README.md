@@ -334,6 +334,9 @@ set -g status-right '#(curl -s 127.0.0.1:7420/api/status.txt?style=plain)'
 - **Credentials:** read only at the moment of a usage call. They are never sent to the page, logged or cached.
 - **Messages:** the office's inbox accepts only connections from your own user. It never claims a permission mode,
   and it never sends a message without your action.
+- **Lanes:** `lane_policy` in `config.json` sets the folders lanes may work under (`roots`) and whether they may
+  have full trust (`allow_full_trust`). A full-trust lane is never started in `/` or your whole home folder. Each
+  lane's systemd unit is capped at `memory_max` (default `50%` of RAM) and `tasks_max` processes (default 4096).
 - **Demo mode:** reads no accounts, and every write does nothing.
 
 ## Uninstall

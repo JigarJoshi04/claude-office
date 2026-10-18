@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.99.0] - 2026-10-19
+
+### Added
+- A lane safety policy (`lane_policy` in config.json). `roots` limits the folders lanes may work under (empty:
+  anywhere), `allow_full_trust` turns full trust off for lanes, and a full-trust lane is never started in / or the
+  whole home folder whatever the policy says. Every lane's systemd unit is capped at `memory_max` (default 50% of
+  RAM) and `tasks_max` processes (default 4096), so a runaway lane cannot take the machine down. The hiring desk
+  shows the policy as chips under Permissions and greys out Full trust when it is off; a refused hire says why.
+
 ## [3.98.0] - 2026-10-19
 
 ### Added

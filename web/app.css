@@ -1138,6 +1138,8 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 /* what a good brief has */
 .brief-check { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -6px 0 14px; }
 .brief-check .bc { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 12.5px; font-weight: 600; color: var(--faint); background: var(--surface-2); transition: color .2s, background .2s; }
+.pol { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -6px 0 14px; color: var(--faint); font-size: 12px; }
+.pol span { padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
 .brief-check .bc.ok { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
 .brief-check .bc-n { margin-left: auto; font: 500 12px var(--mono); color: var(--faint); }
 

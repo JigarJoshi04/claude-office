@@ -1,6 +1,7 @@
 """Lane filesystem tests. All output is temporary and process launches are forbidden."""
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -191,3 +192,45 @@ class ScheduleTests(unittest.TestCase):
         self.assertFalse(lanes.due({"schedule": {"left": 30}}, [seat(80), seat(95, "limited")], now))
         self.assertTrue(lanes.due({"schedule": {"left": 30}}, [seat(80), seat(60)], now))
         self.assertFalse(lanes.due({"schedule": {"left": 30}}, [seat(10, week=99)], now))      # out of its week
+
+
+class LanePolicyTests(unittest.TestCase):
+    """lane_policy: where unattended lanes may work, whether they get full trust, and their systemd caps."""
+
+    def test_the_policy_reads_safely(self):
+        p = lanes.policy({"lane_policy": {"roots": ["~/work", 3, ""], "memory_max": "8G; rm -rf /", "tasks_max": True}})
+        self.assertEqual(p["roots"], [os.path.realpath(os.path.expanduser("~/work"))])
+        self.assertIsNone(p["memory_max"])
+        self.assertIsNone(p["tasks_max"])
+        self.assertTrue(p["allow_full_trust"])
+        self.assertEqual(lanes.policy({})["roots"], [])
+        self.assertEqual(lanes.unit_limits({"lane_policy": {"memory_max": "50%", "tasks_max": 4096}}),
+                         ["-p", "MemoryMax=50%", "-p", "TasksMax=4096"])
+        self.assertEqual(lanes.unit_limits({"lane_policy": {"memory_max": "", "tasks_max": 0}}), [])
+
+    def test_full_trust_is_never_given_in_home_or_root(self):
+        cfg = {"lane_policy": {}}
+        home = os.path.realpath(str(lanes.config.HOME))
+        for wd in ("/", home):
+            with self.assertRaisesRegex(ValueError, "never given"):
+                lanes.check_policy(wd, "bypassPermissions", cfg)
+            lanes.check_policy(wd, "acceptEdits", cfg)                      # edits only: allowed
+        lanes.check_policy(os.path.join(home, "proj"), "bypassPermissions", cfg)
+
+    def test_roots_and_the_full_trust_switch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.realpath(tmp)
+            cfg = {"lane_policy": {"roots": [root], "allow_full_trust": False}}
+            lanes.check_policy(root, "acceptEdits", cfg)
+            lanes.check_policy(os.path.join(root, "a", "b"), "acceptEdits", cfg)
+            with self.assertRaisesRegex(ValueError, "outside"):
+                lanes.check_policy(root + "-evil", "acceptEdits", cfg)       # a sibling with the same prefix
+            with self.assertRaisesRegex(ValueError, "Full trust is off"):
+                lanes.check_policy(root, "bypassPermissions", cfg)
+
+    def test_create_lane_refuses_what_the_policy_forbids_and_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(lanes, "lanes_dir", return_value=Path(tmp) / "lanes"):
+            cfg = {"default_workdir": tmp, "lane_policy": {"roots": [os.path.join(tmp, "only")]}, "lane_defaults": {}}
+            with self.assertRaisesRegex(ValueError, "outside"):
+                lanes.create_lane("t", "b", tmp, "auto", "opus", "acceptEdits", ["c"], cfg, launch=False)
+            self.assertFalse((Path(tmp) / "lanes").exists() and any((Path(tmp) / "lanes").iterdir()))

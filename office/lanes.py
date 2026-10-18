@@ -350,6 +350,7 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         raise ValueError(f"Model must be one of {', '.join(MODELS)}")
     if permission_mode not in PERMISSIONS:
         raise ValueError(f"Permission mode must be one of {', '.join(PERMISSIONS)}")
+    check_policy(workdir, permission_mode, cfg)
     if resume_session is not None and (not isinstance(resume_session, str)
                                        or not messaging.SESSION_ID.fullmatch(resume_session)):
         raise ValueError("A follow-up needs a session id")
@@ -379,6 +380,41 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
     return load_lane(lane_id) or lane
 
 
+def policy(cfg: dict) -> dict:
+    """The lane safety policy from config.json, checked: the folders lanes may work under, whether full trust is
+    allowed, and the systemd caps on each lane (anything malformed reads as no cap)."""
+    p = cfg.get("lane_policy") if isinstance(cfg.get("lane_policy"), dict) else {}
+    roots = p.get("roots") if isinstance(p.get("roots"), list) else []
+    mem = str(p.get("memory_max") or "").strip()
+    tasks = p.get("tasks_max")
+    return {"roots": [os.path.realpath(os.path.expanduser(r)) for r in roots if isinstance(r, str) and r.strip()][:20],
+            "allow_full_trust": p.get("allow_full_trust", True) is not False,
+            "memory_max": mem if re.fullmatch(r"\d+(?:\.\d+)?[KMGT]?|\d{1,2}%", mem) else None,
+            "tasks_max": tasks if isinstance(tasks, int) and not isinstance(tasks, bool) and 64 <= tasks <= 1_000_000 else None}
+
+
+def check_policy(workdir: str, permission_mode: str, cfg: dict) -> None:
+    """Refuse a lane the policy does not allow (raised as the reason, for the page and the CLI)."""
+    p = policy(cfg)
+    if p["roots"] and not any(workdir == r or workdir.startswith(r.rstrip("/") + "/") for r in p["roots"]):
+        raise ValueError(f"Lanes work only under {', '.join(p['roots'])} (lane_policy.roots in config.json): {workdir} is outside")
+    if permission_mode == "bypassPermissions":
+        if not p["allow_full_trust"]:
+            raise ValueError("Full trust is off for lanes (lane_policy.allow_full_trust in config.json): choose Edit files instead")
+        if workdir in ("/", os.path.realpath(str(config.HOME))):
+            raise ValueError("Full trust is never given to a lane in / or your whole home folder: pick a project folder")
+
+
+def unit_limits(cfg: dict) -> list[str]:
+    """systemd-run properties that cap a lane's memory and processes."""
+    p, out = policy(cfg), []
+    if p["memory_max"]:
+        out += ["-p", f"MemoryMax={p['memory_max']}"]
+    if p["tasks_max"]:
+        out += ["-p", f"TasksMax={p['tasks_max']}"]
+    return out
+
+
 def start_unit(lane_id: str) -> None:
     lane = load_lane(lane_id)
     if not lane:
@@ -387,7 +423,7 @@ def start_unit(lane_id: str) -> None:
         raise ValueError("Lane is already running")
     env_path = os.environ.get("PATH", "/usr/bin:/bin")
     cmd = ["systemd-run", "--user", f"--unit={unit_name(lane_id)}", "--collect", "--quiet",
-           "--nice=15", "-p", "CPUWeight=20",
+           "--nice=15", "-p", "CPUWeight=20", *unit_limits(config.load_config()),
            "--setenv=DISPLAY=", "--setenv=WAYLAND_DISPLAY=",
            f"--setenv=PATH={env_path}", f"--setenv=HOME={config.HOME}",
            f"--setenv=PYTHONPATH={config.REPO_DIR}",

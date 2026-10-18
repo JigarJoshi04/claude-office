@@ -1182,6 +1182,15 @@ export function makePanels(app) {
     paintPick();
   }, 250);
   function markDirty() { dvDirty = true; previewSoon(); const sb = document.getElementById("dvSave"), rb = document.getElementById("dvReset"); if (sb) sb.disabled = false; if (rb) rb.disabled = false; }
+  // The lane safety policy (config.json lane_policy), as chips under Permissions: where lanes may work and their caps.
+  function policyHtml(pol) {
+    if (!pol || pol.roots == null) return "";
+    const chips = [pol.roots.length ? `Only under ${pol.roots.map(r => app.privacy() ? "a project folder" : r.replace(/^\/home\/[^/]+/, "~")).join(", ")}` : "Any folder",
+      pol.allow_full_trust === false ? "No full trust" : "Never full trust in ~ or /",
+      pol.memory_max ? `Memory capped at ${pol.memory_max}${/%$/.test(pol.memory_max) ? " of RAM" : ""}` : "",
+      pol.tasks_max ? `At most ${pol.tasks_max.toLocaleString()} processes` : ""].filter(Boolean);
+    return `<div class="pol" title="The lane policy, set in config.json (lane_policy)">${icon("lock", 13)}${chips.map(c => `<span>${esc(c)}</span>`).join("")}</div>`;
+  }
   // A seat's week against spending it evenly (divider.py pace): plan left per share of the week left.
   const FREE_HOURS = [["", "Never"], ["9-18", "9:00–18:00"], ["10-19", "10:00–19:00"], ["8-20", "8:00–20:00"], ["9-23", "9:00–23:00"], ["0-24", "All day"]];
   function seatPace(s) {
@@ -1314,7 +1323,7 @@ export function makePanels(app) {
       `<span class="bc-n">${t.trim() ? t.trim().split(/\s+/).length + " words" : ""}</span>`;
   }
   function hire() {
-    const snap = S(), ld = snap.office.lane_defaults || {}, np = snap.next_pick, d = hireDraft;
+    const snap = S(), ld = snap.office.lane_defaults || {}, np = snap.next_pick, d = hireDraft, pol = snap.office.lane_policy || {};
     const dirs = [...new Set([snap.office.default_workdir, ...snap.seats.flatMap(s => s.sessions.map(x => x.cwd))].filter(Boolean))];
     const isCodex = d.seat && seatById(d.seat) && seatById(d.seat).kind === "codex";
     return { html: `${crumbs("Hiring desk")}
@@ -1338,7 +1347,8 @@ export function makePanels(app) {
         </div>
         <label class="f">Permissions<select id="hPerm" ${isCodex ? "disabled" : ""}>
           <option value="acceptEdits" ${(d.permission_mode || ld.permission_mode) === "acceptEdits" ? "selected" : ""}>Edit files, run listed tools</option>
-          <option value="bypassPermissions" ${(d.permission_mode || ld.permission_mode) === "bypassPermissions" ? "selected" : ""}>Full trust (skips every permission check)</option></select></label>
+          <option value="bypassPermissions" ${(d.permission_mode || ld.permission_mode) === "bypassPermissions" ? "selected" : ""} ${pol.allow_full_trust === false ? "disabled" : ""}>Full trust (skips every permission check)${pol.allow_full_trust === false ? ": off by policy" : ""}</option></select></label>
+        ${policyHtml(pol)}
         <div class="grid2"><label class="f">Start<select id="hStart">
           <option value="" ${!d.start ? "selected" : ""}>Now</option>
           <option value="at" ${d.start === "at" ? "selected" : ""}>At a time…</option>
