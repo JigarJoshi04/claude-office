@@ -236,7 +236,7 @@ class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
                  "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context",
-                 "tasks", "task_pending", "helpers", "helpers_done")
+                 "tasks", "task_pending", "helpers", "helpers_done", "repeat")
 
     def __init__(self, path: Path):
         self.path = path
@@ -267,6 +267,7 @@ class TranscriptState:
         self.task_pending: dict = {}   # TaskCreate tool_use id -> (subject, activeForm), until its result names the id
         self.helpers: dict = {}        # Agent/Task tool_use id -> {"desc", "since", "bg"}: helpers at work right now
         self.helpers_done = 0          # how many have finished (the floor docks a drone each time it goes up)
+        self.repeat = None             # [signature, times in a row, activity text, since]: the same tool call again and again
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -350,6 +351,7 @@ class TranscriptState:
             if c.get("type") == "tool_use":
                 if not d.get("isSidechain"):
                     self._task_tool(c)
+                    self._note_repeat(c, ts)
                     if c.get("name") in ("Agent", "Task") and c.get("id"):     # a helper goes to work
                         inp = c.get("input") if isinstance(c.get("input"), dict) else {}
                         self.helpers[c["id"]] = {"desc": redact(_short(str(inp.get("description") or inp.get("prompt") or "a helper"), 80)),
@@ -366,6 +368,23 @@ class TranscriptState:
                 self._push(ts, "Writing: " + _short(c["text"], 70), "talk")
             elif c.get("type") == "thinking" and not d.get("isSidechain"):
                 self._push(ts, "Thinking", "think", dedupe=True)
+
+    LOOP_EXEMPT = ("Monitor", "ScheduleWakeup", "TaskOutput", "BashOutput", "TaskUpdate", "TodoWrite", "TaskList", "TaskGet")
+
+    def _note_repeat(self, c: dict, ts) -> None:
+        """Count the same tool call (name and input alike) made again and again: a session that runs one command ten
+        times in a row with nothing between is likely stuck in a loop. Waiting and polling tools do not count."""
+        name = str(c.get("name") or "")
+        if name in self.LOOP_EXEMPT:
+            return
+        try:
+            sig = hash(name + json.dumps(c.get("input"), sort_keys=True, default=str))
+        except (TypeError, ValueError):
+            return
+        if self.repeat and self.repeat[0] == sig:
+            self.repeat[1] += 1
+        else:
+            self.repeat = [sig, 1, describe_tool(name, c.get("input") or {})[0], ts]
 
     def _helper_result(self, content) -> None:
         """A helper is done when its result comes back, or, for one in the background, when its task notification
@@ -620,6 +639,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "helpers": [{"desc": h["desc"], "since": h["since"]} for h in tr.helpers.values()
                         if (h["since"] or now) > now - 6 * 3600][:8] if tr else [],
             "helpers_done": tr.helpers_done if tr else 0,
+            "loop": {"text": redact(tr.repeat[2]), "count": tr.repeat[1], "since": tr.repeat[3]} if tr and tr.repeat and tr.repeat[1] >= 5 else None,
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,
             "report_file": report_file,

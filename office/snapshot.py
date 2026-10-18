@@ -411,7 +411,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.51.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.52.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -499,6 +499,10 @@ class Office(LiveOffice):
                     items.append({"level": "bad" if left < 12 * 3600 else "warn", "seat": s["id"],
                                   "text": f"{label}'s login lapses in {when}: run /login on it", "lapses_at": rexp})
             for x in s.get("sessions", []):
+                lp = x.get("loop")
+                if lp and lp["count"] >= 8 and x.get("live", True) and x.get("state") in ("working", "waiting"):
+                    items.append({"level": "warn", "seat": s["id"], "session": x["id"], "loop": True,
+                                  "text": f"{x.get('name') or 'A session'} on {label} has made the same call {lp['count']} times in a row: {lp['text']}"})
                 ci = x.get("ci")
                 if ci and ci.get("checks") == "fail" and x.get("live", True):
                     items.append({"level": "warn", "seat": s["id"], "ci": True, "session": x["id"],

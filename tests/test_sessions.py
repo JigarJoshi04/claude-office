@@ -371,3 +371,22 @@ class HelperTests(unittest.TestCase):
         self.assertEqual((list(st.helpers), st.helpers_done), (["t2"], 1))
         st.feed_line(note("t2"))
         self.assertEqual((st.helpers, st.helpers_done), ({}, 2))
+
+
+class LoopTests(unittest.TestCase):
+    def test_the_same_call_again_and_again(self):
+        import json
+        st = sessions.TranscriptState(Path("/x.jsonl"))
+        use = lambda i, name, inp: json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:00:00Z", "message": {"id": f"m{i}", "content": [
+            {"type": "tool_use", "id": f"t{i}", "name": name, "input": inp}]}}).encode()
+        for i in range(9):
+            st.feed_line(use(i, "Bash", {"command": "npm test", "description": "Run the tests"}))
+        self.assertEqual(st.repeat[1:3], [9, "Run the tests"])
+        st.feed_line(use(20, "Bash", {"command": "npm test -- --watch=false"}))     # something else breaks the run
+        self.assertEqual(st.repeat[1], 1)
+        for i in range(30, 40):
+            st.feed_line(use(i, "Monitor", {"until": "done"}))                       # polling is not a loop
+        self.assertEqual(st.repeat[1], 1)
+        for i in range(40, 46):
+            st.feed_line(use(i, "Edit", {"file_path": "/a.py", "old_string": f"x{i}", "new_string": "y"}))   # different edits
+        self.assertEqual(st.repeat[1], 1)

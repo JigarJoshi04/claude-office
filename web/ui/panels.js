@@ -458,6 +458,7 @@ export function makePanels(app) {
           ${x && x.model ? pill(x.model.replace(/^claude-/, "")) : ""}
           ${x && x.git ? gitChip(x) : ""}
           ${x && x.cache && x.state !== "working" ? cachePill(x) : ""}
+          ${x && x.loop ? `<span class="pill ${x.loop.count >= 8 ? "warn" : ""}" title="The same call, ${x.loop.count} times in a row: ${esc(x.loop.text)}. A session repeating itself with nothing in between may be stuck.">${icon("refresh", 13)}Same call ×${x.loop.count}</span>` : ""}
           ${x && x.ci ? `<a class="pill ci ${esc(x.ci.checks || "")}" href="${esc(x.ci.url)}" target="_blank" rel="noopener noreferrer" title="Its branch's pull request on GitHub">${icon(x.ci.checks === "fail" ? "x" : x.ci.checks === "pass" ? "check" : "clock", 13)}PR #${x.ci.number}${x.ci.checks ? ` · ${CI_WORD[x.ci.checks]}` : ""}</a>` : ""}
           ${x && x.spent && x.spent.usd ? `<span class="pill spent" title="${fmtTok(x.spent.tokens)} tokens so far (its helpers included), at API list prices">${icon("coin", 13)}${esc(money(x.spent.usd))} so far</span>` : ""}
           ${x && x.cache && x.cache.window ? (() => { const f = x.cache.context / x.cache.window, pc = Math.round(f * 100);

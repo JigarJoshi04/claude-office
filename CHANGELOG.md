@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.52.0] - 2026-10-18
+
+### Added
+- Loop detector: a session that makes the very same call (the same tool, the same input) eight times in a row while it
+  works lands in Needs you ("has made the same call 9 times in a row: Run the tests"), and its page shows "Same call
+  ×9" from five. Waiting and polling tools never count, and different edits to one file are not a loop.
+
 ## [3.51.0] - 2026-10-18
 
 ### Added
