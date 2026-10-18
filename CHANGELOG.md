@@ -3,6 +3,19 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.7.0] - 2026-10-18
+
+### Added
+- Gear with a character's level: a team badge (5), caps in the seat's colour (9), sunglasses (13), gold headphones (18).
+- A right-click menu on rooms: open, zoom in, hire a lane for that seat, holiday or duty, copy the terminal command.
+- A minimap while the floor is zoomed in.
+- Chat text renders as safe markdown (escaped first), with a Copy button on code blocks.
+- A visit streak by the level chip, and a Regular badge at seven days; confetti in every room on an office level-up.
+
+### Fixed
+- Thirteen bugs from the 3.4 QA pass (replay seeking, double replays, replay keys, live news over a replay, combo
+  double counting, TV keys, overlaps in TV mode and on phones, UTC dates at the date line, the day card's long names).
+
 ## [3.6.0] - 2026-10-18
 
 ### Added

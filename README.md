@@ -57,7 +57,8 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   little night city fills anything left. Drag the inspector wider and the building rearranges itself live.
 - Under the floor, a dock shows everyone at work right now: who, what they are doing and for how long. A click
   opens their chat and flies the camera to their desk.
-- Zoom and pan the camera, double-click a room to fly to it. Point at a character anywhere (the team list, the dock,
+- Zoom and pan the camera (a minimap appears while zoomed), double-click a room to fly to it, right-click it for quick
+  actions: open, zoom in, hire a lane for that seat, send it on holiday, copy its terminal command. Point at a character anywhere (the team list, the dock,
   a room) and their room lights up on the floor while their row lights up in the list.
 - Every room has its own weather: its window rains while the seat is out of plan and clouds over while its plan runs
   low.
@@ -94,14 +95,14 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   filed reports (100). Levels run from Intern to Legend, with a "LEVEL UP!" banner across the floor and "+XP"
   rising from busy desks.
 - Desks upgrade as their character levels up: a mug, a plant, a gold cup, a glowing desk edge, a pennant, gold
-  trim.
+  trim. Their people get gear too: a team badge, caps in the seat's colour, sunglasses and gold headphones.
 - Fifteen achievements, such as *Night shift*, *Marathon*, *Juggler* and *Week streak*. They sit on each
   character's trophy wall with a "next up" goal, and fill the trophy cabinet in the lobby. The cabinet opens
   the Trophy room, with an XP leaderboard.
 
 **Talk to a task**
-- Open any session and use the **Chat** tab. It shows the conversation: prompts, replies, collapsed tool steps,
-  messages from other sessions, and replies sent to you.
+- Open any session and use the **Chat** tab. It shows the conversation: prompts, replies (formatted: lists, code,
+  tables), collapsed tool steps, messages from other sessions, and replies sent to you.
 - Send a message from the office. Lanes you hire here get it straight away. Terminal sessions hold it for approval
   at that terminal, because that is Claude Code's own safety rule and the office respects it.
 - Agents can answer you: the office has its own inbox, and replies show up in the chat and as a toast.
