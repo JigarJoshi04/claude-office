@@ -395,6 +395,12 @@ export function makePanels(app) {
           if (b.dataset.stab === "chat") { const c = root.querySelector(".chat"); if (c && getComputedStyle(c).overflowY !== "visible") c.scrollTop = c.scrollHeight; else root.scrollTop = root.scrollHeight; }   // Chat opens at the newest
         }));
         root.querySelectorAll("[data-steps]").forEach(b => b.addEventListener("click", () => { const k = b.dataset.steps; if (openSteps.has(k)) openSteps.delete(k); else openSteps.add(k); app.rerender(true); }));
+        root.querySelectorAll(".msg .md pre").forEach(pre => {   // a Copy button on every code block
+          const b = document.createElement("button");
+          b.className = "btn sm ghost md-copy"; b.type = "button"; b.innerHTML = `${icon("copy", 13)}Copy`; b.setAttribute("aria-label", "Copy the code");
+          b.addEventListener("click", () => navigator.clipboard.writeText(pre.textContent.replace(/Copy$/, "")).then(() => toast("Copied.", "good", 1500), () => toast("Copy failed: select the text instead.", "warn")));
+          pre.appendChild(b);
+        });
         const ta = root.querySelector("#chatBox"), send = root.querySelector("#chatSend");
         if (ta && send) {
           ta.value = app.draftFor(v.id);
