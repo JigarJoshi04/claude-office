@@ -1471,3 +1471,14 @@ table.ship small { color: var(--muted); }
 .pace.ghostnote > .ic { color: #c8d4ff; } :root[data-theme="light"] .pace.ghostnote > .ic { color: #3b55a8; }
 /* the lobby TV's channel name, under the screen (3.36) */
 .tv-label { position: absolute; text-align: center; pointer-events: none; font: 400 max(8px, calc(3.6px * var(--f)))/1.2 Silkscreen, var(--pixel, monospace); color: #9fb4e8; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 0 #000; }
+/* loose ends (3.37) */
+ul.loose { list-style: none; margin: 6px 0 10px; padding: 0; display: grid; gap: 4px; }
+ul.loose li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: var(--surface-2); min-width: 0; }
+ul.loose li .grow { min-width: 0; } ul.loose li b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.loose li small { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; flex: none; max-width: 55%; }
+.lc { font: 650 11px var(--mono); font-style: normal; padding: 2px 7px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.lc.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent); } .lc.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.lc.good { color: var(--good); background: color-mix(in srgb, var(--good) 13%, transparent); } .lc.info { color: var(--info); background: color-mix(in srgb, var(--info) 13%, transparent); }
+h5.lh { margin: 14px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.b-links .count { margin-left: 4px; font: 700 11px var(--mono); padding: 1px 6px; border-radius: 99px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }

@@ -270,7 +270,7 @@ export function makePanels(app) {
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
         <button data-go="news">${icon("news", 16)}News</button><button data-go="trophies">${icon("trophy", 16)}Trophies</button>
-        <button data-go="services">${icon("server", 16)}Services</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
+        <button data-go="services">${icon("server", 16)}Services</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
@@ -290,6 +290,11 @@ export function makePanels(app) {
   }
 
   // -------------------------------------------------------------------------------------------- seat
+  // How many worktrees hold work that is nowhere else, for the briefing's link (asked for lazily).
+  function looseCount() {
+    const d = app.looseCache(), k = d && d.totals ? d.totals.work : 0;
+    return k ? `<span class="count">${k}</span>` : "";
+  }
   function seat(v) {
     const s = seatById(v.seat);
     if (!s) return { html: crumbs("Gone") + `<div class="allclear">That seat is no longer here.</div>` };
@@ -634,6 +639,31 @@ export function makePanels(app) {
     return { html: `${crumbs("Server room")}<h2>Server room</h2><p class="lede">Background services that keep lanes running: conductors, supervisors and the lanes themselves.</p>
       ${section(`Services · ${units.length}`, units.length ? units.map(u => `<div class="need ${u.active === "failed" ? "bad" : u.active === "active" ? "good" : "info"}"><span class="ico">${icon(u.active === "active" ? "play" : u.active === "failed" ? "alert" : "stop", 16)}</span>
         <div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(u.unit)}</div><div class="d">${esc(u.description)} · ${esc(u.active)}</div></div></div>`).join("") : `<div class="muted">No watched services. Add patterns to <code>watch_units</code> in the config.</div>`)}` };
+  }
+  // Loose ends (office/loose.py): work left in git that is nowhere else, and worktrees that are safe to remove.
+  function loose() {
+    const d = app.looseCache(), pv = app.privacy();
+    const head = `${crumbs("Loose ends")}<h2>Loose ends</h2><p class="lede">Work the agents left in git, and worktrees you can remove. The office only reads: removing is a command you copy and run yourself.</p>`;
+    if (!d) return { html: head + `<div class="skeleton"></div><div class="skeleton" style="width:70%"></div>` };
+    if (!d.at) return { html: head + `<div class="muted">${d.scanning ? "Looking through the repositories…" : "No repositories yet: the office learns them from the folders its sessions and lanes work in (or add <code>\"repos\"</code> to config.json)."}</div>` };
+    const t = d.totals || {}, n = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
+    const row = (w, tags) => `<li><span class="grow"><b class="${pv ? "private" : ""}" title="${pv ? "" : esc(w.path)}">${esc(w.name)}</b><small>${esc(w.branch || "detached at " + w.head)}${w.touched ? " · touched " + esc(relTime(w.touched)) : ""}</small></span><span class="lc-tags">${tags}</span></li>`;
+    const tags = (w) => [w.files && `<em class="lc bad">${n(w.files, "file")} not committed</em>`, w.unpushed && !w.merged && w.upstream !== "gone" && `<em class="lc warn">${n(w.unpushed, "commit")} on no remote</em>`,
+      w.unpushed && !w.upstream && `<em class="lc">never pushed</em>`, w.live && `<em class="lc info">a session works here</em>`].filter(Boolean).join("");
+    const copyAll = (cmds, what) => cmds && cmds.length ? `<button class="btn sm" data-copy="${esc(cmds.join("\n"))}" data-copy-note="${cmds.length} commands on the clipboard: paste them in a terminal.">${icon("copy", 14)}Copy ${n(cmds.length, what)}</button>` : "";
+    const repos = (d.repos || []).map(r => section(`${esc(r.name)} · ${n(r.worktrees, "worktree")}`, `
+      ${r.work.length ? `<h5 class="lh">Work that is nowhere else · ${r.work.length}</h5><ul class="loose">${r.work.slice(0, 40).map(w => row(w, tags(w))).join("")}</ul>${r.work.length > 40 ? `<p class="hint">and ${r.work.length - 40} more</p>` : ""}`
+        : `<div class="g-clear">${icon("check", 16)}Nothing left behind here.</div>`}
+      ${r.safe.length ? `<h5 class="lh">Safe to remove · ${r.safe.length}</h5><p class="hint">Clean, and every commit is on a remote or on ${esc(r.base || "the default branch")} by name (a squash merge). Removing a worktree keeps its branch.</p>
+        <ul class="loose">${r.safe.slice(0, 6).map(w => row(w, w.merged ? `<em class="lc good">merged</em>` : `<em class="lc good">pushed</em>`)).join("")}</ul>${r.safe.length > 6 ? `<p class="hint">and ${r.safe.length - 6} more, oldest first.</p>` : ""}${copyAll(r.remove_cmds, "remove command")}` : ""}
+      ${r.deleted.length ? `<h5 class="lh">Remote branch deleted · ${r.deleted.length}</h5><p class="hint">Their remote branches were deleted, usually after a merge, but their commits are not on ${esc(r.base || "the default branch")} by name. Look before you remove: removing keeps the branch and its commits.</p>
+        <ul class="loose">${r.deleted.slice(0, 5).map(w => row(w, `<em class="lc">${n(w.unpushed, "commit")}</em>`)).join("")}</ul>${r.deleted.length > 5 ? `<p class="hint">and ${r.deleted.length - 5} more.</p>` : ""}${copyAll(r.deleted_cmds, "remove command")}` : ""}
+      ${r.prune_cmd ? `<p class="hint">${n(r.gone, "worktree")} whose folder is gone: <button class="btn sm ghost" data-copy="${esc(r.prune_cmd)}">${icon("copy", 13)}Copy the prune command</button></p>` : ""}`)).join("");
+    return { html: `${head}<div class="tiles"><div class="tile"><div class="v">${t.work}</div><div class="tk">hold work that is nowhere else</div></div>
+        <div class="tile"><div class="v">${t.safe}</div><div class="tk">safe to remove</div></div><div class="tile"><div class="v">${t.worktrees}</div><div class="tk">${t.worktrees === 1 ? "worktree" : "worktrees"} in ${t.repos === 1 ? "one repository" : `${t.repos} repositories`}</div></div></div>
+      <div class="row" style="gap:8px;margin:10px 0 4px"><span class="hint">${d.scanning ? "Checking again…" : `Checked ${esc(relTime(d.at))}.`}</span><button class="btn sm ghost" data-loose-refresh ${d.scanning ? "disabled" : ""}>${icon("refresh", 14)}Check again</button></div>
+      ${repos}`,
+      bind(root) { const b = root.querySelector("[data-loose-refresh]"); if (b) b.addEventListener("click", () => { app.looseCache(true); b.disabled = true; }); } };
   }
   function programmes() {
     return { html: `${crumbs("Meeting room")}<h2>Programmes</h2><p class="lede">Live work grouped by programme. Names and links come from your config.</p>
@@ -1078,6 +1108,6 @@ export function makePanels(app) {
   }
   return { office, setDuty, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
-    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
+    needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), ceo, seat, session, services, programmes, loose, lounge, news, trophies, lane, divider, hire, settings, laneListHtml, persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings" };
 }

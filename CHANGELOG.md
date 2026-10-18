@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.37.0] - 2026-10-18
+
+### Added
+- Loose ends: every worktree of the repositories the office's sessions and lanes use, sorted into work that is
+  nowhere else (files not committed, commits on no remote, branches never pushed), worktrees safe to remove (clean,
+  and every commit on a remote or on the default branch by name, as a squash merge leaves it), and worktrees whose
+  remote branch was deleted but whose commits are not on the default branch. Copy the remove commands for a whole
+  list; the office only reads, at low priority, and never changes a repository. From the briefing (with a count of
+  worktrees holding work), the palette, or `GET /api/loose`. Repositories are remembered from every session and lane,
+  plus `"repos"` in config.json.
+
 ## [3.36.0] - 2026-10-18
 
 ### Added

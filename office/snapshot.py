@@ -15,7 +15,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import config, divider, lanes, seats as seatmod, sessions
+from . import config, divider, lanes, loose, seats as seatmod, sessions
 from .career import CATALOGUE, Career
 from .history import DayLedger, HistoryStore
 from .tokens import TokenLedger
@@ -228,6 +228,7 @@ class Office(LiveOffice):
         self.usage = seatmod.UsagePoller(self.claude_seats, self.cfg.get("usage_poll_seconds", 150))
         self.history = UsageHistory()
         self._ghost_said: dict = {}                 # seat -> when its ghost use last made news (once an hour)
+        self.loose = loose.LooseEnds(config.STATE_DIR / "loose-roots.json")
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
         self._load_events()
@@ -406,7 +407,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.36.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.37.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -585,6 +586,15 @@ class Office(LiveOffice):
             except Exception:                         # the ledger is a nicety; never let it stop the office
                 pass
             self.stop.wait(60)
+
+    def loose_view(self, force: bool = False) -> dict:
+        """Loose ends in the repositories the office's sessions and lanes use (loose.py)."""
+        snap = self.get() or {}
+        cwds = [x.get("cwd") for s in snap.get("seats", []) for x in s.get("sessions", [])]
+        lane_dirs = [l.get("workdir") for l in lanes.list_lanes()]
+        self.loose.note(cwds + lane_dirs)
+        live = {x.get("cwd") for s in snap.get("seats", []) for x in s.get("sessions", []) if x.get("live", True) and x.get("cwd")}
+        return self.loose.view(self.loose.known(self.cfg.get("repos") or []), live, force)
 
     def tokens_view(self, rng: str = "all", seat: str | None = None, all_sessions: bool = False) -> dict:
         snap = self.get() or {}

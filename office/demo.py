@@ -167,6 +167,26 @@ def _demo_token_ledger() -> TokenLedger:
 class DemoOffice(LiveOffice):
     is_demo = True
 
+    def loose_view(self, force: bool = False) -> dict:
+        """Made-up loose ends: the demo never runs git."""
+        now = time.time()
+        row = lambda name, branch, files=0, unpushed=0, upstream=None, live=False, merged=False, days=1: {
+            "path": f"/home/you/work/{name}", "name": name, "branch": branch, "head": "3f9c2ab", "files": files,
+            "unpushed": unpushed, "upstream": upstream, "ahead": unpushed if upstream not in (None, "gone") else 0,
+            "merged": merged, "main": name == "apollo", "live": live, "locked": False, "touched": now - days * 86400}
+        work = [row("wt-rate-limits", "lane/api-rate-limits", files=3, upstream="origin/lane/api-rate-limits", live=True, days=0),
+                row("wt-billing-spike", "spike/billing-v2", unpushed=6, days=4),
+                row("wt-docs-refresh", "lane/docs-refresh", files=1, unpushed=2, upstream="origin/lane/docs-refresh", days=2)]
+        safe = [row(f"wt-lane-{n}", f"lane/{n}", unpushed=1, upstream="gone", merged=True, days=3 + i) for i, n in enumerate(
+            ["login-copy", "flaky-retry", "search-index", "cache-warmup", "csv-export", "dark-mode", "audit-log"])]
+        deleted = [row("wt-old-experiment", "exp/graph-layout", unpushed=3, upstream="gone", days=12)]
+        cmd = lambda w: f"git -C /home/you/work/apollo worktree remove /home/you/work/{w['name']}"
+        repo = {"root": "/home/you/work/apollo", "name": "apollo", "worktrees": 12, "base": "origin/main", "work": work,
+                "safe": safe, "deleted": deleted, "gone": 1, "remove_cmds": [cmd(w) for w in safe],
+                "deleted_cmds": [cmd(w) for w in deleted], "prune_cmd": "git -C /home/you/work/apollo worktree prune"}
+        return {"at": now - 180, "scanning": False, "repos": [repo],
+                "totals": {"repos": 1, "worktrees": 12, "work": 3, "safe": 7, "deleted": 1, "gone": 1}}
+
     def tokens_view(self, rng: str = "all", seat: str | None = None, all_sessions: bool = False) -> dict:
         if not hasattr(self, "_tokens"):
             self._tokens = _demo_token_ledger()
@@ -349,7 +369,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.36.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.37.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

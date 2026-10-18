@@ -33,6 +33,7 @@ let snap = null, view = { kind: "ceo" }, liveMode = "connecting";
 const details = new Map(), histCache = new Map(), statsCache = new Map(), inflight = new Set();
 const tokens = new Map();   // "range|seat" -> {data, at}
 let week = null;
+let loose = null;          // the last /api/loose answer and when it came
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
 const seenNews = new Set();
 let lastEventTs = 0;
@@ -104,6 +105,18 @@ const app = {
     return c ? c.data : null;
   },
   tokenMetric: () => prefs.tokenMetric || "all",
+  // Loose ends (/api/loose): asked for when its page or the briefing shows; polled while a sweep runs.
+  looseCache: (force = false) => {
+    const stale = !loose || Date.now() - loose.at > (loose.data && loose.data.scanning ? 3000 : 60000);
+    if ((stale || force) && !inflight.has("loose")) {
+      inflight.add("loose");
+      fetch(`/api/loose${force ? "?refresh=1" : ""}`).then(r => r.ok ? r.json() : null).then(d => {
+        loose = { data: d, at: Date.now() }; inflight.delete("loose");
+        if (view.kind === "loose" || view.kind === "ceo") renderPanel(true);
+      }).catch(() => { loose = { data: null, at: Date.now() }; inflight.delete("loose"); });
+    }
+    return loose ? loose.data : null;
+  },
   statsCache: (day) => { const k = day || "today"; const c = statsCache.get(k); if (!c || Date.now() - c.at > 60000) loadStats(day); return c ? c.data : null; },
   loadHistory: (h, force) => loadHistory(h, force),
   loadStats: (d, force) => loadStats(d, force),
@@ -320,7 +333,7 @@ function viewFromHash() {
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
-  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office"].includes(k) ? { kind: k } : { kind: "ceo" };
+  return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "office", "loose"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 let revealT = 0;
@@ -1031,6 +1044,7 @@ function paletteItems() {
     { icon: icon("settings", 16), label: "Settings", run: () => go({ kind: "settings" }) },
     { icon: icon("sliders", 16), label: "Keyboard shortcuts", hint: "?", keywords: "keys help hotkeys", run: shortcuts },
     { icon: icon("server", 16), label: "Server room", run: () => go({ kind: "services" }) },
+    { icon: icon("branch", 16), label: "Loose ends", keywords: "git worktrees uncommitted unpushed cleanup", run: () => go({ kind: "loose" }) },
   ];
   // Share-safe: a terminal session's topic never becomes a search keyword.
   for (const s of snap.seats) {
