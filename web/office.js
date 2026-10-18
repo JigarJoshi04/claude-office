@@ -4,6 +4,7 @@ import * as S from "./engine/sprites.js";
 import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, drawStatic, capFor, deskFor } from "./engine/scene.js";
 import { windowRect, drawDecorLive } from "./engine/decor.js";
 import { officeLevel } from "./engine/unlocks.js";
+import { seasonFor, drawSeason, drawSnow } from "./engine/season.js";
 
 const SPEED = 46;                 // logical px per second
 const MAX_SLOTS = 6;
@@ -59,7 +60,8 @@ export function createOffice(stage, handlers) {
   let selected = null, privacy = false, reduced = false, mvp = null, hoverId = null, persona = null;
   let spot = null;
   let skyKey = "";
-  let walkBoost = 1;                   // replay speeds walking up so arrivals reach their desks in replay time                     // a seat being pointed at in the inspector or on the floor: its room lights up
+  let walkBoost = 1;
+  let seasonal = true;                 // Settings → Seasonal decorations                   // replay speeds walking up so arrivals reach their desks in replay time                     // a seat being pointed at in the inspector or on the floor: its room lights up
   const said = new Map();              // session id -> {text, until, at}: personality lines
   const agents = new Map();          // session id -> agent
   let leavers = [];                   // agents walking out
@@ -222,6 +224,11 @@ export function createOffice(stage, handlers) {
     drawLounge(t, lights, env);
     for (const pod of L.pods) drawRoom(pod, t, lights, env);
     drawHire(t, lights);
+    const season = seasonal ? seasonFor(now) : null;
+    if (season) {
+      drawSeason(ctx, L, season, t, env.night, lights);
+      if (season === "winter") for (const pod of L.pods) { const wr = windowRect(pod.room); drawSnow(ctx, wr.x, wr.y, wr.w, wr.h, t); }
+    }
     const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers].sort((a, b) => a.y - b.y);
     for (const a of walkers) S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, true);
     S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
@@ -1019,6 +1026,8 @@ export function createOffice(stage, handlers) {
     focusSeat, focusSession, fit, celebrate, alarm, banner,
     officeLevel: () => ol,
     spotlight(id) { spot = id || null; },
+    setSeasonal(on) { seasonal = !!on; },
+    season: () => (seasonal ? seasonFor(new Date()) : null),
     setWalkBoost(k) { walkBoost = Math.max(1, Math.min(8, k || 1)); },
     // The next update seats everyone where they belong at once (no walking in or out): for jumps in time (replay).
     reset() { for (const a of agents.values()) if (a.tagEl) a.tagEl.remove(); agents.clear(); leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; }); fresh.clear(); first = true; },

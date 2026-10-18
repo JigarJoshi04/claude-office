@@ -18,7 +18,7 @@ const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
 const QS = new URLSearchParams(location.search);
 
 const prefs = Object.assign({ theme: "dark", motion: matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduced" : "full",
-  sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true }, store.get("prefs", {}));
+  sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true, seasonal: true }, store.get("prefs", {}));
 let snap = null, view = { kind: "ceo" }, liveMode = "connecting";
 const details = new Map(), histCache = new Map(), statsCache = new Map(), inflight = new Set();
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
@@ -289,6 +289,7 @@ function setPref(k, v) {
   if (k === "sound") sound.set(v);
   if (k === "textSize") { applyTextSize(); if (view.kind === "settings") renderPanel(true); }
   if (k === "panel") applyPanel();
+  if (k === "seasonal") office.setSeasonal(v);
   if (k === "privacy") { office.setPrivacy(v); renderPanel(true); renderMain(); rnSig = ""; if (snap) renderRightNow(); }
   if (k === "notify" && v) {
     // The switch only stays on if the browser really lets the office notify.
@@ -1033,6 +1034,7 @@ document.documentElement.dataset.theme = prefs.theme;
 document.documentElement.dataset.motion = prefs.motion;
 office.setReducedMotion(prefs.motion === "reduced");
 office.setPrivacy(prefs.privacy);
+office.setSeasonal(prefs.seasonal);
 sound.set(prefs.sound);
 setView(QS.get("view") || prefs.view || "floor");
 view = viewFromHash();
