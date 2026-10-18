@@ -1263,6 +1263,9 @@ export function makePanels(app) {
       ${section("The brief", `
         <label class="f">Title<input type="text" id="hTitle" maxlength="80" placeholder="e.g. Fix the flaky export test" value="${esc(d.title)}"></label>
         <label class="f">What should it do?<textarea id="hBrief" placeholder="The goal, where to look, how to check the work, and what counts as done.">${esc(d.brief)}</textarea></label>
+        <details class="fanout" ${d.each ? "open" : ""}><summary>${icon("layers", 14)}One lane for each of a list…</summary>
+          <label class="f">For each (one per line: PRs, failing tests, files)<textarea id="hEach" placeholder="#481&#10;#482&#10;tests/test_export.py" style="min-height:76px">${esc(d.each || "")}</textarea></label>
+          <p class="hint">Each line becomes its own lane in the backlog (at most 20), running in waves as seats free up. Write {{item}} in the title or the brief where the line goes; otherwise it is added to both.</p></details>
         <div class="brief-check" id="hCheck" aria-live="polite">${briefCheck(d.brief)}</div>
         <label class="f">Working folder<input type="text" id="hDir" list="hDirs" value="${esc(d.workdir || snap.office.default_workdir || "")}"><datalist id="hDirs">${dirs.map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
         <div class="grid2">
@@ -1293,8 +1296,11 @@ export function makePanels(app) {
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
         const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
-          start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "" }; store.set("hireDraft", hireDraft); };
-        ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen"].forEach(id => q(id).addEventListener("input", save));
+          start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "", each: q("hEach").value }; store.set("hireDraft", hireDraft); };
+        ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen", "hEach"].forEach(id => q(id).addEventListener("input", save));
+        const items = () => [...new Set(q("hEach").value.split("\n").map(x => x.trim()).filter(Boolean))];
+        const goLabel = () => { const n = items().length; q("hGo").innerHTML = `${icon("briefcase", 16)}${n >= 2 ? `Hire ${Math.min(n, 20)} lanes into the backlog` : "Hire and start"}`; };
+        q("hEach").addEventListener("input", goLabel); goLabel();
         q("hBrief").addEventListener("input", () => { q("hCheck").innerHTML = briefCheck(q("hBrief").value); });
         q("hMsg").addEventListener("change", save);
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
@@ -1347,6 +1353,24 @@ export function makePanels(app) {
             miss.focus(); toast("Give the lane a title and a brief.", "warn"); return;
           }
           if (hireDraft.permission_mode === "bypassPermissions" && !confirm("Full trust lets the lane run any command without asking. Start it?")) return;
+          const list = items();
+          if (list.length >= 2) {                     // fan out: one lane per line, all into the backlog
+            const n = Math.min(20, list.length);
+            if (!confirm(`Hire ${n} lanes, one for each line${list.length > 20 ? " (the first 20)" : ""}, into the backlog?`)) return;
+            q("hGo").disabled = true;
+            const fill = (t, item, sep) => (t.includes("{{item}}") ? t.split("{{item}}").join(item) : t + sep + item);
+            let ok = 0, demo = false;
+            for (const item of list.slice(0, 20)) {
+              try {
+                const r = await app.post("/api/lanes", { ...hireDraft, title: fill(hireDraft.title, item, " · ").slice(0, 80), brief: fill(hireDraft.brief, item, "\n\nThis lane's item: "), start: { backlog: true } });
+                if (r.demo) { demo = true; break; } ok++;
+              } catch (e) { toast(`Could not hire for “${item}”: ${e.message}`, "bad"); }
+            }
+            if (demo) toast("Demo office: no lanes were hired.");
+            else { sound.play("hire"); toast(`${ok} lane${ok === 1 ? "" : "s"} in the backlog: they start as seats free up.`, "good"); app.badge("hiring"); hireDraft = { ...hireDraft, title: "", brief: "", each: "" }; store.set("hireDraft", hireDraft); }
+            q("hGo").disabled = false; app.refresh(); app.rerender(true);
+            return;
+          }
           q("hGo").disabled = true;
           try {
             const startAt = hireDraft.start === "at" && hireDraft.startAt ? Date.parse(hireDraft.startAt) / 1000 : null;

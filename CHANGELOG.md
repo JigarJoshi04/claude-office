@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.91.0] - 2026-10-19
+
+### Added
+- Fan-out hiring: "One lane for each of a list…" on the hiring desk takes a list (PRs, failing tests, files, one per
+  line) and hires a lane for each line into the backlog (at most 20), so they run in waves as seats free up. `{{item}}`
+  in the title or brief marks where each line goes; otherwise it is added to both.
+
 ## [3.90.0] - 2026-10-19
 
 ### Added

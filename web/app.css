@@ -1659,3 +1659,6 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .punch { display: flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .punch i { width: 14px; height: 14px; border-radius: 50%; border: 2px dashed var(--line-2); } .punch i.on { border: 0; background: radial-gradient(circle at 35% 35%, #ffb27a, #ff7a45); box-shadow: 0 0 6px rgba(255,122,69,.5); }
 .punch span { margin-left: 4px; }
+/* One lane for each of a list (panels.js hire) */
+.fanout { margin-top: 10px; } .fanout summary { cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-2); }
+.fanout[open] summary { margin-bottom: 8px; }
