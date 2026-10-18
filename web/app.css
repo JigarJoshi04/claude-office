@@ -979,3 +979,30 @@ body.tv .peek { width: 340px; }
 .tour-card p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: var(--text-2); }
 .tour-card .tc-row { display: flex; align-items: center; gap: 6px; }
 .floor-hint .btn.primary { box-shadow: none; }
+
+/* the week chart in Today */
+.week .wk-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 2px 0 10px; }
+.week .wk-head b { font: 800 28px/1 Inter, sans-serif; letter-spacing: -.02em; }
+.week .wk-head span { font-size: 14px; color: var(--muted); }
+.week .wk-head em { font-style: normal; font-size: 13px; font-weight: 650; padding: 2px 8px; border-radius: 99px; }
+.week .wk-head em.up { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.week .wk-head em.down { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.wk-body { display: grid; grid-template-columns: minmax(0, 640px) minmax(220px, 1fr); gap: 20px 32px; align-items: center; }
+@media (max-width: 900px) { .wk-body { grid-template-columns: 1fr; } }
+.wk { display: block; width: 100%; height: auto; overflow: visible; }
+.wk-facts { display: grid; gap: 8px; }
+.wf { display: grid; grid-template-columns: 30px 1fr; grid-template-rows: auto auto; column-gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.wf .wf-ic { grid-row: span 2; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--surface-3); color: var(--accent); }
+.wf .wf-k { font-size: 12px; color: var(--muted); }
+.wf b { font-size: 14.5px; font-weight: 650; }
+.wf-who { display: inline-flex; align-items: center; gap: 6px; } .wf-who i { width: 8px; height: 8px; border-radius: 50%; background: var(--seat); }
+.wk .base { stroke: var(--line-2); stroke-width: 1; }
+.wk .val { fill: color-mix(in srgb, var(--accent) 55%, var(--surface-3)); transition: fill .15s; }
+.wk .zero { fill: var(--line-2); }
+.wk-bar { cursor: pointer; outline: none; }
+.wk-bar:hover .val, .wk-bar:focus-visible .val { fill: color-mix(in srgb, var(--accent) 80%, var(--surface-3)); }
+.wk-bar.on .val { fill: var(--accent); }
+.wk-bar:focus-visible .hit { stroke: var(--info); stroke-width: 2; rx: 8; }
+.wk .lbl { font: 700 12px var(--mono); fill: var(--text); }
+.wk .ax { font: 600 12px Inter, sans-serif; fill: var(--muted); }
+.wk-bar.on .ax { fill: var(--text); }

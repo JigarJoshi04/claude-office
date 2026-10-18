@@ -101,6 +101,11 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/stats":
                 return self._json(200, self.office.samples.stats(self.office.get(), q.get("day"),
                                                                list(self.office.events)))
+            if url.path == "/api/week":
+                days = q.get("days", "7")
+                if not days.isdigit():
+                    raise ValueError("days must be an integer from 1 to 90")
+                return self._json(200, {"days": self.office.samples.week(self.office.get(), int(days), list(self.office.events))})
             if url.path == "/api/settings":
                 return self._json(200, settings.view(self.office.cfg, self.office.get().get("seats", [])))
             if url.path == "/api/session":

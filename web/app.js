@@ -23,6 +23,7 @@ const prefs = Object.assign({ theme: "dark", motion: matchMedia("(prefers-reduce
   sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true, seasonal: true }, store.get("prefs", {}));
 let snap = null, view = { kind: "ceo" }, liveMode = "connecting";
 const details = new Map(), histCache = new Map(), statsCache = new Map(), inflight = new Set();
+let week = null;
 const chats = new Map(), pending = new Map(), drafts = store.get("drafts", {}), opened = new Set();
 const seenNews = new Set();
 let lastEventTs = 0;
@@ -68,6 +69,15 @@ const app = {
   setPref,
   detailFor: (k) => (details.get(k) || {}).data || null,
   historyCache: (h) => { const c = histCache.get(h); if (!c || Date.now() - c.at > 60000) loadHistory(h); return c ? c.data : null; },
+  weekCache: () => {   // the last 14 days for the week chart (/api/week), refreshed every 2 minutes
+    if ((!week || Date.now() - week.at > 120000) && !inflight.has("week")) {
+      inflight.add("week");
+      fetch("/api/week?days=14").then(r => r.ok ? r.json() : null).then(d => { week = { data: d && d.days ? d.days : [], at: Date.now() }; inflight.delete("week"); if (prefs.view === "stats") renderMain(); })
+        .catch(() => { week = { data: [], at: Date.now() }; inflight.delete("week"); });
+    }
+    return week ? week.data : null;
+  },
+  weekMetric: () => prefs.weekMetric || "reports",
   statsCache: (day) => { const k = day || "today"; const c = statsCache.get(k); if (!c || Date.now() - c.at > 60000) loadStats(day); return c ? c.data : null; },
   loadHistory: (h, force) => loadHistory(h, force),
   loadStats: (d, force) => loadStats(d, force),

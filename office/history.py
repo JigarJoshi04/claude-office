@@ -60,10 +60,89 @@ def timelines(rows, now, live_ids=()):
     return list(found.values())
 
 
+class DayLedger:
+    """One summary per day (the Today numbers), kept for months in a small JSON file. History itself keeps 24 hours,
+    so earlier days and the week chart read from here."""
+
+    FIELDS = ("reports", "sessions", "active_min", "tool_calls", "limits", "lanes_hired")
+
+    def __init__(self, path: Path | None = None, keep_days: int = 120):
+        self.path, self.keep_days = path, keep_days
+        self.lock = threading.Lock()
+        self.days = {}
+        if path:
+            try:
+                raw = json.loads(path.read_text())
+                if isinstance(raw, dict):
+                    self.days = {k: v for k, v in raw.items() if _is_day(k) and isinstance(v, dict)}
+            except (OSError, ValueError):
+                pass
+
+    def note(self, stats):
+        if not isinstance(stats, dict) or not _is_day(stats.get("day")):
+            return
+        o = stats.get("office") or {}
+        mins = sum((s or {}).get("active_min") or 0 for s in (stats.get("seats") or {}).values())
+        if not (o.get("sessions") or o.get("reports") or mins):
+            return                                    # an empty day is not worth a line
+        with self.lock:
+            self.days[stats["day"]] = stats
+            for k in sorted(self.days)[:-self.keep_days]:
+                del self.days[k]
+            self._save()
+
+    def get(self, day):
+        return self.days.get(day)
+
+    def week(self, today, n=7):
+        if not _is_day(today):
+            raise ValueError("day must be YYYY-MM-DD")
+        if type(n) is not int or not 1 <= n <= 90:
+            raise ValueError("days must be an integer from 1 to 90")
+        end = date.fromisoformat(today)
+        out = []
+        for i in range(n - 1, -1, -1):
+            d = (end - timedelta(days=i)).isoformat()
+            st = self.days.get(d) or {}
+            o = st.get("office") or {}
+            seats = st.get("seats") or {}
+            out.append({"day": d, "reports": o.get("reports") or 0, "sessions": o.get("sessions") or 0,
+                        "active_min": sum((s or {}).get("active_min") or 0 for s in seats.values()),
+                        "tool_calls": sum((s or {}).get("tool_calls") or 0 for s in seats.values()),
+                        "limits": o.get("limits") or 0, "lanes_hired": o.get("lanes_hired") or 0,
+                        "mvp": (st.get("mvp") or {}).get("seat")})
+        return out
+
+    def _save(self):
+        if not self.path:
+            return
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(prefix=".days-", dir=self.path.parent)
+            try:
+                os.fchmod(fd, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    json.dump(self.days, f, separators=(",", ":"))
+                os.replace(tmp, self.path)
+            finally:
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
+        except OSError:
+            pass                                      # the ledger is a nicety; the office runs without it
+
+
+def _is_day(value):
+    try:
+        return isinstance(value, str) and date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
+
+
 class HistoryStore:
     def __init__(self, path: Path | None = None, events_path: Path | None = None, clock=time.time,
-                 lanes_path: Path | None = None):
+                 lanes_path: Path | None = None, ledger: "DayLedger | None" = None):
         self.path, self.events_path, self.clock = path, events_path, clock
+        self.ledger = ledger
         self.lanes_path = lanes_path
         self.lock = threading.RLock()
         self.rows = []
@@ -198,6 +277,9 @@ class HistoryStore:
             raise ValueError("day must be YYYY-MM-DD") from None
         start = datetime.combine(parsed, daytime()).timestamp()
         end = datetime.combine(parsed + timedelta(days=1), daytime()).timestamp()
+        today = datetime.fromtimestamp(now).date().isoformat()
+        if self.ledger and day < today and self.ledger.get(day):
+            return self.ledger.get(day)               # a finished day, as it was recorded while it happened
         with self.lock:
             cached = self.stats_cache.get(day)
             if cached and 0 <= now - cached[0] < 60:
@@ -207,7 +289,15 @@ class HistoryStore:
             result = self._stats(snapshot, day, start, end, rows, points, events)
             self.stats_cache = {k: v for k, v in self.stats_cache.items() if now - v[0] < 60}
             self.stats_cache[day] = (now, result)
-            return result
+        if self.ledger and day == today:
+            self.ledger.note(result)
+        return result
+
+    def week(self, snapshot, n=7, events=()):
+        """The last n days for the week chart: today live, earlier days from the ledger."""
+        self.stats(snapshot, None, events)
+        today = datetime.fromtimestamp(self.clock()).date().isoformat()
+        return (self.ledger or DayLedger(None)).week(today, n)
 
     def _stats(self, snapshot, day, start, end, rows, points, events):
         seats, active, ids, lane_ids = {}, {}, {}, {}

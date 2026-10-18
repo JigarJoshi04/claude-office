@@ -16,7 +16,7 @@ from pathlib import Path
 
 from . import config, divider, lanes, seats as seatmod, sessions
 from .career import CATALOGUE, Career
-from .history import HistoryStore
+from .history import DayLedger, HistoryStore
 from .live import LiveOffice, public
 from .voice import Announcer
 
@@ -207,7 +207,8 @@ class Office(LiveOffice):
         self._events_path = config.STATE_DIR / "events.jsonl"
         self._load_events()
         self.samples = HistoryStore(config.STATE_DIR / "history.jsonl", self._events_path,
-                                    lanes_path=config.DATA_DIR / "lanes")
+                                    lanes_path=config.DATA_DIR / "lanes", ledger=DayLedger(config.STATE_DIR / "days.json"))
+        self._ledger_at = 0.0
         self.career = Career(config.STATE_DIR / "career.json")
         self.snapshot: dict = {}
         self._prev: dict | None = None
@@ -403,6 +404,12 @@ class Office(LiveOffice):
             snap["events"] = list(self.events)[-60:]
             snap = self.publish(snap)
         self.samples.record(snap)
+        if snap["now"] - self._ledger_at >= 300:      # keep today's line in the day ledger fresh, browser open or not
+            self._ledger_at = snap["now"]
+            try:
+                self.samples.stats(snap, None, list(self.events))
+            except Exception:                         # the ledger is a nicety; never let it stop the office
+                pass
         return snap
 
     @staticmethod

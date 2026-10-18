@@ -5,13 +5,14 @@
 from __future__ import annotations
 
 import threading
+from datetime import date, timedelta
 import time
 from collections import deque
 
 from . import config, divider
 from .career import CATALOGUE, Career, new_seat, xp_for
 from .snapshot import Office
-from .history import HistoryStore
+from .history import DayLedger, HistoryStore
 from .live import LiveOffice, public
 
 ACTIVITY = {
@@ -71,6 +72,27 @@ DEMO_CHAT = [
 ]
 
 
+def _demo_ledger():
+    """Two made-up weeks behind today, so the week chart and earlier days have something to show."""
+    led = DayLedger(None)
+    today = date.today()
+    for i in range(1, 14):
+        d = today - timedelta(days=i)
+        weekend = d.weekday() >= 5
+        k = (i * 37 % 11) / 10
+        reports, mins = (2 + int(k * 4)) if weekend else (9 + int(k * 12)), (60 + int(k * 120)) if weekend else (300 + int(k * 420))
+        seats = {sid: {"active_min": int(mins * w), "sessions": max(1, int(6 * w)), "lanes": int(3 * w), "reports": int(reports * w),
+                       "limits": 1 if (sid == "claude3" and i % 3 == 0) else 0, "tokens_fresh": int(mins * w * 9000),
+                       "tool_calls": int(mins * w * 5.5), "peak_p5": 60.0}
+                 for sid, w in (("claude", 0.1), ("claude2", 0.35), ("claude3", 0.25), ("claude4", 0.2), ("astra", 0.1))}
+        led.note({"day": d.isoformat(), "seats": seats, "mvp": {"seat": "claude2" if i % 2 else "claude3", "why": "the most XP"},
+                  "office": {"sessions": sum(s["sessions"] for s in seats.values()), "reports": sum(s["reports"] for s in seats.values()),
+                             "limits": sum(s["limits"] for s in seats.values()), "lanes_hired": 2 + i % 3, "busiest_seat": "claude2",
+                             "longest_session": None, "first_activity": None, "last_activity": None},
+                  "digest": ["Atlas did the most work."]})
+    return led
+
+
 class DemoOffice(LiveOffice):
     is_demo = True
 
@@ -103,7 +125,7 @@ class DemoOffice(LiveOffice):
 
     def __init__(self):
         self.init_live()
-        self.samples = HistoryStore()
+        self.samples = HistoryStore(ledger=_demo_ledger())
         self.cfg = dict(config.DEFAULTS, office_name="Claude Office", ceo={"name": "Alex", "title": "CEO"},
                         default_workdir="/home/you/work")
         self.usage = _NoPoll()
