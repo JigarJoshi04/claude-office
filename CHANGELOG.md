@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.74.0] - 2026-10-19
+
+### Added
+- Four office levels that unlocked nothing now do: level 7 hangs a rocket and a heart poster in the lounge, level 9
+  strings fairy lights along the lobby wall (they twinkle and glow at night), level 11 gives every corridor its own
+  robot vacuum, and level 13 lays a welcome mat in each character's colour outside its door.
+
 ## [3.73.0] - 2026-10-19
 
 ### Added

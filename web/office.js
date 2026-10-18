@@ -296,6 +296,7 @@ export function createOffice(stage, handlers) {
     if (env.sky[0] !== skyKey) { skyKey = env.sky[0]; stage.style.setProperty("--sky-a", env.sky[0]); stage.style.setProperty("--sky-b", env.sky[1]); stage.dataset.sky = env.night ? "night" : "day"; }   // the backdrop's sky
     const lights = [];
     drawLobbyWall(t, lights);
+    if (has("mats")) for (const pod of L.pods) S.drawMat(ctx, pod.door.x - 11, pod.corr + 2, pod.seat.color);   // office level 13
     drawCEO(t, lights);
     drawServer(t, lights);
     if (L.meet) drawMeeting(t, env);
@@ -318,9 +319,12 @@ export function createOffice(stage, handlers) {
     S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
     if (cat.mode === "sleep") S.drawZ(ctx, cat.x + 8, cat.y - 2, t);
     if (has("dog")) { S.drawDog(ctx, Math.round(dog.x), Math.round(dog.y), dog.mode, dog.facing, t); if (dog.mode === "sleep") S.drawZ(ctx, dog.x + 9, dog.y - 2, t); }
-    if (has("roomba") && L.corridors.length) {      // a robot vacuum sweeps the first corridor back and forth
-      const span = W - LOBBY_W - 30, ph = (t / 1000 * 16) % (span * 2), fwd = ph < span;
-      S.drawRoomba(ctx, Math.round(LOBBY_W + 10 + (fwd ? ph : span * 2 - ph)), L.corridors[0] + 5, t, fwd ? 1 : -1);
+    if (has("roomba") && L.corridors.length) {      // a robot vacuum sweeps the first corridor back and forth (every one, from level 11)
+      const span = W - LOBBY_W - 30;
+      (has("roombas") ? L.corridors : L.corridors.slice(0, 1)).forEach((cy, i) => {
+        const ph = (t / 1000 * 16 + i * span * 0.7) % (span * 2), fwd = ph < span;
+        S.drawRoomba(ctx, Math.round(LOBBY_W + 10 + (fwd ? ph : span * 2 - ph)), cy + 5, t + i * 400, fwd ? 1 : -1);
+      });
     }
     if (droneUp(t)) {                               // now and then a delivery drone crosses over the building
       const k = ((t % DRONE_EVERY) - DRONE_EVERY + DRONE_FLIGHT) / DRONE_FLIGHT, dx = -20 + k * (W + 40), dy = 4 + Math.round(Math.sin(k * 9) * 2);
@@ -437,11 +441,25 @@ export function createOffice(stage, handlers) {
     if (sets.has("common")) drawStickerWall();
     if (cups.length) lights.push({ x: 144, y: 22, r: 26, c: "#ffd24a", i: cups.some(c => c.glint) ? 0.4 : 0.22 });
     S.drawFrame(ctx, 176, 12, 16, 22, !!mvp);
+    if (has("stringlights")) drawStringLights(t, lights);   // office level 9
     if (mvp) {
       const seat = snap.seats.find(s => s.id === mvp.seat);
       if (seat) S.drawSeated(ctx, 179, 18, S.lookFor("mascot-" + seat.id, seat.color), "down", "idle", t);
       if (Math.floor(t / 600) % 4 === 0) S.rect(ctx, 178 + (Math.floor(t / 150) % 12), 13, 1, 1, "#fff8c0");
       lights.push({ x: 184, y: 22, r: 18, c: "#ffd24a", i: 0.35 });
+    }
+  }
+
+  // String lights along the top of the lobby wall: a sagging cable, a bulb every few pixels, twinkling (and lit) at night.
+  const BULBS = ["#ff6b6b", "#ffd24a", "#38e07b", "#4fa3ff", "#c678dd"];
+  function drawStringLights(t, lights) {
+    const night = skyFor(clockAt ? new Date(clockAt * 1000) : new Date()).dark > 0;
+    for (let x = 2, i = 0; x < LOBBY_W - 4; x += 7, i++) {
+      const y = 2 + Math.round(Math.sin((x % 49) / 49 * Math.PI) * 2);   // it sags between hooks every 49 px
+      S.rect(ctx, x, y, 7, 1, "#2a2f3a");
+      const on = reduced || !night || (Math.floor(t / 700) + i) % 5 !== 0, c = BULBS[i % BULBS.length];
+      S.rect(ctx, x + 3, y + 1, 2, 2, on ? c : S.shade(c, 0.45));
+      if (night && on && i % 3 === 0) lights.push({ x: x + 4, y: y + 2, r: 9, c, i: 0.35 });
     }
   }
 
@@ -675,6 +693,7 @@ export function createOffice(stage, handlers) {
     const wr = windowRect(lo);
     S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night);
     S.drawPoster(ctx, lo.x + 18, lo.y + 7, 1);
+    if (has("posters")) { S.drawPoster(ctx, lo.x + 44, lo.y + 7, 0); S.drawPoster(ctx, lo.x + 70, lo.y + 7, 2); }   // office level 7
     S.drawCouch(ctx, lo.x + 14, lo.y + 52, "#c0564b");
     S.rect(ctx, lo.x + 22, lo.y + 78, 32, 14, "#5e412c"); S.rect(ctx, lo.x + 23, lo.y + 79, 30, 1, "#77543a");
     S.drawCouch(ctx, lo.x + 14, lo.y + 100, "#4b6fbf");

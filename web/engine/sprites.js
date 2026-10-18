@@ -860,3 +860,9 @@ export function drawShipBell(ctx, cx, y, sw, wave = -1) {
   }
   ctx.globalAlpha = 1;
 }
+
+// A welcome mat in a character's colour, on the corridor runner outside its door.
+export function drawMat(ctx, x, y, color) {
+  rect(ctx, x, y, 22, 9, shade(color, 0.55)); rect(ctx, x + 1, y + 1, 20, 7, color);
+  for (let i = 0; i < 4; i++) rect(ctx, x + 3 + i * 5, y + 3, 3, 3, shade(color, 1.25));
+}
