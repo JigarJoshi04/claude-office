@@ -151,6 +151,15 @@ export function makePanels(app) {
   }
   // A seat about to reset with a lot of its week unused: one quiet card per seat and window, with one-click work for it.
   // It stays out of Needs you (nothing is wrong), and goes once dismissed or once the plan is used.
+  // Reminders you set (office/reminders.py): what, and when it fires; share-safe keeps the words to yourself.
+  function remindersHtml() {
+    const rs = S().reminders || [];
+    if (!rs.length) return "";
+    const when = (r) => r.label || (r.trigger.kind === "at" ? `at ${clock(r.trigger.at)}` : r.trigger.kind.replace("_", " "));
+    return `<section class="b-sec"><h3 class="b-h">${icon("bell", 16)}Reminders<span class="count">${rs.length}</span><span class="grow"></span><button class="btn sm ghost" data-remind-new>${icon("plus", 14)}New</button></h3>
+      ${rs.slice(0, 6).map(r => `<div class="rem-row"><span class="grow"><b class="${app.privacy() ? "private" : ""}">${esc(r.text)}</b><small>${esc(when(r))}</small></span>
+        <button class="btn sm ghost icon" data-remind-del="${esc(r.id)}" title="Delete this reminder" aria-label="Delete this reminder">${icon("x", 14)}</button></div>`).join("")}</section>`;
+  }
   function unusedHtml() {
     const snap = S(), seen = store.get("unusedSeen", {});
     const cards = snap.seats.filter(s => {
@@ -276,6 +285,7 @@ export function makePanels(app) {
           ${S().snoozed ? `<p class="hint">${S().snoozed} snoozed for now.</p>` : ""}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
+      ${remindersHtml()}
       ${unusedHtml()}
       ${app.prefs().game === "off" ? "" : goalsHtml() + weeklyHtml() + almostHtml()}
       ${snap.seats.length ? `<section class="b-sec"><h3 class="b-h">Team<span class="count">${snap.seats.length}</span></h3>
@@ -367,6 +377,7 @@ export function makePanels(app) {
       <div class="hero st-${vo.state}" style="--seat:${esc(s.color)}">
         <button class="btn sm ghost icon h-find" data-focus-seat="${esc(s.id)}" title="Show on the floor" aria-label="Show on the floor">${icon("target", 16)}</button>
         <button class="btn sm ghost icon h-card" data-card="${esc(s.id)}" title="${esc(p.name)}'s card" aria-label="${esc(p.name)}'s character card">${icon("star", 16)}</button>
+        ${s.kind === "claude" ? `<button class="btn sm ghost icon h-bell" data-remind="${esc(JSON.stringify(["seat_reset", s.id, `when ${p.name}'s 5-hour plan is back`]))}" title="Remind me when its 5-hour plan is back" aria-label="Remind me when ${esc(p.name)}'s plan is back">${icon("bell", 16)}</button>` : ""}
         <div class="h-top">${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0), "big")}
           <div class="grow"><h2>${esc(p.name)}</h2><div class="role">${esc(p.role)}${s.career ? ` · Level ${s.career.level} ${esc(s.career.title)}` : ""}</div>
           <span class="m-word ${vo.tone}"><i></i>${esc(vo.word)}</span></div></div>
@@ -493,6 +504,7 @@ export function makePanels(app) {
         <div class="row wrap" style="gap:6px;margin-top:6px">
           ${x ? pill(STATE_LABEL[x.state] || x.state, { working: "good", waiting: "info", idle: "idle", limited: "bad", stuck: "warn" }[x.state] || "") : pill("Finished")}
           ${x ? pill(x.kind === "lane" ? "Lane" : "Terminal") : ""}
+          ${x && x.live !== false ? `<button class="btn sm ghost" data-remind="${esc(JSON.stringify(["session_end", x.id, `when ${name} finishes`]))}" title="Remind me when this session finishes">${icon("bell", 13)}When it finishes</button>` : ""}
           ${x && x.model ? pill(x.model.replace(/^claude-/, "")) : ""}
           ${x && x.git ? gitChip(x) : ""}
           ${x && x.cache && x.state !== "working" ? cachePill(x) : ""}
@@ -1021,6 +1033,7 @@ export function makePanels(app) {
         ${!running ? `<button class="btn sm" id="lResume">${icon("play", 15)}${scheduled ? "Start now" : "Resume"}</button>` : ""}
         <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">As before</option><option value="auto">Let the divider pick</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
+        ${running || scheduled ? `<button class="btn sm ghost" data-remind="${esc(JSON.stringify(["lane_end", l.id, `when lane '${l.title}' ends`]))}">${icon("bell", 14)}Remind me when it ends</button>` : ""}
       </div>
       ${l.report_status ? section("Report", `<div class="doc md">${md((d && d.report) || l.report_status)}</div>`, `<button class="btn sm ghost" data-copy="${esc((d && d.report) || l.report_status)}">${icon("copy", 14)}Copy</button>`) : ""}
       ${section("Progress notes", `<div class="doc md">${md((d && d.state) || l.state_tail || "Nothing yet.")}</div>`)}

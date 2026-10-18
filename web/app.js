@@ -85,6 +85,7 @@ const app = {
   liveMode: () => liveMode,
   go,
   openStandup: () => openStandup(),
+  remind: (when, label, text) => openRemind(when, label, text),
   setView: (v) => setView(v),
   rerender: (force) => renderPanel(force),
   refresh: () => pollOnce(),
@@ -649,6 +650,12 @@ function onNews(e) {
       if (prefs.game !== "off") toast(text, good ? "good" : "info", { ic: "flag", ms: 7000 });
       break;
     }
+    case "reminder": {                                 // a note you left yourself (reminders.py), on every channel
+      sound.play("ring");
+      toast(prefs.privacy ? "A reminder you set is due." : text, "warn", { ic: "bell", ms: 12000 });
+      notify("Reminder", prefs.privacy ? "A reminder you set is due." : text);
+      break;
+    }
     case "reply": sound.play("arrive"); toast(text, "good"); notify("A session replied", text); for (const k of chats.keys()) chats.get(k).at = 0; break;
     case "lane":
       if (e.level === "good") { fx.celebrate(e.seat, null, "Lane done!"); sound.play("report"); notify("Office lane", text); giftBox.earn(e.seat, "lane"); }
@@ -859,6 +866,43 @@ function renderRightNow() {
 // character names go in: no session names, topics or accounts, so it is safe to share.
 // "Save a picture of the office": the floor as a poster, sized for a post (ui/poster.js).
 function savePicture() { openPoster(app, office, (s) => panels.persona(s)); }
+
+// Reminders (office/reminders.py): a note for a time, or for when something happens (a plan back, a session or lane
+// finishing, a PR merging). `when` is a trigger the page already knows, or none: then the dialog offers times.
+function openRemind(when = null, label = "", text = "") {
+  const times = [[15, "In 15 min"], [30, "In 30 min"], [60, "In 1 hour"], [120, "In 2 hours"], [0, "At a time…"]];
+  $("dialogBody").innerHTML = `<div class="dh"><b>Remind me</b><button class="btn sm ghost" id="rmClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="db"><label class="f">What<input type="text" id="rmText" maxlength="140" value="${esc(text)}" placeholder="Check the migration, reply to Vega…"></label>
+      ${when ? `<p class="hint" style="margin-top:8px">${icon("bell", 13)} ${esc(label)}</p>`
+        : `<div class="seg-ctl" role="group" aria-label="When" style="margin-top:10px">${times.map(([m, l], i) => `<button data-rm-in="${m}" class="${i === 1 ? "on" : ""}">${l}</button>`).join("")}</div>
+           <input id="rmAt" type="time" hidden style="margin-top:8px;width:auto">`}
+      <div class="row" style="margin-top:12px;gap:8px"><button class="btn primary" id="rmGo">${icon("bell", 15)}Set the reminder</button></div></div>`;
+  $("dialog").showModal();
+  let mins = 30;
+  document.querySelectorAll("[data-rm-in]").forEach(b => b.addEventListener("click", () => {
+    mins = +b.dataset.rmIn; document.querySelectorAll("[data-rm-in]").forEach(x => x.classList.toggle("on", x === b)); $("rmAt").hidden = mins !== 0;
+    if (!mins) $("rmAt").focus();
+  }));
+  $("rmClose").addEventListener("click", () => $("dialog").close());
+  $("rmGo").addEventListener("click", async () => {
+    let trigger = when, lbl = label;
+    if (!trigger) {
+      let at = Date.now() / 1000 + mins * 60;
+      if (!mins) {
+        const [h, m] = ($("rmAt").value || "").split(":").map(Number);
+        if (!Number.isFinite(h)) { toast("Pick a time.", "warn"); return; }
+        const d = new Date(); d.setHours(h, m || 0, 0, 0); if (d.getTime() < Date.now()) d.setDate(d.getDate() + 1);
+        at = d.getTime() / 1000;
+      }
+      trigger = { kind: "at", at }; lbl = `at ${clock(at)}`;
+    }
+    try {
+      await app.post("/api/reminders", { text: $("rmText").value, trigger, label: lbl, seat: trigger.kind === "seat_reset" ? trigger.ref : null });
+      $("dialog").close(); toast(`Reminder set, ${lbl}.`, "good", { ic: "bell" }); pollOnce();
+    } catch (e) { toast("Could not set it: " + e.message, "bad"); }
+  });
+  $("rmText").focus();
+}
 
 // This morning's standup (office/standup.py): Yesterday, Today and Blockers from the office's own records, with the
 // characters' names, in a dialog to copy into Slack. Share-safe blurs it on screen; copying still gives the words.
@@ -1075,6 +1119,15 @@ function bindCommon(p) {
   p.querySelectorAll("[data-view-go]").forEach(b => b.addEventListener("click", () => { setView(b.dataset.viewGo); if (b.dataset.anchor) setTimeout(() => { const a = document.getElementById(b.dataset.anchor); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }, 120); }));
   p.querySelectorAll("[data-seat-go]").forEach(b => b.addEventListener("click", () => go({ kind: "seat", seat: b.dataset.seatGo })));
   p.querySelectorAll("[data-card]").forEach(b => b.addEventListener("click", () => cards.open(b.dataset.card)));
+  // Reminders tied to what the page shows: a seat's plan coming back, a session finishing, a lane ending.
+  p.querySelectorAll("[data-remind]").forEach(b => b.addEventListener("click", () => {
+    const [kind, ref, label] = JSON.parse(b.dataset.remind);
+    openRemind({ kind, ref }, label, label.replace(/^when /, "").replace(/^./, c => c.toUpperCase()));
+  }));
+  p.querySelectorAll("[data-remind-new]").forEach(b => b.addEventListener("click", () => openRemind()));
+  p.querySelectorAll("[data-remind-del]").forEach(b => b.addEventListener("click", async () => {
+    try { await app.post("/api/reminders", { action: "delete", id: b.dataset.remindDel }); pollOnce(); } catch (e) { toast("Could not delete it: " + e.message, "bad"); }
+  }));
   p.querySelectorAll("[data-gift-seek]").forEach(b => b.addEventListener("click", () => giftBox.seek()));
   p.querySelectorAll("button[data-lane], .need[data-lane]").forEach(b => b.addEventListener("click", () => go({ kind: "lane", id: b.dataset.lane })));
   p.querySelectorAll(".member[data-seat], .act.click[data-seat]").forEach(r => r.addEventListener("click", () => go({ kind: "seat", seat: r.dataset.seat })));
@@ -1168,6 +1221,7 @@ function paletteItems() {
     { icon: icon("pin", 16), label: "Take a checkpoint", keywords: "save resume restart laptop", run: checkpoint },
     { icon: icon("copy", 16), label: "Save a picture of the office", keywords: "screenshot png share image export", run: savePicture },
     { icon: icon("news", 16), label: "This morning's standup", keywords: "standup slack yesterday today blockers daily", run: openStandup },
+    { icon: icon("bell", 16), label: "Remind me…", keywords: "reminder remind later timer alarm note", run: () => openRemind() },
     { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },
     { icon: icon("volume", 16), label: prefs.sound ? "Mute sound effects" : "Turn on sound effects", run: () => setPref("sound", !prefs.sound) },

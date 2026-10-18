@@ -19,6 +19,7 @@ from pathlib import Path
 from . import asks, cabinet, checkpoint, config, divider, lanes, loose, prs, seats as seatmod, sessions, standup, weeks
 from .career import CATALOGUE, Career
 from .presence import Presence
+from .reminders import Reminders
 from .history import DayLedger, HistoryStore
 from .tokens import TokenLedger
 from .live import LiveOffice, public
@@ -298,6 +299,7 @@ class Office(LiveOffice):
         self.career = Career(config.STATE_DIR / "career.json")
         self.weeks = weeks.Weeks(config.STATE_DIR / "weeks.json")
         self.presence = Presence()
+        self.reminders = Reminders(config.STATE_DIR / "reminders.json")
         self.tokens = TokenLedger(config.STATE_DIR / "tokens.json", [], config.HOME / ".codex" / "sessions")
         self.snapshot: dict = {}
         self._prev: dict | None = None
@@ -478,7 +480,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.79.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.80.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -513,6 +515,9 @@ class Office(LiveOffice):
         quiet = self.quiet.get()                          # snoozed items wait; do not disturb is on every screen
         snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > now)
         snap["ceo"] = self.presence.get()                  # at the computer or away (presence.py)
+        for r in self.reminders.check(snap, now, list(self.events)[-80:]):   # notes to yourself whose moment came
+            self.emit("reminder", ("Late: " if r["late"] else "") + r["text"], r.get("seat"), "warn")
+        snap["reminders"] = self.reminders.view()
         snap["attention"] = [a for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) <= now]
         snap["office"]["dnd_until"] = quiet["dnd_until"] if quiet["dnd_until"] > now else None
         snap["totals"] = self._totals(snap)

@@ -493,7 +493,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.79.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.80.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,
@@ -510,6 +510,12 @@ class DemoOffice(LiveOffice):
         quiet, t = self.quiet.get(), time.time()
         snap["snoozed"] = sum(1 for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) > t)
         snap["ceo"] = {"present": True, "away_since": None, "locked": False, "idle_s": 12, "source": "demo", "last_away": None}
+        if not hasattr(self, "reminders"):
+            from .reminders import Reminders
+            self.reminders = Reminders(None)               # the demo's reminders live in memory
+        for r in self.reminders.check(snap, t, list(self.events)[-80:]):
+            self.emit("reminder", r["text"], r.get("seat"), "warn")
+        snap["reminders"] = self.reminders.view()
         snap["attention"] = [a for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) <= t]
         snap["office"]["dnd_until"] = quiet["dnd_until"] if quiet["dnd_until"] > t else None
         snap["totals"] = Office._totals(snap)

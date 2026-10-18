@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.80.0] - 2026-10-19
+
+### Added
+- Reminders without a calendar: a note to yourself for a time ("Remind me…" in the palette: in 15 min, an hour, or
+  at a time), or for when something happens: a seat's 5-hour plan is back (the bell on its page), a session
+  finishes, a lane ends, or a PR merges. It fires once as office news (a chime, a toast, a desktop notification),
+  says "Late" when the office was down at the time, and is forgotten a week after it was set. The briefing lists the
+  ones waiting. Share-safe keeps their words off the screen. `POST /api/reminders`; kept in `state/reminders.json`.
+
 ## [3.79.0] - 2026-10-19
 
 ### Added

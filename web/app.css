@@ -1624,3 +1624,7 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .tok-prj { cursor: pointer; border-radius: 8px; } .tok-prj:hover { background: var(--surface-2); } .tok-prj:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .poster-img { max-height: 56vh; object-fit: contain; background: #0a0c12; }
 .standup { margin: 0; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); font: 13px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 52vh; overflow: auto; }
+/* Reminders in the briefing (panels.js remindersHtml) */
+.rem-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); margin-top: 6px; }
+.rem-row .grow { min-width: 0; } .rem-row b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rem-row small { display: block; font-size: 12px; color: var(--muted); }

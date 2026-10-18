@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import asks, checkpoint, config, divider, lanes, messaging, sessions, talk, settings, tokens
+from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
 
@@ -170,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.79.0"
+    server_version = "ClaudeOffice/3.80.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -399,6 +400,24 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, ask_question(self.office, body))
             if path in ("/api/ask/answer", "/api/ask/dismiss"):
                 return self._json(200, answer_question(self.office, body, path.endswith("dismiss"), self.demo))
+            if path == "/api/reminders":                     # notes to yourself (reminders.py); the demo keeps them in memory
+                rem = self.office.reminders
+                if body.get("action") == "delete":
+                    return self._json(200, {"ok": rem.delete(str(body.get("id", "")))})
+                trig = reminders_mod.trigger_from(body.get("trigger"))
+                snap, seat, due = self.office.get(), body.get("seat"), None
+                if trig["kind"] == "seat_reset":
+                    s = next((x for x in snap.get("seats", []) if x["id"] == trig["ref"]), None)
+                    if not s:
+                        raise ValueError("No such seat")
+                    seat, due = s["id"], ((s.get("usage") or {}).get("five_hour") or {}).get("resets_at")
+                if trig["kind"] == "session_end" and not any(x.get("id") == trig["ref"] and x.get("live", True) for s in snap.get("seats", []) for x in s.get("sessions", [])):
+                    raise ValueError("That session has already finished")
+                if seat is not None and not isinstance(seat, str):
+                    raise ValueError("seat must be a seat id")
+                item = rem.add(str(body.get("text", "")), trig, seat, body.get("label") if isinstance(body.get("label"), str) else None, due)
+                self.office.build()
+                return self._json(200, {"ok": True, "reminder": item})
             if path in ("/api/dnd", "/api/snooze"):          # quiet: shared by every screen
                 minutes = body.get("minutes")
                 if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 <= minutes <= 24 * 60:
