@@ -231,7 +231,16 @@ function setRadio(on) {
   setPref("radio", on);
   if (on ? radio.start() : (radio.stop(), true)) toast(on ? "Office radio on: lo-fi, made up as it plays. M turns it off." : "Office radio off.", "info", { ic: "volume", ms: 3500 });
 }
-if (prefs.radio) { const wake = () => { if (prefs.radio && !radio.on) radio.start(); }; addEventListener("pointerdown", wake, { once: true }); addEventListener("keydown", wake, { once: true }); }
+// A gesture that is itself a radio toggle (M, the boombox, the menu item, the palette) does the toggling instead.
+if (prefs.radio) {
+  const wake = (e) => {
+    const t = e.target instanceof Element ? e.target : null;
+    if (e.key === "m" || (t && t.closest('[data-mi="radio"], .hot[aria-label^="Office radio"], .palette, .palette-back'))) return;
+    removeEventListener("pointerdown", wake, true); removeEventListener("keydown", wake, true);
+    if (prefs.radio && !radio.on) radio.start();
+  };
+  addEventListener("pointerdown", wake, true); addEventListener("keydown", wake, true);
+}
 const cards = makeCards({ app, panels, prefs });
 app.openCard = (id) => cards.open(id);
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
