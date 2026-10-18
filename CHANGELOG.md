@@ -3,6 +3,23 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.18.0] - 2026-10-18
+
+### Fixed
+- Ten bugs from the gifts QA pass: "Open the album" landed on the top of the page below 1240 px and did nothing in
+  TV mode; the gift chip left the box off screen on phones; long cat tips were clipped and stacked; the confetti hid
+  behind the reveal; "Swap 5 spares" misled with a full floor; floor banners were cut off on phones; lava lamps sat
+  on the desk plant; focus fell to the page after a reveal.
+- Banners queue instead of replacing each other; the party horn and the gift chime are never dropped by the sound
+  throttle; the album footer gives today's, the current or tomorrow's happy hour; the happy-hour chip has readable
+  contrast; TV mode shows waiting gifts and the happy hour; a departed seat's gifts keep its name; the golden duck's
+  glint moves on its reveal; the cat has a finger-sized target on touch screens; no wall stickers over the elevator;
+  the demo announces its happy hour once a visit; album stickers have an outline on light tiles; the Monday review
+  stops retrying when there is no week; a remembered radio resumes on the first gesture without switching off.
+
+### Added
+- The morning card points at the day's delivery while it waits.
+
 ## [3.17.0] - 2026-10-18
 
 ### Added

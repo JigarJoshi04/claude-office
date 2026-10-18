@@ -59,15 +59,15 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
     // The demo's ?stickers=all: a full album, in memory, to show what the sets put on the floor.
     fillDemo() { if (demo) set("album", Object.fromEntries(STICKERS.map(s => [s.id, { n: 1, first: now() }]))); },
     // A report or a finished lane: maybe a gift from that seat.
-    earn(seat, from = "report") {
+    earn(seat, from = "report", name) {
       if (waiting().length >= MAX_WAITING) return null;
       const miss = get("giftMiss", 0);
       if (miss + 1 < PITY && rand() >= (happy() ? HAPPY_CHANCE : CHANCE)) { set("giftMiss", miss + 1); return null; }
       set("giftMiss", 0);
-      return add({ seat, from });
+      return add({ seat, from, ...(name ? { name } : {}) });   // the name stays with the gift if the seat leaves
     },
     // A gift earned for sure: all goals done, a level up, a big combo. `min` lifts the rarity.
-    grant(seat, from, min) { return add({ seat, from, ...(min ? { min } : {}) }, GRANT_ROOM); },
+    grant(seat, from, min, name) { return add({ seat, from, ...(min ? { min } : {}), ...(name ? { name } : {}) }, GRANT_ROOM); },
     // The first visit of a local day: a morning delivery at the CEO desk. A visit streak makes it better: from three
     // days in a row it is rare or better, and every seventh day epic or better. With the floor full it waits for room.
     daily(day, streak = 0) {
@@ -79,7 +79,7 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
     },
     // Swap the most-duplicated spares for a gift that is rare or better.
     swap() {
-      if (spares() < SWAP || waiting().length >= MAX_WAITING) return null;
+      if (spares() < SWAP || waiting().length >= MAX_WAITING + GRANT_ROOM) return null;
       const al = { ...album() };
       for (let left = SWAP; left > 0;) {
         const [id] = Object.entries(al).filter(([, x]) => x.n > 1).sort((a, b) => ORDER.indexOf(STICKERS.find(s => s.id === a[0]).rarity) - ORDER.indexOf(STICKERS.find(s => s.id === b[0]).rarity) || b[1].n - a[1].n)[0];
@@ -87,7 +87,7 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
         left--;
       }
       set("album", al);
-      return add({ seat: null, from: "swap", min: "rare" });
+      return add({ seat: null, from: "swap", min: "rare" }, GRANT_ROOM);
     },
     open(id) {
       const list = waiting(), g = list.find(x => x.id === id);

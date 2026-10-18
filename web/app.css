@@ -764,7 +764,9 @@ dialog .db { padding: 16px 20px; max-height: 70vh; overflow: auto; }
   .wordmark { display: none; }
   .chat { max-height: max(220px, calc(100svh - 500px)); }   /* title, chat and message box fit one phone screen */
 }
-.hot.cat { border-radius: 50%; } .hot.cat:hover { box-shadow: 0 0 0 calc(.6px * var(--f)) #ffd59a; }
+.hot.cat { border-radius: 50%; }
+@media (pointer: coarse) { .hot.cat::after { content: ""; position: absolute; inset: -9px; } }
+.bubble.cat-says { -webkit-line-clamp: 4; max-width: max(190px, calc(84px * var(--f))); } .hot.cat:hover { box-shadow: 0 0 0 calc(.6px * var(--f)) #ffd59a; }
 .bubble.cat-says { background: #fff4e0; z-index: 7; }
 
 /* ---- the office page: level, unlocks, who built it ---- */
@@ -1140,7 +1142,7 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
   font: 700 12.5px var(--mono); color: #ff8fb8; background: rgba(255,90,150,.13); box-shadow: inset 0 0 0 1px rgba(255,90,150,.34); animation: giftchip 2.4s ease-in-out infinite; }
 .giftchip:hover { background: rgba(255,90,150,.22); }
 .giftchip[hidden] { display: none; }
-:root[data-theme="light"] .giftchip { color: #b0215a; }
+:root[data-theme="light"] .giftchip:not(.happy) { color: #b0215a; }
 @keyframes giftchip { 0%, 80%, 100% { transform: none; } 85% { transform: rotate(-8deg); } 90% { transform: rotate(7deg); } 95% { transform: rotate(-4deg); } }
 .hot.gift { border-radius: calc(3px * var(--f)); }
 .hot.gift:hover, .hot.gift:focus-visible { box-shadow: 0 0 0 calc(.6px * var(--f)) #fff, 0 0 calc(6px * var(--f)) rgba(255,210,74,.8); outline: none; }
@@ -1188,7 +1190,7 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .alb em { position: absolute; top: 6px; right: 7px; font: 700 11px var(--mono); font-style: normal; color: var(--muted); }
 .alb-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .alb-foot .hint { flex: 1 1 260px; } .alb-foot .hint b { color: var(--text-2); }
-.giftchip.happy { color: #fff; background: linear-gradient(90deg, #ff4fd8, #ff7a45, #ffd24a, #38e07b, #5b8def, #ff4fd8); background-size: 300% 100%;
+.giftchip.happy { color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.35); background: linear-gradient(90deg, #b0218f, #c2410c, #a16207, #15803d, #1d4ed8, #b0218f); background-size: 300% 100%;
   box-shadow: 0 0 14px rgba(255,79,216,.45); animation: giftchip 2.4s ease-in-out infinite, gchappy 4s linear infinite; }
 .giftchip .gc-happy { margin-left: 2px; font-weight: 800; letter-spacing: .02em; }
 @keyframes gchappy { to { background-position: -300% 0; } }
@@ -1295,3 +1297,4 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 :root[data-motion="reduced"] .ccv-card { transition: none; }
 .linkish { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; font-weight: 650; color: #ff8fb8; cursor: pointer; }
 .linkish:hover { text-decoration: underline; } :root[data-theme="light"] .linkish { color: #b0215a; }
+.stage:focus { outline: none; }

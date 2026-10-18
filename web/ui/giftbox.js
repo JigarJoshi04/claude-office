@@ -14,20 +14,21 @@ export function makeGiftBox(ctx) {
   const happy = () => forceHappy || happyNow().on;
   const gifts = makeGifts({ store, demo: DEMO, happy });
   if (ctx.fullAlbum) gifts.fillDemo();
-  const nameOf = (seatId) => { const s = seatId && app.snap() && app.snap().seats.find(x => x.id === seatId); return s ? panels.persona(s).name : null; };
+  const seatName = (seatId) => { const s = seatId && app.snap() && app.snap().seats.find(x => x.id === seatId); return s ? panels.persona(s).name : null; };
+  const nameOf = (seatId, g) => seatName(seatId) || (g && g.name) || null;   // a seat that has left keeps its name on its gifts
   // What a gift is called on the floor, and on its reveal card.
   const KINDS = { daily: ["Morning delivery", "This morning's delivery"], swap: ["A swapped gift, rare or better", "Swapped for five spares"],
     goals: ["A gift for today's goals, rare or better", "For finishing today's goals"], office: ["An office level-up gift, epic or better", "For the office's level up"],
     week: ["A record-week gift, epic or better", "For a record week"], arcade: ["An arcade prize", "For a new best at Bug Squash"] };
   const label = (g) => {
-    const who = nameOf(g.seat);
+    const who = nameOf(g.seat, g);
     if (g.from === "daily" && g.min) return `Morning delivery, day ${g.streak} of your streak (${g.min} or better): open it`;
     if (KINDS[g.from]) return KINDS[g.from][0] + ": open it";
     if (who && g.from === "levelup") return `${who}'s level-up gift: open it`;
     if (who && g.from === "combo") return `A combo gift from ${who}: open it`;
     return who ? `A gift from ${who}: open it` : "A gift: open it";
   };
-  const fromLine = (g) => g.from === "daily" && g.streak ? `Day ${g.streak} of your visit streak` : KINDS[g.from] ? KINDS[g.from][1] : nameOf(g.seat) ? `From ${nameOf(g.seat)}${g.from === "levelup" ? ", for levelling up" : g.from === "combo" ? ", for the combo" : ""}` : "";
+  const fromLine = (g) => g.from === "daily" && g.streak ? `Day ${g.streak} of your visit streak` : KINDS[g.from] ? KINDS[g.from][1] : nameOf(g.seat, g) ? `From ${nameOf(g.seat, g)}${g.from === "levelup" ? ", for levelling up" : g.from === "combo" ? ", for the combo" : ""}` : "";
 
   function sync() {
     const list = gifts.waiting();
@@ -55,8 +56,9 @@ export function makeGiftBox(ctx) {
     office.setHappy(on);
     if (on !== happyOn) {
       happyOn = on;
-      if (on && (forceHappy || (!DEMO && store.get("happyDay", "") !== localDay()))) {   // announced once a day
-        if (!forceHappy) store.set("happyDay", localDay());
+      // Announced once a day (the demo, which keeps nothing, once a visit).
+      if (on && (forceHappy || DEMO || store.get("happyDay", "") !== localDay())) {
+        if (!forceHappy && !DEMO) store.set("happyDay", localDay());
         if (prefs.view === "floor" && !replay.active()) office.banner("Happy hour!", "Gifts are twice as likely for half an hour", "#ff7ac8");
         sound.play("happy");
         toast("Happy hour: for the next half hour, reports are twice as likely to leave a gift.", "good", { ic: "gift", ms: 7000 });
@@ -70,7 +72,7 @@ export function makeGiftBox(ctx) {
   // A report or a finished lane may leave a gift (never while replaying: the floor shows the past).
   function earn(seatId, from) {
     if (replay.active()) return;
-    const g = gifts.earn(seatId, from);
+    const g = gifts.earn(seatId, from, seatName(seatId));
     if (!g) return;
     sync();
     sound.play("drop");
@@ -83,12 +85,14 @@ export function makeGiftBox(ctx) {
   // A gift earned for sure (all goals, a big combo, a level up, a record week); never from a replay.
   function grant(seatId, from, min) {
     if (replay.active()) return false;
-    const g = gifts.grant(seatId, from, min);
+    const g = gifts.grant(seatId, from, min, seatName(seatId));
     if (g) { sync(); sound.play("drop"); }
     return !!g;
   }
 
+  let opening = false;
   function open(id) {
+    if (opening) return;
     office.unwrap(id);
     const before = setsDone(gifts.album());
     const res = gifts.open(id);
@@ -96,7 +100,9 @@ export function makeGiftBox(ctx) {
     if (!res) return;
     sound.play("gift", res.sticker.rarity);
     const done = [...setsDone(gifts.album())].filter(k => !before.has(k));
-    reveal(res, done);
+    // The confetti gets a moment on the floor before the reveal dims it.
+    opening = true;
+    setTimeout(() => { opening = false; reveal(res, done); }, prefs.motion === "reduced" ? 0 : 520);
     if (!DEMO) {
       if (res.have >= 12) badge(award("collector"));
       if (res.sticker.rarity === "legendary") badge(award("golden"));
@@ -116,8 +122,15 @@ export function makeGiftBox(ctx) {
   function reveal(res, done = []) {
     const st = res.sticker, r = RARITY[st.rarity], from = fromLine(res.gift);
     const d = $("dialog");
+    if (d.open) d.close();
     d.classList.add("gift");
-    d.addEventListener("close", () => d.classList.remove("gift"), { once: true });
+    let glint = 0;
+    d.addEventListener("close", () => {
+      d.classList.remove("gift"); clearInterval(glint);
+      // Focus goes on to the next waiting gift, or the gift chip, never back to the page.
+      const next = document.querySelector(".hot.gift"), chip = $("giftChip");
+      if (next) next.focus({ preventScroll: true }); else if (chip && !chip.hidden) chip.focus({ preventScroll: true }); else $("stage").focus({ preventScroll: true });
+    }, { once: true });
     $("dialogBody").innerHTML = `<div class="gift-rev r-${esc(st.rarity)}" style="--rar:${esc(r.color)}">
       <button class="btn sm ghost gr-x" id="grClose" aria-label="Close">${icon("x", 16)}</button>
       <div class="gr-stage" aria-hidden="true"><div class="gr-rays"></div><div class="gr-box"></div><div class="gr-st"></div></div>
@@ -128,7 +141,12 @@ export function makeGiftBox(ctx) {
       ${DEMO ? `<p class="gr-demo">The demo office keeps stickers until you reload.</p>` : ""}
       <div class="gr-act"><button class="btn primary" id="grOk">Keep it</button><button class="btn" id="grAlbum">${icon("star", 15)}Open the album</button></div></div>`;
     d.querySelector(".gr-box").appendChild(boxCanvas(res.gift));
-    d.querySelector(".gr-st").appendChild(stickerCanvas(st, 8, { t: 900 }));
+    const art = d.querySelector(".gr-st");
+    art.appendChild(stickerCanvas(st, 8));
+    if (st.gold && prefs.motion !== "reduced") {          // the golden duck's glint sweeps across it
+      const t0 = performance.now();
+      glint = setInterval(() => art.replaceChildren(stickerCanvas(st, 8, { t: performance.now() - t0 })), 90);
+    }
     d.showModal();
     $("grClose").addEventListener("click", () => d.close());
     $("grOk").addEventListener("click", () => d.close());
@@ -138,7 +156,10 @@ export function makeGiftBox(ctx) {
 
   function swap() {
     const g = gifts.swap();
-    if (!g) { toast(`Collect ${SWAP} spare stickers to swap them.`, "info"); return false; }
+    if (!g) {
+      toast(gifts.spares() >= SWAP ? "The floor is full of gifts: open one first, then swap." : `Collect ${SWAP} spare stickers to swap them.`, "info");
+      return false;
+    }
     sync();
     toast("Swapped: a rare-or-better gift is waiting at the CEO desk.", "good", { ic: "gift" });
     return true;
@@ -150,7 +171,14 @@ export function makeGiftBox(ctx) {
     if (!g) return;
     setView("floor");
     if (g.seat && app.snap().seats.some(s => s.id === g.seat)) office.focusSeat(g.seat); else office.fit();
-    setTimeout(() => { const b = document.querySelector(`.hot.gift[data-k="gift:${CSS.escape(g.id)}"]`); if (b) b.focus({ preventScroll: true }); }, 450);
+    setTimeout(() => {
+      const b = document.querySelector(`.hot.gift[data-k="gift:${CSS.escape(g.id)}"]`);
+      if (!b) return;
+      // On a phone or a narrow window the floor scrolls with the page (and sideways): bring the box on screen.
+      const r = b.getBoundingClientRect();
+      if (r.top < 60 || r.bottom > innerHeight - 20 || r.left < 0 || r.right > innerWidth) b.scrollIntoView({ block: "center", inline: "center", behavior: prefs.motion === "reduced" ? "auto" : "smooth" });
+      b.focus({ preventScroll: true });
+    }, 450);
   }
   const chip = $("giftChip");
   if (chip) chip.addEventListener("click", seek);

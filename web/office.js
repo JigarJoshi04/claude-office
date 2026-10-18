@@ -371,8 +371,11 @@ export function createOffice(stage, handlers) {
   function drawStickerWall() {
     for (let i = 0, x = 3; x < LOBBY_W - 8; i++) {
       const hx = S.hashOf("decal" + i), y = WALL - 9 + (hx % 4), c = DECALS[(hx >>> 4) % DECALS.length];
-      S.rect(ctx, x, y, 5, 5, "#ffffff"); S.rect(ctx, x + 1, y + 1, 3, 3, c);
-      if ((hx >>> 9) % 3 === 0) S.rect(ctx, x + 2, y + 2, 1, 1, "#ffffff");
+      const onLift = x + 5 > ELEVATOR.x - 4 && x < ELEVATOR.x + 30;   // never over the elevator doors
+      if (!onLift) {
+        S.rect(ctx, x, y, 5, 5, "#ffffff"); S.rect(ctx, x + 1, y + 1, 3, 3, c);
+        if ((hx >>> 9) % 3 === 0) S.rect(ctx, x + 2, y + 2, 1, 1, "#ffffff");
+      }
       x += 8 + (hx >>> 12) % 7;
     }
     S.rect(ctx, 77, 14, 5, 5, "#ffffff"); S.rect(ctx, 78, 15, 3, 3, "#ffd24a");
@@ -592,7 +595,10 @@ export function createOffice(stage, handlers) {
     if (busy) lights.push({ x: mid, y: pod.y + 54, r: 62, c: "#ffd59a", i: 0.5 });
     const lv = s.career ? s.career.level : 1;
     if (lv >= 3) S.drawDeskPerks(ctx, desk, lv, s.color, t);
-    if (sets.has("rare")) { S.drawLavaLamp(ctx, desk.x + 2, desk.y + 6, t + s.id.length * 700); lights.push({ x: desk.x + 4, y: desk.y + 9, r: 10, c: "#ff7ac8", i: 0.35 }); }
+    if (sets.has("rare")) {                          // a lava lamp at whichever end of the desk the plant leaves free
+      const lx = desk.gaps.length > 1 ? desk.x + 2 : desk.x + desk.w - 14;   // where the plant is not (drawDeskPerks)
+      S.drawLavaLamp(ctx, lx, desk.y + 6, t + s.id.length * 700); lights.push({ x: lx + 2, y: desk.y + 9, r: 10, c: "#ff7ac8", i: 0.35 });
+    }
     if (lv >= 15) lights.push({ x: mid, y: desk.y + desk.h, r: 40, c: s.color, i: 0.3 });
     for (let slot = 0; slot < pod.cap; slot++) {
       const sp = seatSpot(pod, slot), a = bySlot.get(slot), x = sp.cx + (a ? Math.round(a.shift || 0) : 0);
@@ -892,7 +898,10 @@ export function createOffice(stage, handlers) {
       const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
       if (p.mode === "sleep") { p.mode = "sit"; p.until = performance.now() + 5000; }
       if (!reduced) burst(p.x + 6, p.y + 2, 7, "heart");
-      pops.push({ el: div("bubble cat-says", p.says + tip, p.x + 5, p.y - 2), until: performance.now() + 5200 });
+      // One tip at a time; it waits for the hearts to float up first.
+      for (let i = pops.length - 1; i >= 0; i--) if (pops[i].el.classList.contains("cat-says")) { pops[i].el.remove(); pops.splice(i, 1); }
+      clearTimeout(p.tipT);
+      p.tipT = setTimeout(() => pops.push({ el: div("bubble cat-says", p.says + tip, p.x + 5, p.y - 2), until: performance.now() + 5600 }), reduced ? 0 : 700);
       if (handlers.onCat) handlers.onCat(tip);
     });
     overlay.appendChild(p.el);
@@ -1133,17 +1142,24 @@ export function createOffice(stage, handlers) {
     }
   }
 
-  // A full-width "LEVEL UP" banner over the floor.
+  // A full-width "LEVEL UP" banner over the visible floor (on a phone the stage is wider than the screen). Banners that
+  // arrive while one shows wait their turn, so a busy moment (a level up during a happy hour) shows each in full.
+  const bannerQ = [];
   function banner(title, sub, color) {
     if (reduced) return;
-    const old = stage.querySelector(".lvl-banner"); if (old) old.remove();
+    const host = stage.closest(".floor-frame") || stage;
+    if (host.querySelector(".lvl-banner")) { if (bannerQ.length < 3) bannerQ.push([title, sub, color]); return; }
     const b = document.createElement("div");
     b.className = "lvl-banner"; b.setAttribute("aria-hidden", "true");
     b.style.setProperty("--seat", color || "#ffd24a");
     b.innerHTML = `<div class="lb-in"><span class="lb-stars">✦ ✦ ✦</span><b>${esc(title)}</b><span class="lb-sub">${esc(sub)}</span></div>`;
-    stage.appendChild(b);
+    host.appendChild(b);
     stage.classList.add("bannering");
-    setTimeout(() => { b.remove(); if (!stage.querySelector(".lvl-banner")) stage.classList.remove("bannering"); }, 3400);
+    setTimeout(() => {
+      b.remove();
+      if (bannerQ.length) banner(...bannerQ.shift());
+      else stage.classList.remove("bannering");
+    }, 3400);
   }
 
   function celebrate(seatId, sessionId, text) {

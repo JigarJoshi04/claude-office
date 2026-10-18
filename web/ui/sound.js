@@ -58,7 +58,7 @@ export const sound = {
   play(name, arg) {
     if (!on || !SFX[name]) return;
     const t = performance.now();
-    if (name !== "click" && t - last < 350) return;      // never a cacophony
+    if (!["click", "gift", "happy"].includes(name) && t - last < 350) return;   // never a cacophony (but never drop a gift or the party)
     last = t;
     try { SFX[name](arg); } catch { /* audio is a nicety */ }
   },

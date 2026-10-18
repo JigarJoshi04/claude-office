@@ -54,7 +54,17 @@ export function makeFloor(ctx) {
     if (el && !replay.active()) peekCard(s.id, el.getBoundingClientRect()); else peekCard(null);   // live cards never sit on a replayed floor
     const hud = document.querySelector(".tv-hud .tv-line");
     if (hud) hud.textContent = $("pulseText").textContent;
+    tvExtra();
     tvTicker();
+  }
+  // TV mode hides the top bar, so its strip carries the gifts waiting and the happy hour.
+  function tvExtra() {
+    const el = document.querySelector(".tv-hud .tv-extra"), g = app.gifts;
+    if (!el || !g) return;
+    const n = g.waiting().length, on = g.happy();
+    el.hidden = !n && !on;
+    el.classList.toggle("happy", on);
+    el.innerHTML = `${n ? `${icon("gift", 14)}${n}` : ""}${on ? `<span>Happy hour</span>` : ""}`;
   }
   // TV mode's news ticker: the latest news scrolls along the bottom, in plain words, with when it happened.
   function tvTicker() {
@@ -73,10 +83,11 @@ export function makeFloor(ctx) {
       setView("floor");
       const hud = document.createElement("div");
       hud.className = "tv-hud";
-      hud.innerHTML = `<span class="tv-brand">${esc(snap ? snap.office.name || "Claude Office" : "Claude Office")}</span><i class="tv-dot"></i><span class="tv-line">${esc($("pulseText").textContent)}</span><span class="tv-clock"></span><button class="btn sm ghost" data-tv-exit>${icon("x", 14)}Exit TV</button>`;
+      hud.innerHTML = `<span class="tv-brand">${esc(snap ? snap.office.name || "Claude Office" : "Claude Office")}</span><i class="tv-dot"></i><span class="tv-line">${esc($("pulseText").textContent)}</span><span class="tv-extra giftchip" hidden></span><span class="tv-clock"></span><button class="btn sm ghost" data-tv-exit>${icon("x", 14)}Exit TV</button>`;
       document.querySelector(".floor-frame").appendChild(hud);
       const tk = document.createElement("div"); tk.className = "tv-ticker"; tk.setAttribute("aria-hidden", "true"); tk.innerHTML = `<span class="tk-label">News</span><div class="tk-track"><div class="tk-in"></div></div>`;
       document.querySelector(".floor-frame").appendChild(tk);
+      tvExtra();
       hud.querySelector("[data-tv-exit]").addEventListener("click", () => setTv(false));
       document.body.classList.add("tv");
       if (!DEMO) badge(award("big_screen"));

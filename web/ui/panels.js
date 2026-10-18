@@ -9,7 +9,7 @@ import { goals, goalsFor, streak, weekly, localDay } from "./goals.js";
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
-import { SETS, setsDone, happyHourFor } from "./gifts.js";
+import { SETS, setsDone, happyHourFor, happyNow, MAX_WAITING, GRANT_ROOM, SWAP } from "./gifts.js";
 import { md } from "./md.js";
 
 const TEMPLATES = [
@@ -629,10 +629,16 @@ export function makePanels(app) {
       return `<div class="alb-set ${done.has(k) ? "on" : ""}" style="--rar:${RARITY[k].color}"><span class="as-ic">${icon(done.has(k) ? "trophy" : "lock", 15)}</span>
         <span class="grow"><b>${esc(RARITY[k].name)} ${got}/${all.length} · ${esc(SETS[k].name)}</b><small>${done.has(k) ? "On the floor now: " : "Finish the set: "}${esc(SETS[k].desc.charAt(0).toLowerCase() + SETS[k].desc.slice(1))}</small></span>
         <span class="as-bar"><i style="width:${Math.round(got / all.length * 100)}%"></i></span></div>`; }).join("");
-    const hh = happyHourFor(localDay()), at = new Date(); at.setHours(hh.hour, hh.minute, 0, 0);
+    // The happy hour, as it stands now: coming up today, on, or (once it is over) tomorrow's.
+    const hn = happyNow(), tm = new Date(); tm.setDate(tm.getDate() + 1);
+    const th = happyHourFor(localDay(tm)), tAt = new Date(tm); tAt.setHours(th.hour, th.minute, 0, 0);
+    const hm = (d) => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const happyLine = hn.on ? `Happy hour is on now (${hn.left} min left): gifts are twice as likely.`
+      : new Date() < hn.start ? `Today's happy hour (${hm(hn.start)}, half an hour) doubles the odds.` : `Tomorrow's happy hour (${hm(tAt)}, half an hour) doubles the odds.`;
+    const full = waiting >= MAX_WAITING + GRANT_ROOM;
     return `<div id="album">${section(`Sticker album · ${have} of ${STICKERS.length}`, `<div class="alb-sets">${counts}</div><div class="alb-grid">${tiles}</div>
-      <div class="alb-foot"><span class="hint">Your agents sometimes leave a gift when they file a report or finish a lane, and every morning a delivery waits at the CEO desk. Finishing today's goals, a ×3 combo or a level up always brings one, and today's happy hour (${esc(at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}, half an hour) doubles the odds.${waiting ? ` <b>${waiting} waiting on the floor.</b>` : ""}${app.demo ? " The demo office keeps stickers until you reload." : " Stickers are kept in this browser."}</span>
-        <button class="btn sm" data-swap ${spares >= 5 ? "" : "disabled"} title="Five spare stickers for one gift that is rare or better">${icon("gift", 14)}Swap 5 spares${spares ? ` (${spares})` : ""}</button></div>`)}</div>`;
+      <div class="alb-foot"><span class="hint">Your agents sometimes leave a gift when they file a report or finish a lane, and every morning a delivery waits at the CEO desk. Finishing today's goals, a ×3 combo or a level up always brings one. ${esc(happyLine)}${waiting ? ` <b>${waiting} waiting on the floor.</b>` : ""}${app.demo ? " The demo office keeps stickers until you reload." : " Stickers are kept in this browser."}</span>
+        <button class="btn sm" data-swap ${spares >= SWAP && !full ? "" : "disabled"} title="${full ? "The floor is full of gifts: open one first" : "Five spare stickers for one gift that is rare or better"}">${icon("gift", 14)}Swap 5 spares${spares ? ` (${spares})` : ""}</button></div>`)}</div>`;
   }
   function trophies() {
     const seats = S().seats.filter(s => s.career), cat = S().achievements || [];

@@ -245,7 +245,7 @@ const cards = makeCards({ app, panels, prefs });
 app.openCard = (id) => cards.open(id);
 const arcade = makeArcade({ store, onBest: (score) => { if (!DEMO && score >= 40) badge(award("exterminator")); return giftBox.grant(null, "arcade"); } });
 // "Your office", scrolled to the sticker album.
-function openAlbum() { go({ kind: "office" }); requestAnimationFrame(() => { const a = document.getElementById("album"); if (a) a.scrollIntoView({ block: "start", behavior: prefs.motion === "reduced" ? "auto" : "smooth" }); }); }
+function openAlbum() { if (floor.tv()) floor.setTv(false); go({ kind: "office" }, false, { anchor: "album" }); }
 
 // ------------------------------------------------------------------------------------------------ prefs
 function setPref(k, v) {
@@ -302,12 +302,14 @@ function go(v, fromHash, opt = {}) {
   office.setSelected(v.kind === "seat" ? { seat: v.seat } : v.kind === "session" ? { seat: v.seat, session: v.id } : null);
   renderPanel(true);
   $("panel").scrollTop = 0;
+  const anchor = () => (opt.anchor && document.getElementById(opt.anchor)) || $("panel");   // a section to land on, or the top
+  if (opt.anchor && anchor() !== $("panel")) requestAnimationFrame(() => anchor().scrollIntoView({ block: "start" }));
   if (matchMedia("(max-width: 1240px)").matches && v.kind !== "ceo") {
     // The header is sticky: land the panel's title just below it, not under it. Wait out a double-click first: a
     // second click on the floor means "fly there", and then the page must stay on the floor.
     clearTimeout(panelScroll);
     panelScroll = setTimeout(() => {
-      const y = $("panel").getBoundingClientRect().top + window.scrollY - document.querySelector(".top").offsetHeight - 8;
+      const y = anchor().getBoundingClientRect().top + window.scrollY - document.querySelector(".top").offsetHeight - 8;
       window.scrollTo({ top: Math.max(0, y), behavior: prefs.motion === "reduced" ? "auto" : "smooth" });
     }, 420);
   }
