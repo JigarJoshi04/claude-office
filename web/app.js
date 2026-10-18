@@ -405,6 +405,7 @@ function hashFor(v) {
   if (v.kind === "seat") return "#seat=" + encodeURIComponent(v.seat);
   if (v.kind === "session") return "#session=" + encodeURIComponent(v.seat) + "/" + encodeURIComponent(v.id);
   if (v.kind === "lane") return "#lane=" + encodeURIComponent(v.id);
+  if (v.kind === "bakeoff") return "#bakeoff=" + encodeURIComponent(v.id);
   if (v.kind === "project") return "#project=" + encodeURIComponent(v.name);
   return v.kind === "ceo" ? "#" : "#" + v.kind;
 }
@@ -418,6 +419,7 @@ function viewFromHash() {
   if (k === "seat") return { kind: "seat", seat: rest };
   if (k === "session") { const i = rest.indexOf("/"); return i > 0 ? { kind: "session", seat: rest.slice(0, i), id: rest.slice(i + 1) } : { kind: "ceo" }; }
   if (k === "lane") return { kind: "lane", id: rest };
+  if (k === "bakeoff") return { kind: "bakeoff", id: rest.slice(0, 20) };
   return ["divider", "hire", "services", "programmes", "lounge", "news", "settings", "trophies", "scrapbook", "office", "loose", "prs", "inbox", "cabinet", "doctor"].includes(k) ? { kind: k } : { kind: "ceo" };
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });

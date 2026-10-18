@@ -102,7 +102,7 @@ export function makePanels(app) {
     const backlog = (S().lanes || []).filter(x => x.status === "scheduled" && x.schedule && x.schedule.backlog).sort((a, b) => (a.schedule.order || 0) - (b.schedule.order || 0));
     const when = l.status === "scheduled" && l.schedule ? (l.schedule.backlog ? ` · in the backlog, ${ordinal((l.backlog_pos ?? backlog.indexOf(l)) + 1)} in line` : l.schedule.at ? ` · starts ${dayTime(l.schedule.at)}` : ` · starts when a seat has ${l.schedule.left}% of its window left`) : "";
     return `<div class="need ${tn}" data-lane="${esc(l.id)}"><span class="ico">${icon({ done: "check", finished: "check", running: "play", blocked: "alert", failed: "alert", waiting: "clock", stopped: "stop", scheduled: "calendar", interrupted: "alert" }[l.status] || "briefcase", 16)}</span>
-      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status === "stopped" && l.stopped_reason === "time budget" ? "stopped at its time limit" : l.status)}${when}${l.deadline && ["running", "starting", "waiting"].includes(l.status) ? ` · until ${esc(clock(l.deadline))}` : !l.deadline && l.max_minutes && l.status !== "stopped" ? ` · ${l.max_minutes} min limit` : ""}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}${l.trust ? ` · <span class="t-${l.trust.level}">${TRUST_WORD[l.trust.level]}</span>` : ""}</div></div></div>`;
+      <div class="grow"><div class="t">${esc(l.title)}</div><div class="d">${l.chain_of ? `stage ${l.chain_of.step} of ${l.chain_of.of} · ` : ""}${esc(l.status === "interrupted" ? `cut off${l.reboot ? " by a restart" : ""}` : l.status === "stopped" && l.stopped_reason === "time budget" ? "stopped at its time limit" : l.status)}${when}${l.deadline && ["running", "starting", "waiting"].includes(l.status) ? ` · until ${esc(clock(l.deadline))}` : !l.deadline && l.max_minutes && l.status !== "stopped" ? ` · ${l.max_minutes} min limit` : ""}${l.seat ? " on " + esc(nameOf(l.seat)) : ""} · ${relTime(l.created_at)}${l.chain && l.chain.length ? ` · then ${esc(l.chain[0].title)}` : ""}${l.spent && l.spent.usd ? ` · ${esc(money(l.spent.usd))} at API prices` : ""}${l.shipped && (l.shipped.commits || l.shipped.prs_opened) ? ` · shipped ${[l.shipped.commits && `${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}`, l.shipped.prs_merged ? `${l.shipped.prs_merged} PR${l.shipped.prs_merged === 1 ? "" : "s"} merged` : l.shipped.prs_opened && `${l.shipped.prs_opened} PR${l.shipped.prs_opened === 1 ? "" : "s"} opened`].filter(Boolean).join(", ")}` : ""}${l.report_status ? " · " + esc(l.report_status.replace(/^STATUS:\s*/, "")) : ""}${l.trust ? ` · <span class="t-${l.trust.level}">${TRUST_WORD[l.trust.level]}</span>` : ""}${l.bakeoff ? ` · bake-off ${esc(l.bakeoff.side)}${l.bakeoff.winner === l.bakeoff.side ? " (won)" : ""}` : ""}</div></div></div>`;
   }
 
   // ---------------------------------------------------------------------------------------- briefing
@@ -295,6 +295,7 @@ export function makePanels(app) {
   function needAction(a) {
     const st = a.seat && seatById(a.seat);
     if (a.ask) return `<button class="btn sm primary" data-go="inbox">${icon("reply", 14)}Answer</button>`;
+    if (a.bakeoff) return `<button class="btn sm primary" data-bake-go="${esc(a.bakeoff)}">${icon("flag", 14)}Judge</button>`;
     if (a.review && a.session) return `<button class="btn sm primary" data-forward-review="${esc(a.seat)}|${esc(a.session)}" title="Open the session with the comments written out as a message (you send it)">${icon("send", 14)}Forward to it</button>`;
     if (a.interrupted) return `<button class="btn sm primary" data-resume-all="${esc(JSON.stringify(a.interrupted))}">${icon("play", 14)}Resume ${a.interrupted.length > 1 ? "all" : "it"}</button>`;
     if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
@@ -319,7 +320,7 @@ export function makePanels(app) {
   function needs(snap) {
     const out = [], spent = new Map(), nearly = new Map();
     for (const a of snap.attention || []) {
-      if (a.ask || a.ci || a.review || a.risk || a.trust || a.collision || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
+      if (a.ask || a.ci || a.review || a.risk || a.trust || a.collision || a.bakeoff || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
       const st = a.seat && seatById(a.seat);
       const planItem = /usage at \d+%|stopped by the usage limit|runs out of its/i.test(a.text);
       // A seat close to its limit says so once: "Orion has 1% of its 5-hour window left, out in ~2 min".
@@ -414,6 +415,7 @@ export function makePanels(app) {
         const t2 = root.querySelector("[data-toggle-needs]"); if (t2) t2.addEventListener("click", () => { showAllNeeds = !showAllNeeds; app.rerender(true); });
         root.querySelectorAll("[data-open-session]").forEach(b => b.addEventListener("click", () => { const [seat, id] = b.dataset.openSession.split("|"); app.go({ kind: "session", seat, id }); }));
         root.querySelectorAll("[data-forward-review]").forEach(b => b.addEventListener("click", () => forwardReview(b)));
+        root.querySelectorAll("[data-bake-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "bakeoff", id: b.dataset.bakeGo })));
         root.querySelectorAll("[data-review-lane]").forEach(b => b.addEventListener("click", () => {
           const [repo, n, title, cwd] = JSON.parse(b.dataset.reviewLane);
           const mine = (hireDraft.title || "").trim() || (hireDraft.brief || "").trim();
@@ -1266,6 +1268,31 @@ export function makePanels(app) {
         <a class="btn sm ghost" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${icon("external", 14)}Open</a><button class="btn sm" data-review-lane="${esc(JSON.stringify([p.repo, p.number, p.title || "", p.workdir || ""]))}" title="Fill the hiring desk with a read-only review brief (nothing starts until you hire)">${icon("bot", 14)}Reviewer</button></div>`).join("")
         : `<p class="hint">Nobody is waiting on your review.</p>`}${m.review.length > 4 ? `<p class="hint">and ${m.review.length - 4} more.</p>` : ""}</section>`;
   }
+  // A bake-off (lanes.hire_bakeoff): the two contenders side by side, and the verdict.
+  function bakeoff(v) {
+    const pair = (S().lanes || []).filter(l => (l.bakeoff || {}).id === v.id).sort((x, y) => (x.bakeoff.side < y.bakeoff.side ? -1 : 1));
+    if (pair.length !== 2) return { html: `${crumbs("Bake-off")}<h2>Bake-off</h2><p class="muted">This bake-off is not in the lane list any more.</p>` };
+    const title = pair[0].title.replace(/ · A$/, ""), winner = pair[0].bakeoff.winner, done = new Set(["done", "blocked", "failed", "stopped", "finished"]);
+    const took = (l) => (l.finished_at && l.created_at ? dur(l.finished_at - l.created_at) : l.status);
+    const col = (l) => { const st = l.seat && seatById(l.seat), side = l.bakeoff.side;
+      return `<div class="bake-col ${winner === side ? "won" : ""}" style="--seat:${esc(st ? st.color : "#888")}"><div class="bake-h"><b>${side}</b>${winner === side ? `<span class="pill good">${icon("trophy", 13)}Winner</span>` : ""}</div>
+        <dl class="facts"><dt>Who</dt><dd>${st ? esc(P(st).name) : esc(l.seat_pref)} · ${esc(l.model)}</dd><dt>Status</dt><dd>${esc(l.status)}${l.trust ? ` · <span class="t-${l.trust.level}">${esc(l.trust.level)}</span>` : ""}</dd>
+          <dt>Took</dt><dd>${esc(took(l))}</dd>${l.spent && l.spent.usd ? `<dt>Cost</dt><dd>${esc(money(l.spent.usd))} at API prices</dd>` : ""}
+          ${l.shipped && l.shipped.commits ? `<dt>Shipped</dt><dd>${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}</dd>` : ""}</dl>
+        <div class="quote">${l.report_status ? esc(l.report_status.replace(/^STATUS:\s*/, "")) : "No report yet."}</div>
+        <button class="btn sm" data-lane-go="${esc(l.id)}">${icon("briefcase", 14)}Open ${side}</button></div>`; };
+    const ready = pair.every(l => done.has(l.status));
+    return { html: `${crumbs("Bake-off")}<h2>${esc(title)}</h2><p class="lede">One brief, two contenders, each on its own branch (bakeoff/${esc(v.id)}-a and -b). ${winner ? (winner === "tie" ? "You called it a tie." : `${winner} won.`) : ready ? "Both have reported: pick the better one." : "Judge them when both have reported."}</p>
+      <div class="bake">${pair.map(col).join("")}</div>
+      ${ready && !winner ? `<div class="row" style="gap:8px;margin-top:14px"><button class="btn primary" data-judge="A">${icon("trophy", 15)}A wins</button><button class="btn primary" data-judge="B">${icon("trophy", 15)}B wins</button><button class="btn" data-judge="tie">A tie</button></div>` : ""}`,
+      bind(root) {
+        root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
+        root.querySelectorAll("[data-judge]").forEach(b => b.addEventListener("click", async () => {
+          try { const r = await app.post("/api/lanes/bakeoff/judge", { id: v.id, winner: b.dataset.judge }); result(r, b.dataset.judge === "tie" ? "Called a tie." : `${b.dataset.judge} wins the bake-off.`); app.refresh(); }
+          catch (e) { toast("Could not record it: " + e.message, "bad"); }
+        }));
+      } };
+  }
   // A seat's week against spending it evenly (divider.py pace): plan left per share of the week left.
   const FREE_HOURS = [["", "Never"], ["9-18", "9:00–18:00"], ["10-19", "10:00–19:00"], ["8-20", "8:00–20:00"], ["9-23", "9:00–23:00"], ["0-24", "All day"]];
   function seatPace(s) {
@@ -1421,6 +1448,11 @@ export function makePanels(app) {
           <label class="f">Model<select id="hModel" ${isCodex ? "disabled" : ""}>${["opus", "sonnet", "fable", "haiku"].map(m => `<option ${(d.model || ld.model) === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
         </div>
         <div id="hModelHint">${modelHint(d.seat || "auto", d.model || ld.model)}</div>
+        <label class="check bake-t"><input type="checkbox" id="hBake" ${d.bake ? "checked" : ""}> Bake-off: give the same brief to a second contender, and compare</label>
+        <div class="grid2" id="hBakeB" ${d.bake ? "" : "hidden"}>
+          <label class="f">Contender B<select id="hSeatB"><option value="auto">Let the divider pick</option>${snap.seats.map(s => `<option value="${esc(s.id)}" ${d.seatB === s.id ? "selected" : ""}>${esc(P(s).name)} · ${esc(SEAT_LABEL[s.status] || s.status)}</option>`).join("")}</select></label>
+          <label class="f">B's model<select id="hModelB">${["opus", "sonnet", "fable", "haiku"].map(m => `<option ${(d.modelB || "sonnet") === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+        </div>
         <label class="f">Permissions<select id="hPerm" ${isCodex ? "disabled" : ""}>
           <option value="acceptEdits" ${(d.permission_mode || ld.permission_mode) === "acceptEdits" ? "selected" : ""}>Edit files, run listed tools</option>
           <option value="bypassPermissions" ${(d.permission_mode || ld.permission_mode) === "bypassPermissions" ? "selected" : ""} ${pol.allow_full_trust === false ? "disabled" : ""}>Full trust (skips every permission check)${pol.allow_full_trust === false ? ": off by policy" : ""}</option></select></label>
@@ -1449,6 +1481,8 @@ export function makePanels(app) {
           start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "", each: q("hEach").value, max_minutes: +q("hMax").value || null }; store.set("hireDraft", hireDraft); };
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen", "hEach"].forEach(id => q(id).addEventListener("input", save));
         for (const id of ["hSeat", "hModel"]) q(id).addEventListener("change", () => { q("hModelHint").innerHTML = modelHint(q("hSeat").value, q("hModel").value); });
+        const bakeSync = () => { hireDraft = { ...hireDraft, bake: q("hBake").checked, seatB: q("hSeatB").value, modelB: q("hModelB").value }; store.set("hireDraft", hireDraft); q("hBakeB").hidden = !q("hBake").checked; };
+        ["hBake", "hSeatB", "hModelB"].forEach(id => q(id).addEventListener("change", bakeSync));
         const items = () => [...new Set(q("hEach").value.split("\n").map(x => x.trim()).filter(Boolean))];
         const goLabel = () => { const n = items().length; q("hGo").innerHTML = `${icon("briefcase", 16)}${n >= 2 ? `Hire ${Math.min(n, 20)} lanes into the backlog` : "Hire and start"}`; };
         q("hEach").addEventListener("input", goLabel); goLabel();
@@ -1506,6 +1540,18 @@ export function makePanels(app) {
             miss.focus(); toast("Give the lane a title and a brief.", "warn"); return;
           }
           if (hireDraft.permission_mode === "bypassPermissions" && !confirm("Full trust lets the lane run any command without asking. Start it?")) return;
+          if (q("hBake").checked) {                      // a bake-off: the same brief to A (this form's seat and model) and B
+            if (items().length || hireDraft.start) { toast("A bake-off starts now, for one brief: clear For each and Start.", "warn"); return; }
+            q("hGo").disabled = true;
+            try {
+              const r = await app.post("/api/lanes/bakeoff", { title: hireDraft.title, brief: hireDraft.brief, workdir: hireDraft.workdir, permission_mode: hireDraft.permission_mode,
+                max_minutes: hireDraft.max_minutes, a: { seat: hireDraft.seat || "auto", model: hireDraft.model || ld.model }, b: { seat: q("hSeatB").value, model: q("hModelB").value } });
+              if (r.demo) toast("Demo office: no lanes were hired.");
+              else { sound.play("hire"); toast("Bake-off started: two contenders, one brief. Judge them when both report.", "good"); app.badge("hiring");
+                hireDraft = { ...hireDraft, title: "", brief: "", bake: false }; store.set("hireDraft", hireDraft); app.go({ kind: "bakeoff", id: r.id }); }
+            } catch (e) { toast("Could not start the bake-off: " + e.message, "bad"); }
+            q("hGo").disabled = false; app.refresh(); return;
+          }
           const list = items();
           const fill = (t, item, sep) => (t.includes("{{item}}") ? t.split("{{item}}").join(item) : t + sep + item);
           if (list.length >= 2) {                     // fan out: one lane per line, all into the backlog
@@ -1725,6 +1771,7 @@ export function makePanels(app) {
     needsCount: () => needs(S()).length,
     draftHire: (d) => { hireDraft = { ...hireDraft, ...d }; store.set("hireDraft", hireDraft); },
     needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml,
+    bakeoff,
     scrapbook: () => ({ html: scrapHtml({ crumbs, privacy: app.privacy() }),
       bind(root) { bindScrap(root, { dialog: document.getElementById("dialog"), rerender: () => app.rerender(true), privacy: app.privacy() }); } }), persona: P, nameOf, humanise,
     isEditing: (k) => (k === "divider" && (dvDirty || dragging)) || k === "hire" || k === "settings"

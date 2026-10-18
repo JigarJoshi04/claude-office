@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.122.0] - 2026-10-19
+
+### Added
+- Bake-offs: one brief, two contenders. Tick Bake-off on the hiring desk and pick a second seat and model: two lanes
+  get the same brief, each told to work on its own branch in its own worktree (bakeoff/<id>-a and -b) and to lead its
+  report with a one-line summary. When both have reported, Needs you asks for a verdict; the bake-off's page shows
+  them side by side (who, model, status and trust check, time taken, cost, commits, the report) with A wins, B wins
+  or a tie. The verdict goes in the news. `POST /api/lanes/bakeoff` and `/api/lanes/bakeoff/judge`.
+
 ## [3.121.0] - 2026-10-19
 
 ### Changed

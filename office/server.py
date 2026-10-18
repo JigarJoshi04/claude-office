@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.121.0"
+    server_version = "ClaudeOffice/3.122.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -499,6 +499,22 @@ class Handler(BaseHTTPRequestHandler):
                                          chain=lanes.chain_from(body.get("chain"), " ".join(str(body.get("title", "")).split())[:60]))
                 self.office.emit("lane", f"CEO hired office lane '{lane['title']}' ({lane['seat_pref']})" + (" to start later" if lane.get("schedule") else ""), level="good")
                 return self._json(200, {"ok": True, "lane": lane})
+            if path == "/api/lanes/bakeoff":                # one brief, two contenders (lanes.hire_bakeoff)
+                cfg = self.office.cfg
+                pair = lanes.hire_bakeoff(body.get("title", ""), body.get("brief", ""), body.get("workdir") or "",
+                                          {"A": body.get("a") or {}, "B": body.get("b") or {}},
+                                          body.get("permission_mode") or cfg["lane_defaults"]["permission_mode"], seat_ids, cfg,
+                                          max_minutes=body.get("max_minutes") or None)
+                self.office.emit("lane", f"CEO started a bake-off: '{pair[0]['title'][:-4]}', A ({pair[0]['seat_pref']}, {pair[0]['model']}) against B ({pair[1]['seat_pref']}, {pair[1]['model']})", level="good")
+                return self._json(200, {"ok": True, "lanes": pair, "id": pair[0]["bakeoff"]["id"]})
+            if path == "/api/lanes/bakeoff/judge":
+                pair = lanes.judge_bakeoff(str(body.get("id", "")), str(body.get("winner", "")))
+                w = pair[0]["bakeoff"]["winner"]
+                title = pair[0]["title"][:-4]
+                self.office.emit("lane", f"Bake-off '{title}': " + ("a tie" if w == "tie" else f"contender {w} wins"),
+                                 next((l.get("seat") for l in pair if l["bakeoff"]["side"] == w), None), "good")
+                self.office.build()
+                return self._json(200, {"ok": True, "winner": w})
             if path == "/api/lanes/stop-all":               # the panic button: every office lane that is not finished
                 want = body.get("ids")                       # the lanes the page shows (and counted in its question)
                 if want is not None and (not isinstance(want, list) or not all(isinstance(x, str) for x in want)):

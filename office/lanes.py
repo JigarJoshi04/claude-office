@@ -350,7 +350,7 @@ def start_scheduled(seats: list[dict], now: float | None = None, can_hire: bool 
 def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, permission_mode: str,
                 seat_ids: list[str], cfg: dict, launch: bool = True, allow_messages: bool = True,
                 resume_session: str | None = None, chain: list[dict] | None = None, chain_of: dict | None = None,
-                schedule: dict | None = None, max_minutes: int | None = None) -> dict:
+                schedule: dict | None = None, max_minutes: int | None = None, bakeoff: dict | None = None) -> dict:
     title = " ".join(str(title).split())[:80]
     if max_minutes is not None and (isinstance(max_minutes, bool) or not isinstance(max_minutes, int) or not 5 <= max_minutes <= 1440):
         raise ValueError("A time limit is 5 to 1440 minutes")
@@ -386,6 +386,7 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         "chain_of": chain_of or ({"step": 1, "of": 1 + len(chain), "first": lane_id} if chain else None),
         "schedule": schedule,
         "max_minutes": max_minutes,                            # its time budget, from when it first starts (None: none)
+        "bakeoff": bakeoff,                                    # {"id", "side": "A" | "B", "winner"}: one of two contenders
     }
     if schedule:                                       # starts later: the office starts it when it is due
         lane["status"] = "scheduled"
@@ -499,6 +500,40 @@ def stop_lane(lane_id: str) -> dict:
 def interrupted_lanes() -> list[dict]:
     d = lanes_dir()
     return [l for p in (d.iterdir() if d.is_dir() else []) if (l := load_lane(p.name)) and l.get("status") == "interrupted"]
+
+
+BAKEOFF_NOTE = ("\n\nThis is a bake-off: two agents get this same brief and the CEO compares the results. You are contender "
+                "{side}. Make your changes on a new branch named bakeoff/{id}-{low} in a new git worktree under this folder, never "
+                "on the current branch and never on the other contender's. Lead your report with a one-line summary, then what you "
+                "did, how you checked it, and what you would do next, so the two reports can be read side by side.")
+
+
+def hire_bakeoff(title: str, brief: str, workdir: str, sides: dict, permission_mode: str, seat_ids: list[str], cfg: dict,
+                 max_minutes: int | None = None) -> list[dict]:
+    """The same brief to two contenders, A and B (each {"seat", "model"}), each on its own branch: two lanes."""
+    if set(sides) != {"A", "B"} or not all(isinstance(v, dict) for v in sides.values()):
+        raise ValueError("A bake-off needs contenders A and B")
+    bid = os.urandom(3).hex()
+    out = []
+    for side in ("A", "B"):
+        v = sides[side]
+        out.append(create_lane(f"{' '.join(str(title).split())[:72]} · {side}", str(brief).strip() + BAKEOFF_NOTE.format(side=side, id=bid, low=side.lower()),
+                               workdir, v.get("seat") or "auto", v.get("model") or cfg["lane_defaults"]["model"], permission_mode,
+                               seat_ids, cfg, max_minutes=max_minutes, bakeoff={"id": bid, "side": side}))
+    return out
+
+
+def judge_bakeoff(bid: str, winner: str) -> list[dict]:
+    """The CEO's verdict on a bake-off: "A", "B" or "tie", kept on both lanes."""
+    if winner not in ("A", "B", "tie"):
+        raise ValueError("The winner is A, B or tie")
+    both = [l for l in (load_lane(p.name) for p in (lanes_dir().iterdir() if lanes_dir().is_dir() else [])) if l and (l.get("bakeoff") or {}).get("id") == bid]
+    if len(both) != 2:
+        raise ValueError("No such bake-off")
+    for l in both:
+        l["bakeoff"] = dict(l["bakeoff"], winner=winner, judged_at=time.time())
+        save_lane(l)
+    return both
 
 
 def resume_interrupted(seat_ids: list[str], gap: float = 3.0, ids: list[str] | None = None) -> list[str]:

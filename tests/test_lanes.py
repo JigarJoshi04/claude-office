@@ -260,3 +260,39 @@ class MemoryCapTests(unittest.TestCase):
         self.assertEqual([lanes._mem(x) for x in ("8G", "8g", "0", "0%", "512m", "50%", "abc", "", "1.5G")],
                          ["8G", "8G", None, None, "512M", "50%", None, None, "1.5G"])
         self.assertEqual(lanes.unit_limits({"lane_policy": {"memory_max": "0", "tasks_max": 0}}), [])
+
+
+class BakeoffTests(unittest.TestCase):
+    def test_two_contenders_one_brief_and_a_verdict(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(lanes, "lanes_dir", return_value=Path(tmp) / "lanes"):
+            cfg = {"default_workdir": tmp, "lane_policy": {}, "lane_defaults": {"model": "opus"}}
+            with patch.object(lanes, "start_unit") as su:
+                a, b = lanes.hire_bakeoff("Cache the table", "Make it fast.", tmp, {"A": {"seat": "c1", "model": "opus"}, "B": {"seat": "c2", "model": "sonnet"}},
+                                          "acceptEdits", ["c1", "c2"], cfg)
+            self.assertEqual(su.call_count, 2)
+            self.assertEqual((a["title"], b["title"]), ("Cache the table · A", "Cache the table · B"))
+            self.assertEqual((a["seat_pref"], b["model"]), ("c1", "sonnet"))
+            bid = a["bakeoff"]["id"]
+            self.assertEqual(b["bakeoff"], {"id": bid, "side": "B"})
+            brief = (lanes.lane_dir(a["id"]) / "brief.md").read_text()
+            self.assertIn(f"bakeoff/{bid}-a", brief)
+            self.assertIn("contender A", brief)
+            with self.assertRaises(ValueError):
+                lanes.judge_bakeoff(bid, "C")
+            lanes.judge_bakeoff(bid, "B")
+            self.assertEqual({lanes.load_lane(x["id"])["bakeoff"]["winner"] for x in (a, b)}, {"B"})
+            with self.assertRaises(ValueError):
+                lanes.judge_bakeoff("nope", "A")
+
+    def test_ready_to_judge_needs_you_once_both_finish(self):
+        from office.snapshot import Office, attention_key
+        pair = [{"id": "x-a", "title": "T · A", "status": "done", "bakeoff": {"id": "b1", "side": "A"}},
+                {"id": "x-b", "title": "T · B", "status": "running", "bakeoff": {"id": "b1", "side": "B"}}]
+        snap = {"now": 1.0, "asks": [], "units": [], "office": {}, "seats": [], "lanes": pair}
+        self.assertFalse([a for a in Office._attention(snap) if a.get("bakeoff")])
+        pair[1]["status"] = "blocked"
+        items = [a for a in Office._attention(snap) if a.get("bakeoff")]
+        self.assertEqual(items[0]["text"], "Bake-off 'T' is ready to judge: A done, B blocked")
+        self.assertEqual(attention_key(items[0]), "bakeoff:b1")
+        pair[0]["bakeoff"]["winner"] = "A"
+        self.assertFalse([a for a in Office._attention(snap) if a.get("bakeoff")])

@@ -73,6 +73,8 @@ def attention_key(a: dict) -> str:
         return "interrupted:"
     if a.get("collision"):
         return f"collision:{a['collision']}"
+    if a.get("bakeoff"):
+        return f"bakeoff:{a['bakeoff']}"
     if a.get("trust"):                                    # a claim its transcript contradicts (before its lane's own items)
         return f"trust:{a['trust']}"
     if a.get("lane"):                                     # waiting for a seat and failed are two things to snooze
@@ -530,7 +532,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.121.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.122.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -646,6 +648,15 @@ class Office(LiveOffice):
                 who = a.get("name") or a.get("where") or "An agent"
                 items.append({"level": "warn", "seat": a.get("seat"), "ask": a["id"],
                               "text": f"{who}{' on ' + labels[a['seat']] if a.get('seat') in labels else ''} asks: {a['text'][:140]}"})
+        bakes: dict = {}                                     # bake-offs with both contenders finished and no verdict yet
+        for l in snap.get("lanes") or []:
+            if (l.get("bakeoff") or {}).get("id"):
+                bakes.setdefault(l["bakeoff"]["id"], []).append(l)
+        done = {"done", "blocked", "failed", "stopped", "finished"}
+        for bid, pair in bakes.items():
+            if len(pair) == 2 and all(l.get("status") in done for l in pair) and not any(l["bakeoff"].get("winner") for l in pair):
+                items.append({"level": "warn", "bakeoff": bid, "text": f"Bake-off '{pair[0]['title'][:-4]}' is ready to judge: "
+                              + ", ".join(f"{l['bakeoff']['side']} {l['status']}" for l in sorted(pair, key=lambda l: l["bakeoff"]["side"]))})
         mute = set((snap.get("office") or {}).get("risk_mute") or ())
         live_ids = {x.get("id") for s in snap.get("seats", []) for x in s.get("sessions", []) if x.get("live", True)}
         for v in snap.get("contradicted") or []:             # said it was done, but its last test run failed (trust.py)

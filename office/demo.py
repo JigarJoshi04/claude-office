@@ -475,7 +475,15 @@ class DemoOffice(LiveOffice):
                 if p:
                     g = progs.setdefault(p["key"], {"name": p["name"], "url": p["url"], "sessions": []})
                     g["sessions"].append({"name": x["name"], "seat": s["id"], "state": x["state"], "report_status": x["report_status"]})
+        bake = lambda side, seat, model, took, report, usd: {
+            "id": f"1016-090000-cache-the-pricing-table-{side.lower()}", "title": f"Cache the pricing table · {side}", "workdir": "/home/you/work/apollo",
+            "seat_pref": seat, "model": model, "permission_mode": "acceptEdits", "created_at": now - 7200, "finished_at": now - 7200 + took,
+            "status": "done", "seat": seat, "runs": [{"seat": seat, "started_at": now - 7150}], "unit": None, "report_status": report,
+            "state_tail": None, "unit_active": False, "bakeoff": {"id": "b4k3f0", "side": side},
+            "spent": {"tokens": int(usd * 400000), "usd": usd}, "trust": {"level": "verified" if side == "A" else "unverified", "why": "x"}}
         lanes = [
+            bake("A", "claude2", "opus", 2400, "STATUS: DONE - an LRU cache in front of the pricing table, 38 ms to 2 ms, tests added", 6.4),
+            bake("B", "claude4", "sonnet", 1500, "STATUS: DONE - memoised the lookup per request; no new tests", 1.9),
             {"id": "1016-140212-refresh-the-api-docs", "title": "Refresh the API docs", "workdir": "/home/you/work/docs",
              "seat_pref": "auto", "model": "opus", "permission_mode": "acceptEdits", "created_at": now - 1600,
              "status": "running", "seat": "astra", "runs": [{"seat": "astra", "started_at": now - 1500}],
@@ -512,7 +520,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.121.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.122.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
