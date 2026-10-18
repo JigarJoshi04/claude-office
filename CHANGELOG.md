@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.110.0] - 2026-10-19
+
+### Added
+- Per-model weekly limits. When a plan caps a model's week on its own (Opus, say), the seat's page shows each
+  model's bar, how much of it is used and when it resets. The hiring desk warns when the chosen model's week is past
+  60% on the chosen seat (or the divider's pick), and says the divider will send the lane elsewhere past the guard.
+
 ## [3.109.0] - 2026-10-19
 
 ### Added

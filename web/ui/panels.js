@@ -279,6 +279,14 @@ export function makePanels(app) {
   // A report's claim against its own last test run (trust.py): Verified, Unverified or Contradicted, and why.
   const TRUST_WORD = { verified: "Verified", unverified: "Unverified", contradicted: "Contradicted" };
   const trustChip = (v) => v ? `<div class="trust t-${v.level}" title="From its transcript: its last test run against its last code change">${icon(v.level === "verified" ? "check" : v.level === "contradicted" ? "x" : "alert", 14)}<b>${TRUST_WORD[v.level]}</b><span>${esc(v.why)}</span></div>` : "";
+  // The hiring desk: how much of the chosen model's own week the seat (or the divider's pick) has used, when it is a lot.
+  function modelHint(seatId, model) {
+    const st = seatById(seatId === "auto" ? (S().next_pick || {}).seat : seatId);
+    const lim = st && ((st.usage || {}).scoped || []).find(m => modelFam(m.label) === modelFam(model));
+    if (!lim || lim.pct < 60) return "";
+    return `<p class="hint ${lim.pct >= 90 ? "bad-t" : ""}" style="margin:-6px 0 12px">${icon("alert", 13)} ${esc(P(st).name)} has used ${Math.round(lim.pct)}% of its ${esc(lim.label)} week${lim.resets_at ? ` (back ${esc(dayTime(lim.resets_at))})` : ""}.${lim.pct >= 90 ? " The divider sends a lane for it elsewhere." : ""}</p>`;
+  }
+  const modelFam = (m) => ((m || "").match(/opus|sonnet|haiku|fable|gpt|codex/i) || ["other"])[0].toLowerCase();
   const PHASE_ICON = { exploring: "search", building: "tool", testing: "target", debugging: "bug", "wrapping up": "send" };
   // One fix per kind of problem, so every item in Needs you has a next step.
   function needAction(a) {
@@ -466,6 +474,9 @@ export function makePanels(app) {
         ${section("Today", `<div class="diary">${icon("news", 16)}<span>${esc(diary(p, dstats))}</span></div>`)}
         ${section("Plan, last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
           <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
+        ${(u.scoped || []).length ? section("Per-model weekly limits", `${u.scoped.map(m => { const pc = Math.max(0, Math.min(100, Math.round(m.pct))), lvl = pc >= 90 ? "bad" : pc >= 70 ? "warn" : "";
+            return `<div class="mlim ${lvl}"><span class="mdl m-${esc(modelFam(m.label))}">${esc(m.label)}</span><span class="mlim-bar"><i style="width:${pc}%"></i></span><b>${pc}%</b><small>${m.resets_at ? "resets " + dayTime(m.resets_at) : ""}</small></div>`; }).join("")}
+          <div class="hint" style="margin-top:6px">Some plans cap a model's week on its own, apart from the seat's week. A lane that asks for that model stays off this seat past the weekly guard.</div>`) : ""}
         ${recent.length ? section("Recently", recent.slice(0, 3).map(actRow).join("")) : ""}`;
     return { html: `${crumbs(esc(p.name))}
       <div class="hero st-${vo.state}" style="--seat:${esc(s.color)}">
@@ -1384,6 +1395,7 @@ export function makePanels(app) {
             ${snap.seats.map(s => `<option value="${esc(s.id)}" ${d.seat === s.id ? "selected" : ""}>${esc(P(s).name)} · ${esc(SEAT_LABEL[s.status] || s.status)}</option>`).join("")}</select></label>
           <label class="f">Model<select id="hModel" ${isCodex ? "disabled" : ""}>${["opus", "sonnet", "fable", "haiku"].map(m => `<option ${(d.model || ld.model) === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
         </div>
+        <div id="hModelHint">${modelHint(d.seat || "auto", d.model || ld.model)}</div>
         <label class="f">Permissions<select id="hPerm" ${isCodex ? "disabled" : ""}>
           <option value="acceptEdits" ${(d.permission_mode || ld.permission_mode) === "acceptEdits" ? "selected" : ""}>Edit files, run listed tools</option>
           <option value="bypassPermissions" ${(d.permission_mode || ld.permission_mode) === "bypassPermissions" ? "selected" : ""} ${pol.allow_full_trust === false ? "disabled" : ""}>Full trust (skips every permission check)${pol.allow_full_trust === false ? ": off by policy" : ""}</option></select></label>
@@ -1411,6 +1423,7 @@ export function makePanels(app) {
         const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
           start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "", each: q("hEach").value, max_minutes: +q("hMax").value || null }; store.set("hireDraft", hireDraft); };
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen", "hEach"].forEach(id => q(id).addEventListener("input", save));
+        for (const id of ["hSeat", "hModel"]) q(id).addEventListener("change", () => { q("hModelHint").innerHTML = modelHint(q("hSeat").value, q("hModel").value); });
         const items = () => [...new Set(q("hEach").value.split("\n").map(x => x.trim()).filter(Boolean))];
         const goLabel = () => { const n = items().length; q("hGo").innerHTML = `${icon("briefcase", 16)}${n >= 2 ? `Hire ${Math.min(n, 20)} lanes into the backlog` : "Hire and start"}`; };
         q("hEach").addEventListener("input", goLabel); goLabel();

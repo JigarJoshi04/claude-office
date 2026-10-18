@@ -393,7 +393,8 @@ class DemoOffice(LiveOffice):
             dict(id="claude2", kind="claude", label="claude2", nickname="Atlas", color="#3987e5", config_dir="~/.claude2",
                  account={"name": "Seat Two", "email": "seat2@example.com", "org": "Acme", "role": "member"},
                  health={"state": "ok", "detail": "Logged in", "tier": "Max 5x", "subscription": "team"},
-                 usage=usage(64, 48, 2.1 * 3600, 3 * 86400),
+                 usage=dict(usage(64, 48, 2.1 * 3600, 3 * 86400), scoped=[{"label": "Opus", "pct": 93.0, "resets_at": now + 3 * 86400},
+                                                                          {"label": "Fable", "pct": 41.0, "resets_at": now + 3 * 86400}]),
                  sessions=[_sess("claude2", "d-orch", "apollo-orchestrator", "desk", "working", "orchestrator", now, 14000,
                                  title="Apollo launch orchestration", tokens=180000),
                            _sess("claude2", "l-rate", "api-rate-limits", "lane", "working", "rate", now, 3100,
@@ -508,7 +509,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.109.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.110.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},

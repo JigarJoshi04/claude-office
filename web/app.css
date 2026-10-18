@@ -1716,3 +1716,7 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .arc-days { display: flex; align-items: flex-end; justify-content: center; gap: 3px; height: 28px; margin-top: 12px; }
 .arc-days i { width: 7px; border-radius: 2px; background: rgba(255,142,240,.35); } .arc-days i.today { background: #ff8ef0; box-shadow: 0 0 8px #ff4fd8; }
 .arc-streak { margin: 4px 0 0; font-size: 12px; color: #ffd8fb; opacity: .8; }
+.mlim { display: grid; grid-template-columns: 70px 1fr 40px auto; align-items: center; gap: 10px; margin: 6px 0; font-size: 13px; }
+.mlim .mdl { margin: 0; text-align: center; } .mlim small { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.mlim-bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; } .mlim-bar i { display: block; height: 100%; background: var(--good); border-radius: 99px; }
+.mlim.warn .mlim-bar i { background: var(--warn); } .mlim.bad .mlim-bar i { background: var(--bad); }
