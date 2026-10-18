@@ -68,7 +68,11 @@ DEMO_HELPERS = {"d-orch": ["Check the overnight lanes' reports", "Read the faili
 
 
 DEMO_CI = {   # the desks' CI lamps: a PR's checks on the branch each lane has out
-    "l-rate": {"checks": "pending", "number": 482, "url": "https://github.com/example/apollo/pull/482", "state": "open", "review": "review_required"},
+    "l-rate": {"checks": "pending", "number": 482, "url": "https://github.com/example/apollo/pull/482", "state": "open", "review": "changes_requested",
+               "threads": [{"path": "api/limiter.py", "line": 41, "author": "maya-r", "replies": 1,
+                            "body": "The bucket refills per request here, not per second, so a quiet client can burst far past the limit. Refill from elapsed time instead."},
+                           {"path": "tests/test_limiter.py", "line": 12, "author": "maya-r", "replies": 0,
+                            "body": "Please add a test for two clients sharing one key."}]},
     "l-bill": {"checks": "fail", "number": 479, "url": "https://github.com/example/apollo/pull/479", "state": "open", "review": None},
     "c-docs": {"checks": "pass", "number": 481, "url": "https://github.com/example/apollo/pull/481", "state": "open", "review": "approved"},
 }
@@ -493,7 +497,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.96.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.97.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"}},
                 "seats": seats, "units": units, "lanes": lanes, "programmes": list(progs.values()), "divider": div,

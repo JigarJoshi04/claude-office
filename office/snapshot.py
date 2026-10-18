@@ -44,7 +44,7 @@ def attention_key(a: dict) -> str:
         return f"lane:{a['lane']}:{a.get('status') or ''}"
     if a.get("unit"):
         return f"unit:{a['unit']}"
-    kind = "ci" if a.get("ci") else "ghost" if a.get("ghost") else "loop" if a.get("loop") else re.sub(r"[\d.,:%~]+", "#", a.get("text", ""))[:60]
+    kind = "ci" if a.get("ci") else "review" if a.get("review") else "ghost" if a.get("ghost") else "loop" if a.get("loop") else re.sub(r"[\d.,:%~]+", "#", a.get("text", ""))[:60]
     return f"{kind}:{a.get('seat') or ''}:{a.get('session') or ''}"
 
 
@@ -483,7 +483,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.96.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.97.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -571,6 +571,7 @@ class Office(LiveOffice):
                 who = a.get("name") or a.get("where") or "An agent"
                 items.append({"level": "warn", "seat": a.get("seat"), "ask": a["id"],
                               "text": f"{who}{' on ' + labels[a['seat']] if a.get('seat') in labels else ''} asks: {a['text'][:140]}"})
+        reviewed = set()                                     # one review item per PR, however many desks share its branch
         for s in snap["seats"]:
             label = s["label"]
             if (s.get("health") or {}).get("state") == "login":
@@ -591,6 +592,11 @@ class Office(LiveOffice):
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"], "loop": True,
                                   "text": f"{x.get('name') or 'A session'} on {label} has made the same call {lp['count']} times in a row: {lp['text']}"})
                 ci = x.get("ci")
+                if ci and ci.get("threads") and x.get("live", True) and ci["number"] not in reviewed:   # comments nobody resolved
+                    reviewed.add(ci["number"])
+                    n = len(ci["threads"])
+                    items.append({"level": "warn", "seat": s["id"], "session": x["id"], "review": True,
+                                  "text": f"PR #{ci['number']} has {n} unresolved review comment{'' if n == 1 else 's'}: {x.get('name') or 'a session'} on {label}"})
                 if ci and ci.get("checks") == "fail" and x.get("live", True) and ci["number"] not in seen_prs:
                     seen_prs.add(ci["number"])
                     items.append({"level": "warn", "seat": s["id"], "ci": True, "session": x["id"],
@@ -739,13 +745,18 @@ class Office(LiveOffice):
             return
         self.prs.view(list(self.loose.known(self.cfg.get("repos") or [])))      # refreshes in the background when stale
         open_prs = self.prs.by_branch()
+        asked = set()                                     # the PRs whose review comments are read this tick (at most 10)
         for s in seats_out:
             for x in s.get("sessions", []):
                 g = x.get("git") or {}
                 p = open_prs.get((gh.get(g.get("repo")), g.get("branch"))) if g.get("branch") else None
                 if p:
+                    key = (gh.get(g.get("repo")), p["number"])
+                    if x.get("live", True) and (key in asked or len(asked) < 10):
+                        asked.add(key)
                     x["ci"] = {"checks": p["checks"], "number": p["number"], "url": p["url"], "state": p["state"], "review": p["review"],
-                               "title": p.get("title"), "branch": p.get("branch")}
+                               "title": p.get("title"), "branch": p.get("branch"),
+                               "threads": self.prs.reviews_for(*key)[:6] if key in asked else []}   # unresolved review comments
 
     def cabinet_view(self, q: str = "", seat: str | None = None, offset: int = 0) -> dict:
         """The filing cabinet: past sessions matching q, most recent first (cabinet.py)."""

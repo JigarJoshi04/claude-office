@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.97.0] - 2026-10-19
+
+### Added
+- The review-comment watcher: when a desk's branch has an open PR with unresolved review comments, Needs you says so
+  ("PR #482 has 2 unresolved review comments") with Forward to it, which opens that session with the comments written
+  out in its message box (file, line, reviewer, what they said) for you to send. The session page shows the count on
+  its PR, and the desk gets a yellow sticky note by its CI lamp. Read with `gh` every five minutes for at most ten
+  PRs at a time; credential-shaped text in a comment is masked, and nothing is sent without you.
+
 ## [3.96.0] - 2026-10-19
 
 ### Added

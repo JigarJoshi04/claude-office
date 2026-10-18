@@ -887,6 +887,10 @@ export function createOffice(stage, handlers) {
       S.rect(ctx, x + 11, ly + 1, 1, 1, blink ? "#5b6378" : { pass: "#3ddc84", pending: "#ffc24b", fail: "#ff4d5e" }[ci.checks]);
       if (ci.checks === "fail" && !blink) lights.push({ x: x + 11, y: ly + 1, r: 8, c: "#ff4d5e", i: 0.6 });
     }
+    if (ci && (ci.threads || []).length) {                 // reviewers left comments: a sticky note on the screen's edge
+      S.rect(ctx, x + 14, ly - 1, 4, 4, "#ffe27a"); S.rect(ctx, x + 14, ly + 3, 4, 1, "#c9a93a");
+      S.rect(ctx, x + 15, ly, 2, 1, "#8a6d1e"); S.rect(ctx, x + 15, ly + 2, 1, 1, "#8a6d1e");
+    }
     const tk = a.sess.tasks, sy = top ? pod.y + 33 : pod.y + 63;
     if (tk && tk.total) { S.rect(ctx, x - 1, sy, 12, 2, "#5b6378"); S.rect(ctx, x - 1, sy, Math.round(12 * tk.done / tk.total), 2, tk.done === tk.total ? "#ffd24a" : "#3ddc84"); }
     const c = a.sess.cache;
