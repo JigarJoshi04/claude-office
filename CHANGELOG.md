@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.102.0] - 2026-10-19
+
+### Added
+- Each working session has a phase: exploring, building, testing, debugging or wrapping up, read from its last few
+  steps (reading and searching, editing and running, a test run and whether it passed, a commit, push, PR or report).
+  No AI and nothing sent: it shows on the Right-now cards and as a coloured pill on the session page.
+
 ## [3.101.0] - 2026-10-19
 
 ### Added

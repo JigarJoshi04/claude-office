@@ -270,6 +270,7 @@ export function makePanels(app) {
         <p class="hint">${a.demo ? "Demo answer: nothing was read." : `Read from its transcript by the analyst${a.cached ? " (from the cache)" : a.tokens ? `, ${fmtTok(a.tokens)} tokens` : ""}. The session was not told.`}</p>`;
     return `${form}<div class="about-ans${a.error ? " err" : ""}"><button class="btn sm ghost icon" data-ask-x aria-label="Clear the answer">${icon("x", 14)}</button>${body}</div>`;
   }
+  const PHASE_ICON = { exploring: "search", building: "tool", testing: "target", debugging: "bug", "wrapping up": "send" };
   // One fix per kind of problem, so every item in Needs you has a next step.
   function needAction(a) {
     const st = a.seat && seatById(a.seat);
@@ -598,6 +599,7 @@ export function makePanels(app) {
           ${x && x.cache && x.cache.window ? (() => { const f = Math.min(1, x.cache.context / Math.max(x.cache.window, x.cache.context)), pc = Math.round(f * 100);
             return `<span class="pill ctx ${f >= 0.9 ? "bad" : f >= 0.7 ? "warn" : ""}" title="${fmtTok(x.cache.context)} of ${fmtTok(x.cache.window)} tokens of context: what it sends with every reply. Near full, Claude Code compacts the conversation. On the floor it is the pile of paper on its desk.">${icon("files", 13)}Context ${pc}%</span>`; })() : ""}
           ${x && x.tasks ? `<span class="pill ${x.tasks.done === x.tasks.total ? "good" : ""}" title="Its task list: ${x.tasks.done} of ${x.tasks.total} done">${icon("check", 13)}${x.tasks.done}/${x.tasks.total} tasks</span>` : ""}
+          ${x && x.phase ? `<span class="pill ph ph-${x.phase.replace(" ", "-")}" title="Where it is in its work, from its last few steps (reading, editing, running tests, shipping)">${icon(PHASE_ICON[x.phase] || "dot", 13)}${x.phase[0].toUpperCase() + x.phase.slice(1)}</span>` : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
       <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
       ${tab === "chat" && conv ? `<div class="chat-find">${icon("search", 15)}<input type="search" id="chatFind" placeholder="Find in this conversation" aria-label="Find in this conversation" value="${esc(chatFind.get(v.id) || "")}" autocomplete="off"><span class="cf-n" aria-live="polite"></span></div>` : ""}

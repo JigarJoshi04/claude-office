@@ -58,6 +58,7 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
         "cache": _demo_cache(sid, state, now),
         "tasks": _demo_tasks(sid, now),
         "ci": DEMO_CI.get(sid),
+        "phase": DEMO_PHASE.get(sid),
         "risks": [dict(r, ts=now - r["ago"]) for r in DEMO_RISKS.get(sid, [])],
         "helpers": [{"desc": d, "since": now - 300 - i * 140} for i, d in enumerate(DEMO_HELPERS.get(sid, []))][: 1 + int(now // 40) % 3],
         "helpers_done": int(now // 40) if sid in DEMO_HELPERS else 0,
@@ -70,6 +71,8 @@ DEMO_RISKS = {"l-bill": [{"id": "demo-risk-1", "ago": 420, "rule": "force_push",
 
 DEMO_HELPERS = {"d-orch": ["Check the overnight lanes' reports", "Read the failing CI logs", "Draft tomorrow's lane briefs"]}
 
+
+DEMO_PHASE = {"l-rate": "testing", "l-bill": "debugging", "c-docs": "wrapping up", "d-orch": "exploring", "l-search": "building", "c-visit": "exploring"}
 
 DEMO_CI = {   # the desks' CI lamps: a PR's checks on the branch each lane has out
     "l-rate": {"checks": "pending", "number": 482, "url": "https://github.com/example/apollo/pull/482", "state": "open", "review": "changes_requested",
@@ -501,7 +504,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.101.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.102.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096}},

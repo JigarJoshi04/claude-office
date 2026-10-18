@@ -233,6 +233,44 @@ def screen_for(name: str, inp: dict) -> str | None:
     return None
 
 
+_SHIP = re.compile(r"(?:git\s+(?:commit|push|tag)|gh\s+(?:pr\s+(?:create|merge|ready)|release\s+create))\b")
+_LOOK = re.compile(r"(?:cat|ls|head|tail|grep|rg|find|wc|tree|less|jq|git\s+(?:log|show|diff|status|blame|branch|fetch)"
+                   r"|gh\s+(?:pr|run|issue|api)\s*(?:view|list|checks|diff|watch)?)\b")
+
+
+def step_kind(name: str, inp, screen: str | None) -> str | None:
+    """A tool call as a step of work: look, edit, run, test or ship (None: not telling)."""
+    inp = inp if isinstance(inp, dict) else {}
+    if screen == "test":
+        return "test"
+    if name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+        path = str(inp.get("file_path") or inp.get("notebook_path") or "")
+        return "ship" if re.search(r"(?:^|/)REPORT[^/]*\.md$", path) else None if re.search(r"(?:^|/)STATE[^/]*\.md$", path) else "edit"
+    if name in ("Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch") or name.startswith("mcp__"):
+        return "look"
+    if name == "Bash":
+        segs = [x for x in _segments(str(inp.get("command") or "")) if x and not re.match(r"cd\b", x)]
+        if any(_SHIP.match(x) for x in segs):
+            return "ship"
+        return "look" if segs and all(_LOOK.match(x) for x in segs) else "run"
+    return None
+
+
+def phase_of(steps: list[str], test_ok) -> str | None:
+    """Where a session is in its work, from its last steps: exploring, building, testing, debugging or wrapping up."""
+    if not steps:
+        return None
+    if "ship" in steps[-3:]:
+        return "wrapping up"
+    if steps[-1] == "test":
+        return "testing"
+    if test_ok is False and "test" in steps:
+        return "debugging"
+    last = steps[-6:]
+    made = last.count("edit") + last.count("run")
+    return "building" if made and made >= last.count("look") else "exploring"
+
+
 def _user_text(content) -> str | None:
     """Text of a real human/task prompt, or None for tool results and harness notices."""
     if isinstance(content, str):
@@ -277,7 +315,7 @@ class TranscriptState:
     __slots__ = ("path", "offset", "size", "mtime", "title", "first_prompt", "last_prompt", "model",
                  "last_ts", "activity", "activity_kind", "recent", "tool_calls", "ledger", "seen_ids",
                  "limited_at", "limit_text", "last_text", "partial", "ino", "fresh_total", "cache_at", "cache_ttl", "context",
-                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at", "risks")
+                 "tasks", "task_pending", "helpers", "helpers_done", "repeat", "screen", "test_id", "test_ok", "test_at", "risks", "steps")
 
     def __init__(self, path: Path):
         self.path = path
@@ -314,6 +352,7 @@ class TranscriptState:
         self.test_ok = None            # whether the last test run passed (None: none seen yet)
         self.test_at = None
         self.risks: list[dict] = []    # risky tool calls (risk.py): {"id", "ts", "rule", "text"}, the last 20
+        self.steps: list[str] = []     # the last main-chain tool calls by kind (step_kind), for its phase
 
     # -- parsing -------------------------------------------------------------------------------------------
     def feed_line(self, line: bytes) -> None:
@@ -426,6 +465,10 @@ class TranscriptState:
                     self.screen = screen_for(str(c.get("name") or ""), c.get("input") or {})
                     if self.screen == "test":
                         self.test_id = c.get("id")
+                    sk = step_kind(str(c.get("name") or ""), c.get("input"), self.screen)
+                    if sk:
+                        self.steps.append(sk)
+                        del self.steps[:-10]
                 self._push(ts, text, kind)
             elif c.get("type") == "text" and isinstance(c.get("text"), str) and c["text"].strip() and not d.get("isSidechain"):
                 self.last_text = _short(c["text"], 400)
@@ -715,6 +758,7 @@ def list_sessions(seat: dict, cache: TranscriptCache, now: float | None = None) 
             "screen": tr.screen if tr else None,
             "test_ok": tr.test_ok if tr else None,
             "risks": list(tr.risks[-5:]) if tr else [],
+            "phase": phase_of(tr.steps, tr.test_ok) if tr and state in ("working", "waiting") else None,
             "loop": {"text": redact(tr.repeat[2]), "count": tr.repeat[1], "since": tr.repeat[3]} if tr and tr.repeat and tr.repeat[1] >= 5 else None,
             "cpu_s": proc_cpu_seconds(pid),
             "state_file": state_file,

@@ -1685,3 +1685,7 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .burnwhy ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; } .burnwhy li small { display: block; color: var(--muted); font-size: 12px; }
 .ai-log { margin-top: 8px; font-size: 13px; color: var(--muted); } .ai-log summary { cursor: pointer; }
 .ai-log ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; overflow-wrap: anywhere; }
+/* A session's phase (sessions.phase_of): the same five colours on the dock and the session page. */
+.ph { font-weight: 600; } .ph-exploring { color: #7cb7ff; } .ph-building { color: var(--accent-2); } .ph-testing { color: #ffc24b; }
+.ph-debugging { color: #ff6b7a; } .ph-wrapping-up { color: #3ddc84; }
+.pill.ph { background: var(--surface-2); }

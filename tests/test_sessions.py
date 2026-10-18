@@ -430,3 +430,27 @@ class TestFlaskTests(unittest.TestCase):
         res = json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "content": "2 failed, 40 passed in 3.1s", "is_error": False}]}}).encode()
         st.feed_line(use); st.feed_line(res)
         self.assertIs(st.test_ok, False)
+
+
+class PhaseTests(unittest.TestCase):
+    """A session's phase from its last steps (sessions.step_kind / phase_of): no AI, just what it did."""
+
+    def test_steps(self):
+        from office.sessions import step_kind
+        cases = [("Bash", {"command": "cd x && git push origin HEAD"}, None, "ship"), ("Bash", {"command": "git log --oneline | head"}, None, "look"),
+                 ("Bash", {"command": "npm install"}, None, "run"), ("Write", {"file_path": "/l/REPORT.md"}, None, "ship"),
+                 ("Edit", {"file_path": "/l/STATE.md"}, None, None), ("Edit", {"file_path": "/w/app.py"}, None, "edit"),
+                 ("Read", {"file_path": "a"}, None, "look"), ("Bash", {"command": "pytest -q"}, "test", "test"),
+                 ("Bash", {"command": 'git commit -m "x"'}, None, "ship"), ("TodoWrite", {}, None, None), ("Bash", None, None, "run")]
+        for name, inp, screen, want in cases:
+            self.assertEqual(step_kind(name, inp, screen), want, (name, inp))
+
+    def test_phases(self):
+        from office.sessions import phase_of
+        self.assertIsNone(phase_of([], None))
+        self.assertEqual(phase_of(["look", "look", "edit", "edit"], None), "building")
+        self.assertEqual(phase_of(["edit", "test"], None), "testing")
+        self.assertEqual(phase_of(["test", "edit", "look"], False), "debugging")
+        self.assertEqual(phase_of(["test", "edit", "look"], True), "building")              # a tie goes to building
+        self.assertEqual(phase_of(["edit", "ship", "look"], False), "wrapping up")
+        self.assertEqual(phase_of(["look", "look", "look", "run"], None), "exploring")
