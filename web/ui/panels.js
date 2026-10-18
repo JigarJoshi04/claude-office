@@ -804,6 +804,8 @@ export function makePanels(app) {
   }
 
   // ------------------------------------------------------------------------------------------ hiring
+  // Templates of your own (Hire → Save as a template), kept in this browser.
+  const myTemplates = () => { const l = store.get("myTemplates", []); return Array.isArray(l) ? l.filter(t => t && t.name && t.brief) : []; };
   function hire() {
     const snap = S(), ld = snap.office.lane_defaults || {}, np = snap.next_pick, d = hireDraft;
     const dirs = [...new Set([snap.office.default_workdir, ...snap.seats.flatMap(s => s.sessions.map(x => x.cwd))].filter(Boolean))];
@@ -811,7 +813,7 @@ export function makePanels(app) {
     return { html: `${crumbs("Hiring desk")}
       <h2>Hire a lane</h2>
       <p class="lede">A lane is an agent that works in the background on one brief. It keeps notes, moves to another seat if its seat runs out of plan, and files a report when it is done.</p>
-      ${section("Start from a template", `<div class="templates">${TEMPLATES.map((t, i) => `<button data-tpl="${i}">${icon(t.ic, 16)}${esc(t.name)}</button>`).join("")}</div>`)}
+      ${section("Start from a template", `<div class="templates">${myTemplates().map((t, i) => `<span class="tpl-mine"><button data-mytpl="${i}" title="${esc(t.title)}">${icon("star", 16)}${esc(t.name)}</button><button class="tpl-x" data-mytpl-del="${i}" aria-label="Delete the template ${esc(t.name)}" title="Delete">${icon("x", 13)}</button></span>`).join("")}${TEMPLATES.map((t, i) => `<button data-tpl="${i}">${icon(t.ic, 16)}${esc(t.name)}</button>`).join("")}</div>`)}
       ${section("The brief", `
         <label class="f">Title<input type="text" id="hTitle" maxlength="80" placeholder="e.g. Fix the flaky export test" value="${esc(d.title)}"></label>
         <label class="f">What should it do?<textarea id="hBrief" placeholder="The goal, where to look, how to check the work, and what counts as done.">${esc(d.brief)}</textarea></label>
@@ -827,7 +829,7 @@ export function makePanels(app) {
         <div class="setrow" style="border-top:0;padding-top:0"><div class="grow">Let me message it while it works<small>Messages from the office reach this lane directly instead of waiting for approval.</small></div>
           <label class="switch"><input type="checkbox" id="hMsg" ${d.allow_messages !== false ? "checked" : ""} ${isCodex ? "disabled" : ""} aria-label="Allow messages"><span></span></label></div>
         <div class="hint">${isCodex ? "Codex seat: it runs through the gpt bridge, so model, permissions and messages do not apply." : "Runs as a background service at low priority, with no windows."}</div>
-        <div class="row" style="margin-top:16px;gap:8px"><button class="btn primary" id="hGo">${icon("briefcase", 16)}Hire and start</button><button class="btn ghost" id="hClear">Clear</button></div>`)}
+        <div class="row" style="margin-top:16px;gap:8px"><button class="btn primary" id="hGo">${icon("briefcase", 16)}Hire and start</button><button class="btn" id="hSaveTpl" title="Keep this title and brief as a template (in this browser)">${icon("star", 15)}Save as a template</button><button class="btn ghost" id="hClear">Clear</button></div>`)}
       ${section("Office lanes", `<div id="laneList">${laneListHtml()}</div>`)}`,
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
@@ -835,6 +837,28 @@ export function makePanels(app) {
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm"].forEach(id => q(id).addEventListener("input", save));
         q("hMsg").addEventListener("change", save);
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
+        const useTpl = (t) => {
+          save();
+          const mine = (hireDraft.title.trim() || hireDraft.brief.trim()) && ![...TEMPLATES, ...myTemplates()].some(x => x.brief === hireDraft.brief);
+          if (mine && !confirm(`Replace your title and brief with the "${t.name}" template?`)) return;
+          hireDraft.title = t.title; hireDraft.brief = t.brief; store.set("hireDraft", hireDraft); app.rerender(true);
+          const ti = document.getElementById("hTitle"); if (ti) { ti.focus(); ti.setSelectionRange(ti.value.length, ti.value.length); }
+        };
+        root.querySelectorAll("[data-mytpl]").forEach(b => b.addEventListener("click", () => useTpl(myTemplates()[+b.dataset.mytpl])));
+        root.querySelectorAll("[data-mytpl-del]").forEach(b => b.addEventListener("click", () => {
+          const list = myTemplates(), t = list[+b.dataset.mytplDel];
+          if (!t || !confirm(`Delete the template "${t.name}"?`)) return;
+          list.splice(+b.dataset.mytplDel, 1); store.set("myTemplates", list); app.rerender(true);
+        }));
+        q("hSaveTpl").addEventListener("click", () => {
+          save();
+          if (!hireDraft.title.trim() || !hireDraft.brief.trim()) { toast("Write a title and a brief first.", "warn"); return; }
+          const name = (prompt("A short name for this template:", hireDraft.title.trim().slice(0, 40)) || "").trim().slice(0, 40);
+          if (!name) return;
+          const list = myTemplates().filter(t => t.name !== name);
+          list.unshift({ name, title: hireDraft.title, brief: hireDraft.brief });
+          store.set("myTemplates", list.slice(0, 12)); app.rerender(true); toast(`Saved the template "${name}".`, "good");
+        });
         root.querySelectorAll("[data-tpl]").forEach(b => b.addEventListener("click", () => {
           const t = TEMPLATES[+b.dataset.tpl]; save();
           const mine = (hireDraft.title.trim() || hireDraft.brief.trim()) && !TEMPLATES.some(x => x.brief === hireDraft.brief);

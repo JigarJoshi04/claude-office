@@ -1091,3 +1091,11 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .chat-find .cf-n { flex: none; font: 600 12px var(--mono); color: var(--faint); }
 .chat .msg.cf-out { opacity: .28; }
 .chat mark.cf { background: color-mix(in srgb, #ffd24a 55%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* your own lane templates in Hire */
+.tpl-mine { position: relative; display: flex; }
+.tpl-mine > button:first-child { flex: 1; padding-right: 30px; }
+.tpl-mine > button:first-child .ic { color: #ffd24a; }
+.tpl-mine .tpl-x { position: absolute; right: 4px; top: 50%; translate: 0 -50%; width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--faint); cursor: pointer; }
+.tpl-mine .tpl-x:hover { background: var(--surface-3); color: var(--text); }
+.tpl-mine .tpl-x .ic { color: inherit; }
