@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.112.0] - 2026-10-19
+
+### Added
+- `claude-office top`: the office in a terminal, for SSH and tmux. Seats with their 5-hour and weekly plan left, what
+  needs you, every live session with its phase and what it is doing, the lanes still out and the latest news,
+  refreshed every two seconds. Up and down pick a session, m messages it, s stops its lane (after you type yes), p
+  is share-safe, q quits. Standard library curses, no install.
+
 ## [3.111.0] - 2026-10-19
 
 ### Added

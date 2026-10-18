@@ -256,6 +256,7 @@ claude-office pick-seat [--json]     the seat the divider gives the next lane (e
 claude-office hire --title T --brief-file F [--workdir D] [--seat auto|ID] [--model opus]
 claude-office lanes | stop ID | resume ID [--seat ID]
 claude-office checkpoint             write the office down
+claude-office top                    the office in this terminal (SSH, tmux): seats, Needs you, sessions, lanes, news
 ```
 
 ## Configuration

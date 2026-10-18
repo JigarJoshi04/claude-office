@@ -4,6 +4,7 @@
   status                           one line per seat: usage, sessions, what they are doing
   pick-seat [--kind claude|codex] [--exclude a,b] [--model opus] [--json]
                                    the seat the load divider gives the next lane (exit 3 when none can)
+  top [--port N]                   the office in this terminal: seats, Needs you, sessions, lanes, news
   hire --title T --brief-file F [--workdir D] [--seat auto|ID] [--model opus]
                                    start an office lane
   lanes | stop ID | resume ID [--seat ID]
@@ -206,11 +207,16 @@ def main(argv=None) -> int:
     po.add_argument("--source", help="who says it: deploy, cron, CI (1-24 characters)")
     po.add_argument("--banner", action="store_true", help="also a banner across the floor (at Full game intensity)")
     po.add_argument("--port", type=int)
+    tp = sub.add_parser("top", help="the office in this terminal (for SSH and tmux)")
+    tp.add_argument("--port", type=int)
     rl = sub.add_parser("run-lane")
     rl.add_argument("id")
     args = p.parse_args(argv)
 
     config.ensure_dirs()
+    if args.cmd == "top":
+        from . import top
+        return top.main(args.port)
     if args.cmd == "serve":
         from .server import serve
         serve(args.port or config.load_config().get("port", config.DEFAULT_PORT), demo=args.demo)
