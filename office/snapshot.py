@@ -406,7 +406,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.35.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.35.1", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")}},
             "seats": seats_out,
@@ -417,9 +417,9 @@ class Office(LiveOffice):
             "next_pick": {"seat": evaluation["pick"], "why": evaluation["why"], "ranking": evaluation["ranking"]},
             "suggested_weights": divider.suggest(seats_out, div),
         }
-        last = self.tokens.last_call()
+        last = self.tokens.last_call() if self.tokens.scanned_at else None    # not before the first read of the transcripts
         for s in seats_out:                                # plan use that nothing on this machine made
-            if s.get("kind") == "claude":
+            if s.get("kind") == "claude" and last is not None:
                 s["ghost"] = ghost_use(self.history.data.get(s["id"]) or [], last.get(s["id"]),
                                        any(x.get("state") in ("working", "waiting") for x in s["sessions"] if x.get("live", True)), now)
                 if s["ghost"] and now - self._ghost_said.get(s["id"], 0) > 3600:

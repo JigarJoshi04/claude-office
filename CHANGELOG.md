@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.35.1] - 2026-10-18
+
+### Fixed
+- Ghost use waits for the first read of the transcripts after a start, so the office's own sessions are never taken
+  for someone else's.
+
 ## [3.35.0] - 2026-10-18
 
 ### Added
