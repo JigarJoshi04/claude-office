@@ -285,7 +285,8 @@ class HistoryStore:
         if at is None:
             return {"limit": None}
         if older:
-            return public({"limit": {"at": at, "older": True, "window": "weekly" if (mine[0][1][1] or 0) >= 99 else "five_hour",
+            first = mine[0][1]                                 # the same rule as below: the week only when the 5 hours had room
+            return public({"limit": {"at": at, "older": True, "window": "weekly" if (first[1] or 0) >= 99 and (first[0] or 0) < 99 else "five_hour",
                                      "sessions": [], "tokens": 0, "pace": [], "per_hour": None, "busiest": None}})
         before = [(ts, x) for ts, x in mine if ts <= at]
         last = before[-1][1] if before else None
@@ -325,7 +326,7 @@ class HistoryStore:
                 h = max(hours, key=hours.get)
                 busiest = {"start": h, "pct": round(hours[h])} if hours[h] >= 1 else None
         return public({"limit": {"at": at, "from": start, "window": "weekly" if weekly else "five_hour", "per_hour": per_hour, "busiest": busiest,
-                                 "sessions": sessions, "tokens": total, "pace": pace[::step] + ([pace[-1]] if pace and step > 1 else [])}})
+                                 "sessions": sessions, "tokens": total, "pace": pace[::step] + ([pace[-1]] if pace and step > 1 and (len(pace) - 1) % step else [])}})
 
     def query(self, snapshot, hours=6, events=()):
         if type(hours) is not int or not 1 <= hours <= 24:

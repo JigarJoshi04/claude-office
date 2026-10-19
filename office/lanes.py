@@ -429,9 +429,12 @@ def make_worktree(workdir: str, lane_id: str) -> tuple[str, dict]:
     dest, branch = os.path.join(os.path.dirname(main), os.path.basename(main) + ".lanes", lane_id), f"lane/{lane_id}"
     try:
         if not os.path.isdir(os.path.dirname(dest)):
-            os.makedirs(os.path.dirname(dest))
-            if REPO_UMASK >= 0:                              # made like your other folders, not like the office's own
-                os.chmod(os.path.dirname(dest), 0o777 & ~REPO_UMASK)
+            try:
+                os.makedirs(os.path.dirname(dest))
+                if REPO_UMASK >= 0:                          # made like your other folders, not like the office's own
+                    os.chmod(os.path.dirname(dest), 0o777 & ~REPO_UMASK)
+            except FileExistsError:                          # another hire made it at the same moment
+                pass
     except OSError as e:
         raise ValueError(f"Could not make a folder for the lane's worktree beside the repository: {e.strerror or e}") from None
     r = git("-C", top, "worktree", "add", "-q", "-b", branch, dest, "HEAD")
@@ -687,8 +690,9 @@ def build_prompt(lane: dict, seat_id: str, cfg: dict) -> str:
 
 def _next_stage(lane: dict, cfg: dict) -> None:
     """Start the chain's next stage in the same folder, with this stage's report in its brief; a BLOCKED report stops it."""
-    if lane["status"] != "done":
-        _log(lane["id"], "chain stopped: this stage is blocked, so the next one does not start")
+    from .trust import _CLAIM
+    if lane["status"] != "done" or not _CLAIM.match(_first_line(lane_dir(lane["id"]) / "REPORT.md") or ""):
+        _log(lane["id"], "chain stopped: this stage did not report its work done, so the next one does not start")
         return
     nxt, rest = lane["chain"][0], lane["chain"][1:]
     report = (lane_dir(lane["id"]) / "REPORT.md").read_text(errors="replace")[:20000]

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import config, conversation, lanes, messaging
+from . import config, conversation, lanes, messaging, rescue
 
 SESSION_ID = messaging.SESSION_ID
 
@@ -179,7 +179,7 @@ def group_targets(snap: dict, group: str, value: str = "", terminals: bool = Fal
                 continue
             if x.get("kind") != "lane" and not terminals:
                 continue
-            if group == "stuck" and not (x.get("state") == "stuck" or ((x.get("loop") or {}).get("count") or 0) >= 8):
+            if group == "stuck" and not rescue.needs_rescue(x):
                 continue
             if group == "programme" and (x.get("programme") or {}).get("key") != value:
                 continue

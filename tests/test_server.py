@@ -290,6 +290,12 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((status, body, int(headers["Content-Length"])), (200, b"", len(raw)))
         self.assertEqual(self.request("HEAD", "/")[0], 200)
         self.assertEqual(self.request("HEAD", "/api/stream")[0], 405)          # never a stream
+        self.assertEqual(self.request("HEAD", "/nothing-here")[0], 404)
+        status, headers, body = self.request(path="/static/app.js", headers={"Accept-Encoding": "gzip;q=0, identity"})
+        self.assertEqual((status, headers.get("Content-Encoding"), body), (200, None, raw))   # q=0 means no
+        gz = self.request(path="/static/app.js", headers={"Accept-Encoding": "gzip"})[1]["ETag"]
+        self.assertNotEqual(gz, etag)                                          # two bodies, two tags
+        self.assertEqual(self.request(path="/static/app.js", headers={"Accept-Encoding": "gzip", "If-None-Match": gz})[0], 304)
         self.assertEqual(self.request(path="/")[1]["Cache-Control"], "no-store")   # the page carries the token: never kept
 
     def test_health_says_which_part_is_slow(self):
@@ -300,7 +306,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         for key in ("refresh", "tokens", "usage", "threads", "watchdog", "version"):
             self.assertIn(key, deep)
-        self.assertEqual(deep["refresh"]["builds"], 1)
+        self.assertEqual(deep["refresh"]["builds"], 0)                         # the first, cold refresh is left out
         self.assertEqual(deep["watchdog"], {"on": False, "timeout_s": None})
         self.assertNotIn(ACCESS, body.decode())
 
@@ -324,6 +330,14 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
         self.assertIn("script-src 'self'", headers["Content-Security-Policy"])
         self.assertNotIn("Access-Control-Allow-Origin", headers)
+
+    def test_a_report_month_is_only_a_month(self):
+        tok = {"X-Office-Token": self.token}
+        for bad in ("2026-10%0D%0ASet-Cookie:%20x=1", "2026-10%E2%9C%93", "2026x10junk"):
+            with self.subTest(month=bad):
+                status, headers, _ = self.request(path="/api/export?what=report&month=" + bad, headers=tok)
+                self.assertEqual(status, 400)
+                self.assertNotIn("Set-Cookie", headers)
 
     def test_public_view_and_metrics_off_by_default(self):
         status, _, body = self.request(path="/api/public")

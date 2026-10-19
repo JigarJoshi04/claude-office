@@ -184,10 +184,17 @@ def api_token() -> str:
     """Per-install secret the page must echo on every write; stops other local pages from driving the office."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     path = CONFIG_DIR / "token"
+    if path.exists() and not path.read_text().strip():    # an empty file (a crash or a full disk while writing): made again
+        path.unlink(missing_ok=True)
     if not path.exists():
         try:                                              # 0600 from the first byte: never readable by others, even briefly
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:                           # another process made it first: use theirs
+        except FileExistsError:                           # another process made it first: use theirs, once it is written
+            for _ in range(20):
+                tok = path.read_text().strip()
+                if tok:
+                    return tok
+                time.sleep(0.05)
             return path.read_text().strip()
         with os.fdopen(fd, "w") as f:
             f.write(secrets.token_urlsafe(32))

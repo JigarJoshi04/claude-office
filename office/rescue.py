@@ -7,6 +7,14 @@ from __future__ import annotations
 AGAIN_S = 600                       # still stuck this long after a nudge: the next step is a restart
 
 
+def needs_rescue(x: dict) -> bool:
+    """Stuck, or making the same call 8 times in a row while it is live and working: the one rule for Needs you, the
+    nudge and a group message to the stuck ones."""
+    if not x.get("live", True):
+        return False
+    return x.get("state") == "stuck" or (((x.get("loop") or {}).get("count") or 0) >= 8 and x.get("state") in ("working", "waiting"))
+
+
 def nudge_text(x: dict) -> str:
     lp = x.get("loop") or {}
     if x.get("state") != "stuck" and lp.get("count"):

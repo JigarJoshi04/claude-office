@@ -7,17 +7,20 @@ from __future__ import annotations
 import calendar
 import csv
 import io
+import hashlib
 import json
 import time
 from datetime import date
+
+from . import lanes
 
 
 WHAT = ("days", "careers", "tokens", "lanes", "events")
 
 
 def _cell(v):
-    """A spreadsheet never runs a cell as a formula: one that starts with = + - @ is quoted."""
-    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@"):
+    """A spreadsheet never runs a cell as a formula: one that starts with = + - @ (or a tab or CR before one) is quoted."""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + v
     return v
 
@@ -33,6 +36,24 @@ def names_from(raw) -> dict:
     except ValueError:
         return {}
     return {k: v.strip()[:40] for k, v in (d if isinstance(d, dict) else {}).items() if isinstance(k, str) and isinstance(v, str) and v.strip()}
+
+
+def _all_lanes(office, snap: dict) -> list[dict]:
+    """Every lane: the snapshot's (the newest 40, with their reports and costs) and the older ones from disk. The
+    demo's lanes are made up, so only the snapshot's."""
+    have = list(snap.get("lanes") or [])
+    if getattr(office, "is_demo", False):
+        return have
+    seen = {l.get("id") for l in have}
+    d = lanes.lanes_dir()
+    for p in sorted(d.iterdir()) if d.is_dir() else []:
+        if p.name in seen:
+            continue
+        l = lanes.load_lane(p.name)
+        if l:
+            l["report_status"] = lanes._first_line(p / "REPORT.md")
+            have.append(l)
+    return have
 
 
 def rows(office, what: str, private: bool = False, names: dict | None = None) -> list[dict]:
@@ -66,9 +87,10 @@ def rows(office, what: str, private: bool = False, names: dict | None = None) ->
                 for (d, k), v in sorted(per.items(), key=lambda kv: (kv[0][0], kv[0][1] or ""))]
     if what == "lanes":
         out = []
-        for l in sorted(snap.get("lanes") or [], key=lambda l: l.get("created_at") or 0):   # the snapshot's (the demo's are made up)
+        for l in sorted(_all_lanes(office, snap), key=lambda l: l.get("created_at") or 0):
             runs = l.get("runs") or []
-            out.append({"id": l["id"], "title": "" if private else l.get("title", ""), "status": l.get("status"), "seat": l.get("seat") or l.get("seat_pref"),
+            out.append({"id": ("lane-" + hashlib.sha256(l["id"].encode()).hexdigest()[:8]) if private else l["id"],   # an id is made from its title
+                        "title": "" if private else l.get("title", ""), "status": l.get("status"), "seat": l.get("seat") or l.get("seat_pref"),
                         "model": l.get("model"), "hired": _iso(l.get("created_at")), "finished": _iso(l.get("finished_at")), "runs": len(runs),
                         "report": "" if private else (l.get("report_status") or "")[:300]})
         return out
@@ -124,8 +146,9 @@ def report(office, month: str, private: bool = False, names: dict | None = None)
         e["min"] += r["active_min"]; e["reports"] += r["reports"]; e["sessions"] += r["sessions"]; e["mvp"] += r["mvp"]; e["limits"] += r["limits"]
     tot = {k: sum(e[k] for e in who.values()) for k in ("min", "reports", "sessions", "limits")}
     tk = {k: sum(r[k] for r in toks) for k in ("fresh", "cache_reads", "usd", "commits", "prs_opened", "prs_merged")}
-    pr = snap.get("promises") or {}
-    settled = [p for p in pr.get("recent") or [] if p.get("settled_at") and inside(time.strftime("%Y-%m-%d", time.localtime(p["settled_at"])))]
+    pm = getattr(office, "promises", None)               # every settled promise it keeps, not the briefing's latest 8
+    every = [dict(p) for p in getattr(pm, "items", None) or []] if pm is not None and not isinstance(pm, dict) else (snap.get("promises") or {}).get("recent") or []
+    settled = [p for p in every if p.get("status") != "open" and p.get("settled_at") and inside(time.strftime("%Y-%m-%d", time.localtime(p["settled_at"])))]
     by_day: dict = {}
     for r in days:
         e = by_day.setdefault(r["day"], [0, 0])
@@ -136,7 +159,7 @@ def report(office, month: str, private: bool = False, names: dict | None = None)
     out = [f"# {name} · {first.strftime('%B %Y')}", ""]
     if not days and not toks:
         return "\n".join(out + ["Nothing on record for this month."]) + "\n"
-    out += [f"- **{tot['reports']} reports** filed, **{tot['min'] / 60:.1f} h** of agent work across **{tot['sessions']} sessions**.",
+    out += [f"- **{tot['reports']} reports** filed, **{tot['min'] / 60:.1f} h** of agent work across **{tot['sessions']} session-days** (a session over midnight counts on both days).",
             f"- **{big(tk['fresh'] + tk['cache_reads'])} tokens** ({big(tk['fresh'])} fresh), worth **${tk['usd']:,.0f}** at API list prices.",
             f"- Shipped: **{tk['commits']} commits**, **{tk['prs_merged']} PRs merged** of {tk['prs_opened']} opened."]
     if tot["limits"]:
@@ -224,10 +247,11 @@ def plan_calendar(snap: dict, names: dict | None = None) -> str:
     now = time.time()
     stamp = lambda t: time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(t))
     out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Claude Office//plans//EN", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Claude Office plans"]
-    text = lambda v: v.replace("\\", "\\\\").replace("\n", " ").replace(",", "\\,").replace(";", "\\;")
-    def event(uid, t, title, desc):
-        out.extend(["BEGIN:VEVENT", f"UID:{uid}@claude-office", f"DTSTAMP:{stamp(now)}", f"DTSTART:{stamp(t)}", f"DTEND:{stamp(t + 900)}",
-                    "SUMMARY:" + text(title), "DESCRIPTION:" + text(desc), "END:VEVENT"])
+    text = lambda v: "".join(ch if ch >= " " or ch == "\t" else " " for ch in v).replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;")   # no CR or LF in a value
+    def event(uid, t, title, desc):                      # SEQUENCE grows with each download, so a calendar updates the event
+        out.extend(["BEGIN:VEVENT", f"UID:{uid}@claude-office", f"DTSTAMP:{stamp(now)}", f"SEQUENCE:{int(now // 60) - 29_000_000}",
+                    f"DTSTART:{stamp(t)}", f"DTEND:{stamp(t + 900)}", "SUMMARY:" + text(title), "DESCRIPTION:" + text(desc), "END:VEVENT"])
+    minute = lambda t: round(t / 60) * 60                 # the plan's reset times wobble by under a second between readings
     for s in snap.get("seats", []):
         if s.get("kind") != "claude":
             continue
@@ -236,10 +260,12 @@ def plan_calendar(snap: dict, names: dict | None = None) -> str:
         for key, word in (("five_hour", "5-hour window"), ("weekly", "week")):
             w, f = u.get(key) or {}, fc.get(key) or {}
             if w.get("resets_at") and now < w["resets_at"] < now + 8 * 86400:
-                event(f"{s['id']}-{key}-reset-{int(w['resets_at'])}", w["resets_at"], f"{name}: {word} resets", f"{name}'s {word} starts again.")
+                event(f"{s['id']}-{key}-reset-{int(minute(w['resets_at']))}", minute(w["resets_at"]), f"{name}: {word} resets", f"{name}'s {word} starts again.")
             if f.get("state") == "runs_out" and f.get("out_at") and now < f["out_at"] < (w.get("resets_at") or now + 8 * 86400):
-                event(f"{s['id']}-{key}-out-{int(f['out_at'] // 900)}", f["out_at"], f"{name}: {word} runs out (at this pace)",
+                event(f"{s['id']}-{key}-out-before-{int(minute(w.get('resets_at') or 0))}", minute(f["out_at"]), f"{name}: {word} runs out (at this pace)",   # one per window: it moves
                       f"At {f.get('per_hour')}% an hour {name}'s {word} runs out before it resets.")
+    if not any(line == "BEGIN:VEVENT" for line in out):   # a calendar needs one event at least (RFC 5545)
+        event("nothing-due", now, "Claude Office: no plan resets in the next eight days", "Download the calendar again for fresh times.")
     out.append("END:VCALENDAR")
     return "\r\n".join(_fold(line) for line in out) + "\r\n"
 

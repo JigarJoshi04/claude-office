@@ -115,6 +115,7 @@ const app = {
     if (locked) throw new Error(HARD_LOCK ? "This is the read-only TV page." : "This screen is locked: hold Esc for 2 seconds to unlock it.");
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Office-Token": TOKEN }, body: JSON.stringify(body || {}) });
     const data = await r.json().catch(() => ({ error: "Bad response" }));
+    if (r.status === 403 && /office token/.test(data.error || "")) throw new Error("The office's token has changed: reload this page to carry on.");
     if (!r.ok || data.error) throw new Error(data.error || "HTTP " + r.status);
     return data;
   },

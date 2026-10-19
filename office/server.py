@@ -25,9 +25,22 @@ from . import askabout, asks, brain, checkpoint, coach, conversation, export, re
 from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
-_STATIC: dict = {}                 # path -> (mtime_ns, size, body, gzipped body or None, etag): each file read once per change
+_STATIC: dict = {}                 # path -> ((mtime_ns, inode), size, body, gzipped body or None, etag): read once per change
 _STATIC_LOCK = threading.Lock()
 _GZIP_TYPES = ("text/", "application/javascript", "application/json", "image/svg+xml")
+
+
+def _accepts_gzip(header: str) -> bool:
+    """Accept-Encoding allows gzip (or *) with a q-value above zero."""
+    for part in header.lower().split(","):
+        name, _, params = part.strip().partition(";")
+        if name.strip() in ("gzip", "*"):
+            q = re.search(r"q\s*=\s*([0-9.]+)", params)
+            try:
+                return not q or float(q.group(1)) > 0
+            except ValueError:
+                return False
+    return False
 
 
 def _fmt_tok(n: float) -> str:
@@ -169,7 +182,10 @@ def inbound_event(body: dict, seat_ids: list) -> dict:
         raise ValueError("source must be 1-24 letters, digits, spaces or . : / -")
     if not isinstance(body.get("banner", False), bool):
         raise ValueError("banner must be true or false")
-    return {"text": " ".join(text.split()), "level": level, "seat": seat, "source": source, "banner": body.get("banner", False)}
+    clean = "".join(ch for ch in text if ch.isprintable() or ch.isspace())   # no terminal escapes in the news
+    if not clean.strip():
+        raise ValueError("text must be 1-140 characters")
+    return {"text": " ".join(clean.split()), "level": level, "seat": seat, "source": source, "banner": body.get("banner", False)}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -177,12 +193,30 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.171.0"
+    server_version = "ClaudeOffice/3.172.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
 
     # -- guards --------------------------------------------------------------------------------------------
+    _token_key = None
+
+    def _token(self) -> str:
+        """The write token: read again whenever its file changes, so `claude-office token --rotate` takes effect at
+        once (the old one stops working; open pages reload to get the new one)."""
+        if self.demo or self._token_key is False:
+            return self.token
+        try:
+            st = (config.CONFIG_DIR / "token").stat()
+            key = (st.st_mtime_ns, st.st_size, st.st_ino)
+        except OSError:
+            return self.token
+        if key != type(self)._token_key:
+            fresh = config.api_token()
+            if fresh:
+                type(self).token, type(self)._token_key = fresh, key
+        return self.token
+
     def _host_ok(self) -> bool:
         host = (self.headers.get("Host") or "").lower()
         allowed = {f"127.0.0.1:{self.port}", f"localhost:{self.port}", f"[::1]:{self.port}"}
@@ -230,10 +264,14 @@ class Handler(BaseHTTPRequestHandler):
     # -- GET -----------------------------------------------------------------------------------------------
     def do_HEAD(self):
         """Headers only, for the page, its files and the health check (monitors and curl -I); never for a stream."""
+        if not self._host_ok():
+            return self._send(403, b"forbidden", "text/plain")
         path = urlparse(self.path).path
         if path in ("/", "/index.html", "/tv", "/healthz") or path.startswith("/static/"):
             return self.do_GET()
-        return self._send(405, b"", "text/plain", {"Allow": "GET"})
+        if path.startswith("/api/"):
+            return self._send(405, b"", "text/plain", {"Allow": "GET"})
+        return self._send(404, b"", "text/plain")
 
     def do_GET(self):
         if not self._host_ok():
@@ -245,7 +283,7 @@ class Handler(BaseHTTPRequestHandler):
                 # /tv is the page for a big screen: no token in it, so the office refuses its every write, and it
                 # starts locked (share-safe, read-only) with no way to unlock from the page.
                 html = (config.WEB_DIR / "index.html").read_text()
-                html = html.replace("{{TOKEN}}", "" if url.path == "/tv" else self.token).replace("{{DEMO}}", "1" if self.demo else "0")
+                html = html.replace("{{TOKEN}}", "" if url.path == "/tv" else self._token()).replace("{{DEMO}}", "1" if self.demo else "0")
                 csp = ("default-src 'self'; img-src 'self' data: blob:; media-src blob:; style-src 'self' 'unsafe-inline'; "
                        "font-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")   # nothing from elsewhere
                 return self._send(200, html.encode(), "text/html; charset=utf-8", {"Content-Security-Policy": csp})
@@ -260,9 +298,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self.office.samples.query(self.office.get(), hours, list(self.office.events)))
             if url.path == "/api/export":                    # your data as CSV or JSON, or a month's report (export.py); token only
                 given = self.headers.get("X-Office-Token") or ""
-                if not self.token or not hmac.compare_digest(given.encode(), self.token.encode()):
+                if not self._token() or not hmac.compare_digest(given.encode(), self._token().encode()):
                     return self._json(403, {"error": "Missing or wrong office token"})
                 private, names = q.get("safe") == "1", export.names_from(q.get("names"))
+                if private and q.get("what") in ("conversation", "lane"):   # their own words: masking a name cannot make them safe
+                    raise ValueError("Share-safe is on: a conversation or a handoff pack is the work's own words. Turn share-safe off (P) to export it")
                 if q.get("what") == "conversation":         # a session's conversation, masked (conversation.read)
                     snap = self.office.get()
                     seat = next((x for x in snap.get("seats", []) if x["id"] == q.get("seat")), None)
@@ -283,6 +323,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, body, "text/markdown; charset=utf-8", {"Content-Disposition": 'attachment; filename="lane.md"'})
                 if q.get("what") == "report":
                     month = q.get("month") or time.strftime("%Y-%m")
+                    if not re.fullmatch(r"\d{4}-\d{2}", month):   # it goes into a header: never anything else
+                        raise ValueError("month is YYYY-MM")
                     body = export.report(self.office, month, private, names).encode()
                     return self._send(200, body, "text/markdown; charset=utf-8", {"Content-Disposition": f'attachment; filename="claude-office-{month}.md"'})
                 what, fmt = q.get("what", ""), q.get("format", "csv")
@@ -438,24 +480,26 @@ class Handler(BaseHTTPRequestHandler):
         st = p.stat()
         with _STATIC_LOCK:
             hit = _STATIC.get(str(p))
-        if not hit or hit[:2] != (st.st_mtime_ns, st.st_size):
+        if not hit or hit[:2] != ((st.st_mtime_ns, st.st_ino), st.st_size):
             raw = p.read_bytes()
             packed = gzip.compress(raw, 6, mtime=0) if ctype.startswith(_GZIP_TYPES) and len(raw) > 1024 else None
-            hit = (st.st_mtime_ns, st.st_size, raw, packed, '"' + hashlib.sha256(raw).hexdigest()[:20] + '"')
+            hit = ((st.st_mtime_ns, st.st_ino), st.st_size, raw, packed, '"' + hashlib.sha256(raw).hexdigest()[:20] + '"')
             with _STATIC_LOCK:
                 _STATIC[str(p)] = hit
         _, _, raw, packed, etag = hit
         # Fonts never change between versions: kept a week. Code and styles are checked every load (an update shows at
         # once) but only sent again when they changed: the ETag answers 304 otherwise.
+        zipped = packed is not None and _accepts_gzip(self.headers.get("Accept-Encoding") or "")
+        etag = etag[:-1] + '-gz"' if zipped else etag         # the two bodies are different representations
         extra = {"ETag": etag, "Vary": "Accept-Encoding",
                  "Cache-Control": "public, max-age=604800" if p.suffix == ".woff2" else "no-cache"}
-        if etag in [t.strip() for t in (self.headers.get("If-None-Match") or "").split(",")]:
+        if etag in [t.strip().removeprefix("W/") for t in (self.headers.get("If-None-Match") or "").split(",")]:
             self.send_response(304)
             for k, v in extra.items():
                 self.send_header(k, v)
             self.end_headers()
             return None
-        if packed and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+        if zipped:
             return self._send(200, packed, ctype, dict(extra, **{"Content-Encoding": "gzip"}))
         return self._send(200, raw, ctype, extra)
 
@@ -490,7 +534,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._send(403, b"forbidden", "text/plain")
         given = self.headers.get("X-Office-Token") or ""
-        if not self.token or not hmac.compare_digest(given.encode(), self.token.encode()):
+        if not self._token() or not hmac.compare_digest(given.encode(), self._token().encode()):
             return self._json(403, {"error": "Missing or wrong office token"})
         if (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower() != "application/json":
             return self._json(415, {"error": "Send JSON"})
@@ -607,7 +651,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, talk.broadcast(self.office, body, seat_ids))
             if path == "/api/nudge":                      # the stuck rescuer's first step: a standard nudge (rescue.py)
                 x = self.office.find_session(str(body.get("seat", "")), str(body.get("id", "")))
-                if not x or not (x.get("state") == "stuck" or ((x.get("loop") or {}).get("count") or 0) >= 8):
+                if not x or not rescue.needs_rescue(x):
                     raise ValueError("That session is not stuck or looping right now")
                 r = talk.send(self.office, {"seat": body.get("seat"), "id": x["id"], "text": rescue.nudge_text(x)}, seat_ids)
                 self.office.nudged[x["id"]] = time.time()
@@ -714,7 +758,14 @@ def serve(port: int, demo: bool = False) -> None:
             office.inbox.listeners.append(on_inbox)
         else:
             office.inbox = None
-    office.build()
+    import faulthandler
+    faulthandler.enable()                                  # a watchdog's abort (or a crash) prints every thread's stack
+    try:
+        office.build()
+    except Exception as e:                                 # a config that breaks the first refresh: serve, and say so
+        if hasattr(office, "faults"):
+            office.faults.fault("The refresh", e)
+        print(f"The first refresh failed: {type(e).__name__}: {e}", flush=True)
     threading.Thread(target=office.run, daemon=True, name="office").start()
     Handler.office = office
     Handler.token = config.api_token() if not demo else "demo"

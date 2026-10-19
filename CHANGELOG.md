@@ -3,6 +3,42 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.172.0] - 2026-10-19
+
+### Fixed (QA round 24: data, server and command line)
+- The token ledger: one malformed line in a transcript (an id that is not text, a numeric timestamp, a message that
+  is a string) stopped every later read for good; it is now passed over. A transcript rewritten shorter kept losing
+  what was appended to it. Interruptions counted any tool result that quoted Claude Code's marker. A forked helper's
+  copy of an API error counted twice. The API weather counted requests the API refused ("prompt is too long") as
+  storms, a 401 could be filed as "other" and a plan limit message as an error. An API error's stand-in reply reset
+  the cache clock, so the rebuild after it was missed. A session whose main transcript is gone but whose helpers'
+  are left kept none of its counted extras after a recount. Older transcripts' inline helper lines counted as the
+  main conversation's. (The ledger reads every transcript again once: the rules are now 18.)
+- The price tag compared helpers' tokens with a rate that counts the main conversation only; both sides now count
+  the same. A lane that exited without a report no longer counts as done for the coach, "COMPLETE FAILURE" is not a
+  done claim, and a chain stops when a stage's report does not claim the work done (FAILED or PARTIAL).
+- Exports: share-safe lane rows no longer carry the title inside the lane id, and a conversation or a handoff pack
+  is refused while share-safe is on (they are the work's own words). The lanes CSV and the month's report read every
+  lane, not the newest 40, and the report counts every settled promise, not the latest 8. It says session-days. CSV
+  cells starting with a tab or a carriage return are quoted too.
+- The plan calendar: the same reset keeps its id across downloads (re-importing updates it instead of adding
+  another), a run-out is one event per window that moves, no CR or LF gets into a value, and an empty calendar is
+  still a valid one.
+- `token --rotate` now takes effect in the running office at once (the old token stops working; a page with the old
+  one says to reload), and an empty token file is made again.
+- `events`: `--follow` carries on after the office rotates the news file (and holds a line still being written),
+  `--kind` filters before the last N, `-n 0` prints nothing and a negative count is refused, odd records and bytes no
+  longer stop it, terminal escape characters are never printed (nor kept from `post`), and `| head` exits quietly.
+  The news file rotates by replacing it whole, under a lock.
+- The report's `month` must be YYYY-MM (it goes into a header). HEAD checks the host and answers 404 for unknown
+  pages. Static files: `gzip;q=0` is honoured and the gzipped copy has its own ETag.
+- Refresh timing: the cold first refresh is left out, percentiles are nearest-rank, and running light waits for ten
+  refreshes. Deep health lists only real threads and says when the office is degraded. A config that breaks the
+  first refresh no longer stops the office starting (it said so and was restarted until systemd gave up). A watchdog
+  abort prints every thread's stack to the journal.
+- A worktree hire racing another for the same new folder, and the brief coach given a seat that is not text.
+- The nudge, Needs you and the "stuck" group share one rule (a loop counts while the session is live and working).
+
 ## [3.171.0] - 2026-10-19
 
 ### Added

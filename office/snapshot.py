@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import math
 import os
 from datetime import datetime
 import re
@@ -18,7 +19,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, brain, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, sdnotify, seats as seatmod, sessions, standup, trust, weeks
+from . import asks, brain, rescue, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, sdnotify, seats as seatmod, sessions, standup, trust, weeks
 from .career import CATALOGUE, Career
 from . import save as save_mod
 from . import utilities
@@ -319,6 +320,12 @@ def quick_seats(now: float | None = None) -> list[dict]:
     return out
 
 
+def _rank(xs: list, q: float) -> float:
+    """The nearest-rank percentile: the smallest value with at least q of them at or below it."""
+    xs = sorted(xs)
+    return xs[max(0, min(len(xs) - 1, math.ceil(q * len(xs)) - 1))] if xs else 0.0
+
+
 class Office(LiveOffice):
     def __init__(self, demo: bool = False):
         self.init_live()
@@ -382,6 +389,8 @@ class Office(LiveOffice):
         except (OSError, ValueError):
             pass
 
+    _events_lock = threading.Lock()
+
     def emit(self, kind: str, text: str, seat: str | None = None, level: str = "info", ts: float | None = None, extra: dict | None = None):
         ev = public({"ts": time.time() if ts is None else ts, "kind": kind, "text": text, "seat": seat, "level": level, **(extra or {})})
         with self.condition:
@@ -392,11 +401,14 @@ class Office(LiveOffice):
             self.announcer.announce(ev, self.cfg, demo=self.demo)
         try:
             config.STATE_DIR.mkdir(parents=True, exist_ok=True)
-            with open(self._events_path, "a") as f:
-                f.write(json.dumps(ev) + "\n")
-            if self._events_path.stat().st_size > 2_000_000:
-                keep = self._events_path.read_text().splitlines()[-1000:]
-                self._events_path.write_text("\n".join(keep) + "\n")
+            with self._events_lock:                       # one writer at a time: no line lost to a rotation
+                with open(self._events_path, "a") as f:
+                    f.write(json.dumps(ev) + "\n")
+                if self._events_path.stat().st_size > 2_000_000:   # the newest 1,000 to a new file, put in place whole
+                    keep = self._events_path.read_text(errors="replace").splitlines()[-1000:]
+                    tmp = self._events_path.with_suffix(".jsonl.tmp")
+                    tmp.write_text("\n".join(keep) + "\n")
+                    os.replace(tmp, self._events_path)
         except OSError:
             pass
 
@@ -464,7 +476,9 @@ class Office(LiveOffice):
             snap = self._build()
             took = time.perf_counter() - t
             self._phases["publish"] = max(0.0, took - sum(self._phases.values()))
-            self.perf.append((took, self._phases))
+            self._builds = getattr(self, "_builds", 0) + 1
+            if self._builds > 1:                              # the first, cold refresh is no guide to the rest
+                self.perf.append((took, self._phases))
             return snap
 
     def _mark(self, phase: str) -> None:
@@ -478,7 +492,7 @@ class Office(LiveOffice):
         runs = list(self.perf)
         if not runs:
             return {"builds": 0, "light": self.light}
-        ms = lambda xs, q: round(sorted(xs)[min(len(xs) - 1, int(q * len(xs)))] * 1000, 1)
+        ms = lambda xs, q: round(_rank(xs, q) * 1000, 1)
         totals = [t for t, _ in runs]
         names = {k for _, ph in runs for k in ph}
         phases = {k: ms([ph.get(k, 0.0) for _, ph in runs], 0.5) for k in sorted(names)}
@@ -489,8 +503,8 @@ class Office(LiveOffice):
     def _busy(self) -> bool:
         """Run light while refreshes are slow (p95 over 1.5 s) or the machine is loaded past its cores; back to normal
         below 1 s and the core count, so it does not flap."""
-        recent = sorted(t for t, _ in list(self.perf)[-30:])
-        p95 = recent[min(len(recent) - 1, int(0.95 * len(recent)))] if recent else 0.0
+        recent = [t for t, _ in list(self.perf)[-30:]]
+        p95 = _rank(recent, 0.95) if len(recent) >= 10 else 0.0          # ten refreshes before judging them
         try:
             load = os.getloadavg()[0] / (os.cpu_count() or 1)
         except OSError:
@@ -606,7 +620,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.171.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.172.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -671,7 +685,7 @@ class Office(LiveOffice):
         snap["api_weather"] = self.tokens.weather(now)          # the API's errors in the last half hour (tokens.api_kind)
         snap["promises"] = self.promises.view(now)
         snap["promise_due"] = self.promises.attention(now)
-        stuck_now = {x["id"] for s in seats_out for x in s.get("sessions", []) if x.get("state") == "stuck" or ((x.get("loop") or {}).get("count") or 0) >= 8}
+        stuck_now = {x["id"] for s in seats_out for x in s.get("sessions", []) if rescue.needs_rescue(x)}
         self.nudged = {k: v for k, v in self.nudged.items() if k in stuck_now and now - v < 6 * 3600}   # a new stuck spell starts at a nudge again
         snap["nudged"] = dict(self.nudged)
         snap["attention"] = self._attention(snap)

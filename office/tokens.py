@@ -32,7 +32,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 17               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 18               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -66,6 +66,21 @@ REBUILD_MIN = 20_000           # a cache write this big after the cache expired 
 TOOL_MAX_S = 4 * 3600          # a tool call longer than this is a session left open, not a slow tool
 
 
+_SIDECHAIN = re.compile(rb'"isSidechain":\s*true')
+
+
+def _interrupted(d: dict) -> bool:
+    """The line is Claude Code's own note that you pressed Esc: its text starts with the marker. A tool result, a
+    summary or a file that merely quotes the marker is not one."""
+    if d.get("isMeta") or d.get("isCompactSummary") or not isinstance(d.get("message"), dict):
+        return False
+    content = d["message"].get("content")
+    if isinstance(content, str):
+        return content.lstrip().startswith("[Request interrupted by user")
+    return any(isinstance(c, dict) and c.get("type") == "text" and str(c.get("text") or "").lstrip().startswith("[Request interrupted by user")
+               for c in content or [] if isinstance(content, list))
+
+
 def api_kind(d: dict) -> str | None:
     """An API error line's kind: server (5xx, overloaded), connection, login or other; None for a usage limit."""
     err = str(d.get("error") or "")
@@ -73,9 +88,9 @@ def api_kind(d: dict) -> str | None:
     for c in ((d.get("message") or {}).get("content") or []) if isinstance(d.get("message"), dict) else []:
         if isinstance(c, dict) and c.get("type") == "text":
             text = str(c.get("text") or "")
-    if err == "rate_limit" or "hit your" in text and "limit" in text:
+    if err == "rate_limit" or "hit your" in text and "limit" in text or "usage limit" in text.lower():
         return None
-    if "authentication" in err or "authenticate" in text.lower():
+    if "authenticat" in err or "authenticat" in text.lower() or re.search(r"API Error: 40[13]\b", text):
         return "login"
     if "reach the API" in text or "connection" in text.lower() or "ECONN" in text or "timed out" in text.lower():
         return "connection"
@@ -208,7 +223,7 @@ def next_rung(n: int) -> int:
 
 def _when(ts: str | None) -> tuple[str | None, str | None]:
     """(local day, "weekday-hour" with Monday 0) for a transcript timestamp."""
-    if not ts:
+    if not ts or not isinstance(ts, str):
         return None, None
     try:
         t = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone()
@@ -247,7 +262,7 @@ def wait_median(hist) -> int | None:
 
 
 def _epoch(ts: str | None) -> float | None:
-    if not ts:
+    if not ts or not isinstance(ts, str):
         return None
     try:
         return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
@@ -270,6 +285,7 @@ class TokenLedger:
         self.lock = threading.Lock()
         self.scanning = False
         self.scanned_at = 0.0
+        self.bad_lines = 0                                 # malformed transcript lines passed over (never a wall)
         self._legacy = None                     # a version 1 ledger, merged after the first rebuild
         self._pending: dict = {}                # Bash tool_use id -> what it would ship, until its result arrives
         self._ts = None                         # the last timestamp seen in the file being read (results carry none)
@@ -281,6 +297,7 @@ class TokenLedger:
         self._seen_ids: dict = {}               # registry name -> {session -> {hash of response or tool id}}: forks copy lines
         self._seen_total = 0
         self._read_sids: set = set()            # sessions whose files this scan read
+        self._read_main: set = set()            # ... and whose main transcript it read (not only a helper's)
         self._counted = None                    # what the response being read (self._last) has been counted at so far
         self._helper_file = False               # the file being read is a helper's (a subagent's)
         self._tool_open: dict = {}
@@ -306,6 +323,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
+                        r.pop("hf", None)              # helpers' tokens: counted again in this pass
                         kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm", "tt", "su", "ae", "st") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
@@ -387,8 +405,8 @@ class TokenLedger:
             if self._old_extras is not None:               # sessions whose transcripts are gone keep what they had
                 with self.lock:
                     for sid, kept in self._old_extras.items():
-                        if sid not in self._read_sids and sid in self.data["sessions"]:
-                            self.data["sessions"][sid].update(kept)
+                        if sid not in self._read_main and sid in self.data["sessions"]:   # only helpers left: what was
+                            self.data["sessions"][sid].update(kept)                     # counted before is the best there is
                 self._old_extras = None; changed = True
             self._serve = None
             self.scans += 1
@@ -441,10 +459,14 @@ class TokenLedger:
         rec = self.data["files"].get(key) or [0, None]
         offset, last_id = rec[0], rec[1]
         self._counted = rec[2] if len(rec) > 2 else None
-        if size < offset:                                  # rewritten from scratch: start over from here on
-            offset = size
         out = self.data.setdefault("files_out", {}).get(key, 0)          # shipped work and costs have their own offset
         out = out if isinstance(out, list) else [out, None]
+        if size < offset or size < out[0]:                 # rewritten from scratch: count from here on, and remember that
+            with self.lock:
+                self.data["files"][key] = [size, None, None]
+                self.data["files_out"][key] = [size, None, 0, None]
+            self._tool_opens.pop(key, None)
+            return True
         out_off, self._xlast, self._xusd = out[0], out[1], (out[2] if len(out) > 2 else 0)
         self._wait_end = out[3] if len(out) > 3 else None
         out_off = min(out_off, size)
@@ -454,6 +476,8 @@ class TokenLedger:
         project_dir, sid = self._session_of(root, path)
         self._read_sids.add(sid)
         self._helper_file = "subagents" in path.relative_to(root).parts      # a helper's own transcript
+        if not self._helper_file:
+            self._read_main.add(sid)
         self._tool_open = self._tool_opens.setdefault(str(path), {})       # tool calls still waiting for their result (_tool_time),
         if len(self._tool_opens) > 300:                                     # kept per file across scans: a slow call spans one
             self._tool_opens.pop(next(iter(self._tool_opens)))
@@ -469,13 +493,16 @@ class TokenLedger:
                 cw = _CWD.search(raw, 0, 4096) if len(self.cwds) < 5000 else None
                 if cw:
                     self.cwds.add(cw.group(1).decode(errors="replace"))
-                if at >= offset:
-                    changed |= self._take(raw, sid, last_id)
-                    last_id = self._last
-                if at >= out_off:
-                    changed |= self._ship(raw, sid)
-                    if not self._helper_file:              # helpers never wait on a person
-                        changed |= self._note_wait(raw, sid)
+                try:
+                    if at >= offset:
+                        changed |= self._take(raw, sid, last_id)
+                        last_id = self._last
+                    if at >= out_off:
+                        changed |= self._ship(raw, sid)
+                        if not self._helper_file:          # helpers never wait on a person
+                            changed |= self._note_wait(raw, sid)
+                except (TypeError, AttributeError, KeyError, ValueError, IndexError):   # a malformed line is passed over:
+                    self.bad_lines += 1                    # it must never stop the read of everything after it
         self.data["files_out"][key] = [pos, self._xlast, self._xusd, self._wait_end]
         if pos <= offset:
             return changed
@@ -490,7 +517,7 @@ class TokenLedger:
         """True when this response or tool call was already counted in another file of the session (a forked
         subagent's file starts with a copy of its parent's lines); otherwise remember it. Bounded: the oldest
         sessions are forgotten first."""
-        if not key:
+        if not key or not isinstance(key, str):           # a malformed id is not remembered, and never breaks a read
             return False
         reg = self._seen_ids.setdefault(registry, {})
         ids = reg.pop(sid, None)
@@ -512,12 +539,13 @@ class TokenLedger:
         m = re.search(rb'"timestamp":\s*"([^"]+)"', raw)
         if m:
             self._ts = m.group(1).decode()
-        priced = self._cost(raw, sid) if b'"usage"' in raw and b'"assistant"' in raw else False   # a line can carry both
-        if not self._helper_file and (b'"tool_use"' in raw or b'"tool_result"' in raw):
+        side = self._helper_file or _SIDECHAIN.search(raw) is not None   # an older transcript keeps helpers' lines inline
+        priced = self._cost(raw, sid, side) if b'"usage"' in raw and b'"assistant"' in raw else False   # a line can carry both
+        if not side and (b'"tool_use"' in raw or b'"tool_result"' in raw):
             priced |= self._tool_time(raw, sid)
         if b'"isApiErrorMessage"' in raw:
             priced |= self._api_error(raw, sid)
-        if not self._helper_file and (b"[Request interrupted by user" in raw or b'"compact_boundary"' in raw or b'"refusal"' in raw):
+        if not side and (b"[Request interrupted by user" in raw or b'"compact_boundary"' in raw or b'"refusal"' in raw):
             priced |= self._steer(raw, sid)
         if b'"tool_use"' in raw and (b'"WebSearch"' in raw or b'"WebFetch"' in raw):
             priced |= self._web(raw, sid)
@@ -642,12 +670,12 @@ class TokenLedger:
         if not isinstance(d, dict):
             return False
         i = None
-        if d.get("type") == "user" and b"[Request interrupted by user" in raw:
+        if d.get("type") == "user" and b"[Request interrupted by user" in raw and _interrupted(d):
             i = 0
         elif d.get("subtype") == "compact_boundary":
             i = 1
-        elif d.get("type") == "assistant" and (d.get("message") or {}).get("stop_reason") == "refusal":
-            mid = (d.get("message") or {}).get("id")
+        elif d.get("type") == "assistant" and isinstance(d.get("message"), dict) and d["message"].get("stop_reason") == "refusal":
+            mid = d["message"].get("id")
             if mid and self._seen("refuse", sid, mid):              # one reply, several lines
                 return False
             i = 2
@@ -667,7 +695,7 @@ class TokenLedger:
         except ValueError:
             return False
         kind = api_kind(d) if isinstance(d, dict) and d.get("isApiErrorMessage") is True else None
-        if not kind:
+        if not kind or self._seen("apierr", sid, d.get("uuid") or d.get("timestamp")):   # a fork's copy of the parent's line
             return False
         day, _ = _when(d.get("timestamp"))
         at = _epoch(d.get("timestamp"))
@@ -747,7 +775,7 @@ class TokenLedger:
             r = s.setdefault("rb", {}).setdefault(day or "?", [0, 0, 0])
             r[0] += 1; r[1] += cw; r[2] += extra
 
-    def _cost(self, raw: bytes, sid: str) -> bool:
+    def _cost(self, raw: bytes, sid: str, side: bool | None = None) -> bool:
         try:
             d = json.loads(raw)
         except ValueError:
@@ -769,8 +797,16 @@ class TokenLedger:
                 self._xusd = None
                 return False
             self._xusd = usd
-            if not self._helper_file:
-                self._rebuild(sid, model, u, d.get("timestamp"))
+            if self._helper_file if side is None else side:  # helpers' own tokens, kept apart (spent: fresh_main)
+                n = lambda k: u.get(k) if isinstance(u.get(k), int) else 0
+                with self.lock:
+                    h = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+                    h["hf"] = h.get("hf", 0) + n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens")
+                if not usd:
+                    return True
+            else:
+                if not model.startswith("<"):                # an API error's stand-in reply is no call: it starts no cache clock
+                    self._rebuild(sid, model, u, d.get("timestamp"))
                 self._startup(sid, u, d.get("timestamp"))
         if not usd:
             return False
@@ -927,7 +963,7 @@ class TokenLedger:
 
     def spent(self, sids) -> dict | None:
         """What sessions have cost so far: all tokens, fresh ones, output and their list price in USD (helpers included)."""
-        tok = fresh = out = usd = 0
+        tok = fresh = out = usd = helpers = 0
         seen = False
         with self.lock:
             src = (self._serve or self.data)["sessions"]
@@ -936,7 +972,9 @@ class TokenLedger:
                 if r:
                     seen = True
                     tok += r.get("f", 0) + r.get("c", 0); fresh += r.get("f", 0); out += r.get("o", 0); usd += sum((r.get("$") or {}).values())
-        return {"tokens": tok, "fresh": fresh, "output": out, "usd": round(usd / 1e6, 2)} if seen else None
+                    helpers += r.get("hf", 0)
+        # fresh_main: the main conversation's own, the measure the plan's exchange rate is in (history.exchange)
+        return {"tokens": tok, "fresh": fresh, "fresh_main": max(0, fresh - helpers), "output": out, "usd": round(usd / 1e6, 2)} if seen else None
 
     def shipped_for(self, sids) -> dict | None:
         """What sessions shipped: commits, pushes, PRs opened and merged, lines (for a lane's outcome)."""
@@ -968,7 +1006,7 @@ class TokenLedger:
         you covers): clear, cloudy (one or two) or stormy (three or more)."""
         now = now or time.time()
         with self.lock:
-            recent = [(at, k) for at, k, _ in self.api_recent if now - at < 1800 and k != "login"]
+            recent = [(at, k) for at, k, _ in self.api_recent if now - at < 1800 and k in ("server", "connection")]   # a refused request is not weather
         by: dict = {}
         for _, k in recent:
             by[k] = by.get(k, 0) + 1

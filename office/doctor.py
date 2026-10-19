@@ -130,7 +130,8 @@ def health(office, snap: dict, deep: bool = False) -> tuple[bool, dict]:
                    "scanning": bool(getattr(led, "scanning", False))},
         "usage": {s["id"]: {"age_s": round(now - s["usage"]["fetched_at"]) if (s.get("usage") or {}).get("fetched_at") else None,
                             "error": (s.get("usage") or {}).get("error")} for s in snap.get("seats", []) if s.get("kind") == "claude"},
-        "threads": {name: name in alive for name in THREADS},
+        "threads": {} if getattr(office, "is_demo", False) else {name: name in alive for name in THREADS},   # the demo has none
         "watchdog": {"on": sdnotify.enabled(), "timeout_s": sdnotify.watchdog_s()},
     })
+    out["degraded"] = any(v is False for v in out["threads"].values()) or bool((snap.get("office") or {}).get("faults"))
     return ok, out

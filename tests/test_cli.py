@@ -34,9 +34,22 @@ class EventsTests(unittest.TestCase):
         (self.state / "events.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\nnot json\n[1]\n")
         code, out, _ = self.run_events(lines=4)
         self.assertEqual(code, 0)
-        self.assertEqual([l.split()[-1] for l in out.splitlines()], ["4", "5"])     # the last 4 lines, two of them junk
+        self.assertEqual([l.split()[-1] for l in out.splitlines()], ["2", "3", "4", "5"])   # the last 4 events; junk lines are no events
         code, out, _ = self.run_events(kind="report", json=True)
         self.assertEqual([json.loads(l)["text"] for l in out.splitlines()], ["news 1", "news 3", "news 5"])
+        self.assertEqual(self.run_events(kind="limit", lines=2)[1].count("\n"), 2)        # the kind first, then the last N
+        self.assertEqual(self.run_events(lines=0)[1], "")
+        self.assertEqual(self.run_events(lines=-3)[0], 2)
+
+    def test_odd_records_and_terminal_escapes(self):
+        rows = [{"ts": "soon", "kind": None, "text": "deploy \x1b]0;pwned\x07 done"}, {"ts": 1e20, "kind": {"a": 1}, "text": 5}, {"ts": float("nan"), "kind": "x"}]
+        (self.state / "events.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n\xff\n")
+        code, out, _ = self.run_events()
+        self.assertEqual((code, len(out.splitlines())), (0, 3))
+        self.assertNotIn("\x1b", out); self.assertNotIn("\x07", out)
+        code, out, _ = self.run_events(json=True)
+        for line in out.splitlines():
+            json.loads(line)                                                       # NaN is written as null
 
     def test_no_news_yet(self):
         code, out, err = self.run_events()
@@ -60,6 +73,23 @@ class TokenTests(unittest.TestCase):
             self.assertNotEqual(new, old)
             self.assertNotIn(new, out.getvalue())
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+
+class TokenFollowTests(unittest.TestCase):
+    def test_the_server_follows_a_rotated_token_and_an_empty_file_is_made_again(self):
+        from office import server
+        with tempfile.TemporaryDirectory() as tmp, patch.object(config, "CONFIG_DIR", Path(tmp)):
+            class H(server.Handler):
+                pass
+            H.demo, H.token, H._token_key = False, config.api_token(), None
+            h = H.__new__(H)
+            first = h._token()
+            with redirect_stdout(io.StringIO()):
+                cli.cmd_token(argparse.Namespace(rotate=True))
+            self.assertNotEqual(h._token(), first)                   # no restart needed
+            self.assertEqual(h._token(), (Path(tmp) / "token").read_text().strip())
+            (Path(tmp) / "token").write_text("")
+            self.assertTrue(config.api_token())                      # an empty token file is never the token
 
 
 class LockDownTests(unittest.TestCase):

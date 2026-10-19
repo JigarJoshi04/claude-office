@@ -44,7 +44,7 @@ class PerfTests(unittest.TestCase):
     def test_median_p95_and_the_slowest_part(self):
         runs = [(0.02, {"seats": 0.015, "lanes": 0.005})] * 19 + [(2.0, {"seats": 0.1, "lanes": 1.9})]
         v = office_with(runs).perf_view()
-        self.assertEqual((v["builds"], v["p50_ms"], v["p95_ms"], v["max_ms"]), (20, 20.0, 2000.0, 2000.0))
+        self.assertEqual((v["builds"], v["p50_ms"], v["p95_ms"], v["max_ms"]), (20, 20.0, 20.0, 2000.0))   # 19 of 20 within 20 ms
         self.assertEqual(v["slowest_phase"], "seats")                  # by the median, not one bad refresh
         self.assertEqual(office_with([]).perf_view(), {"builds": 0, "light": False})
 
@@ -55,6 +55,7 @@ class PerfTests(unittest.TestCase):
             self.assertTrue(office_with(slow)._busy())
             self.assertFalse(office_with(middling)._busy())             # 1.2 s: not slow enough to start running light...
             self.assertTrue(office_with(middling, light=True)._busy())  # ...nor quick enough to stop
+            self.assertFalse(office_with([(2.0, {})] * 9)._busy())         # nine refreshes are too few to judge
         with patch.object(os, "getloadavg", return_value=(7.0, 1, 1)), patch.object(os, "cpu_count", return_value=4):
             self.assertTrue(office_with(quick)._busy())                 # the machine is loaded past its cores
 

@@ -16,7 +16,7 @@ from .sessions import report_blocked
 
 # The report's own status word claims it ("STATUS: DONE - …", "READY #12"), not a word further on ("FAILED - could not
 # complete", "NOT DONE", "PARTIAL").
-_CLAIM = re.compile(r"^[\W\d_]*(?:STATUS\W*)?(?:DONE|READY|COMPLETE[D]?|SUCCESS|FINISHED|SHIPPED|MERGED)\b", re.I)
+_CLAIM = re.compile(r"^[\W\d_]*(?:STATUS\W*)?(?:DONE|READY|COMPLETE[D]?|SUCCESS|FINISHED|SHIPPED|MERGED)\b(?!\W*FAIL)", re.I)   # not "COMPLETE FAILURE"
 WORDS = {"verified": "Verified", "unverified": "Unverified", "contradicted": "Contradicted"}
 
 

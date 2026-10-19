@@ -61,7 +61,7 @@ def outcome(lane: dict) -> str:
     st = lane.get("report_status")
     if st:                                                # the report says how it went; one that claims nothing is not done
         return "blocked" if report_blocked(st) else "done" if _DONE.match(st) else "not done"
-    return {"done": "done", "blocked": "blocked", "finished": "done"}.get(lane.get("status"), lane.get("status") or "unknown")
+    return {"done": "done", "blocked": "blocked", "finished": "not done"}.get(lane.get("status"), lane.get("status") or "unknown")   # finished: it left no report
 
 
 def similar(title: str, brief: str, spent=None) -> list[dict]:
@@ -100,7 +100,7 @@ def similar(title: str, brief: str, spent=None) -> list[dict]:
         cost = spent(sids) if spent and sids else None
         lane["report_status"] = lanes._first_line(p / "REPORT.md")
         out.append({"id": lane["id"], "title": lane.get("title") or "", "model": lane.get("model"), "score": round(s, 2),
-                    "minutes": round(secs / 60) if secs else None, "tokens": (cost or {}).get("tokens"), "fresh": (cost or {}).get("fresh"),
+                    "minutes": round(secs / 60) if secs else None, "tokens": (cost or {}).get("tokens"), "fresh": (cost or {}).get("fresh_main", (cost or {}).get("fresh")),   # as the exchange rate counts
                     "outcome": outcome(lane), "report": redact(lane.get("report_status") or "")[:200]})
     out.sort(key=lambda r: -r["score"])
     return out[:SHOW]
@@ -131,7 +131,7 @@ def price_tag(office, est: dict | None, seat: str | None) -> dict | None:
     if not est or not est.get("fresh") or not hasattr(office, "samples"):
         return None
     snap = office.get() or {}
-    sid = seat if seat and seat != "auto" else (snap.get("next_pick") or {}).get("seat")
+    sid = seat if isinstance(seat, str) and seat and seat != "auto" else (snap.get("next_pick") or {}).get("seat")
     if not sid:
         return None
     ex = office.samples.exchange(snap, sid)

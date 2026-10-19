@@ -173,6 +173,10 @@ class ChainTests(unittest.TestCase):
                 blocked = dict(second, status="blocked")
                 lanes._next_stage(blocked, cfg)                       # a blocked stage stops the chain
                 self.assertNotIn("chain_next", lanes.load_lane(second["id"]))
+                (lanes.lane_dir(second["id"]) / "REPORT.md").write_text("STATUS: FAILED - could not reproduce\n")
+                with mock.patch.object(lanes, "start_unit"):
+                    lanes._next_stage(dict(second, status="done"), cfg)   # a FAILED report stops it too, though the lane "finished"
+                self.assertNotIn("chain_next", lanes.load_lane(second["id"]))
 
 
 

@@ -32,6 +32,10 @@ class ExportTests(unittest.TestCase):
                                       samples=SimpleNamespace(ledger=SimpleNamespace(days=DAYS)), tokens=Tokens(), _events_path=ev)
         p = patch.object(lanes, "list_lanes", side_effect=AssertionError("the export reads the snapshot's lanes"))
         p.start(); self.addCleanup(p.stop)
+        self.lanes_dir = Path(tmp.name) / "lanes"
+        self.lanes_dir.mkdir()
+        p = patch.object(lanes, "lanes_dir", return_value=self.lanes_dir)
+        p.start(); self.addCleanup(p.stop)
 
     def test_rows_per_kind(self):
         days = export.rows(self.office, "days")
@@ -42,6 +46,19 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(export.rows(self.office, "events", private=True)[0]["text"], "")
         with self.assertRaises(ValueError):
             export.rows(self.office, "secrets")
+
+    def test_lanes_older_than_the_snapshots_come_from_disk_and_share_safe_hides_the_title_in_the_id(self):
+        old = self.lanes_dir / "0901-090000-acquire-initech"
+        old.mkdir()
+        (old / "lane.json").write_text(json.dumps({"id": old.name, "title": "Acquire Initech", "status": "done", "created_at": 1_788_000_000, "finished_at": 1_788_003_600}))
+        (old / "REPORT.md").write_text("STATUS: DONE - bought\n")
+        rows = export.rows(self.office, "lanes")
+        self.assertEqual([r["id"] for r in rows], [old.name, "l1"])
+        self.assertEqual(rows[0]["report"], "STATUS: DONE - bought")
+        safe = export.rows(self.office, "lanes", private=True)
+        self.assertNotIn("initech", json.dumps(safe).lower())
+        self.assertRegex(safe[0]["id"], r"^lane-[0-9a-f]{8}$")
+        self.assertIn("'\t=1+1", export.render([{"a": "\t=1+1"}], "csv")[0].decode())
 
     def test_csv_cannot_run_a_formula(self):
         body, ctype = export.render(export.rows(self.office, "events"), "csv")
@@ -54,7 +71,7 @@ class ExportTests(unittest.TestCase):
     def test_the_months_report(self):
         md = export.report(self.office, "2026-10")
         self.assertIn("# Test Office · October 2026", md)
-        self.assertIn("**7 reports** filed, **3.0 h** of agent work across **4 sessions**", md)   # September's day left out
+        self.assertIn("**7 reports** filed, **3.0 h** of agent work across **4 session-days**", md)   # September's day left out
         self.assertIn("worth **$12** at API list prices", md)
         self.assertIn("| Atlas | 3.0 | 7 | 4 | 2 |", md)
         self.assertIn("Usage limits hit: 1.", md)

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -211,36 +212,83 @@ def cmd_lanes(_args) -> int:
 
 def cmd_events(args) -> int:
     """The office's news in this terminal: the last lines, and with --follow every new one as it comes."""
+    import collections
+    import math
+    if args.lines < 0:
+        print("--lines must be 0 or more", file=sys.stderr)
+        return 2
     path = config.STATE_DIR / "events.jsonl"
-    def show(line: str) -> None:
+    safe = lambda v: "".join(ch if ch.isprintable() else " " for ch in str(v))   # never a terminal escape from the news
+    def parse(line: str) -> dict | None:
         try:
             e = json.loads(line)
         except ValueError:
-            return
+            return None
         if not isinstance(e, dict) or (args.kind and e.get("kind") != args.kind):
-            return
+            return None
+        return e
+    def show(e: dict) -> None:
         if args.json:
-            print(json.dumps(e), flush=True)
-        else:
-            print(f"{time.strftime('%d %b %H:%M', time.localtime(e.get('ts') or 0))}  {e.get('kind', ''):<11} {e.get('seat') or '-':<9} {e.get('text', '')}", flush=True)
+            print(json.dumps({k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in e.items()}), flush=True)
+            return
+        ts = e.get("ts")
+        try:
+            when = time.strftime("%d %b %H:%M", time.localtime(float(ts))) if ts is not None else "--"
+        except (TypeError, ValueError, OverflowError, OSError):
+            when = "--"
+        print(f"{when}  {safe(e.get('kind') or ''):<11} {safe(e.get('seat') or '-'):<9} {safe(e.get('text') or '')}", flush=True)
     try:
-        with open(path) as f:
-            lines = f.readlines()
-            for line in lines[-args.lines:]:
-                show(line)
-            if not args.follow:
-                return 0
-            while True:                                   # tail -f: new news as it is written
-                line = f.readline()
-                if line:
-                    show(line)
-                else:
-                    time.sleep(1.5)
+        f = open(path, encoding="utf-8", errors="replace")
     except FileNotFoundError:
         print("No news yet.", file=sys.stderr)
         return 1
+    try:
+        last = collections.deque((e for e in map(parse, f) if e), maxlen=args.lines)   # the kind first, then the last N
+        for e in last:
+            show(e)
+        if not args.follow:
+            return 0
+        f.seek(0, os.SEEK_END)
+        ino, part, seen = os.fstat(f.fileno()).st_ino, "", None
+        while True:                                       # tail -f, and it follows the office's rotation of the file
+            chunk = f.readline()
+            if chunk:
+                part += chunk
+                if part.endswith("\n"):                    # a line still being written waits for its end
+                    seen, line, part = part, part, ""
+                    e = parse(line)
+                    if e:
+                        show(e)
+                continue
+            time.sleep(1.5)
+            try:
+                st = os.stat(path)
+            except OSError:
+                continue
+            if st.st_ino != ino or st.st_size < f.tell():  # replaced or cut back: carry on after the last line shown
+                f.close()
+                f = open(path, encoding="utf-8", errors="replace")
+                ino, part = os.fstat(f.fileno()).st_ino, ""
+                old = f.readlines()
+                after = len(old) - old[::-1].index(seen) if seen in old else 0
+                for line in old[after:]:
+                    if line.endswith("\n"):
+                        seen = line
+                        e = parse(line)
+                        if e:
+                            show(e)
+                    else:
+                        part = line
     except KeyboardInterrupt:
         return 0
+    except BrokenPipeError:                               # `claude-office events | head`
+        try:
+            sys.stdout = open(os.devnull, "w")
+        except OSError:
+            pass
+        return 0
+    finally:
+        f.close()
 
 
 def cmd_token(args) -> int:
@@ -251,8 +299,8 @@ def cmd_token(args) -> int:
         return 0
     path.unlink(missing_ok=True)
     config.api_token()
-    print("A new token is written. Restart the office (systemctl --user restart claude-office) and reload open pages;"
-          " scripts that use ask and post read the file each time.")
+    print("A new token is written. The running office uses it at once and the old one stops working: reload open"
+          " pages. Scripts that use ask, post and message read the file each time.")
     return 0
 
 
