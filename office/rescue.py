@@ -14,6 +14,6 @@ def nudge_text(x: dict) -> str:
                 "anywhere, stop, write what you tried in your STATE notes and try a different approach, or report BLOCKED "
                 "with the reason.").format(n=lp["count"], what=str(lp.get("text") or "")[:80])
     mins = max(1, int((x.get("quiet_s") or 0) // 60))
-    return (f"A note from Claude Office: this session has been quiet for {mins} minutes. If you are waiting on something "
+    return (f"A note from Claude Office: this session has been quiet for {mins} minute{'' if mins == 1 else 's'}. If you are waiting on something "
             "that is not coming, write your STATE notes, then either carry on with the next step or report BLOCKED with "
             "the reason.")

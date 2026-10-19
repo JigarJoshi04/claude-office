@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from . import config, lanes
+from .trust import _CLAIM
 
 MAX_OPEN, KEEP_DONE = 20, 60
 SOON_S = 2 * 3600                         # due this soon on work still out: it needs the CEO
@@ -31,8 +32,17 @@ def final_stage(lane: dict | None, load=lanes.load_lane) -> dict | None:
 
 
 def done_at(lane: dict) -> float | None:
-    """When a lane finished with a DONE report and nothing left in its chain, or None."""
+    """When a lane finished with a DONE report and nothing left in its chain, or None. A report that does not claim
+    the work done (FAILED, PARTIAL, NOT DONE) keeps nothing, whatever the lane's status says."""
     if lane.get("status") != "done" or lane.get("chain"):            # "finished" is an exit without a report: it keeps nothing
+        return None
+    st = lane.get("report_status")
+    if st is None and lane.get("id"):
+        try:
+            st = lanes._first_line(lanes.lane_dir(lane["id"]) / "REPORT.md")
+        except ValueError:
+            st = None
+    if not st or not _CLAIM.match(st):
         return None
     runs = lane.get("runs") or []
     return lane.get("finished_at") or (runs[-1].get("ended_at") if runs else None) or None

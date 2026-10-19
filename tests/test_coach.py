@@ -84,7 +84,8 @@ class CoachTests(unittest.TestCase):
         self.assertEqual(e["models"][0], {"model": "opus", "n": 2, "done": 1})
 
     def test_a_report_that_does_not_claim_done_is_not_done(self):
-        self.assertEqual(coach.outcome({"status": "stopped", "report_status": "Notes so far: half the tables"}), "stopped")
+        self.assertEqual(coach.outcome({"status": "stopped", "report_status": "Notes so far: half the tables"}), "not done")
+        self.assertEqual(coach.outcome({"status": "done", "report_status": "STATUS: FAILED - no repro"}), "not done")
         self.assertEqual(coach.outcome({"status": "done", "report_status": "STATUS: DONE - all of it"}), "done")
         self.assertNotIn("file", coach.words("Edit the files"))                                 # a plural of a stop word is one too
 

@@ -324,7 +324,7 @@ function renderTokensInner(el, app) {
     const ts = (t.tools || []).filter(x => x.calls);
     if (!ts.length) return "";
     const most = Math.max(1, ...ts.map(x => x.seconds)), all = ts.reduce((a, x) => a + x.seconds, 0) || 1;
-    const span = (s) => s < 60 ? `${Math.round(s)} s` : s < 3600 ? `${Math.floor(s / 60)} min${s % 60 >= 1 && s < 600 ? ` ${Math.round(s % 60)} s` : ""}` : `${Math.floor(s / 3600)} h ${String(Math.round(s % 3600 / 60)).padStart(2, "0")}`;
+    const span = (x) => { const s = Math.round(x), m = Math.round(x / 60); return s < 60 ? `${s} s` : s < 600 ? `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}` : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`; };   // rounded once: never "1 min 60 s"
     return `<div class="view-card"><h5>Where the time goes · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
       <div class="table-scroll"><table class="league ship tools-t"><thead><tr><th>Tool</th><th style="width:26%"></th><th class="num">Calls</th><th class="num">In all</th><th class="num">Average</th><th class="num">Longest</th></tr></thead>
       <tbody>${ts.map(x => `<tr><td>${esc(x.tool)}</td><td><span class="tb-bar"><i style="width:${(x.seconds / most * 100).toFixed(1)}%"></i></span></td><td class="num">${x.calls.toLocaleString()}</td>

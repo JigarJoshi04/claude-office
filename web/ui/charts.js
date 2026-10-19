@@ -80,7 +80,7 @@ export function bindSparks(root) {
 }
 
 // The timeline: one block per seat, one row per session, segments coloured by state.
-export function timeline(hist, snap, width, hours, nameOf = (s) => s.label, words = (t) => t) {
+export function timeline(hist, snap, width, hours, nameOf = (s) => s.label, words = (t) => t, privacy = false) {
   const labelW = 170, padR = 14, rowH = 18, headH = 28, gapH = 10;
   const now = hist.now || snap.now;
   const t0 = now - hours * 3600, t1 = now + Math.max(1800, hours * 3600 * 0.18);
@@ -128,11 +128,11 @@ export function timeline(hist, snap, width, hours, nameOf = (s) => s.label, word
     }
     for (const m of marks.filter(m => m.seat === seat.id)) {
       const mx = x(m.ts), col = m.level === "good" ? "var(--good)" : m.level === "bad" ? "var(--bad)" : m.level === "warn" ? "var(--warn)" : "var(--info)";
-      svg += `<path class="mk" data-tip="${esc(esc(clock(m.ts) + " · " + words(m.text)))}" d="M${mx} ${yy + 3} l4 4 l-4 4 l-4 -4 Z" fill="${col}" stroke="var(--surface)" stroke-width="1"/>`;
+      svg += `<path class="mk" data-tip="${esc(esc(clock(m.ts) + " · " + (privacy ? `${m.kind} news` : words(m.text))))}" d="M${mx} ${yy + 3} l4 4 l-4 4 l-4 -4 Z" fill="${col}" stroke="var(--surface)" stroke-width="1"/>`;   // share-safe: the kind only
     }
     yy += headH + 3;
     for (const s of shown) {
-      svg += `<text class="lbl2" x="24" y="${yy + 12}" data-sid="${esc(s.id)}">${esc(trim(s.name, 22))}${s.kind === "desk" ? " 🎧" : ""}</text>`;
+      svg += `<text class="lbl2" x="24" y="${yy + 12}" data-sid="${esc(s.id)}">${esc(privacy ? (s.kind === "lane" ? "a lane" : "a session") : trim(s.name, 22))}${s.kind === "desk" ? " 🎧" : ""}</text>`;
       for (const [a, b, st] of s.segments || []) {
         if (b < t0) continue;
         const sx = x(a), ex = Math.max(sx + 2, x(b));

@@ -284,6 +284,7 @@ class TokenLedger:
         self._counted = None                    # what the response being read (self._last) has been counted at so far
         self._helper_file = False               # the file being read is a helper's (a subagent's)
         self._tool_open: dict = {}
+        self._tool_opens: dict = {}             # per transcript file: its tool calls still waiting for a result
         self.api_recent: deque = deque(maxlen=500)   # (when, kind, seat) of the last day's API errors, as they are read
         self._xusd = 0                          # the same, for its price
         self.data = self._load()
@@ -453,7 +454,9 @@ class TokenLedger:
         project_dir, sid = self._session_of(root, path)
         self._read_sids.add(sid)
         self._helper_file = "subagents" in path.relative_to(root).parts      # a helper's own transcript
-        self._tool_open: dict = {}                                           # tool calls still waiting for their result (_tool_time)
+        self._tool_open = self._tool_opens.setdefault(str(path), {})       # tool calls still waiting for their result (_tool_time),
+        if len(self._tool_opens) > 300:                                     # kept per file across scans: a slow call spans one
+            self._tool_opens.pop(next(iter(self._tool_opens)))
         changed = False
         pos = start
         self._ts = None
@@ -692,12 +695,12 @@ class TokenLedger:
         for c in content:
             if not isinstance(c, dict):
                 continue
-            if c.get("type") == "tool_use" and c.get("id"):
+            if c.get("type") == "tool_use" and isinstance(c.get("id"), str):
                 self._tool_open[c["id"]] = (tool_group(str(c.get("name") or "")), at)
                 if len(self._tool_open) > 400:
                     self._tool_open.pop(next(iter(self._tool_open)))
-            elif c.get("type") == "tool_result":
-                p = self._tool_open.pop(c.get("tool_use_id"), None)
+            elif c.get("type") == "tool_result" and isinstance(c.get("tool_use_id"), str):
+                p = self._tool_open.pop(c["tool_use_id"], None)
                 if not p or not 0 <= at - p[1] <= TOOL_MAX_S:
                     continue
                 dur, (day, _) = at - p[1], _when(d.get("timestamp"))
@@ -717,7 +720,9 @@ class TokenLedger:
                 return
             n = lambda k: int(u.get(k) or 0)
             day, _ = _when(ts)
-            s["su"] = [day or "?", n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens")]
+            total = n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens")
+            if total:                                          # a synthetic reply (no API call) is not the first prompt
+                s["su"] = [day or "?", total]
 
     def _rebuild(self, sid: str, model: str, u: dict, ts) -> None:
         """A cold-cache rebuild: a response that wrote a large prompt back into the cache after the conversation sat

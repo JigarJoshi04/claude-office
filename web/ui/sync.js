@@ -131,8 +131,8 @@ function flush() {
           try { r = await post("/api/save", { key: k, v, at, base: b ? b.ver || 0 : 0, dev: DEV }); } catch { break; }   // the next write tries again
           if (r && r.ok) { setBase(k, v, r.ver); break; }
           if (!r || !r.conflict) break;
-          const srv = r.v === null ? undefined : r.v;
-          const m = merge3(k, read(k), srv, baseOf(k, r, b), stamps()[k], r.at);
+          const srv = r.v === null ? undefined : r.v, bNow = bases()[k];     // a pull may have moved the base while it waited
+          const m = merge3(k, read(k), srv, baseOf(k, r, bNow), stamps()[k], r.at);
           setBase(k, srv, r.ver);
           if (!same(m, read(k))) { write(k, m); changed = true; }
         }
@@ -145,16 +145,21 @@ function send(k) { queue.add(k); clearTimeout(timer); timer = setTimeout(flush, 
 
 // Merge the office's save into this screen's: on load (true when this screen's copy changed) and when it comes back.
 async function pull() {
+  if (flushing) return null;                                             // a write in flight: merge after it lands
   let srv;
   try { const r = await fetch("/api/save"); srv = r.ok ? await r.json() : null; } catch { srv = null; }
-  if (!srv || !srv.keys) return null;
+  if (!srv || !srv.keys || flushing) return null;
   const st = stamps(), bs = bases();
   let changed = false;
   for (const k of SYNC) {
     const local = read(k), s = srv.keys[k], b = bs[k];
-    const merged = merge3(k, local, s ? s.v : undefined, baseOf(k, s, b), st[k], s ? s.at : 0);
+    // An office copy older than the one this screen last saw (a reply that crossed this screen's write, or an office
+    // that lost its save and got a stale screen's first) is merged with no base: nothing this screen has is undone.
+    const older = s && b && (s.ver || 0) < (b.ver || 0);
+    const merged = merge3(k, local, s ? s.v : undefined, older ? undefined : baseOf(k, s, b), st[k], s ? s.at : 0);
     if (merged === undefined) continue;
-    if (s) setBase(k, s.v, s.ver || 0);
+    if (s && !older) setBase(k, s.v, s.ver || 0);
+    else if (older) { const bb = bases(); bb[k] = { v: s.v, ver: s.ver || 0 }; write("__base", bb); }   // its version, to write over it
     else if (b) { const bb = bases(); delete bb[k]; write("__base", bb); }  // the office lost its copy: send this one again
     if (!same(merged, local)) { if (write(k, merged)) changed = true; }
     if (!s || !same(s.v, merged)) send(k);

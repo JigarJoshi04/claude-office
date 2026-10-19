@@ -554,7 +554,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.161.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.162.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -616,7 +616,8 @@ class Office(LiveOffice):
         snap["api_weather"] = self.tokens.weather(now)          # the API's errors in the last half hour (tokens.api_kind)
         snap["promises"] = self.promises.view(now)
         snap["promise_due"] = self.promises.attention(now)
-        self.nudged = {k: v for k, v in self.nudged.items() if now - v < 6 * 3600}
+        stuck_now = {x["id"] for s in seats_out for x in s.get("sessions", []) if x.get("state") == "stuck" or ((x.get("loop") or {}).get("count") or 0) >= 8}
+        self.nudged = {k: v for k, v in self.nudged.items() if k in stuck_now and now - v < 6 * 3600}   # a new stuck spell starts at a nudge again
         snap["nudged"] = dict(self.nudged)
         snap["attention"] = self._attention(snap)
         for c in collisions(snap):                           # said once an hour per working tree and set of sessions
@@ -689,7 +690,8 @@ class Office(LiveOffice):
                 bakes.setdefault(l["bakeoff"]["id"], []).append(l)
         done = {"done", "blocked", "failed", "stopped", "finished"}
         for bid, pair in bakes.items():
-            if len(pair) == 2 and all(l.get("status") in done for l in pair) and not any(l["bakeoff"].get("winner") for l in pair):
+            if len(pair) == 2 and all(l.get("status") in done for l in pair) and not any(l["bakeoff"].get("winner") for l in pair) \
+                    and any(l.get("status") in ("done", "blocked", "finished") for l in pair):   # one that never started is nothing to judge
                 items.append({"level": "warn", "bakeoff": bid, "text": f"Bake-off '{pair[0]['title'][:-4]}' is ready to judge: "
                               + ", ".join(f"{l['bakeoff']['side']} {l['status']}" for l in sorted(pair, key=lambda l: l["bakeoff"]["side"]))})
         mute = set((snap.get("office") or {}).get("risk_mute") or ())

@@ -319,6 +319,13 @@ class WorktreeTests(unittest.TestCase):
         branches = subprocess.run(["git", "-C", str(self.repo), "branch", "--list", t["branch"]], capture_output=True, text=True).stdout
         self.assertIn(t["branch"], branches)
 
+    def test_from_inside_a_worktree_the_copy_goes_beside_the_main_checkout(self):
+        inner = self.repo / "wt" / "x"
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "add", "-q", "-b", "inner", str(inner)], capture_output=True, check=True)
+        with patch.object(lanes, "start_unit"):
+            lane = lanes.create_lane("Nested", "Brief.", str(inner / "src"), "auto", "opus", "acceptEdits", ["c1"], self.cfg, worktree=True)
+        self.assertEqual(Path(lane["worktree"]["path"]).parent, self.root / "proj.lanes")   # never inside the repository
+
     def test_not_a_repository_or_refused_by_the_policy(self):
         plain = self.root / "plain"
         plain.mkdir()

@@ -9,9 +9,10 @@ from office.snapshot import Office, attention_key
 NOW = 1_800_000_000
 
 
-def lane(lid, status="running", finished=None, chain=None, nxt=None, title="Fix it"):
+def lane(lid, status="running", finished=None, chain=None, nxt=None, title="Fix it", report=None):
     return {"id": lid, "title": title, "status": status, "seat": "claude2", "finished_at": finished, "chain": chain or [], "chain_next": nxt,
-            "runs": [{"started_at": NOW - 100, "ended_at": finished}] if finished else []}
+            "runs": [{"started_at": NOW - 100, "ended_at": finished}] if finished else [],
+            "report_status": report if report is not None else ("STATUS: DONE - fixed" if status == "done" else None)}
 
 
 class PromiseTests(unittest.TestCase):
@@ -42,6 +43,11 @@ class PromiseTests(unittest.TestCase):
         self.make("l2")
         self.lanes["l2"] = lane("l2", "done", finished=NOW + 8000)              # done, but after the time
         self.assertEqual(self.p.evaluate([], NOW + 8100, self.load)[0]["why"], "finished late")
+
+    def test_a_report_that_does_not_claim_done_keeps_nothing(self):
+        self.make()
+        self.lanes["l1"] = lane("l1", "done", finished=NOW + 600, report="STATUS: FAILED - could not reproduce")
+        self.assertEqual(self.p.evaluate([], NOW + 700, self.load), [])
 
     def test_an_exit_without_a_report_keeps_nothing(self):
         self.make()

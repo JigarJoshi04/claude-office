@@ -59,8 +59,8 @@ def score(mine: set[str], theirs: set[str], idf: dict[str, float], top: float, l
 def outcome(lane: dict) -> str:
     """done, blocked, stopped or failed: how a finished lane ended (done only when its report says so)."""
     st = lane.get("report_status")
-    if st and (report_blocked(st) or _DONE.match(st)):
-        return "blocked" if report_blocked(st) else "done"
+    if st:                                                # the report says how it went; one that claims nothing is not done
+        return "blocked" if report_blocked(st) else "done" if _DONE.match(st) else "not done"
     return {"done": "done", "blocked": "blocked", "finished": "done"}.get(lane.get("status"), lane.get("status") or "unknown")
 
 

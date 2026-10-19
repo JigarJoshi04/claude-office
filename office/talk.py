@@ -119,7 +119,7 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
     fork = body.get("fork") is True and x is not None              # a copy of a session still open in its terminal
     if x is not None and body.get("followup") and not fork:
         raise ValueError("Wait for the running session to finish before following up")
-    if x is not None and (mode == "none" or inbox is None):
+    if x is not None and not fork and (mode == "none" or inbox is None):   # a fork needs no socket: it copies the transcript
         raise ValueError("That running session cannot receive messages right now")
     if mode in ("direct", "review") and inbox is not None and not fork:
         msg_id = messaging.send(x["socket"], text, inbox.address, office.cfg.get("message_from_name") or "Claude Office (CEO)")
@@ -135,6 +135,10 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
     if pick != "auto" and not any(s["id"] == pick and s.get("kind") == "claude"
                                   for s in office.get().get("seats", [])):
         raise ValueError("Claude follow-ups require a Claude seat")
+    if fork and pick != "auto":                         # the seat it continues on must see this conversation's transcript
+        to = next((s for s in office.get().get("seats", []) if s["id"] == pick), None)
+        if to and not lanes.transcript_on(to, session_id):
+            raise ValueError(f"{to.get('label') or pick} cannot see this conversation (its projects folder is its own), so it cannot carry it on")
     lane = lanes.create_lane(followup_title(text, (x or {}).get("name") or session_id[:8]), text, cwd, pick,
                              office.cfg["lane_defaults"]["model"], office.cfg["lane_defaults"]["permission_mode"],
                              seat_ids, office.cfg, resume_session=session_id, fork=fork)

@@ -309,7 +309,7 @@ export function makePanels(app) {
     if (a.review && a.session) return `<button class="btn sm primary" data-forward-review="${esc(a.seat)}|${esc(a.session)}" title="Open the session with the comments written out as a message (you send it)">${icon("send", 14)}Forward to it</button>`;
     if (a.interrupted) return `<button class="btn sm primary" data-resume-all="${esc(JSON.stringify(a.interrupted))}">${icon("play", 14)}Resume ${a.interrupted.length > 1 ? "all" : "it"}</button>`;
     if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
-    if (a.limited && a.session && st && st.kind === "claude") {   // out of plan: the same conversation, forked onto a seat with plan left
+    if (a.limited && a.kind === "desk" && a.session && st && st.kind === "claude") {   // a terminal session out of plan: its conversation, forked onto a seat with plan left (a lane moves on its own)
       const np = (S().next_pick || {}).seat, to = np && np !== a.seat && seatById(np);
       if (to && to.kind === "claude") return `<button class="btn sm primary" data-continue="${esc(a.seat)}|${esc(a.session)}|${esc(np)}" title="Fork this conversation onto ${esc(P(to).name)} and carry on there">${icon("play", 14)}Continue on ${esc(P(to).name)}</button>`;
     }
@@ -354,7 +354,7 @@ export function makePanels(app) {
         if (!nearly.has(st.id)) { nearly.set(st.id, g); out.push(g); }
         continue;
       }
-      if (st && st.status === "limited" && planItem) {
+      if (st && st.status === "limited" && planItem && !(a.limited && a.kind === "desk" && a.session)) {   // a terminal session out of plan keeps its own row: it can Continue elsewhere
         const g = spent.get(st.id) || { level: "bad", seat: st.id, paused: 0, resets_at: null, grouped: true };
         if (/stopped by the usage limit/i.test(a.text)) g.paused++;
         g.resets_at = g.resets_at || a.resets_at;
@@ -1294,7 +1294,7 @@ export function makePanels(app) {
       ${section("Brief", `<div class="quote">${esc(d ? d.brief : "")}</div>`)}
       ${section("Log", `<pre class="pre">${esc((d && d.log) || "")}</pre>`)}
       ${section("Details", `<dl class="facts"><dt>Lane id</dt><dd><code>${esc(l.id)}</code></dd><dt>Unit</dt><dd><code>${esc(l.unit)}</code></dd><dt>Folder</dt><dd><code>${esc(l.workdir)}</code></dd>
-        ${l.worktree ? `<dt>Worktree</dt><dd>Branch <code>${esc(l.worktree.branch)}</code>, its own checkout. It stays when the lane is done; to remove it: <code>git -C ${esc(l.worktree.repo)} worktree remove ${esc(l.worktree.path)}</code></dd>` : ""}</dl>`)}`,
+        ${l.worktree ? `<dt>Worktree</dt><dd>Branch <code>${esc(l.worktree.branch)}</code>, its own checkout. It stays when the lane is done; to remove it: <code>git -C '${esc(l.worktree.repo.replace(/'/g, "'\\''"))}' worktree remove '${esc(l.worktree.path.replace(/'/g, "'\\''"))}'</code></dd>` : ""}</dl>`)}`,
       bind(root) {
         const stop = root.querySelector("#lStop"), res = root.querySelector("#lResume"), clone = root.querySelector("#lClone"), chat = root.querySelector("[data-chat-session]");
         const front = root.querySelector("#lFront");
@@ -1304,7 +1304,9 @@ export function makePanels(app) {
         if (stop) stop.addEventListener("click", async () => { if (!confirm("Stop this lane? Its progress notes stay, so you can resume it.")) return; try { const r = await app.post("/api/lanes/stop", { id: v.id }); result(r, "Lane stopped.", "warn"); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
         if (res) res.addEventListener("click", async () => { try { const r = await app.post("/api/lanes/resume", { id: v.id, seat: root.querySelector("#lSeat").value || null }); result(r, "Resuming the lane."); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
         if (clone) clone.addEventListener("click", () => {
-          hireDraft = { title: l.title, brief: d ? d.brief : "", workdir: l.workdir, seat: l.seat_pref || "auto", model: l.model, permission_mode: l.permission_mode, allow_messages: l.allow_messages !== false };
+          // A lane in its own worktree is hired again from its repository, at the same place inside it, not from the old copy.
+          const wt = l.worktree, dir = wt && l.workdir.startsWith(wt.path) ? wt.repo + l.workdir.slice(wt.path.length) : l.workdir;
+          hireDraft = { title: l.title, brief: d ? d.brief : "", workdir: dir, seat: l.seat_pref || "auto", model: l.model, permission_mode: l.permission_mode, allow_messages: l.allow_messages !== false, worktree: !!wt };
           store.set("hireDraft", hireDraft); app.go({ kind: "hire" }); toast("Brief copied to the hiring desk.");
         });
         if (chat) chat.addEventListener("click", () => { const [seatId, id] = chat.dataset.chatSession.split("|"); sessTab.set(id, "chat"); app.go({ kind: "session", seat: seatId, id }); });
@@ -1349,6 +1351,7 @@ export function makePanels(app) {
     const pm = app.detailFor("p:" + s.id), lm = pm && pm.limit;
     if (!lm || S().now - lm.at > 86400) return "";
     const wk = lm.window === "weekly", priv = app.privacy(), lead = lm.sessions[0];
+    if (lm.older) return section("Why it ran out", `<p class="hint">${esc(p.name)} has been out of its ${wk ? "week" : "5-hour window"} since before the last day the office keeps minute by minute, so there is no window to look back on.</p>`);
     const pace = lm.per_hour && !wk ? `, filling ${lm.per_hour}% an hour${lm.per_hour > 20 ? `: ${(lm.per_hour / 20).toFixed(1)}× the pace that lasts a whole window` : ""}` : "";
     const tip = !lead ? "" : lead.share >= 50 ? `${priv ? "One session" : lead.name} burned ${lead.share}% of it. Running work like it on another seat, or on a smaller model, spreads the load.`
       : `The burn was spread over ${lm.sessions.length} sessions. The divider's usage guard, or fewer lanes at once on this seat, keeps a window from running dry.`;
@@ -1375,7 +1378,7 @@ export function makePanels(app) {
     const who = [];
     for (const s of S().seats) for (const x of s.sessions || []) {
       if (x.live === false || !x.touch) continue;
-      if (Object.keys(x.touch.roots || {}).some(r => inside(d, r) || inside(r, d))) who.push(`${x.name || "a session"} on ${P(s).name}`);
+      if (Object.keys(x.touch.roots || {}).some(r => inside(d, r))) who.push(`${x.name || "a session"} on ${P(s).name}`);   // the folder is in a tree someone is editing
     }
     if (!who.length) return "";
     return `<p class="hint bad-t" style="margin:-6px 0 10px">${icon("branch", 13)} ${esc(app.privacy() ? `${who.length} session${who.length > 1 ? "s are" : " is"}` : who.slice(0, 2).join(" and ") + (who.length > 2 ? ` and ${who.length - 2} more` : "") + (who.length > 1 ? " are" : " is"))} editing in this working tree right now. Give the lane its own worktree, or pick another folder.</p>`;
@@ -1687,11 +1690,10 @@ export function makePanels(app) {
         q("hStart").addEventListener("change", () => { save(); app.rerender(true); });
         if (q("hStartAt")) q("hStartAt").addEventListener("input", save);
         const useTpl = (t) => {
-          coachState = null;                                // the coach read the old brief
           save();
           const mine = (hireDraft.title.trim() || hireDraft.brief.trim()) && ![...TEMPLATES, ...myTemplates()].some(x => x.brief === hireDraft.brief);
           if (mine && !confirm(`Replace your title and brief with the "${t.name}" template?`)) return;
-          hireDraft.title = t.title; hireDraft.brief = t.brief; store.set("hireDraft", hireDraft); app.rerender(true);
+          coachState = null; hireDraft.title = t.title; hireDraft.brief = t.brief; store.set("hireDraft", hireDraft); app.rerender(true);   // the coach read the old brief
           const ti = document.getElementById("hTitle"); if (ti) { ti.focus(); ti.setSelectionRange(ti.value.length, ti.value.length); }
         };
         root.querySelectorAll("[data-mytpl]").forEach(b => b.addEventListener("click", () => useTpl(myTemplates()[+b.dataset.mytpl])));
@@ -1707,7 +1709,7 @@ export function makePanels(app) {
           if (!name) return;
           const list = myTemplates().filter(t => t.name !== name);
           list.unshift({ name, title: hireDraft.title, brief: hireDraft.brief });
-          store.set("myTemplates", list.slice(0, 12)); app.rerender(true); toast(`Saved the template "${name}".`, "good");
+          store.set("myTemplates", list.slice(0, 40)); app.rerender(true); toast(`Saved the template "${name}".`, "good");   // the save's cap
         });
         root.querySelectorAll("[data-next]").forEach(b => b.addEventListener("click", () => {
           const n = nextUp().find(x => x.key === b.dataset.next);        // by key: the list may have changed since it was drawn
@@ -1723,7 +1725,7 @@ export function makePanels(app) {
           const t = TEMPLATES[+b.dataset.tpl]; save();
           const mine = (hireDraft.title.trim() || hireDraft.brief.trim()) && !TEMPLATES.some(x => x.brief === hireDraft.brief);
           if (mine && !confirm(`Replace your title and brief with the "${t.name}" template?`)) return;   // never lose a written brief silently
-          hireDraft.title = t.title; hireDraft.brief = t.brief; store.set("hireDraft", hireDraft); app.rerender(true);
+          coachState = null; hireDraft.title = t.title; hireDraft.brief = t.brief; store.set("hireDraft", hireDraft); app.rerender(true);   // the coach read the old brief
           const ti = document.getElementById("hTitle"); if (ti) { ti.focus(); ti.setSelectionRange(ti.value.length, ti.value.length); }
         }));
         q("hClear").addEventListener("click", () => { coachState = null; hireDraft = { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true }; store.set("hireDraft", hireDraft); app.rerender(true); });
@@ -1743,7 +1745,7 @@ export function makePanels(app) {
                 max_minutes: hireDraft.max_minutes, a: { seat: hireDraft.seat || "auto", model: hireDraft.model || ld.model }, b: { seat: q("hSeatB").value, model: q("hModelB").value } });
               if (r.demo) toast("Demo office: no lanes were hired.");
               else { sound.play("hire"); toast("Bake-off started: two contenders, one brief. Judge them when both report.", "good"); app.badge("hiring");
-                if (hireDraft.promise) for (const ln of r.lanes || []) makePromise(ln.id, hireDraft.promise);   // a promise on each contender
+                if (hireDraft.promise) toast("A bake-off is not promised: one contender would break it. Promise the winner's follow-up instead.", "info");
                 coachState = null; hireDraft = { ...hireDraft, title: "", brief: "", bake: false, promise: "" }; store.set("hireDraft", hireDraft); app.go({ kind: "bakeoff", id: r.id }); }
             } catch (e) { toast("Could not start the bake-off: " + e.message, "bad"); }
             const go = q("hGo"); if (go) go.disabled = false;      // gone once the bake-off's page is open

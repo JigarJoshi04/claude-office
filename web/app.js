@@ -385,10 +385,11 @@ function chapterTick() {
   if (DEMO || replay.active()) return;
   const got = claimChapter(chapter, giftBox.grant);
   if (!got.length) return;
-  const top = got[got.length - 1], words = top.key ? `Chapter ${chapter.n}: vault key ${top.key}` : `Chapter ${chapter.n}: tier ${top.tier}${top.tier === 30 ? ", the whole track" : ""}`;
-  if (prefs.game === "full" && prefs.view === "floor") office.banner(top.tier === 30 ? "Chapter complete!" : "New tier!", words, "#ffd24a");
+  const done = got.some(x => x.tier === 30), top = got.filter(x => x.tier).pop() || got[got.length - 1];
+  const words = top.key ? `Chapter ${chapter.n}: vault key ${top.key}` : `Chapter ${chapter.n}: tier ${top.tier}${done ? ", the whole track" : ""}`;
+  if (prefs.game === "full" && prefs.view === "floor") office.banner(done ? "Chapter complete!" : "New tier!", words, "#ffd24a");
   toast(`${words}. ${top.label}.`, "good", { ic: "star", ms: 6000 });
-  if (!DEMO && top.tier === 30) badge(award("chapter"));
+  if (!DEMO && done) badge(award("chapter"));
 }
 // Your data (export.py): CSV and JSON downloads and the month's report. They need the office token, so the page
 // fetches them and saves the file itself.
@@ -817,7 +818,7 @@ function onNews(e) {
       fx.celebrate(e.seat, null, lvl ? `Level ${what}!` : what || "Unlocked!");
       if (lvl && seat && prefs.view === "floor") fx.banner("Level up!", `${who ? who.name : seat.label} is now level ${what}${seat.career ? ": " + seat.career.title : ""}`, seat.color);
       if (who) fx.sayAtSeat(e.seat, line(who, e.kind), 6500);
-      if (lvl) { teammateReacts(e, "levelup"); giftBox.grant(e.seat, "levelup"); } else teammateReacts(e, "achievement");
+      if (lvl) { teammateReacts(e, "levelup"); giftBox.grant(e.seat, "levelup", null, null, `levelup-${e.seat}-${what}`); } else teammateReacts(e, "achievement");   // one gift a level, on any screen
       if (!replay.active() && who) scrapbook.capture(office, prefs, e.kind, lvl ? `${who.name} reached level ${what}` : `${who.name} unlocked ${what || "a trophy"}`, e.seat);
       if (prefs.game === "full") sound.play(e.kind);
       if (prefs.game !== "off") toast(text, "good", { ic: lvl ? "star" : "trophy", ms: 6000 });
@@ -829,7 +830,7 @@ function onNews(e) {
       fx.celebrate(e.seat, null, merged ? "Merged!" : "PR opened");
       if (merged) { fx.ringBell(1); teammateReacts(e, "shipped"); } else fx.mail(e.seat, 1, "parcel");   // a merge rings the ship's bell in the lobby
       if (who) fx.sayAtSeat(e.seat, merged ? "Merged. On to the next one." : "PR's up. Fingers crossed.", 6000);
-      if (merged) { game.comboHit(e); giftBox.grant(e.seat, "shipped"); } else giftBox.earn(e.seat, "shipped");
+      if (merged) { game.comboHit(e); giftBox.grant(e.seat, "shipped", null, null, `shipped-${e.seat}-${Math.round(e.ts)}`); } else giftBox.earn(e.seat, "shipped");
       sound.play(merged ? "bell" : "report");
       toast(text, "good", { ic: "check", ms: 5000 });
       notify(merged ? "PR merged" : "PR opened", text);
@@ -839,7 +840,7 @@ function onNews(e) {
       const kept = e.level === "good";
       if (kept) {
         fx.celebrate(e.seat, null, "Promise kept!");
-        if (prefs.game !== "off") { giftBox.grant(e.seat, "promise", "rare"); if (!DEMO) badge(award("word_kept")); }
+        if (prefs.game !== "off") { giftBox.grant(e.seat, "promise", "rare", null, `promise-${Math.round(e.ts)}`); if (!DEMO) badge(award("word_kept")); }
         if (prefs.game === "full") sound.play("report");
       }
       toast(text, kept ? "good" : "warn", { ic: "flag", ms: 7000 });
@@ -1324,8 +1325,8 @@ function renderMain(fromSnap) {
   mainDrawn.add(v);
   const el = $({ timeline: "viewTimeline", board: "viewBoard", stats: "viewStats", tokens: "viewTokens", lanes: "viewLanes" }[v]);
   if (v === "lanes") {                                  // the lanes board: drawn again only when a lane changes
-    const sig = JSON.stringify([(snap.lanes || []).map(l => [l.id, l.status, l.seat, l.report_status, l.backlog_pos, l.trust && l.trust.level, l.spent && l.spent.tokens]), (snap.promises || {}).open, prefs.privacy]);
-    if (fromSnap && sig === lanesSig) return;
+    const sig = JSON.stringify([(snap.lanes || []).map(l => [l.id, l.status, l.seat, l.report_status, l.backlog_pos, l.trust && l.trust.level, l.spent && l.spent.tokens]), (snap.promises || {}).open, prefs.privacy, Math.floor(snap.now / 60)]);   // and each minute, for the times
+    if (fromSnap && (sig === lanesSig || (document.activeElement && document.activeElement.id === "lbFind"))) return;   // never under someone typing
     lanesSig = sig; keepFocus(el, () => renderLanesBoard(el, app, (s) => panels.persona(s)));
     return;
   }

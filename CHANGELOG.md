@@ -3,6 +3,39 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.162.0] - 2026-10-19
+
+### Fixed (QA round 23)
+- Continue on another seat never showed: a terminal session out of plan was folded into the seat's "out of plan"
+  row. It keeps its own row now (lanes move on by themselves), Continue works for a session without a message
+  socket, it refuses a seat that cannot see the conversation, and a retry carries on the fork instead of forking again.
+- Why it ran out could blame the wrong sessions: a session whose counter fell when its transcript was read again,
+  or one resumed with a long past, was counted wrongly. Only what each session added minute by minute counts. A
+  lockout older than the day the history keeps says so, and a busiest hour of 0% is not shown.
+- The game save: an office copy older than this screen's (a reply that crossed this screen's write, or an office
+  that lost its save to a stale screen) no longer undoes anything; a conflict merges against the base as it is after
+  the wait, and no pull runs while a write is in flight. Saving a template no longer cuts the list back to 12.
+- Lanes: a warm hand-off is used once (a restart or a resume starts from the notes), a run's limit check reads only
+  its own output (an old limit line no longer benches a seat for hours), a stopped lane records when, re-hiring a
+  worktree lane starts from its repository, a failed worktree hire removes its branch, a worktree hired from inside
+  another goes beside the main checkout, and a bake-off that could not start is not offered for judging.
+- A report that does not claim the work done (FAILED, PARTIAL, NOT DONE) no longer keeps a promise or counts as done
+  in the brief coach.
+- The nudge is for stuck or looping sessions only, a new stuck spell starts at the nudge again, and "1 minute".
+- Share-safe: `top` hides stuck, loop, blocked and cut-off sessions' names and its prompts; timeline markers,
+  session rows and replay ticks show kinds only; the lanes board's Find is off.
+- The lanes board no longer scrambles typing in Find when lanes change, its times move on, and its filters keep the
+  keyboard. Stopped and cut-off lanes show when they ended.
+- An escaped quote (`it\'s`) no longer hides the rest of a command from the session reader (3.147).
+- The token ledger keeps a slow tool call across its scans, skips a tool id that is not text, and a synthetic first
+  reply no longer leaves a session out of start-up weight.
+- One gift per level up, merged PR, kept promise and milestone, however many screens are open; team stickers only
+  with two characters or more; the chapter badge comes with tier 30 even when a vault key lands with it, and a screen
+  a day behind never rewinds the chapter.
+- A bake-off is not promised (one contender would break it); templates clear the brief coach.
+- The spend log masks before it shortens, the tools card never says "1 min 60 s", and hatched days on the plan
+  chart open like the others.
+
 ## [3.161.0] - 2026-10-19
 
 ### Added

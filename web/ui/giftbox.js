@@ -12,7 +12,7 @@ import { drawGift, GIFT_BOX } from "../engine/sprites.js";
 export function makeGiftBox(ctx) {
   const { app, office, panels, replay, store, DEMO, setView, badge, award, onAlbum, prefs, forceHappy } = ctx;
   const happy = () => forceHappy || happyNow().on;
-  const gifts = makeGifts({ store, demo: DEMO, happy, team: (id) => { const s = app.snap() && app.snap().seats.find(x => x.id === id); return s ? { id, name: panels.persona(s).name, color: s.color } : null; } });
+  const gifts = makeGifts({ store, demo: DEMO, happy, team: (id) => { const sn = app.snap(), s = sn && sn.seats.length >= 2 && sn.seats.find(x => x.id === id); return s ? { id, name: panels.persona(s).name, color: s.color } : null; } });   // a team needs two
   if (ctx.fullAlbum) { gifts.fillDemo(); const t = setInterval(() => { const sn = app.snap(); if (sn) { clearInterval(t); gifts.fillDemo(sn.seats.map(s => s.id)); sync(); } }, 200); }   // ?stickers=all: the team set too, once the seats are known
   if (DEMO && ctx.demoGifts > 0) for (let i = 0; i < Math.min(30, ctx.demoGifts); i++) gifts.grant(null, i % 2 ? "goals" : "daily");   // the demo's ?gifts=N: a full floor and a mailroom
   const seatName = (seatId) => { const s = seatId && app.snap() && app.snap().seats.find(x => x.id === seatId); return s ? panels.persona(s).name : null; };

@@ -13,7 +13,7 @@ export function renderTimeline(el, app) {
   el.innerHTML = `<div class="view-card">
     <div class="view-head"><div class="grow"><h3>Timeline</h3><p>Every session on every seat, with plan resets coming up on the right.</p></div>
       <div class="seg-ctl">${[1, 3, 6, 12, 24].map(h => `<button data-h="${h}" class="${h === hours ? "on" : ""}">${h} h</button>`).join("")}</div></div>
-    ${hist ? (hist.unavailable ? `<div class="muted" style="padding:20px">The timeline needs the history store on the server. Restart the office after updating.</div>` : timeline(hist, app.snap(), width, hours, (s) => personaFor(s, app.snap().seats.findIndex(x => x.id === s.id)).name, app.humanise))
+    ${hist ? (hist.unavailable ? `<div class="muted" style="padding:20px">The timeline needs the history store on the server. Restart the office after updating.</div>` : timeline(hist, app.snap(), width, hours, (s) => personaFor(s, app.snap().seats.findIndex(x => x.id === s.id)).name, app.humanise, app.privacy()))
       : `<div class="skeleton"></div><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:60%"></div>`}
     <div class="tl-legend"><span><i class="k working"></i>Working</span><span><i class="k waiting"></i>Waiting on a tool</span><span><i class="k idle"></i>Idle</span><span><i class="k limited"></i>Out of plan</span><span><i class="k stuck"></i>Quiet</span>
       <span>◆ News</span><span style="color:var(--info)">┆ Plan resets</span><span style="color:var(--bad)">✕ Runs out at this pace</span><span>✓ Reported</span></div>
@@ -258,7 +258,7 @@ function weekCard(app, shown) {
   const wd = (d) => new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short" });
   const bars = last.map((d, i) => {
     const v = get(d), h = v > 0 ? Math.max(3, Math.round(v / max * H)) : 0, x = i * 64 + 14, on = d.day === shown, B = H + T;
-    if (key === "plan" && !d.avail_min && !noRecord(d)) return `<g class="wk-bar norec"><rect class="hatch" x="${x}" y="${B - H}" width="36" height="${H}" rx="4" fill="url(#wkHatch)"/>
+    if (key === "plan" && !d.avail_min && !noRecord(d)) return `<g class="wk-bar norec" data-week-day="${d.day}" tabindex="0" role="button" aria-label="${esc(new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" }))}: no plan readings"><rect class="hit" x="${x - 8}" y="0" width="52" height="${B + 26}" fill="transparent"/><rect class="hatch" x="${x}" y="${B - H}" width="36" height="${H}" rx="4" fill="url(#wkHatch)"/>
       <text class="ax" x="${x + 18}" y="${B + 18}" text-anchor="middle">${wd(d.day)}</text><title>No plan readings that day</title></g>`;
     if (noRecord(d)) return `<g class="wk-bar norec"><rect class="hatch" x="${x}" y="${B - H}" width="36" height="${H}" rx="4" fill="url(#wkHatch)"/>
       <text class="ax" x="${x + 18}" y="${B + 18}" text-anchor="middle">${wd(d.day)}</text><title>No record: the office opened ${esc(new Date(born * 1000).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" }))}</title></g>`;

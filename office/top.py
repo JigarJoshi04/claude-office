@@ -43,7 +43,10 @@ def _private_need(a: dict) -> str:
     """What needs you, in share-safe words: the kind of thing and the seat, never a title, a repo or a command."""
     kind = ("An agent asks you a question" if a.get("ask") else "A bake-off is ready to judge" if a.get("bakeoff")
             else "Two sessions share a working tree" if a.get("collision") else "Review comments wait on a pull request" if a.get("review")
-            else "A risky action" if a.get("risk") else "A report its own tests contradict" if a.get("trust") else None)
+            else "A risky action" if a.get("risk") else "A report its own tests contradict" if a.get("trust")
+            else "A session has gone quiet" if a.get("stuck") else "A session repeats the same call" if a.get("loop")
+            else "Office lanes were cut off" if a.get("interrupted") else "A promise is due soon" if a.get("promise")
+            else "A session is blocked" if " is blocked:" in (a.get("text") or "") else None)
     if kind:
         return kind + (f" on {a['seat']}" if a.get("seat") else "")
     if a.get("lane"):
@@ -180,11 +183,12 @@ def run(scr, port: int, every: float = 2.0) -> None:
             if not ws:
                 continue
             s, x = ws[min(pick, len(ws) - 1)]
+            who = "this session" if private else x.get("name")
             if k == ord("m"):
-                text = _ask(scr, f"Message {x.get('name')}: ")
+                text = _ask(scr, f"Message {who}: ")
                 note = _post(port, "/api/message", {"seat": s["id"], "id": x["id"], "text": text}) if text else ""
             elif x.get("lane_id"):
-                if _ask(scr, f"Stop the lane '{x.get('name')}'? Type yes: ").lower() == "yes":
+                if _ask(scr, f"Stop the lane '{who}'? Type yes: ").lower() == "yes":
                     note = _post(port, "/api/lanes/stop", {"id": x["lane_id"]})
             else:
                 note = "Only office lanes can be stopped from here."

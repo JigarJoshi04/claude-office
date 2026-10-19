@@ -37,6 +37,10 @@ class TopTests(unittest.TestCase):
         self.assertNotIn("secret-repo", text)
         self.assertIn("Two sessions share a working tree on Atlas", text)          # the nickname, not the seat id
         self.assertNotIn("Docs", text)                                 # a lane's title
+        snap = dict(SNAP, attention=[{"level": "warn", "stuck": True, "seat": "claude2", "text": "secret-lane on claude2 quiet for 20 min"},
+                                     {"level": "warn", "seat": "claude2", "text": "secret-desk is blocked: needs the prod key"}])
+        text = "\n".join(t for t, _ in top.lines(snap, 100, private=True))
+        self.assertNotIn("secret", text)
 
     def test_narrow_and_empty(self):
         rows = top.lines({"seats": [], "office": {}}, 20)

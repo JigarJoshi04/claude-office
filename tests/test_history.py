@@ -158,6 +158,16 @@ class StatsTests(unittest.TestCase):
         self.assertGreater(pm["per_hour"], 400)                      # 80 points in 9 minutes
         self.assertEqual(pm["pace"][0][1], 10)                        # from the reset, not the window before
 
+    def test_postmortem_counts_only_rises(self):
+        t = self.start
+        def one(ts, p5, out, toks):
+            return {"now": ts, "lanes": [], "seats": [{"id": "a", "kind": "claude", "status": "limited" if out else "working", "usage": {"five_hour": {"pct": p5}, "weekly": {"pct": 30}},
+                    "sessions": [{"id": "s1", "name": "desk", "kind": "desk", "state": "working", "tokens_total": toks, "started_at": t - 99999, "live": True}]}]}
+        for i, (p5, out, toks) in enumerate([(10, 0, 5_000_000), (40, 0, 5_100_000), (70, 0, 300_000), (100, 1, 400_000)]):   # read again: the counter fell
+            self.h.record(one(t + 60 * (i + 1), p5, out, toks))
+        pm = self.h.postmortem(one(t + 300, 100, 1, 400_000), "a")["limit"]
+        self.assertEqual(pm["tokens"], 200_000)                      # +100k and +100k; not the old 5M, not the drop
+
     def test_what_one_percent_of_the_plan_buys(self):
         t = self.start
         def one(ts, p5, wk, toks):

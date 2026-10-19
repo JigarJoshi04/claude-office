@@ -489,6 +489,7 @@ class QuoteTests(unittest.TestCase):
         self.assertEqual(_blank_quotes("echo \"a \\\" b\" >> '/x/my notes.md'"), "echo '' >> /x/my_notes.md")
         self.assertIn("pytest -q", _segments('echo "==>" && pytest -q'))
         self.assertEqual(_blank_quotes('echo "unclosed'), "echo ''")
+        self.assertIn("pytest -q", _segments("echo it\\'s done && pytest -q"))      # an escaped quote is not a quote
 
 
 class HeredocTests(unittest.TestCase):

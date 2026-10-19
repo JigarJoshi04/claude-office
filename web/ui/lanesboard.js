@@ -13,11 +13,11 @@ const COLS = [
 const ARCHIVE_S = 7 * 86400;            // a finished lane older than a week is archived (shown with "Show archived")
 const TONE = { done: "good", finished: "good", running: "info", starting: "info", waiting: "warn", blocked: "warn", failed: "bad", interrupted: "warn", stopped: "", scheduled: "", queued: "" };
 
-const ended = (l) => l.finished_at || ((l.runs || []).slice(-1)[0] || {}).ended_at || l.created_at || 0;
+const ended = (l) => l.finished_at || l.interrupted_at || ((l.runs || []).slice(-1)[0] || {}).ended_at || l.created_at || 0;
 
 // Which lanes show, in which column, in what order.
-export function boardColumns(lanes, { q = "", seat = "", model = "", archived = false, now = Date.now() / 1000 } = {}) {
-  const words = String(q).toLowerCase().split(/\s+/).filter(Boolean);
+export function boardColumns(lanes, { q = "", seat = "", model = "", archived = false, now = Date.now() / 1000, privacy = false } = {}) {
+  const words = privacy ? [] : String(q).toLowerCase().split(/\s+/).filter(Boolean);   // share-safe: titles are hidden, so not searched
   const keep = lanes.filter(l => (!seat || (l.seat || l.seat_pref) === seat) && (!model || l.model === model)
     && words.every(w => `${l.title || ""} ${l.id} ${(l.report_status || "")}`.toLowerCase().includes(w)));
   const out = {};
@@ -32,9 +32,10 @@ export function boardColumns(lanes, { q = "", seat = "", model = "", archived = 
   return { cols: out, hidden, total: keep.length };
 }
 
+let findTimer = 0;                    // one timer across redraws: typing is never cut short by one
 export function renderLanesBoard(el, app, persona) {
   const snap = app.snap(), p = app.prefs(), priv = app.privacy();
-  const f = { q: p.lbQuery || "", seat: p.lbSeat || "", model: p.lbModel || "", archived: !!p.lbArchived, now: snap.now };
+  const f = { q: priv ? "" : p.lbQuery || "", seat: p.lbSeat || "", model: p.lbModel || "", archived: !!p.lbArchived, now: snap.now, privacy: priv };
   const lanes = snap.lanes || [], { cols, hidden, total } = boardColumns(lanes, f);
   const seatOf = (id) => snap.seats.find(s => s.id === id), name = (id) => { const s = seatOf(id); return s ? persona(s).name : id === "auto" ? "Divider picks" : id || "No seat yet"; };
   const promised = new Map(((snap.promises || {}).open || []).map(x => [x.lane, x]));
@@ -55,10 +56,11 @@ export function renderLanesBoard(el, app, persona) {
       ${(l.schedule || {}).backlog && l.backlog_pos > 0 ? `<button class="btn sm ghost" data-lb-front="${esc(l.id)}">${icon("chevronRight", 13)}To the front</button>` : ""}
       ${["interrupted", "failed"].includes(l.status) ? `<button class="btn sm" data-lb-resume="${esc(l.id)}">${icon("play", 13)}Resume</button>` : ""}</div>`;
   };
-  const focus = document.activeElement && document.activeElement.id === "lbFind" ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
+  const had = document.activeElement && el.contains(document.activeElement) ? document.activeElement.id : null;
+  const focus = had === "lbFind" ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
   el.innerHTML = `<div class="view-card lb">
     <div class="lb-head"><div class="grow"><h3>Lanes</h3><p>${total} lane${total === 1 ? "" : "s"}${hidden ? `, ${hidden} archived` : ""}: the newest 40 and every one still to finish.</p></div>
-      <div class="chat-find" style="margin:0;min-width:200px">${icon("search", 15)}<input type="search" id="lbFind" placeholder="Find a lane" aria-label="Find a lane" value="${esc(f.q)}" autocomplete="off"></div>
+      <div class="chat-find" style="margin:0;min-width:200px">${icon("search", 15)}<input type="search" id="lbFind" placeholder="${priv ? "Find is off in share-safe" : "Find a lane"}" aria-label="Find a lane" value="${esc(f.q)}" autocomplete="off" ${priv ? "disabled" : ""}></div>
       <select id="lbSeat" aria-label="Character"><option value="">Every character</option>${snap.seats.map(s => `<option value="${esc(s.id)}" ${f.seat === s.id ? "selected" : ""}>${esc(persona(s).name)}</option>`).join("")}</select>
       <select id="lbModel" aria-label="Model"><option value="">Every model</option>${models.map(m => `<option ${f.model === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>
       <label class="check"><input type="checkbox" id="lbArch" ${f.archived ? "checked" : ""}> Show archived</label>
@@ -67,8 +69,8 @@ export function renderLanesBoard(el, app, persona) {
       ${cols[key].length ? cols[key].map(card).join("") : `<p class="muted lb-none">${key === "needs" ? "Nothing needs you." : key === "work" ? "No lane at work." : key === "next" ? "Nothing waiting." : "None yet."}</p>`}</section>`).join("")}</div></div>`;
   const find = el.querySelector("#lbFind");
   if (focus) { find.focus(); try { find.setSelectionRange(focus[0], focus[1]); } catch { /* */ } }
-  let t = 0;
-  find.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => { app.setPref("lbQuery", find.value); renderLanesBoard(el, app, persona); }, 200); });
+  else if (had) { const back = el.querySelector("#" + CSS.escape(had)); if (back) back.focus(); }   // a filter keeps the keyboard
+  find.addEventListener("input", () => { clearTimeout(findTimer); findTimer = setTimeout(() => { app.setPref("lbQuery", el.querySelector("#lbFind").value); renderLanesBoard(el, app, persona); }, 200); });
   el.querySelector("#lbSeat").addEventListener("change", (e) => { app.setPref("lbSeat", e.target.value); renderLanesBoard(el, app, persona); });
   el.querySelector("#lbModel").addEventListener("change", (e) => { app.setPref("lbModel", e.target.value); renderLanesBoard(el, app, persona); });
   el.querySelector("#lbArch").addEventListener("change", (e) => { app.setPref("lbArchived", e.target.checked); renderLanesBoard(el, app, persona); });

@@ -38,6 +38,7 @@ export function trackNow(day, totalXp, demo = false) {
   const ch = chapterOf(day);
   let base = store.get("chapterBase", null);
   if (demo) base = { id: ch.n, xp: Math.max(0, totalXp - 137000) };
+  else if (base && base.id > ch.n) return { ...ch, xp: 0, ...tierOf(0), ahead: true };   // a screen a day behind never rewinds the save
   else if (!base || base.id !== ch.n) { base = { id: ch.n, xp: totalXp }; store.set("chapterBase", base); }   // first sight of a chapter
   const xp = Math.max(0, totalXp - base.xp);
   return { ...ch, xp, ...tierOf(xp) };
@@ -46,7 +47,9 @@ export function trackNow(day, totalXp, demo = false) {
 // New tiers reached since the last look: grants their gifts (fixed ids, so two screens never both give one) and
 // returns them for the celebration. claimed is kept in the save too.
 export function claim(track, grant) {
+  if (track.ahead) return [];
   const was = store.get("chapterClaimed", null);
+  if (was && was.id > track.n) return [];                // never claim an earlier chapter's tiers again
   const had = was && was.id === track.n ? was : { id: track.n, tier: 0, keys: 0 };
   const got = [];
   for (let t = had.tier + 1; t <= track.tier; t++) {

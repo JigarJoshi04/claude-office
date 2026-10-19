@@ -419,8 +419,15 @@ def make_worktree(workdir: str, lane_id: str) -> tuple[str, dict]:
     if r.returncode != 0:
         raise ValueError(f"{workdir} is not in a git repository, so the lane cannot have its own worktree there")
     top = r.stdout.strip()
-    dest, branch = os.path.join(os.path.dirname(top), os.path.basename(top) + ".lanes", lane_id), f"lane/{lane_id}"
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    main = top                                           # beside the main checkout, even when hired from inside a worktree
+    c = git("-C", top, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if c.returncode == 0 and os.path.basename(c.stdout.strip().rstrip("/")) == ".git":
+        main = os.path.dirname(c.stdout.strip().rstrip("/"))
+    dest, branch = os.path.join(os.path.dirname(main), os.path.basename(main) + ".lanes", lane_id), f"lane/{lane_id}"
+    try:
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+    except OSError as e:
+        raise ValueError(f"Could not make a folder for the lane's worktree beside the repository: {e.strerror or e}") from None
     r = git("-C", top, "worktree", "add", "-q", "-b", branch, dest, "HEAD")
     if r.returncode != 0:
         raise ValueError("Could not make the lane's worktree: " + (r.stderr or r.stdout).strip()[:200])
@@ -429,10 +436,11 @@ def make_worktree(workdir: str, lane_id: str) -> tuple[str, dict]:
 
 
 def remove_worktree(tree: dict | None) -> None:
-    """Take a lane's worktree away again (its branch stays), when the lane could not be hired after all."""
+    """Take a lane's worktree and its new branch away again, when the lane could not be hired after all."""
     if not tree:
         return
     subprocess.run(["git", "-C", tree["repo"], "worktree", "remove", "--force", tree["path"]], capture_output=True, text=True, timeout=60)
+    subprocess.run(["git", "-C", tree["repo"], "branch", "-D", tree["branch"]], capture_output=True, text=True, timeout=30)
 
 
 def policy(cfg: dict) -> dict:
@@ -532,6 +540,7 @@ def stop_lane(lane_id: str) -> dict:
     lane = load_lane(lane_id) or lane
     if lane.get("status") not in ("done", "blocked", "failed"):
         lane["status"] = "stopped"
+        lane["finished_at"] = time.time()                 # when it stopped (the lanes board's time, its archive)
     save_lane(lane)
     return lane
 
@@ -626,6 +635,7 @@ def resume_lane(lane_id: str, seat: str | None, seat_ids: list[str]) -> dict:
     refused = policy_refuses(lane)                      # the policy as it is now, not as it was at hire time
     if refused:
         raise ValueError(refused)
+    lane.pop("warm_from", None)                         # a resume starts from its notes, not a stuck conversation
     rep = lane_dir(lane_id) / "REPORT.md"                # stopped by the policy before, allowed now: that report goes
     if rep.exists() and (_first_line(rep) or "").startswith("STATUS: BLOCKED - the lane policy refused it"):
         rep.unlink()
@@ -698,11 +708,12 @@ def _log(lane_id: str, text: str) -> None:
         f.write(f"=== {time.strftime('%Y-%m-%dT%H:%M:%S%z')} {text}\n")
 
 
-def _log_tail(lane_id: str, n: int = 6) -> str:
+def _log_tail(lane_id: str, n: int = 6, since: int = 0) -> str:
+    """The log's last lines, from `since` (a byte offset: this run's own output, never an earlier run's limit line)."""
     try:
         with open(lane_dir(lane_id) / "lane.log", "rb") as f:
             f.seek(0, 2)
-            f.seek(max(0, f.tell() - 4096))
+            f.seek(max(since, f.tell() - 4096))
             return "\n".join(f.read().decode(errors="replace").splitlines()[-n:])
     except OSError:
         return ""
@@ -886,6 +897,7 @@ def run_lane(lane_id: str) -> int:
     fails = lane.get("fails", 0)
     while True:
         lane = load_lane(lane_id) or lane
+        run_from = 0                                       # where this run's own log output starts (set when it starts)
         if (d / "REPORT.md").exists() and (d / "REPORT.md").stat().st_size:
             status_line = _first_line(d / "REPORT.md") or ""
             from .sessions import report_blocked
@@ -928,7 +940,10 @@ def run_lane(lane_id: str) -> int:
                 save_lane(lane)
                 _log(lane_id, f"start on {seat_id} ({why})")
                 cmd, env = _command(lane, seat, prompt, d, cfg)
+                if lane.pop("warm_from", None):              # a warm hand-off is used once; a later start is fresh
+                    save_lane(lane)
                 log = open(d / "lane.log", "ab")
+                run_from = log.tell()                        # this run's own output starts here
                 try:
                     proc = subprocess.Popen(cmd, cwd=lane["workdir"], env=env, stdin=subprocess.DEVNULL,
                                             stdout=subprocess.PIPE if seat["kind"] == "codex" or lane.get("resume_session") else log,
@@ -939,6 +954,8 @@ def run_lane(lane_id: str) -> int:
                     if sid:
                         lane["runs"][-1]["session_id"] = sid
                         lane["last_session_id"] = sid
+                        if lane.get("fork"):                     # the fork is made: a retry carries on with it, not a new copy
+                            lane.update(resume_session=sid, fork=False)
                         save_lane(lane)
                 except OSError as e:
                     _log(lane_id, f"could not start: {e}")
@@ -986,7 +1003,7 @@ def run_lane(lane_id: str) -> int:
         lane["pid"] = None
         save_lane(lane)
         _log(lane_id, f"exit rc={rc} on {seat_id}")
-        tail = _log_tail(lane_id)
+        tail = _log_tail(lane_id, since=run_from)
         if (d / "REPORT.md").exists() and (d / "REPORT.md").stat().st_size:
             continue  # top of loop records done/blocked
         if LIMIT_RE.search(tail):

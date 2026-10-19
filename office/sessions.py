@@ -262,6 +262,11 @@ def _blank_quotes(cmd: str) -> str:
     out, i, n, last = [], 0, len(cmd), ""
     while i < n:
         c = cmd[i]
+        if c == "\\" and i + 1 < n:                       # outside quotes a backslash takes the next character with it
+            out.append(cmd[i:i + 2])
+            last = cmd[i + 1]
+            i += 2
+            continue
         if c not in "'\"":
             out.append(c)
             if not c.isspace():

@@ -61,7 +61,7 @@ export function makeBurn(ctx) {
     if (seen == null || top <= seen) return;
     if (alarms) alarms.milestone(rungWords(top));       // an alarm rings at any game level
     if (!full()) return;
-    const words = rungWords(top), gift = giftBox.grant(null, "milestone", "epic");
+    const words = rungWords(top), gift = giftBox.grant(null, "milestone", "epic", null, "milestone-" + top);   // one gift a rung, however many screens
     if (!gift) store.set("milestoneGift", top);          // the floor has no room (or a replay runs): it comes later
     sound.play("levelup");
     announce(`${words} tokens`, "A new plaque goes up on Your office", "#ffd24a",
@@ -72,7 +72,7 @@ export function makeBurn(ctx) {
   // A milestone gift that found no room is granted on a later pass.
   function owedGift() {
     const owed = store.get("milestoneGift", null);
-    const g = owed && full() && giftBox.grant(null, "milestone", "epic");
+    const g = owed && full() && giftBox.grant(null, "milestone", "epic", null, "milestone-" + owed);
     if (!g) return;
     store.set("milestoneGift", null);
     toast(`Your gift for ${rungWords(owed)} tokens is ${g.mail ? "in the mailroom" : "at your desk"}.`, "good", { ic: "gift" });

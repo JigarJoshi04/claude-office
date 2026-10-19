@@ -82,7 +82,7 @@ export function makeReplay(app, office, frame) {
     const span = hist.now - hist.from;
     const ticks = (hist.markers || []).filter(m => ["report", "levelup", "achievement", "limit", "login"].includes(m.kind)).map(m => {
       const k = m.kind === "report" ? (m.level === "good" ? "good" : "warn") : m.kind === "limit" || m.kind === "login" ? "bad" : "gold";
-      return `<i class="rp-tick ${k}" style="left:${(((m.ts - hist.from) / span) * 100).toFixed(2)}%" title="${esc(clock(m.ts) + " · " + app.humanise(m.text))}"></i>`;
+      return `<i class="rp-tick ${k}" style="left:${(((m.ts - hist.from) / span) * 100).toFixed(2)}%" title="${esc(clock(m.ts) + " · " + (app.privacy() ? `${m.kind} news` : app.humanise(m.text)))}"></i>`;
     }).join("");
     bar = document.createElement("div");
     bar.className = "replay"; bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Replay");

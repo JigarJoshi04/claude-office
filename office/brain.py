@@ -132,7 +132,7 @@ class Brain:
             try:
                 c = json.loads(self._path("cache", key + ".json").read_text())
                 if time.time() - c["at"] < CACHE_S:
-                    self._log({"ts": time.time(), "kind": kind, "seat": c.get("seat"), "tokens": 0, "usd": 0, "chars": len(prompt), "cached": True, "about": about[:80]})
+                    self._log({"ts": time.time(), "kind": kind, "seat": c.get("seat"), "tokens": 0, "usd": 0, "chars": len(prompt), "cached": True, "about": about})
                     return {"answer": c["answer"], "cached": True, "tokens": 0, "seat": c.get("seat")}
             except (OSError, ValueError, KeyError, TypeError):
                 pass
@@ -176,7 +176,7 @@ class Brain:
             u = d.get("usage") or {}
             tokens = sum(int(u.get(k) or 0) for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
             self._log({"ts": started, "kind": kind, "seat": seat["id"], "tokens": tokens, "usd": d.get("total_cost_usd") or 0,
-                       "chars": len(prompt), "cached": False, "about": about[:80], "ok": not d.get("is_error") and r.returncode == 0})
+                       "chars": len(prompt), "cached": False, "about": about, "ok": not d.get("is_error") and r.returncode == 0})
             answer = d.get("structured_output")
             if r.returncode != 0 or d.get("is_error") or not isinstance(answer, dict):
                 raise Unavailable("The analyst could not answer: " + redact(str(d.get("result") or r.stderr or "no answer"))[:200])

@@ -274,15 +274,19 @@ class HistoryStore:
         with self.lock:
             rows = self._points(snapshot)
         mine = [(r["ts"], r["seats"][seat_id]) for r in rows if seat_id in r["seats"]]
-        at = None
+        at, older = None, False
         for i in range(len(mine) - 1, -1, -1):                       # the start of its latest run out of plan
             x = mine[i][1]
             if len(x) > 5 and x[5] == 1:
                 at = mine[i][0]
+                older = i == 0                                     # out since before the day the history keeps
             elif at is not None:
                 break
         if at is None:
             return {"limit": None}
+        if older:
+            return public({"limit": {"at": at, "older": True, "window": "weekly" if (mine[0][1][1] or 0) >= 99 else "five_hour",
+                                     "sessions": [], "tokens": 0, "pace": [], "per_hour": None, "busiest": None}})
         before = [(ts, x) for ts, x in mine if ts <= at]
         last = before[-1][1] if before else None
         weekly = bool(last and (last[1] or 0) >= 99 and (last[0] or 0) < 99)
@@ -294,16 +298,16 @@ class HistoryStore:
                 start = seq[j][0]
                 break
         window = [r for r in rows if start <= r["ts"] <= at]
-        burned, names, first = {}, {}, {}
-        for r in window:
-            for sid, x in r["sessions"].items():
-                if x[0] != seat_id:
+        burned, names, last = {}, {}, {}
+        for r in window:                                       # what each session added minute by minute: a counter that
+            for sid, x in r["sessions"].items():               # drops (a transcript read again) or a resumed one's past
+                if x[0] != seat_id:                            # never counts, only its rises in this window
                     continue
                 names[sid] = (x[1] or "a session", x[2])
-                if sid not in first:                                   # a session already running counts from here
-                    seen = (r.get("first_seen") or {}).get(sid) or self.first_seen.get(sid) or r["ts"]
-                    first[sid] = 0 if seen >= start else (x[6] or 0)
-                burned[sid] = max(0, (x[6] or 0) - first[sid])
+                v = x[6] or 0
+                if sid in last:
+                    burned[sid] = burned.get(sid, 0) + max(0, v - last[sid])
+                last[sid] = v
         total = sum(burned.values())
         sessions = sorted(({"id": sid, "name": names[sid][0], "kind": names[sid][1], "tokens": v, "share": round(v / total * 100) if total else 0}
                            for sid, v in burned.items() if v), key=lambda e: -e["tokens"])[:6]
@@ -319,7 +323,7 @@ class HistoryStore:
                     hours[h] = hours.get(h, 0) + p1 - p0
             if hours:
                 h = max(hours, key=hours.get)
-                busiest = {"start": h, "pct": round(hours[h])}
+                busiest = {"start": h, "pct": round(hours[h])} if hours[h] >= 1 else None
         return public({"limit": {"at": at, "from": start, "window": "weekly" if weekly else "five_hour", "per_hour": per_hour, "busiest": busiest,
                                  "sessions": sessions, "tokens": total, "pace": pace[::step] + ([pace[-1]] if pace and step > 1 else [])}})
 
