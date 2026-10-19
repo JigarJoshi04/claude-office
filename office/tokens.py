@@ -32,7 +32,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 16               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 17               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -305,7 +305,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
-                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm", "tt", "su", "ae") if k in r}
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm", "tt", "su", "ae", "st") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
@@ -514,6 +514,8 @@ class TokenLedger:
             priced |= self._tool_time(raw, sid)
         if b'"isApiErrorMessage"' in raw:
             priced |= self._api_error(raw, sid)
+        if not self._helper_file and (b"[Request interrupted by user" in raw or b'"compact_boundary"' in raw or b'"refusal"' in raw):
+            priced |= self._steer(raw, sid)
         if b'"tool_use"' in raw and (b'"WebSearch"' in raw or b'"WebFetch"' in raw):
             priced |= self._web(raw, sid)
         if b'"tool_use"' in raw and b'"Bash"' in raw and (b"git" in raw or b"gh " in raw):
@@ -625,6 +627,33 @@ class TokenLedger:
             if gap > w[2]:
                 w[2], w[4] = round(gap), round(end)
             w[5 + next(i for i, e in enumerate(WAIT_EDGES) if gap <= e)] += 1
+        return True
+
+    def _steer(self, raw: bytes, sid: str) -> bool:
+        """The steering log: a turn you interrupted, a conversation compacted to free room, a reply the model refused.
+        Per day: [interruptions, compactions, refusals] (main conversations only)."""
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return False
+        if not isinstance(d, dict):
+            return False
+        i = None
+        if d.get("type") == "user" and b"[Request interrupted by user" in raw:
+            i = 0
+        elif d.get("subtype") == "compact_boundary":
+            i = 1
+        elif d.get("type") == "assistant" and (d.get("message") or {}).get("stop_reason") == "refusal":
+            mid = (d.get("message") or {}).get("id")
+            if mid and self._seen("refuse", sid, mid):              # one reply, several lines
+                return False
+            i = 2
+        if i is None:
+            return False
+        day, _ = _when(d.get("timestamp"))
+        with self.lock:
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+            s.setdefault("st", {}).setdefault(day or "?", [0, 0, 0])[i] += 1
         return True
 
     def _api_error(self, raw: bytes, sid: str) -> bool:
@@ -1215,6 +1244,13 @@ class TokenLedger:
             for d, v in (r.get("web") or {}).items():                    # counted from the calls (see _web)
                 if cur is None or d in cur:
                     where[2] += v[0]; where[3] += v[1]
+        steer: dict = {}                                                  # the steering log, per seat: [interruptions, compactions, refusals]
+        for r in mine.values():
+            for d, v in (r.get("st") or {}).items():
+                if cur is None or d in cur:
+                    e = steer.setdefault(seat_of(r), [0, 0, 0])
+                    for i in range(3):
+                        e[i] += v[i]
         api: dict = {}                                                    # the connection's weather: errors per day and kind
         for r in mine.values():
             for d, per in (r.get("ae") or {}).items():
@@ -1314,6 +1350,9 @@ class TokenLedger:
             "where": {"helpers": where[0], "main": max(0, tot[0] + tot[1] - where[0]), "thinking": where[1], "output": tot[2],
                       "searches": where[2], "fetches": where[3],
                       "rebuilds": rebuilt[0], "rebuild_tokens": rebuilt[1], "rebuild_usd": round(rebuilt[2] / 1e6, 2)},
+            "steering": {"interruptions": sum(v[0] for v in steer.values()), "compactions": sum(v[1] for v in steer.values()),
+                         "refusals": sum(v[2] for v in steer.values()),
+                         "seats": sorted(({"seat": k, "interruptions": v[0], "compactions": v[1], "refusals": v[2]} for k, v in steer.items()), key=lambda e: -sum((e["interruptions"], e["compactions"], e["refusals"])))},
             "api_errors": {"days": dict(sorted(api.items())), "by_kind": {k: sum(e.get(k, 0) for e in api.values()) for k in ("server", "connection", "login", "other")}},
             "startup": {"sessions": sum(len(v) for v in starts.values()), "tokens": sum(sum(v) for v in starts.values()),
                         "median": round(statistics.median([x for v in starts.values() for x in v])) if starts else None,

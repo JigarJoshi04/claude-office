@@ -279,6 +279,19 @@ function renderTokensInner(el, app) {
       <div class="tok-parts" style="margin:12px 0 0">${w.output ? `<span title="Thinking is part of the output: what the models reasoned before they wrote">${icon("sparkles", 13)}${tp}% of the output was thinking (${big(w.thinking)})</span>` : ""}
         ${w.searches || w.fetches ? `<span>${icon("search", 13)}${w.searches.toLocaleString()} web search${w.searches === 1 ? "" : "es"} · ${w.fetches.toLocaleString()} page fetch${w.fetches === 1 ? "" : "es"}</span>` : ""}</div></div>`;
   }
+  // The steering log: turns you interrupted, conversations compacted, replies refused.
+  function steerCard() {
+    const st = t.steering;
+    if (!st || !(st.interruptions + st.compactions + st.refusals)) return "";
+    const rows = !seat && st.seats.length > 1 ? st.seats.filter(e => e.seat).map(e => { const sx = seatOf(e.seat);
+      return `<tr style="--seat:${esc(sx ? sx.color : "#82889f")}"><td><span class="who">${sx ? `<i data-portrait="mascot-${esc(e.seat)}|${esc(sx.color)}|"></i>` : ""}${esc(who(e.seat))}</span></td>
+        <td class="num">${e.interruptions}</td><td class="num">${e.compactions}</td><td class="num">${e.refusals}</td></tr>`; }).join("") : "";
+    return `<div class="view-card"><h5>Steering · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+      <div class="tok-parts" style="margin-top:0"><span>${icon("stop", 13)}${st.interruptions} turn${st.interruptions === 1 ? "" : "s"} you interrupted</span>
+        <span>${icon("layers", 13)}${st.compactions} compaction${st.compactions === 1 ? "" : "s"}</span><span>${icon("x", 13)}${st.refusals} refused repl${st.refusals === 1 ? "y" : "ies"}</span></div>
+      ${rows ? `<div class="table-scroll"><table class="league ship"><thead><tr><th>Character</th><th class="num">Interrupted</th><th class="num">Compacted</th><th class="num">Refused</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+      <p class="hint">An interruption is you stopping a turn (Esc), often to steer it; a compaction is a conversation summarised to make room, where detail can be lost; a refusal is a reply the model declined. From the main conversations' transcripts.</p></div>`;
+  }
   // The connection: the API errors sessions met (not usage limits), per kind and per day.
   function apiCard() {
     const a = t.api_errors;
@@ -368,6 +381,7 @@ function renderTokensInner(el, app) {
     ${cacheCard()}
     ${startCard()}
     ${apiCard()}
+    ${steerCard()}
     ${timeCard()}
     ${waitCard(t, { label: RANGES.find(r => r[0] === rng)[1].toLowerCase(), who, priv })}
     ${shipCard()}

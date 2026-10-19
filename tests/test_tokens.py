@@ -108,6 +108,18 @@ class TokenLedgerTests(unittest.TestCase):
         v = self.ledger.view(self.seats, today=day, rng="7")
         self.assertEqual(v["api_errors"]["by_kind"], {"server": 2, "connection": 1, "login": 1, "other": 0})
 
+    def test_the_steering_log(self):
+        u = lambda ts, text: json.dumps({"type": "user", "timestamp": ts, "message": {"role": "user", "content": [{"type": "text", "text": text}]}}) + "\n"
+        refuse = json.dumps({"type": "assistant", "timestamp": "2026-10-18T10:05:00Z", "message": {"id": "r1", "stop_reason": "refusal", "content": []}}) + "\n"
+        (self.proj / "s-main.jsonl").write_text(line("m1", "2026-10-18T10:00:00Z") + u("2026-10-18T10:01:00Z", "[Request interrupted by user]")
+                                                + u("2026-10-18T10:02:00Z", "[Request interrupted by user for tool use]")
+                                                + json.dumps({"type": "system", "subtype": "compact_boundary", "timestamp": "2026-10-18T10:03:00Z"}) + "\n"
+                                                + refuse + refuse)
+        self.ledger.scan()
+        st = self.ledger.view(self.seats, today="2026-10-18")["steering"]
+        self.assertEqual((st["interruptions"], st["compactions"], st["refusals"]), (2, 1, 1))   # one refusal, however many lines
+        self.assertEqual(st["seats"][0]["seat"], "claude")
+
     def test_counts_dedupes_attributes_and_resumes(self):
         (self.proj / "s-main.jsonl").write_text(line("m1", "2026-10-17T10:00:00Z") + line("m1", "2026-10-17T10:00:00Z")
                                                 + '{"type":"user","message":{"content":"hi"}}\n' + line("m2", "2026-10-18T10:00:00Z"))

@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.160.0] - 2026-10-19
+
+### Added
+- The steering log, on the tokens page: the turns you interrupted (Esc), the conversations compacted to make room
+  and the replies the model refused, for the range and per character. The ledger reads its transcripts once more.
+
 ## [3.159.0] - 2026-10-19
 
 ### Added
