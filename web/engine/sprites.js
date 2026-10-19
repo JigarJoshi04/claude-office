@@ -502,6 +502,24 @@ export function drawBookshelf(ctx, x, y, w) {
   }
 }
 
+// The moon's phase at a time (ms): 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter (a mean synodic month from
+// the new moon of 6 Jan 2000, close enough for a window).
+export function moonPhase(ms) {
+  const p = ((ms - Date.UTC(2000, 0, 6, 18, 14)) / 86400000 / 29.530588853) % 1;
+  return p < 0 ? p + 1 : p;
+}
+// A 5-pixel moon lit as it is tonight: the shadow comes in from the left as it waxes and from the right as it wanes.
+export function drawMoon(ctx, x, y, phase, skyColor) {
+  const lit = (1 - Math.cos(phase * 2 * Math.PI)) / 2, dark = Math.round((1 - lit) * 5), waxing = phase < 0.5;
+  if (lit < 0.04) { rect(ctx, x + 1, y, 3, 1, "#3a3f55"); rect(ctx, x, y + 1, 5, 3, "#3a3f55"); rect(ctx, x + 1, y + 4, 3, 1, "#3a3f55"); return; }   // a new moon: just its outline
+  const rows = [[1, 3], [0, 5], [0, 5], [0, 5], [1, 3]];
+  rows.forEach(([from, n], i) => rect(ctx, x + from, y + i, n, 1, "#f4f1d0"));
+  if (dark) for (let i = 0; i < 5; i++) {
+    const [from, n] = rows[i], cut = Math.min(n, Math.max(0, dark - from));
+    if (cut) rect(ctx, waxing ? x + from : x + from + n - cut, y + i, cut, 1, skyColor);
+  }
+}
+
 // weather: "clear", "cloudy" (a seat's plan is running low) or "rain" (it is out of plan): each room's own mood sky.
 export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear", extras = null) {
   rect(ctx, x - 2, y - 2, w + 4, h + 4, P.trim);
@@ -531,7 +549,7 @@ export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear", ex
       const sx = x + (hashOf("s" + i + x) % w), sy = y + (hashOf("y" + i + x) % Math.max(1, h - 8));
       if ((Math.floor(t / 900) + i) % 5) rect(ctx, sx, sy, 1, 1, "#fff8d0");
     }
-    if (weather === "clear") { rect(ctx, x + w - 9, y + 3, 4, 4, "#f4f1d0"); rect(ctx, x + w - 8, y + 3, 3, 3, sky[0]); }   // moon
+    if (weather === "clear") drawMoon(ctx, x + w - 10, y + 2, moonPhase(Date.now()), sky[0]);   // tonight's real moon
     for (let i = 0; i < w; i += 5) {
       const bh = 5 + (hashOf("b" + (x + i)) % 10);
       rect(ctx, x + i, y + h - bh, 5, bh, "#121625");

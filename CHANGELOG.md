@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.157.0] - 2026-10-19
+
+### Added
+- Wear and tear: a long session leaves its desk messier, with crumpled paper after two hours, a cold cup after four
+  and a takeaway box after eight.
+- The moon in the night windows is tonight's real one, waxing, full or waning, from the date.
+
 ## [3.156.0] - 2026-10-19
 
 ### Added

@@ -1038,6 +1038,12 @@ export function createOffice(stage, handlers) {
     }
     const tk = a.sess.tasks, sy = top ? pod.y + 33 : pod.y + 63;
     if (tk && tk.total) { S.rect(ctx, x - 1, sy, 12, 2, "#5b6378"); S.rect(ctx, x - 1, sy, Math.round(12 * tk.done / tk.total), 2, tk.done === tk.total ? "#ffd24a" : "#3ddc84"); }
+    // Wear and tear: a long session leaves its desk messier, crumpled paper after two hours, a cold cup after four,
+    // a takeaway box after eight.
+    const hrs = a.sess.started_at ? (Date.now() / 1000 - a.sess.started_at) / 3600 : 0, wy = top ? pod.y + 46 : pod.y + 61;
+    if (hrs >= 2) { S.rect(ctx, x - 6, wy - 1, 2, 2, "#e6e8ee"); S.rect(ctx, x - 5, wy - 1, 1, 1, "#aab0be"); }
+    if (hrs >= 4) { S.rect(ctx, x - 9, wy, 2, 2, "#dfe2ea"); S.rect(ctx, x - 13, wy - 3, 3, 4, "#d9d4c4"); S.rect(ctx, x - 13, wy - 3, 3, 1, "#6b4a2e"); }
+    if (hrs >= 8) { S.rect(ctx, x - 20, wy - 2, 6, 3, "#f4f1e8"); S.rect(ctx, x - 20, wy - 2, 6, 1, "#d64545"); S.rect(ctx, x - 18, wy - 3, 2, 1, "#b8b2a2"); }
     const c = a.sess.cache;
     if (c && c.window && c.context) {
       const fill = Math.min(1, c.context / c.window), sheets = Math.max(1, Math.round(fill * 7)), px = x + 16, py = top ? pod.y + 46 : pod.y + 61;

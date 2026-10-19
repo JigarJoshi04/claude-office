@@ -695,3 +695,12 @@ test("chapters: six weeks each from the epoch, 30 tiers that cost a little more 
   assert.equal(rewardFor(7).min, null);
   assert.match(rewardFor(30).label, /trophy/);
 });
+
+test("the moon in the windows follows the real phase", async () => {
+  const { moonPhase } = await import("../../web/engine/sprites.js");
+  const at = (d) => moonPhase(Date.parse(d + "T12:00:00Z"));
+  assert.ok(at("2026-10-10") > 0.95 || at("2026-10-10") < 0.05);      // a new moon
+  assert.ok(Math.abs(at("2026-10-26") - 0.5) < 0.04);                    // a full moon
+  assert.ok(at("2026-10-18") > 0.2 && at("2026-10-18") < 0.3);          // first quarter, waxing
+  assert.ok(moonPhase(0) >= 0 && moonPhase(0) < 1);
+});
