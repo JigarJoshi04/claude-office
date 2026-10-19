@@ -98,6 +98,8 @@ const app = {
   dismissAway: () => { away = null; renderPanel(true); $("panel").focus({ preventScroll: true }); },
   broadcast: (preset, group, value) => broadcast(preset, group, value),
   locked: () => locked,
+  newsReadAt: () => newsReadTs,
+  markNewsRead: () => markNewsRead(),
   snap: () => snap,
   prefs: () => prefs,
   privacy: () => prefs.privacy,
@@ -611,7 +613,7 @@ function go(v, fromHash, opt = {}) {
   if (!fromHash && hashFor(v) !== (location.hash || "#")) history.pushState(null, "", hashFor(v) === "#" ? location.pathname + location.search : hashFor(v));
   view = v;
   if (v.kind === "seat" && !fromHash && snap && !replay.active()) greet(v.seat);
-  if (v.kind === "session") { loadDetail("s:" + v.seat + "/" + v.id, true); loadChat(v.seat, v.id, true); }
+  if (v.kind === "session") { loadDetail("s:" + v.seat + "/" + v.id, true); loadChat(v.seat, v.id, true); markTalkSeen(v.seat, v.id); }
   if (v.kind === "lane") loadDetail("l:" + v.id, true);
   if (v.kind === "seat") loadDetail("p:" + v.seat, true);
   office.setSelected(v.kind === "seat" ? { seat: v.seat } : v.kind === "session" ? { seat: v.seat, session: v.id } : null);
@@ -699,6 +701,7 @@ function apply(next) {
   const first = !snap;
   prevLive = snap ? snap.seats.reduce((n, s) => n + live(s).length, 0) : null;   // who was in before this refresh (First one in)
   snap = next; setNow(snap.now);
+  if (!newsReadTs) { newsReadTs = snap.now; store.set("newsReadTs", newsReadTs); }
   if (DEMO && QS.has("faults")) snap.office.faults = [{ part: "The token ledger", what: "PermissionError: [Errno 13] Permission denied: 'tokens.json'", count: 37, since: snap.now - 1500, last: snap.now - 4 }];   // the demo's ?faults=1
   apiWeather(snap.api_weather);
   chapterTick();
@@ -1081,13 +1084,26 @@ function renderLatest() {
   if (sig !== latestSig) { latestSig = sig; latestIdx = 0; }
   paintLatest();
 }
+// Unread markers (this browser's own): the news since the last look at it, and sessions that said something new
+// since you last opened them (a dot on their dock card).
+let newsReadTs = store.get("newsReadTs", 0);
+const seenTalk = (() => { const m = store.get("seenTalk", {}) || {}, week = Date.now() / 1000 - 7 * 86400; return Object.fromEntries(Object.entries(m).filter(([, v]) => Array.isArray(v) && v[1] > week)); })();
+const textHash = (t) => { let h = 0; for (let i = 0; i < (t || "").length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; };
+const unreadNews = () => (snap && snap.events || []).filter(e => e.ts > newsReadTs).length;
+const saidNew = (s, x) => { const k = s.id + "/" + x.id, v = seenTalk[k]; return !!(v && x.last_text && textHash(x.last_text) !== v[0]); };
+function markNewsRead() { if (!snap) return; newsReadTs = snap.now; store.set("newsReadTs", newsReadTs); paintLatest(); }
+function markTalkSeen(seat, id) {
+  const s = snap && snap.seats.find(z => z.id === seat), x = s && live(s).find(z => z.id === id);
+  if (!x) return;
+  seenTalk[seat + "/" + id] = [textHash(x.last_text), snap.now]; store.set("seenTalk", seenTalk); rnSig = ""; renderRightNow();
+}
 function paintLatest() {
   const el = $("latest");
   const ev = (snap && snap.events || []).slice(-5).reverse();
   if (!ev.length) { el.innerHTML = `${icon("coffee", 18)}<span class="txt">Quiet in the office. News shows up here as agents arrive, finish and file reports.</span>`; return; }
   const e = ev[latestIdx % ev.length];
   const ic = { levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert", lane: "briefcase", reply: "chat", message: "send" }[e.kind] || "news";
-  el.innerHTML = `${icon(ic, 18, { good: "good", warn: "warn", bad: "bad" }[e.level] || "")}<span class="txt" title="${esc(panels.humanise(e.text))}">${esc(panels.humanise(e.text))}</span><span class="when">${relTime(e.ts)}</span><button class="btn sm ghost" data-go-news>All news</button><button class="btn sm ghost" data-replay title="Replay the last 6 hours on the floor (R)">${icon("rewind", 15)}Replay</button>`;
+  el.innerHTML = `${icon(ic, 18, { good: "good", warn: "warn", bad: "bad" }[e.level] || "")}<span class="txt" title="${esc(panels.humanise(e.text))}">${esc(panels.humanise(e.text))}</span><span class="when">${relTime(e.ts)}</span><button class="btn sm ghost" data-go-news>All news${(() => { const n = unreadNews(); return n ? `<span class="count" aria-label="${n} new">${n >= 60 ? "60+" : n}</span>` : ""; })()}</button><button class="btn sm ghost" data-replay title="Replay the last 6 hours on the floor (R)">${icon("rewind", 15)}Replay</button>`;
   el.querySelector("[data-go-news]").addEventListener("click", () => go({ kind: "news" }));
   el.querySelector("[data-replay]").addEventListener("click", () => { setView("floor"); replay.open(6); });
 }
@@ -1113,7 +1129,7 @@ function renderRightNow() {
   const rows = snap.seats.flatMap(s => live(s).filter(x => x.state in order).map(x => ({ s, x })))
     .sort((a, b) => order[a.x.state] - order[b.x.state] || (b.x.updated_at || 0) - (a.x.updated_at || 0)).slice(0, 12);
   const w = rows.filter(r => r.x.state === "working" || r.x.state === "waiting").length, o = rows.length - w;
-  const sig = JSON.stringify([prefs.privacy, rows.map(r => [r.x.id, r.x.state, r.x.activity, r.x.name, r.x.phase, r.x.tasks && r.x.tasks.done + "/" + r.x.tasks.total, Math.floor((snap.now - (r.x.started_at || snap.now)) / 60)])]);
+  const sig = JSON.stringify([prefs.privacy, rows.map(r => [saidNew(r.s, r.x), r.x.id, r.x.state, r.x.activity, r.x.name, r.x.phase, r.x.tasks && r.x.tasks.done + "/" + r.x.tasks.total, Math.floor((snap.now - (r.x.started_at || snap.now)) / 60)])]);
   if (sig === rnSig) return;
   rnSig = sig;
   $("rnCount").textContent = rows.length ? `${w} at work${o ? `, ${o} stopped` : ""}` : "";
@@ -1131,7 +1147,7 @@ function renderRightNow() {
     const age = mins == null ? "" : mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, "0")}`;
     return `<button class="rn st-${x.state}" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" data-spot="${esc(s.id)}" style="--seat:${s.color}" title="${esc(x.name)}: ${esc(act)}">
       <span class="av"><i data-portrait="${esc(x.id)}|${esc(s.color)}|${x.kind === "desk" ? "headset" : ""}"></i></span>
-      <span class="rn-body"><span class="rn-top"><i class="sdot ${x.state}" title="${STATE[x.state]}"></i><b>${esc(x.name.replace(/^wt-/, ""))}</b>${x.state === "working" ? "" : `<span class="rn-state">${STATE[x.state]}</span>`}</span>
+      <span class="rn-body"><span class="rn-top"><i class="sdot ${x.state}" title="${STATE[x.state]}"></i><b>${esc(x.name.replace(/^wt-/, ""))}</b>${saidNew(s, x) ? `<i class="rn-new" title="Said something new since you last looked"></i>` : ""}${x.state === "working" ? "" : `<span class="rn-state">${STATE[x.state]}</span>`}</span>
       <span class="rn-act">${esc(act)}</span><span class="rn-meta"><span class="rn-who">${esc(p.name)}</span> · ${x.kind === "lane" ? "lane" : "terminal"}${age ? " · " + age : ""}${x.phase ? ` · <span class="ph ph-${x.phase.replace(" ", "-")}">${x.phase}</span>` : x.tasks ? ` · ${x.tasks.done}/${x.tasks.total} tasks` : ""}</span></span></button>`;
   }).join("");
   hydratePortraits(el, 3);
@@ -1640,6 +1656,7 @@ function paletteItems() {
     { icon: icon("star", 16), label: "Last month, wrapped", keywords: "month wrapped review recap story year", run: () => wrapped.play() },
     { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
+    { icon: icon("check", 16), label: "Mark all news read", keywords: "unread new news clear seen", run: () => { markNewsRead(); for (const s of snap.seats) for (const x of live(s)) seenTalk[s.id + "/" + x.id] = [textHash(x.last_text), snap.now]; store.set("seenTalk", seenTalk); rnSig = ""; renderRightNow(); toast("All caught up.", "good", { ic: "check" }); } },
     { icon: icon("lock", 16), label: "Lock this screen: share-safe and read-only", keywords: "lock presenter screen share present meeting tv kiosk read only", run: () => setLocked(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },
     { icon: icon("rewind", 16), label: "Replay the last 24 hours", keywords: "history playback rewind day yesterday", run: () => { setView("floor"); replay.open(24); } },

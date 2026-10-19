@@ -1245,9 +1245,13 @@ export function makePanels(app) {
       const d = new Date(e.ts * 1000).toDateString();
       return d === today ? "Earlier today" : d === y.toDateString() ? "Yesterday" : new Date(e.ts * 1000).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" });
     };
-    let last = null, html = "";
-    for (const e of ev) { const l = label(e); if (l !== last) { html += `<div class="news-h">${esc(l)}</div>`; last = l; } html += actRow(e); }
-    return html;
+    let last = null, html = "", marked = false;
+    const readAt = app.newsReadAt ? app.newsReadAt() : 0, fresh = ev.filter(e => e.ts > readAt).length;
+    for (const e of ev) {
+      if (fresh && !marked && e.ts <= readAt) { html += `<div class="news-new">${icon("check", 13)}You saw the news up to here, ${esc(clock(readAt))}</div>`; marked = true; last = null; }
+      const l = label(e); if (l !== last) { html += `<div class="news-h">${esc(l)}</div>`; last = l; } html += actRow(e);
+    }
+    return (fresh ? `<p class="news-count"><b>${fresh >= 60 ? "60+" : fresh} new</b> since you last looked</p>` : "") + html;
   }
   function news() {
     const ev = (S().events || []).slice().reverse().filter(e => newsFilter === "all" || e.level === newsFilter);
@@ -1256,7 +1260,8 @@ export function makePanels(app) {
       <div style="margin-top:12px">${ev.length ? newsGroups(ev) : newsFilter !== "all"
         ? emptyState("news", "Nothing under this filter", "", `<button class="btn sm" data-news="all">Show all the news</button>`)
         : emptyState("news", "No news yet", "Arrivals, reports, limits, resets and what you change show up here as they happen.")}</div>`,
-      bind(root) { root.querySelectorAll("[data-news]").forEach(b => b.addEventListener("click", () => { newsFilter = b.dataset.news; app.rerender(true); })); } };
+      bind(root) { root.querySelectorAll("[data-news]").forEach(b => b.addEventListener("click", () => { newsFilter = b.dataset.news; app.rerender(true); }));
+        if (app.markNewsRead) setTimeout(() => app.markNewsRead(), 1500); } };   // read once it has been on screen a moment
   }
 
   // -------------------------------------------------------------------------------------------- lane

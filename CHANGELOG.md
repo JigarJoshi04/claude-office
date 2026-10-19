@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.177.0] - 2026-10-19
+
+### Added
+- Unread markers: All news carries a count of the news since you last looked; the News page says how many are new
+  and marks where you left off (it counts as read after a moment on screen). A session that has said something new
+  since you last opened it gets a dot on its card in Right now. "Mark all news read" in the palette clears both.
+  This browser's own, never synced.
+
 ## [3.176.0] - 2026-10-19
 
 ### Added
