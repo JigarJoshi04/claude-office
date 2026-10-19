@@ -677,6 +677,22 @@ export function makePanels(app) {
     if (left > 0) return `<span class="pill cache warm ${left < 60 ? "soon" : ""}" data-cache-until="${c.until}" title="The prompt cache holds this session's ${ctx}-token context until ${esc(clock(c.until))}. A reply before then reads it back cheaply; after, the context is written to the cache again (${extra}). Its mug steams on the floor while it is warm.">${icon("coffee", 13)}Cache warm <b>${mmss(left)}</b></span>`;
     return `<span class="pill cache cold" title="The prompt cache cooled at ${esc(clock(c.until))}. The next reply writes the ${ctx}-token context to the cache again (${extra} than while it was warm).">${icon("coffee", 13)}Cache cooled · ${ctx}</span>`;
   }
+  // A fresh-start handoff: a brief for a new lane from a terminal session's title, task, folder, notes and last words,
+  // so the work carries on without resuming a long (or stuck, or out-of-plan) conversation. Nothing starts until Hire.
+  function handoffBrief(s, x) {
+    const d = app.detailFor("s:" + s.id + "/" + x.id) || {};
+    const notes = (d.state_tail || "").trim(), last = (x.last_text || "").trim();
+    return {
+      title: ("Carry on: " + (x.title || x.name || "the session")).slice(0, 80),
+      brief: [`Carry on the work of the terminal session "${x.name}" on ${nameOf(s.id)}, which ${x.state === "limited" ? "ran out of plan" : x.state === "stuck" ? "got stuck" : "has a long conversation behind it"}. Start fresh from what follows; do not resume that conversation.`,
+        x.task || x.title ? `\nGoal: ${x.task || x.title}` : "",
+        `Where: ${x.cwd}`,
+        notes ? `\nIts latest notes (STATE.md):\n${notes.slice(-2500)}` : "",
+        last ? `\nIts last message:\n${last.slice(-1200)}` : "",
+        "\nFirst, read the folder's state (git status, the notes) to see where it stopped. Done when: the original goal is met, checked, and you report what you finished and what is left."].filter(Boolean).join("\n"),
+      workdir: x.cwd, seat: "auto",
+    };
+  }
   // Open in…: the folder, the editor, a terminal there (opener.py on the office's side; never in the demo).
   function openIn(target, terminalLabel = null) {
     const t = esc(JSON.stringify(target));
@@ -929,7 +945,7 @@ export function makePanels(app) {
         ${x.state_file ? `<dt>Notes file</dt><dd><code>${esc(x.state_file)}</code></dd>` : ""}</dl>`)}
       ${x.cwd && x.live !== false ? `<div class="row wrap open-in">${openIn({ seat: s.id, id: x.id })}</div>` : ""}
       ${x.resume_cmd ? section("Pick it up in a terminal", `<div class="copy"><code>${esc(x.resume_cmd)}</code><button class="btn sm" data-copy="${esc(x.resume_cmd)}">${icon("copy", 14)}Copy</button></div>`) : ""}
-      <div class="row wrap" style="margin-top:18px"><button class="btn sm" data-focus-session="${esc(x.id)}">${icon("target", 15)}Show on the floor</button>${lane ? `<button class="btn sm" data-lane="${esc(lane.id)}">${icon("briefcase", 15)}Open office lane</button>` : ""}</div>`;
+      <div class="row wrap" style="margin-top:18px"><button class="btn sm" data-focus-session="${esc(x.id)}">${icon("target", 15)}Show on the floor</button>${lane ? `<button class="btn sm" data-lane="${esc(lane.id)}">${icon("briefcase", 15)}Open office lane</button>` : ""}${x.cwd && x.kind === "desk" ? `<button class="btn sm" data-handoff="${esc(s.id)}|${esc(x.id)}" title="A brief from what it was doing and its notes, so a fresh lane carries on without the long conversation">${icon("reply", 15)}Hand to a fresh lane</button>` : ""}</div>`;
   }
 
   // ---------------------------------------------------------------------------------- rooms & news
@@ -2078,6 +2094,8 @@ export function makePanels(app) {
   return { office, setDuty, needText, hireFor: (id) => { hireDraft = { ...hireDraft, seat: id }; store.set("hireDraft", hireDraft); },
     needsCount: () => needs(S()).length,
     draftHire: (d) => { hireDraft = { ...hireDraft, ...d }; store.set("hireDraft", hireDraft); },
+    handoffBrief: (seatId, id) => { const s = seatById(seatId), x = s && s.sessions.find(z => z.id === id); return x ? handoffBrief(s, x) : null; },
+    hasDraft: () => !!((hireDraft.title || "").trim() || (hireDraft.brief || "").trim()),
     needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml,
     bakeoff,
     help: (v) => ({ html: helpHtml({ crumbs, topic: v.topic, query: v.topic && v !== helpTopic ? (helpTopic = v, helpQuery = "") : helpQuery }),   // a topic link (a new visit) starts with no search

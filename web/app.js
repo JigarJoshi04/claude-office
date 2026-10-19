@@ -1536,6 +1536,13 @@ function bindCommon(p) {
   });
   p.querySelectorAll("[data-focus-seat]").forEach(b => b.addEventListener("click", () => { setView("floor"); office.focusSeat(b.dataset.focusSeat); }));
   p.querySelectorAll("[data-focus-session]").forEach(b => b.addEventListener("click", () => { setView("floor"); office.focusSession(b.dataset.focusSession); }));
+  p.querySelectorAll("[data-handoff]").forEach(b => b.addEventListener("click", () => {   // a fresh lane carries a terminal session on
+    const [seat, id] = b.dataset.handoff.split("|"), d = panels.handoffBrief(seat, id);
+    if (!d) { toast("That session has gone.", "info"); return; }
+    if (panels.hasDraft() && !confirm("Replace the brief on the hiring desk with this handoff?")) return;
+    panels.draftHire(d); go({ kind: "hire" });
+    toast("The handoff brief is on the hiring desk: read it, then hire.", "good", { ic: "reply" });
+  }));
 }
 
 // ------------------------------------------------------------------------------------------------ actions

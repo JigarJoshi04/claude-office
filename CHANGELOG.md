@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.182.0] - 2026-10-19
+
+### Added
+- Hand to a fresh lane: a terminal session's Overview has a button that writes a handoff brief from what it was
+  doing (its title and task), its folder, its latest notes and its last message, and puts it on the hiring desk, so
+  a new lane carries the work on without resuming a long, stuck or out-of-plan conversation. Nothing starts until
+  you hire.
+
 ## [3.181.0] - 2026-10-19
 
 ### Added

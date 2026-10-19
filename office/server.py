@@ -194,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
     port = config.DEFAULT_PORT
     demo = False
     same_user = True       # only this Unix user (peer.py); config "same_user_only": false turns it off
-    server_version = "ClaudeOffice/3.181.0"
+    server_version = "ClaudeOffice/3.182.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
