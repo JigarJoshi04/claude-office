@@ -45,6 +45,26 @@ class TokenLedgerTests(unittest.TestCase):
         self.ledger = TokenLedger(root / "state" / "tokens.json", [("claude", self.a), ("claude2", self.b)], root / ".codex" / "sessions")
         self.seats = [{"id": "claude", "kind": "claude"}, {"id": "claude2", "kind": "claude"}, {"id": "astra", "kind": "codex"}]
 
+    def test_cold_cache_rebuilds_after_the_cache_expired(self):
+        one_hour = lambda mid, ts, cw: json.dumps({"type": "assistant", "timestamp": ts, "cwd": "/work/api", "sessionId": "x",
+            "message": {"id": mid, "model": "claude-opus-5-5", "usage": {"input_tokens": 5, "output_tokens": 5, "cache_creation_input_tokens": cw,
+                        "cache_read_input_tokens": 0, "cache_creation": {"ephemeral_1h_input_tokens": cw}}}}) + "\n"
+        (self.proj / "s-main.jsonl").write_text(
+            line("r1", "2026-10-18T10:00:00Z", cw=80_000)            # the first write: nothing to rebuild
+            + line("r2", "2026-10-18T10:02:00Z", cw=60_000)          # 2 minutes on: still warm
+            + line("r3", "2026-10-18T10:30:00Z", cw=90_000)          # 28 minutes on a 5-minute cache: a rebuild
+            + line("r4", "2026-10-18T10:45:00Z", cw=5_000)           # small: not counted
+            + one_hour("r5", "2026-10-18T11:20:00Z", 70_000)        # 35 minutes on a 1-hour cache: still warm
+            + one_hour("r6", "2026-10-18T13:00:00Z", 70_000))       # 100 minutes on: a rebuild
+        sub = self.proj / "s-main" / "subagents"
+        sub.mkdir(parents=True)
+        (sub / "agent-1.jsonl").write_text(line("h1", "2026-10-18T12:50:00Z", cw=90_000))   # a helper's write is not the main conversation's
+        self.ledger.scan()
+        v = self.ledger.view(self.seats, today="2026-10-18")
+        self.assertEqual((v["where"]["rebuilds"], v["where"]["rebuild_tokens"]), (2, 160_000))
+        self.assertGreater(v["where"]["rebuild_usd"], 0)
+        self.assertEqual({s["seat"]: s["rebuilds"] for s in v["seats"]}.get("claude"), 2)
+
     def test_counts_dedupes_attributes_and_resumes(self):
         (self.proj / "s-main.jsonl").write_text(line("m1", "2026-10-17T10:00:00Z") + line("m1", "2026-10-17T10:00:00Z")
                                                 + '{"type":"user","message":{"content":"hi"}}\n' + line("m2", "2026-10-18T10:00:00Z"))

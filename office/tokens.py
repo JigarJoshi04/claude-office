@@ -30,7 +30,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 12               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 13               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -58,6 +58,9 @@ _MERGE_YES = re.compile(r"\bmerged pull request\b|\"state\":\s*\"merged\"|^merge
 _MERGE_ERR = re.compile(r"graphql|is expected|could not|^x |^! |^error|^fatal", re.M)
 _COMMIT_LINE = re.compile(r"^\[[^\]\n]+ [0-9a-f]{7,40}\]", re.M)
 _COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|aborting commit")   # not "error:": later commands print those
+
+
+REBUILD_MIN = 20_000           # a cache write this big after the cache expired counts as a cold rebuild
 
 
 def _redact(text: str) -> str:
@@ -272,7 +275,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
-                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl") if k in r}
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
@@ -589,6 +592,28 @@ class TokenLedger:
             w[5 + next(i for i, e in enumerate(WAIT_EDGES) if gap <= e)] += 1
         return True
 
+    def _rebuild(self, sid: str, model: str, u: dict, ts) -> None:
+        """A cold-cache rebuild: a response that wrote a large prompt back into the cache after the conversation sat
+        longer than the cache lives (5 minutes, or an hour for 1-hour writes), so what a warm cache would have read
+        cheaply was written again. Per day: [rebuilds, tokens written, extra list price in micro-dollars]."""
+        at = _epoch(ts)
+        if not at:
+            return
+        n = lambda k, d=u: int((d or {}).get(k) or 0)
+        cw, split = n("cache_creation_input_tokens"), u.get("cache_creation") if isinstance(u.get("cache_creation"), dict) else {}
+        ttl = 3600 if n("ephemeral_1h_input_tokens", split) * 2 > cw else 300
+        with self.lock:
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+            prev = s.get("lm")
+            s["lm"] = max(prev or 0, at)
+            if not prev or at - prev <= ttl or cw < REBUILD_MIN:
+                return
+            extra = max(0, (prices.response_cost(model, {"cache_creation_input_tokens": cw, "cache_creation": split}) or 0)
+                        - (prices.response_cost(model, {"cache_read_input_tokens": cw}) or 0))
+            day, _ = _when(ts)
+            r = s.setdefault("rb", {}).setdefault(day or "?", [0, 0, 0])
+            r[0] += 1; r[1] += cw; r[2] += extra
+
     def _cost(self, raw: bytes, sid: str) -> bool:
         try:
             d = json.loads(raw)
@@ -611,6 +636,8 @@ class TokenLedger:
                 self._xusd = None
                 return False
             self._xusd = usd
+            if not self._helper_file:
+                self._rebuild(sid, model, u, d.get("timestamp"))
         if not usd:
             return False
         day, _ = _when(d.get("timestamp"))
@@ -1040,6 +1067,15 @@ class TokenLedger:
                 months[d[:7]][3] += v
         tot_usd = sum(v for d, v in usd_series.items() if cur is None or d in cur)
         where = [0, 0, 0, 0]                                              # helpers' tokens, thinking, web searches, page fetches
+        rebuilt, rebuilt_by = [0, 0, 0], {}                               # cold-cache rebuilds: count, tokens, extra micro-dollars
+        for r in sessions.values():
+            for d, v in (r.get("rb") or {}).items():
+                if cur is None or d in cur:
+                    x = rebuilt_by.setdefault(seat_of(r), [0, 0, 0])
+                    for i in range(3):
+                        x[i] += v[i]
+                        if seat is None or seat_of(r) == seat:
+                            rebuilt[i] += v[i]
         for r in mine.values():
             for d, v in (r.get("x") or {}).items():
                 if cur is None or d in cur:
@@ -1061,7 +1097,8 @@ class TokenLedger:
         board = sorted(({"seat": k, **{x: v[x] for x in ("all", "fresh", "output", "sessions", "today")}, "usd": round(v["usd"], 2),
                          "today_by": by(v["today_by"], v["today_usd"]),
                          "top_model": max(v["m"], key=v["m"].get) if v["m"] else None,
-                         **dict(zip(SHIP, shipped_by.get(k, [0] * len(SHIP))))} for k, v in per_seat.items()), key=lambda x: -x["all"])
+                         **dict(zip(SHIP, shipped_by.get(k, [0] * len(SHIP)))),
+                         **dict(zip(("rebuilds", "rebuild_tokens"), rebuilt_by.get(k, [0, 0])[:2]))} for k, v in per_seat.items()), key=lambda x: -x["all"])
         if prev is not None:                                              # the place each seat had, in every measure
             orders = {m: [k for k, v in sorted(prev_seat.items(), key=lambda kv: -kv[1][m]) if v[m] > 0] for m in ("all", "fresh", "output", "usd")}
             for b in board:
@@ -1124,7 +1161,8 @@ class TokenLedger:
             b["plan_month"] = plans.get(b["seat"])
         return {
             "where": {"helpers": where[0], "main": max(0, tot[0] + tot[1] - where[0]), "thinking": where[1], "output": tot[2],
-                      "searches": where[2], "fetches": where[3]},
+                      "searches": where[2], "fetches": where[3],
+                      "rebuilds": rebuilt[0], "rebuild_tokens": rebuilt[1], "rebuild_usd": round(rebuilt[2] / 1e6, 2)},
             "waits": {"seconds": waits[0], "replies": waits[1], "away": waits[2], "median_s": wait_median(waits[3:]),
                       "days": dict(sorted(wait_days.items())) if cur is not None else None,
                       "longest": [{"wait_s": w, "at": at, "id": short_id(sid), "project": r.get("p"), "seat": seat_of(r)}

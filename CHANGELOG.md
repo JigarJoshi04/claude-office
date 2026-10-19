@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.138.0] - 2026-10-19
+
+### Added
+- The prompt cache, on the tokens page: how much of the input came from the cache, and the cold rebuilds — a session
+  coming back after its cache expired (5 minutes, or an hour on 1-hour caching) writes its whole conversation to the
+  cache again. Each is counted with the tokens written and what it cost over a warm cache at list prices, for the
+  office and per character. Main conversations only; the ledger reads its transcripts once more to count them.
+
 ## [3.137.0] - 2026-10-19
 
 ### Added

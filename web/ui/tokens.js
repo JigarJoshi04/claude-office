@@ -279,6 +279,22 @@ function renderTokensInner(el, app) {
       <div class="tok-parts" style="margin:12px 0 0">${w.output ? `<span title="Thinking is part of the output: what the models reasoned before they wrote">${icon("sparkles", 13)}${tp}% of the output was thinking (${big(w.thinking)})</span>` : ""}
         ${w.searches || w.fetches ? `<span>${icon("search", 13)}${w.searches.toLocaleString()} web search${w.searches === 1 ? "" : "es"} · ${w.fetches.toLocaleString()} page fetch${w.fetches === 1 ? "" : "es"}</span>` : ""}</div></div>`;
   }
+  // The prompt cache: how much of the input came from it, and what sessions left idle past its life cost to rebuild.
+  function cacheCard() {
+    const tt = t.total, w = t.where || {};
+    const hit = (x) => { const inp = (x.all || 0) - (x.output || 0); return inp > 0 ? Math.round(((x.all || 0) - (x.fresh || 0)) / inp * 100) : null; };
+    const h = hit(tt);
+    if (h == null) return "";
+    const rows = !seat ? (t.seats || []).filter(s => s.seat && s.all >= 1e6).sort((a, b) => (b.rebuild_tokens || 0) - (a.rebuild_tokens || 0) || (hit(a) || 0) - (hit(b) || 0)).map(s => {
+      const st = seatOf(s.seat);
+      return `<tr style="--seat:${esc(st ? st.color : "#82889f")}"><td><span class="who">${st ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(st.color)}|"></i>` : ""}${esc(who(s.seat))}</span></td>
+        <td class="num">${hit(s) == null ? "–" : hit(s) + "%"}</td><td class="num" ${st && st.kind === "codex" ? `title="Not measured for Codex"` : ""}>${st && st.kind === "codex" ? "–" : (s.rebuilds || 0).toLocaleString()}</td><td class="num">${s.rebuild_tokens ? big(s.rebuild_tokens) : "–"}</td></tr>`; }).join("") : "";
+    return `<div class="view-card"><h5>The prompt cache · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+      <div class="tok-parts" style="margin-top:0"><span title="Cache reads against all input: what was read back cheaply instead of sent again">${icon("refresh", 13)}<b>${h}%</b>&nbsp;of the input came from the cache</span>
+        ${w.rebuilds ? `<span title="A session that sat longer than the cache lives (5 minutes, or an hour on 1-hour caching) writes its whole prompt again on its next turn">${icon("clock", 13)}${w.rebuilds.toLocaleString()} cold rebuild${w.rebuilds === 1 ? "" : "s"}: ${big(w.rebuild_tokens)} tokens written again${w.rebuild_usd ? `, about ${money(w.rebuild_usd)} more than a warm cache` : ""}</span>` : `<span>${icon("check", 13)}No cold rebuilds</span>`}</div>
+      ${rows ? `<div class="table-scroll"><table class="league ship"><thead><tr><th>Character</th><th class="num">From the cache</th><th class="num">Cold rebuilds</th><th class="num">Tokens rebuilt</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+      <p class="hint">A cold rebuild is a session coming back after its cache expired, so its whole conversation is written to the cache again. Coming back sooner keeps it warm; compacting before a long break makes the rebuild smaller. Counted for main conversations, from ${t.since ? esc(new Date(t.since + "T12:00:00").toLocaleDateString([], { day: "numeric", month: "long" })) : "the first transcript"}.</p></div>`;
+  }
   const list = (items, fn) => items.length ? `<ol>${items.map(fn).join("")}</ol>` : `<p class="muted">Nothing ${esc(rangeWord[rng])}.</p>`;
   const sessions = list((t.sessions || []).slice(0, 8), (s, i) => `<li><span class="rk">${i + 1}</span><span class="grow"><b class="${priv ? "private" : ""}">${esc(s.project || "a session")}</b>
     <small>${esc(who(s.seat))}${s.last ? ` · ${esc(relTime(s.last))}` : ""}</small></span><em>${fmt(val(s))}</em></li>`);
@@ -310,6 +326,7 @@ function renderTokensInner(el, app) {
         <div class="tp-scale"><span>Less</span>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join("")}<span>More</span></div></div></div>
     ${valueCard()}
     ${whereCard()}
+    ${cacheCard()}
     ${waitCard(t, { label: RANGES.find(r => r[0] === rng)[1].toLowerCase(), who, priv })}
     ${shipCard()}
     ${records ? `<div class="view-card"><h5>Records${seat ? ` · ${esc(who(seat))}` : ""}</h5><div class="tp-recs">${records}</div></div>` : ""}

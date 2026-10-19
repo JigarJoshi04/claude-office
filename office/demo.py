@@ -199,6 +199,9 @@ def _demo_token_ledger() -> TokenLedger:
                     for x in waits:
                         hist[next(j for j, e in enumerate(tokens.WAIT_EDGES) if x <= e)] += 1
                     sessions[sid]["w"] = {d.isoformat(): [sum(waits), n, waits[-1], int(rnd("wa", d, seat, k) < 0.3), int(start + 1800)] + hist}
+                if seat != "astra" and rnd("rb", d, seat, k) < 0.45:   # sessions left idle past the cache's life
+                    nrb = 1 + int(rnd("rbn", d, seat, k) * (4 if seat == "claude2" else 2))
+                    sessions[sid]["rb"] = {d.isoformat(): [nrb, nrb * 140_000, nrb * 600_000]}
                 if seat != "astra":                                   # priced per response, as the real ledger does
                     usd = round(prices.estimate(mo, f, c, o) * (1 + 0.15 * rnd("1h", d, seat, k)) * 1e6)
                     sessions[sid]["$"] = {d.isoformat(): usd}
@@ -529,7 +532,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.137.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.138.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
