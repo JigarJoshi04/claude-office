@@ -1894,3 +1894,9 @@ body.locked [data-go="inbox"], body.locked .snz { display: none !important; }   
 .rn-new { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 #latest [data-go-news] .count { margin-left: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; display: inline-grid; place-items: center;
   background: var(--accent); color: var(--accent-ink); font: 700 11px var(--mono); }
+
+/* The room grows (panels.js career): the five room tiers by level */
+.room-tiers { display: flex; flex-wrap: wrap; gap: 6px; }
+.room-tiers .rt { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 99px; font-size: 12.5px; background: var(--surface-2); color: var(--faint); }
+.room-tiers .rt.on { background: color-mix(in srgb, var(--seat) 18%, var(--surface-2)); color: var(--text); }
+.room-tiers .rt small { font: 600 10.5px var(--mono); opacity: .7; }

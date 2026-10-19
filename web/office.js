@@ -2,7 +2,7 @@
 // and click targets, a camera you can zoom and pan, agents that walk in from the elevator, and night lighting.
 import * as S from "./engine/sprites.js";
 import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, pathBetween, drawStatic, capFor, deskFor } from "./engine/scene.js";
-import { windowRect, drawDecorLive } from "./engine/decor.js";
+import { windowRect, drawDecorLive, roomTier } from "./engine/decor.js";
 import { officeLevel } from "./engine/unlocks.js";
 import { seasonFor, drawSeason, drawSnow } from "./engine/season.js";
 import { icon } from "./ui/icons.js";
@@ -1600,7 +1600,7 @@ export function createOffice(stage, handlers) {
     snap = next;
     const arch = (s) => (persona ? persona(s).archetype : null);
     ol = officeLevel(snap.seats);
-    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color, arch(s)])) + "|" + (snap.units || []).length + "|" + ["palms", "flowers", "statue"].filter(has).join();
+    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color, arch(s), roomTier(s.career && s.career.level)])) + "|"   // a room grows with its character + (snap.units || []).length + "|" + ["palms", "flowers", "statue"].filter(has).join();
     const relayout = key !== staticKey;
     if (relayout) { L = computeLayout(snap.seats, arch, plan); W = L.W; H = L.H; staticKey = key; L.pods.forEach(p => { p.y = null; }); }
     else L.pods.forEach((p, i) => { p.seat = snap.seats[i]; });

@@ -21,6 +21,7 @@ import { encodeBrief, decodeBrief, looksSecret } from "./sharecode.js";
 import { seasonFor, SEASON_NAME } from "../engine/season.js";
 import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
+import { ROOM_TIERS } from "../engine/decor.js";
 
 const TEMPLATES = [
   { name: "Fix a failing test", ic: "check", title: "Fix failing test: ", brief: "Goal: make the failing test pass without weakening it.\nWhere: <test file or CI job>\nContext: <what changed recently>\nDone when: the test passes locally and the full suite is green.\nVerify: run the suite and paste the summary in the report." },
@@ -634,7 +635,9 @@ export function makePanels(app) {
     const info = sel ? `<div class="badge-info"><b>${esc(sel.name)}</b> · ${esc(sel.desc)}${c.unlocked[sel.id] ? ` · unlocked ${esc(dayTime(c.unlocked[sel.id]))}` : " · not yet"}</div>` : "";
     const bd = c.bond, mate = bd && seatById(bd.with);
     const bondRow = mate ? `<div class="bond" style="--seat:${esc(mate.color)}">${icon("heart", 16)}<span class="grow"><b>${esc(P(mate).name)}</b> · ${esc(bd.name)}<small>${[bd.cowork_h ? `${bd.cowork_h} h in the same repository` : "", bd.reports ? `${bd.reports} report${bd.reports === 1 ? "" : "s"} within minutes of each other` : "", bd.covers ? `covered ${bd.covers} limit${bd.covers === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")}${bd.next ? ` · ${bd.next - bd.pts} to the next level` : ""}</small></span></div>` : "";
-    return `<div class="career" style="--seat:${esc(s.color)}">` + (bondRow ? section("Closest teammate", bondRow) : "") + section(`Achievements · ${got.length} of ${cat.length}`,
+    const lv = c.level || 1, room = ROOM_TIERS.map(([at, name]) => `<span class="rt ${lv >= at ? "on" : ""}" title="${lv >= at ? "In the room" : `At level ${at}`}">${icon(lv >= at ? "check" : "lock", 12)}${esc(name)}<small>${at}</small></span>`).join("");
+    return `<div class="career" style="--seat:${esc(s.color)}">` + (bondRow ? section("Closest teammate", bondRow) : "")
+      + section("The room grows", `<div class="room-tiers">${room}</div>`) + section(`Achievements · ${got.length} of ${cat.length}`,
       `<div class="cstats">${tiles.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("")}</div>
       ${allTimeTokens(s)}
       ${next ? `<div class="nextup">${icon("target", 16)}<div class="grow"><div><b>Next up: ${esc(next.a.name)}</b> <span>${big(Math.floor(next.have))} of ${big(next.need)} ${esc(next.unit)}</span></div><div class="xpbar"><i style="width:${Math.round(next.f * 100)}%"></i></div></div></div>` : ""}

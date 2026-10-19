@@ -45,8 +45,12 @@ const FLOORS = {
   },
 };
 
+// Rooms grow with their character (career level): curtains, gold trim, a skylight, a hanging plant, a brass plaque.
+export const ROOM_TIERS = [[12, "Curtains"], [18, "A gold picture rail"], [25, "A skylight"], [35, "A hanging plant"], [50, "A brass plaque"]];
+export const roomTier = (level) => ROOM_TIERS.filter(([lv]) => (level || 0) >= lv).length;
+
 // Floor, walls, a back-wall band in the seat colour, and a door in the front wall.
-export function drawRoomShell(c, room, color, arch) {
+export function drawRoomShell(c, room, color, arch, tier = 0) {
   const { x, y, w, h } = room;
   (FLOORS[arch] || FLOORS["The Orchestrator"])(c, x, y + BACK, w, h - BACK - 4);
   // back wall: a soft two-tone wall with a picture rail
@@ -62,6 +66,33 @@ export function drawRoomShell(c, room, color, arch) {
   r(c, x, y + h - 4, dx - x, 4, "#1b1e31"); r(c, dx + DOOR_W, y + h - 4, x + w - dx - DOOR_W, 4, "#1b1e31");
   r(c, dx - 2, y + h - 6, 2, 6, "#6b74a8"); r(c, dx + DOOR_W, y + h - 6, 2, 6, "#6b74a8");
   r(c, dx, y + h - 4, DOOR_W, 4, S.shade(color, 0.7)); r(c, dx + 2, y + h - 3, DOOR_W - 4, 1, S.shade(color, 1.1));   // door mat
+  if (tier) drawRoomTier(c, room, color, tier);
+}
+
+function drawRoomTier(c, room, color, tier) {
+  const { x, y, w, h } = room, wr = windowRect(room);
+  if (tier >= 3) {                                     // a skylight: a pane in the ceiling band and its light on the floor
+    r(c, x + w / 2 - 14, y + 1, 28, 2, "#bfe3ff"); r(c, x + w / 2 - 14, y + 3, 28, 1, "#7fa8cc");
+    c.fillStyle = "rgba(255,248,214,0.07)"; c.beginPath();
+    c.moveTo(x + w / 2 - 14, y + BACK + 2); c.lineTo(x + w / 2 + 14, y + BACK + 2); c.lineTo(x + w / 2 + 30, y + h - 30); c.lineTo(x + w / 2 - 2, y + h - 30); c.closePath(); c.fill();
+  }
+  if (tier >= 2) {                                     // a gold picture rail along the back wall
+    r(c, x + 2, y + BACK - 11, w - 4, 1, "#d8b45a"); r(c, x + 2, y + BACK - 10, w - 4, 1, "#9c7a2e");
+  }
+  if (tier >= 1) {                                     // curtains either side of the window, in the room's colour
+    const cl = S.shade(color, 0.75), cd = S.shade(color, 0.55);
+    r(c, wr.x - 6, wr.y - 4, wr.w + 12, 2, "#8a6d3c");                                           // the rod
+    for (const cx of [wr.x - 6, wr.x + wr.w + 1]) { r(c, cx, wr.y - 2, 5, wr.h + 6, cl); r(c, cx + 1, wr.y - 2, 1, wr.h + 6, cd); r(c, cx + 3, wr.y - 2, 1, wr.h + 6, cd); }
+  }
+  if (tier >= 4) {                                     // a hanging plant between the window's curtain and the right wall
+    const hx = x + w - 10, hy = y + 4;
+    r(c, hx + 3, hy, 1, 6, "#8a8f9e");
+    r(c, hx + 1, hy + 6, 5, 4, "#9a5b36"); r(c, hx + 1, hy + 6, 5, 1, "#b87447");
+    r(c, hx, hy + 4, 7, 3, "#3a9a57"); r(c, hx, hy + 8, 1, 7, "#2f7d46"); r(c, hx + 6, hy + 8, 1, 9, "#2f7d46"); r(c, hx + 3, hy + 10, 1, 5, "#4fb36c");
+  }
+  if (tier >= 5) {                                     // a brass plaque at the wall's left end: the corner office
+    r(c, x + 3, y + 9, 9, 7, "#8a6a1e"); r(c, x + 4, y + 10, 7, 5, "#e2be5a"); r(c, x + 6, y + 11, 3, 1, "#fff2b0"); r(c, x + 5, y + 13, 5, 1, "#a8862c");
+  }
 }
 
 export function windowRect(room) { return { x: room.x + room.w - 62, y: room.y + 8, w: 46, h: 22 }; }

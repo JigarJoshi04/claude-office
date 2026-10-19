@@ -702,6 +702,7 @@ function apply(next) {
   prevLive = snap ? snap.seats.reduce((n, s) => n + live(s).length, 0) : null;   // who was in before this refresh (First one in)
   snap = next; setNow(snap.now);
   if (!newsReadTs) { newsReadTs = snap.now; store.set("newsReadTs", newsReadTs); }
+  if (DEMO && QS.get("levels") === "tiers") snap.seats.forEach((s, i) => { if (s.career) s.career.level = [50, 35, 25, 18, 12][i % 5]; });   // the demo's ?levels=tiers: every room tier
   if (DEMO && QS.has("faults")) snap.office.faults = [{ part: "The token ledger", what: "PermissionError: [Errno 13] Permission denied: 'tokens.json'", count: 37, since: snap.now - 1500, last: snap.now - 4 }];   // the demo's ?faults=1
   apiWeather(snap.api_weather);
   chapterTick();

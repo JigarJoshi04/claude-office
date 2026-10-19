@@ -2,7 +2,7 @@
 // closet) and a room per character on the right, each opening onto a corridor through its door. v5: the plan adapts to
 // the space it is shown in (2, 3 or 4 rooms to a row, taller rooms), so the building fills the screen.
 import * as S from "./sprites.js";
-import { BACK, drawRoomShell, drawDecorStatic } from "./decor.js";
+import { BACK, drawRoomShell, drawDecorStatic, roomTier } from "./decor.js";
 
 export const W = 768;                           // the default plan's width (three rooms to a row); a layout carries its own
 export const WALL = 48;                         // the lobby's back wall
@@ -167,7 +167,7 @@ export function drawStatic(c, L) {
   if (wy < H) S.rect(c, LOBBY_W - 2, wy, 2, H - wy, "#141722");
   // character rooms
   for (const p of L.pods) {
-    drawRoomShell(c, p.room, p.seat.color, p.arch);
+    drawRoomShell(c, p.room, p.seat.color, p.arch, roomTier(p.seat.career && p.seat.career.level));
     drawDecorStatic(c, p.room, p.arch, !!(L.unlocked && L.unlocked.has("flowers")));
   }
   // the lounge, the meeting room and any open space

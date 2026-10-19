@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.178.0] - 2026-10-19
+
+### Added
+- Rooms grow with their character: curtains in the room's colour at level 12, a gold picture rail at 18, a
+  skylight with its light on the floor at 25, a hanging plant at 35 and a brass plaque at 50 (the corner office).
+  The Career tab shows which the room has and the level of the next. The demo shows every tier with
+  `?levels=tiers`.
+
 ## [3.177.0] - 2026-10-19
 
 ### Added
