@@ -116,11 +116,12 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
         raise ValueError("Codex sessions cannot take messages yet")
     inbox = getattr(office, "inbox", None)
     mode = delivery_for(office, x)
-    if x is not None and body.get("followup"):
+    fork = body.get("fork") is True and x is not None              # a copy of a session still open in its terminal
+    if x is not None and body.get("followup") and not fork:
         raise ValueError("Wait for the running session to finish before following up")
     if x is not None and (mode == "none" or inbox is None):
         raise ValueError("That running session cannot receive messages right now")
-    if mode in ("direct", "review") and inbox is not None:
+    if mode in ("direct", "review") and inbox is not None and not fork:
         msg_id = messaging.send(x["socket"], text, inbox.address, office.cfg.get("message_from_name") or "Claude Office (CEO)")
         inbox.record_out(msg_id, x["socket"], seat_id, session_id, text)
         office.emit("message", f"CEO messaged {x['name']} on {seat['label']}", seat_id)
@@ -136,6 +137,6 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
         raise ValueError("Claude follow-ups require a Claude seat")
     lane = lanes.create_lane(followup_title(text, (x or {}).get("name") or session_id[:8]), text, cwd, pick,
                              office.cfg["lane_defaults"]["model"], office.cfg["lane_defaults"]["permission_mode"],
-                             seat_ids, office.cfg, resume_session=session_id)
+                             seat_ids, office.cfg, resume_session=session_id, fork=fork)
     office.emit("lane", f"CEO followed up on {(x or {}).get('name') or session_id[:8]} ({lane['id']})", seat_id, "good")
     return {"ok": True, "delivery": "followup", "lane": lane}

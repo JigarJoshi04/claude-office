@@ -351,7 +351,7 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
                 seat_ids: list[str], cfg: dict, launch: bool = True, allow_messages: bool = True,
                 resume_session: str | None = None, chain: list[dict] | None = None, chain_of: dict | None = None,
                 schedule: dict | None = None, max_minutes: int | None = None, bakeoff: dict | None = None,
-                worktree: bool = False) -> dict:
+                worktree: bool = False, handoff: str = "cold", fork: bool = False) -> dict:
     title = " ".join(str(title).split())[:80]
     if max_minutes is not None and (isinstance(max_minutes, bool) or not isinstance(max_minutes, int) or not 5 <= max_minutes <= 1440):
         raise ValueError("A time limit is 5 to 1440 minutes")
@@ -370,6 +370,8 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
     if resume_session is not None and (not isinstance(resume_session, str)
                                        or not messaging.SESSION_ID.fullmatch(resume_session)):
         raise ValueError("A follow-up needs a session id")
+    if handoff not in ("cold", "warm"):
+        raise ValueError("A hand-off is cold (fresh from its notes) or warm (the same conversation)")
     lane_id = f"{time.strftime('%m%d-%H%M%S')}-{_slug(title)}"
     if lane_dir(lane_id).exists():                       # two hires in the same second with the same title
         lane_id = f"{lane_id[:-4] if len(lane_id) > 40 else lane_id}-{os.urandom(2).hex()}"
@@ -397,6 +399,8 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         "max_minutes": max_minutes,                            # its time budget, from when it first starts (None: none)
         "bakeoff": bakeoff,                                    # {"id", "side": "A" | "B", "winner"}: one of two contenders
         "worktree": tree,                                      # {"path", "branch", "repo"}: its own git worktree, or None
+        "handoff": handoff,                                    # on a limit: cold (a fresh start from STATE) or warm (the same conversation)
+        "fork": bool(fork and resume_session),                 # continue a copy of a live session's conversation (--fork-session)
     }
     if schedule:                                       # starts later: the office starts it when it is due
         lane["status"] = "scheduled"
@@ -733,6 +737,13 @@ def _choose_seat(lane: dict, exclude: tuple = ()) -> tuple[str | None, str, floa
     return ev["pick"], ev["why"], ev.get("next_reset")
 
 
+def transcript_on(seat: dict, sid: str) -> bool:
+    """Whether a seat can see a session's transcript (its projects folder holds it), so it can resume it."""
+    if seat.get("kind") != "claude" or not messaging.SESSION_ID.fullmatch(sid or ""):
+        return False
+    return any((Path(seat["config_dir"]) / "projects").glob(f"*/{sid}.jsonl"))
+
+
 def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[list[str], dict]:
     resume = lane.get("resume_session")
     if resume is not None and (not isinstance(resume, str) or not messaging.SESSION_ID.fullmatch(resume)):
@@ -754,11 +765,20 @@ def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[l
         env = dict(os.environ)
     else:
         ld = cfg["lane_defaults"]
+        warm = lane.get("warm_from") if lane.get("warm_from") and transcript_on(seat, lane["warm_from"]) else None
         if lane.get("resume_session"):
-            # A follow-up: continue that session's own conversation with the CEO's message.
+            # A follow-up: continue that session's own conversation with the CEO's message (a copy of it, --fork-session,
+            # when the session is still open in its terminal).
             prompt = messaging.FOLLOWUP_PREFIX + (d / "brief.md").read_text()
-            cmd = ["claude", "--resume", lane["resume_session"], "-p", prompt, "--permission-mode", lane["permission_mode"],
-                   "--allowedTools", ld["allowed_tools"]]
+            cmd = ["claude", "--resume", lane["resume_session"], *(["--fork-session"] if lane.get("fork") else []), "-p", prompt,
+                   "--permission-mode", lane["permission_mode"], "--allowedTools", ld["allowed_tools"]]
+        elif warm:
+            # A warm hand-off: the same conversation, on the seat it moved to after a limit.
+            prompt = (f"You were moved to the seat {seat['id']} because the seat you were on hit its usage limit. This is the same "
+                      f"conversation: carry on from where you were. Keep your STATE file ({d / 'STATE.md'}) up to date, and write "
+                      f"the REPORT ({d / 'REPORT.md'}) when you are done, as before.")
+            cmd = ["claude", "--resume", warm, "-p", prompt, "--model", lane["model"], "--permission-mode", lane["permission_mode"],
+                   "--allowedTools", ld["allowed_tools"], "--add-dir", str(d)]
         else:
             cmd = ["claude", "-p", prompt, "--model", lane["model"], "--permission-mode", lane["permission_mode"],
                    "--allowedTools", ld["allowed_tools"], "--add-dir", str(d)]
@@ -973,6 +993,8 @@ def run_lane(lane_id: str) -> int:
             until = parse_reset(tail)
             mark_limited(seat_id, until)
             lane["runs"][-1]["ended_by"] = "limit"
+            if lane.get("handoff") == "warm" and lane["runs"][-1].get("session_id"):   # the next seat picks up this conversation
+                lane["warm_from"] = lane["runs"][-1]["session_id"]
             save_lane(lane)
             _log(lane_id, f"{seat_id} hit its limit; resting until {time.strftime('%H:%M', time.localtime(until))}")
             fails = 0

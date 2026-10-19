@@ -554,7 +554,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.150.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.151.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -770,7 +770,7 @@ class Office(LiveOffice):
                                   "nudged_at": (snap.get("nudged") or {}).get(x["id"]),
                                   "text": f"{x['name']} on {label} quiet for {x['quiet_s'] // 60} min"})
                 if x["state"] == "limited":
-                    items.append({"level": "warn", "seat": s["id"], "session": x["id"],
+                    items.append({"level": "warn", "seat": s["id"], "session": x["id"], "limited": True, "kind": x.get("kind"),
                                   "text": f"{x['name']} on {label} is stopped by the usage limit"})
                 rs = x.get("report_status") or ""
                 if sessions.report_blocked(rs) and x.get("live", True):

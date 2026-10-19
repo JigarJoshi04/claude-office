@@ -308,6 +308,10 @@ export function makePanels(app) {
     if (a.review && a.session) return `<button class="btn sm primary" data-forward-review="${esc(a.seat)}|${esc(a.session)}" title="Open the session with the comments written out as a message (you send it)">${icon("send", 14)}Forward to it</button>`;
     if (a.interrupted) return `<button class="btn sm primary" data-resume-all="${esc(JSON.stringify(a.interrupted))}">${icon("play", 14)}Resume ${a.interrupted.length > 1 ? "all" : "it"}</button>`;
     if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
+    if (a.limited && a.session && st && st.kind === "claude") {   // out of plan: the same conversation, forked onto a seat with plan left
+      const np = (S().next_pick || {}).seat, to = np && np !== a.seat && seatById(np);
+      if (to && to.kind === "claude") return `<button class="btn sm primary" data-continue="${esc(a.seat)}|${esc(a.session)}|${esc(np)}" title="Fork this conversation onto ${esc(P(to).name)} and carry on there">${icon("play", 14)}Continue on ${esc(P(to).name)}</button>`;
+    }
     if ((a.stuck || a.loop) && a.session) {            // the stuck rescuer's ladder (rescue.py): a nudge, then a restart
       const again = a.nudged_at && S().now - a.nudged_at > 600;
       if (a.lane_id && again) return `<button class="btn sm primary" data-restart-lane="${esc(a.lane_id)}" title="Stop it and start it again from its notes">${icon("refresh", 14)}Restart it</button>`;
@@ -440,6 +444,16 @@ export function makePanels(app) {
           store.set("hireDraft", hireDraft); app.go({ kind: "hire" });
         }));
         root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
+        root.querySelectorAll("[data-continue]").forEach(b => b.addEventListener("click", async () => {
+          const [seatId, id, to] = b.dataset.continue.split("|"), toName = (seatById(to) && P(seatById(to)).name) || to;
+          if (!confirm(`Continue this conversation on ${toName}? It is copied into a new session there (the first turn reads the whole conversation into ${toName}'s cache). The original stays where it is.`)) return;
+          b.disabled = true;
+          try {
+            const r = await app.post("/api/message", { seat: seatId, id, followup: true, fork: true, seat_choice: to,
+              text: "You hit the usage limit on the seat you were on. Claude Office copied this conversation onto another seat with plan left: carry on from where you were." });
+            toast(r.demo ? "Demo office: nothing was started." : `Continuing on ${toName} as a lane.`, r.demo ? "info" : "good"); app.refresh();
+          } catch (e) { toast("Could not continue it: " + e.message, "bad"); b.disabled = false; }
+        }));
         root.querySelectorAll("[data-nudge]").forEach(b => b.addEventListener("click", async () => {
           const [seatId, id] = b.dataset.nudge.split("|");
           b.disabled = true;
@@ -1597,6 +1611,8 @@ export function makePanels(app) {
           <option value="backlog" ${d.start === "backlog" ? "selected" : ""}>Add to the backlog (oldest first, as seats free up)</option></select></label>
           ${d.start === "at" ? `<label class="f">At<input type="datetime-local" id="hStartAt" value="${esc(d.startAt || "")}"></label>` : "<span></span>"}</div>
         <label class="f">Promise it by<select id="hPromise"><option value="">No promise</option>${PROMISE_BY.map(([k, lb]) => `<option value="${k}" ${d.promise === k ? "selected" : ""}>${esc(lb)}</option>`).join("")}</select></label>
+        <label class="f">On a limit<select id="hHand"><option value="cold" ${d.handoff !== "warm" ? "selected" : ""}>Start fresh on the next seat, from its notes</option>
+          <option value="warm" ${d.handoff === "warm" ? "selected" : ""}>Carry on the same conversation on the next seat (re-reads it all)</option></select></label>
         <label class="f">Time limit<select id="hMax">${[["", "None"], ["30", "30 minutes"], ["60", "1 hour"], ["120", "2 hours"], ["240", "4 hours"]].map(([v, l]) => `<option value="${v}" ${String(d.max_minutes || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="f">Then, in the same folder<select id="hThen">
           <option value="" ${!d.chain ? "selected" : ""}>Nothing: it reports and stops</option>
@@ -1611,7 +1627,7 @@ export function makePanels(app) {
       ${section("Office lanes", `<div id="laneList">${laneListHtml()}</div>`)}`,
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
-        const save = () => { hireDraft = { ...hireDraft, promise: q("hPromise").value, worktree: q("hTree").checked, title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
+        const save = () => { hireDraft = { ...hireDraft, promise: q("hPromise").value, worktree: q("hTree").checked, handoff: q("hHand").value, title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
           start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "", each: q("hEach").value, max_minutes: +q("hMax").value || null }; store.set("hireDraft", hireDraft); };
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen", "hEach"].forEach(id => q(id).addEventListener("input", save));
         for (const id of ["hSeat", "hModel"]) q(id).addEventListener("change", () => { q("hModelHint").innerHTML = modelHint(q("hSeat").value, q("hModel").value); });
@@ -1654,6 +1670,7 @@ export function makePanels(app) {
         });
         q("hMsg").addEventListener("change", save);
         q("hMax").addEventListener("change", save);
+        q("hHand").addEventListener("change", save);
         q("hTree").addEventListener("change", () => { hireDraft = { ...hireDraft, worktree: q("hTree").checked }; store.set("hireDraft", hireDraft); });
         q("hDir").addEventListener("input", debounce(() => { q("hClash").innerHTML = clashHtml(q("hDir").value); }, 250));
         q("hPromise").addEventListener("change", () => { hireDraft = { ...hireDraft, promise: q("hPromise").value }; store.set("hireDraft", hireDraft); });

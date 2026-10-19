@@ -262,6 +262,38 @@ class MemoryCapTests(unittest.TestCase):
         self.assertEqual(lanes.unit_limits({"lane_policy": {"memory_max": "0", "tasks_max": 0}}), [])
 
 
+class HandoffTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.seat = {"id": "claude3", "kind": "claude", "config_dir": str(self.root / ".claude3")}
+        (self.root / ".claude3" / "projects" / "-w").mkdir(parents=True)
+        self.d = self.root / "lane"
+        self.d.mkdir()
+        (self.d / "brief.md").write_text("Do it.")
+        self.cfg = deepcopy(config.DEFAULTS)
+        self.sid = "12345678-1234-1234-1234-123456789abc"
+
+    def lane(self, **kw):
+        return {"id": "1019-x", "title": "T", "workdir": str(self.root), "model": "opus", "permission_mode": "acceptEdits", "allow_messages": False, **kw}
+
+    def test_warm_resumes_the_same_conversation_when_the_seat_can_see_it(self):
+        cmd, _ = lanes._command(self.lane(warm_from=self.sid), self.seat, "COLD PROMPT", self.d, self.cfg)
+        self.assertNotIn("--resume", cmd)                                  # this seat cannot see that transcript: cold
+        (self.root / ".claude3" / "projects" / "-w" / f"{self.sid}.jsonl").write_text("{}\n")
+        cmd, _ = lanes._command(self.lane(warm_from=self.sid), self.seat, "COLD PROMPT", self.d, self.cfg)
+        self.assertEqual(cmd[1:3], ["--resume", self.sid])
+        self.assertIn("same conversation", cmd[cmd.index("-p") + 1])
+        self.assertNotIn("COLD PROMPT", cmd)
+
+    def test_a_fork_of_a_live_session(self):
+        cmd, _ = lanes._command(self.lane(resume_session=self.sid, fork=True), self.seat, "x", self.d, self.cfg)
+        self.assertEqual(cmd[1:4], ["--resume", self.sid, "--fork-session"])
+        cmd, _ = lanes._command(self.lane(resume_session=self.sid), self.seat, "x", self.d, self.cfg)
+        self.assertNotIn("--fork-session", cmd)
+
+
 class WorktreeTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()

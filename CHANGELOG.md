@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.151.0] - 2026-10-19
+
+### Added
+- Warm hand-offs. A lane can be told, on the hiring desk, to carry on the same conversation on the next seat when its
+  seat hits a limit, instead of starting fresh from its notes (the new seat re-reads the whole conversation into its
+  cache, so it costs more). It falls back to a fresh start when the next seat cannot see the transcript.
+- Continue on another seat: a terminal session stopped by its usage limit gets a Continue on <name> button in Needs
+  you. It copies the conversation into a new session on the divider's pick (Claude Code's --fork-session, so the
+  original stays where it is) and carries on there as a lane.
+
 ## [3.150.0] - 2026-10-19
 
 ### Added

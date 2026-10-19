@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.150.0"
+    server_version = "ClaudeOffice/3.151.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -535,7 +535,7 @@ class Handler(BaseHTTPRequestHandler):
                                          schedule=lanes.schedule_from(body.get("start")),
                                          max_minutes=body.get("max_minutes") or None,
                                          chain=lanes.chain_from(body.get("chain"), " ".join(str(body.get("title", "")).split())[:60]),
-                                         worktree=body.get("worktree") is True)
+                                         worktree=body.get("worktree") is True, handoff="warm" if body.get("handoff") == "warm" else "cold")
                 self.office.emit("lane", f"CEO hired office lane '{lane['title']}' ({lane['seat_pref']})" + (" to start later" if lane.get("schedule") else ""), level="good")
                 return self._json(200, {"ok": True, "lane": lane})
             if path == "/api/lanes/bakeoff":                # one brief, two contenders (lanes.hire_bakeoff)
