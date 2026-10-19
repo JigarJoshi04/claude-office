@@ -266,6 +266,12 @@ class HistoryStore:
         last = before[-1][1] if before else None
         weekly = bool(last and (last[1] or 0) >= 99 and (last[0] or 0) < 99)
         start = max(at - 5 * 3600, rows[0]["ts"] if rows else at)
+        key = 1 if weekly else 0
+        seq = [(ts, x[key]) for ts, x in before if ts >= start and x[key] is not None]
+        for j in range(len(seq) - 1, 0, -1):                         # the window it ran out of began at its last reset
+            if seq[j][1] < seq[j - 1][1] - 2:
+                start = seq[j][0]
+                break
         window = [r for r in rows if start <= r["ts"] <= at]
         burned, names, first = {}, {}, {}
         for r in window:
@@ -280,7 +286,7 @@ class HistoryStore:
         total = sum(burned.values())
         sessions = sorted(({"id": sid, "name": names[sid][0], "kind": names[sid][1], "tokens": v, "share": round(v / total * 100) if total else 0}
                            for sid, v in burned.items() if v), key=lambda e: -e["tokens"])[:6]
-        pace = [(ts, x[1] if weekly else x[0]) for ts, x in before if ts >= start and (x[1] if weekly else x[0]) is not None]
+        pace = [(ts, x[key]) for ts, x in before if ts >= start and x[key] is not None]
         step = max(1, len(pace) // 60)
         per_hour = busiest = None
         if len(pace) >= 2 and pace[-1][0] > pace[0][0]:

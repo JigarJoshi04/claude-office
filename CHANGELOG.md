@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.140.1] - 2026-10-19
+
+### Fixed
+- Why it ran out counted from five hours back even when the window had reset in between, so the chart began at 100%,
+  the fill rate read 0% an hour and sessions from the window before were counted. It starts at the window's reset.
+
 ## [3.140.0] - 2026-10-19
 
 ### Added

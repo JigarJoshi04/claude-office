@@ -147,6 +147,7 @@ class StatsTests(unittest.TestCase):
                     "sessions": [{"id": "big", "name": "api lane", "kind": "lane", "state": "working", "tokens_total": toks[0], "started_at": t, "live": True},
                                  {"id": "small", "name": "docs", "kind": "desk", "state": "working", "tokens_total": toks[1], "started_at": t, "live": True}]}]}
         self.assertEqual(self.h.postmortem(one(t, 10, 0, (0, 0)), "a"), {"limit": None})
+        self.h.record(one(t, 100, 0, (0, 0)))                          # the end of the window before, then a reset
         for i in range(10):                                          # ten minutes filling the window, then out of plan
             p5 = min(100, 10 + i * 10)
             self.h.record(one(t + 60 * (i + 1), p5, 1 if p5 >= 100 else 0, (i * 3000, i * 1000)))
@@ -155,6 +156,7 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(pm["window"], "five_hour")
         self.assertEqual([(x["name"], x["share"]) for x in pm["sessions"]], [("api lane", 75), ("docs", 25)])
         self.assertGreater(pm["per_hour"], 400)                      # 80 points in 9 minutes
+        self.assertEqual(pm["pace"][0][1], 10)                        # from the reset, not the window before
 
     def test_baseline_survives_restart_without_a_previous_day_sample(self):
         t = self.start
