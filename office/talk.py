@@ -144,3 +144,87 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
                              seat_ids, office.cfg, resume_session=session_id, fork=fork)
     office.emit("lane", f"CEO followed up on {(x or {}).get('name') or session_id[:8]} ({lane['id']})", seat_id, "good")
     return {"ok": True, "delivery": "followup", "lane": lane}
+
+
+# -- one message to a group ----------------------------------------------------------------------------------------
+BROADCAST_MAX = 20
+GROUPS = ("lanes", "stuck", "seat", "programme", "all")
+# Ready-made messages; config "message_macros" ([{"name", "text"}]) adds your own. Placeholders are filled per target.
+MACROS = [
+    {"name": "Notes now", "text": "{{seat}}'s plan resets at {{reset_time}}. Write your progress notes and your next step now, then keep going."},
+    {"name": "Status, one line", "text": "{{lane_title}}: one line on where you are and what comes next, please."},
+    {"name": "Wrap up", "text": "Wrap up {{lane_title}}: commit what works, write the report, and stop."},
+    {"name": "Unstick", "text": "You seem stuck. Stop, say in one line what is blocking you, then try a different approach."},
+]
+
+
+def macros(cfg: dict) -> list[dict]:
+    """The built-in macros and the config's own (bad entries are left out)."""
+    own = [{"name": str(m["name"])[:40], "text": str(m["text"])[:messaging.MAX_TEXT]} for m in cfg.get("message_macros") or []
+           if isinstance(m, dict) and str(m.get("name") or "").strip() and str(m.get("text") or "").strip()]
+    return own + [m for m in MACROS if m["name"] not in {o["name"] for o in own}]
+
+
+def group_targets(snap: dict, group: str, value: str = "", terminals: bool = False, demo: bool = False) -> list[tuple[dict, dict]]:
+    """The live Claude sessions a group message goes to, as (seat, session): only ones that can take a message now,
+    and only office lanes unless terminals is set (a terminal session holds it for approval)."""
+    if group not in GROUPS:
+        raise ValueError("Pick who it goes to: lanes, stuck, seat, programme or all")
+    out = []
+    for s in snap.get("seats", []):
+        if s.get("kind") != "claude" or (group == "seat" and s["id"] != value):
+            continue
+        for x in s.get("sessions", []):
+            if x.get("talk") not in ("direct", "review") or not (demo or SESSION_ID.fullmatch(str(x.get("id") or ""))):
+                continue
+            if x.get("kind") != "lane" and not terminals:
+                continue
+            if group == "stuck" and not (x.get("state") == "stuck" or ((x.get("loop") or {}).get("count") or 0) >= 8):
+                continue
+            if group == "programme" and (x.get("programme") or {}).get("key") != value:
+                continue
+            out.append((s, x))
+    return out
+
+
+def fill(text: str, seat: dict, x: dict) -> str:
+    """{{seat}}, {{lane_title}} and {{reset_time}} for one target."""
+    import time
+    reset = ((seat.get("usage") or {}).get("five_hour") or {}).get("resets_at")
+    return (text.replace("{{seat}}", seat.get("nickname") or seat.get("label") or seat["id"])
+                .replace("{{lane_title}}", x.get("name") or "this task")
+                .replace("{{reset_time}}", time.strftime("%H:%M", time.localtime(reset)) if reset else "its next reset"))
+
+
+def broadcast(office, body: dict, seat_ids: list[str]) -> dict:
+    """One message to a group. With "dry" it only says who would get it. Otherwise "expect" must match the number of
+    targets now, so a page that saw an older list cannot message more sessions than it showed."""
+    snap = office.get()
+    targets = group_targets(snap, str(body.get("group") or ""), str(body.get("value") or ""), body.get("terminals") is True,
+                            demo=getattr(office, "is_demo", False))
+    only = body.get("only")
+    if isinstance(only, list):                          # the page's own picks within the group
+        keep = {str(i) for i in only}
+        targets = [(s, x) for s, x in targets if x["id"] in keep]
+    view = [{"seat": s["id"], "id": x["id"], "name": x.get("name"), "kind": x.get("kind"), "talk": x.get("talk")} for s, x in targets]
+    if body.get("dry"):
+        return {"ok": True, "targets": view, "count": len(view), "max": BROADCAST_MAX, "macros": macros(office.cfg)}
+    text = str(body.get("text") or "").strip()
+    if not text:
+        raise ValueError("Write a message first")
+    if not targets:
+        raise ValueError("Nobody in that group can take a message right now")
+    if len(targets) > BROADCAST_MAX:
+        raise ValueError(f"That is {len(targets)} sessions: at most {BROADCAST_MAX} at once. Pick a smaller group")
+    if body.get("expect") != len(targets):
+        raise ValueError(f"The group has changed: {len(targets)} now. Look at the list again before sending")
+    results, sent, held = [], 0, 0
+    for s, x in targets:
+        try:
+            r = send(office, {"seat": s["id"], "id": x["id"], "text": fill(text, s, x)}, seat_ids)
+            results.append({"seat": s["id"], "id": x["id"], "delivery": r.get("delivery")})
+            held += r.get("delivery") == "review"
+            sent += r.get("delivery") == "direct"
+        except (ValueError, OSError) as e:
+            results.append({"seat": s["id"], "id": x["id"], "error": str(e)[:120]})
+    return {"ok": True, "sent": sent, "held": held, "failed": len(targets) - sent - held, "results": results}

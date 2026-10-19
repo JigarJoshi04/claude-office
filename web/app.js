@@ -96,7 +96,7 @@ const app = {
   demo: DEMO,
   away: () => away,
   dismissAway: () => { away = null; renderPanel(true); $("panel").focus({ preventScroll: true }); },
-  broadcast: () => broadcast(),
+  broadcast: (preset, group, value) => broadcast(preset, group, value),
   snap: () => snap,
   prefs: () => prefs,
   privacy: () => prefs.privacy,
@@ -1301,7 +1301,7 @@ function openMenu(focusItem) {
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
     + item("dnd", "moon", "Do not disturb", dndOn() ? `Until ${clock(snap.office.dnd_until)}` : "Off", dndOn())
     + item("night", lightsOut() ? "sun" : "moon", lightsOut() ? "Lights on" : "Goodnight…")
-    + "<hr>" + item("daycard", "star", "Share today's card") + item("clip", "play", "Record a 15-second clip") + item("timelapse", "rewind", "Record today's timelapse") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("lock", "lock", "Lock this screen") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("clip", "play", "Record a 15-second clip") + item("timelapse", "rewind", "Record today's timelapse") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("lock", "lock", "Lock this screen") + item("broadcast", "send", "Message a group") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -1472,6 +1472,7 @@ function bindCommon(p) {
     if (a.dataset.id) go({ kind: "session", seat: a.dataset.seat, id: a.dataset.id });
     else if (a.dataset.seat) go({ kind: "seat", seat: a.dataset.seat });
   }));
+  p.querySelectorAll("[data-prog-msg]").forEach(b => b.addEventListener("click", () => broadcast("", "programme", b.dataset.progMsg)));
   p.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); toast(b.dataset.copyNote ? "Copied. " + b.dataset.copyNote : "Copied.", "good", b.dataset.copyNote ? 5000 : 1800); } catch { toast("Copy failed: select the text instead.", "warn"); }
   }));
@@ -1499,42 +1500,62 @@ async function checkpoint() {
     const cp = $("dCopyPath"); if (cp) cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(r.path); toast("Copied.", "good", 1800); } catch { /* ignore */ } });
   } catch (e) { toast("Checkpoint failed: " + e.message, "bad"); }
 }
-function broadcast(preset = "") {
-  const targets = snap.seats.flatMap(s => live(s).filter(x => x.kind === "lane" && (x.talk === "direct" || x.talk === "review")).map(x => ({ s, x })));
-  const who = (s) => panels.persona(s).name;
-  $("dialogBody").innerHTML = `<div class="dh"><b>Message all lanes</b><button class="btn sm ghost" id="bClose">${icon("x", 16)}</button></div>
-    <div class="db">${targets.length ? `<p class="muted" style="margin-top:0">One message to every running background lane. Lanes you hired here get it straight away; others may wait for approval in their terminal.</p>
-      <div class="row wrap" style="gap:6px;margin-bottom:12px">${targets.map(t => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-bt="${esc(t.s.id)}|${esc(t.x.id)}" checked> ${esc(t.x.name)} · ${esc(who(t.s))}</label>`).join("")}</div>
+// One message to a group (talk.broadcast on the office): every lane, the stuck ones, one seat's or one programme's.
+// The office says who is in the group (a dry run), the CEO can untick some, and the send carries how many it showed,
+// so a list that changed meanwhile is refused instead of messaging more sessions than were on screen.
+async function broadcast(preset = "", group = "lanes", value = "", terminals = false) {
+  const who = (s) => panels.persona(s).name, seatOf = (id) => snap.seats.find(s => s.id === id);
+  const groups = [["lanes|", "Every lane"], ["stuck|", "Stuck or looping"], ["all|", "Everything that can take a message"],
+    ...snap.seats.filter(s => s.kind === "claude").map(s => [`seat|${s.id}`, `On ${who(s)}`]),
+    ...(snap.programmes || []).filter(p => p.key).map(p => [`programme|${p.key}`, `In ${p.name}`])];
+  let dry;
+  try { dry = await app.post("/api/broadcast", { group, value, terminals: terminals || group === "all", dry: true }); }
+  catch (e) { toast("Could not list the group: " + e.message, "bad"); return; }
+  const draft = $("bText") ? $("bText").value : preset;
+  const label = (t) => { const s = seatOf(t.seat); return `${prefs.privacy && t.kind !== "lane" ? "A terminal session" : esc(t.name || "a session")} · ${esc(s ? who(s) : t.seat)}${t.talk === "review" ? " · waits for approval" : ""}`; };
+  $("dialogBody").innerHTML = `<div class="dh"><b>Message a group</b><button class="btn sm ghost" id="bClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="db"><div class="row wrap" style="gap:10px;margin-bottom:10px"><label class="f" style="margin:0;flex:1;min-width:200px">Who<select id="bGroup">${groups.map(([k, l]) => `<option value="${esc(k)}" ${k === group + "|" + value ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+      ${group === "all" ? "" : `<label class="row" style="gap:6px;align-self:flex-end;margin-bottom:6px"><input type="checkbox" id="bTerm" ${terminals ? "checked" : ""}>Terminal sessions too</label>`}</div>
+      ${dry.targets.length ? `<div class="row wrap" style="gap:6px;margin-bottom:12px">${dry.targets.map(t => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-bt="${esc(t.id)}" checked> ${label(t)}</label>`).join("")}</div>`
+        : `<p class="muted" style="margin-top:0">Nobody in this group can take a message right now.</p>`}
+      ${dry.count > dry.max ? `<p class="hint bad">${dry.count} sessions: at most ${dry.max} at once. Untick some, or pick a smaller group.</p>` : ""}
+      <div class="row wrap" style="gap:6px;margin-bottom:8px">${(dry.macros || []).map((m, i) => `<button class="btn sm ghost" data-macro="${i}" title="${esc(m.text)}">${icon("sparkles", 13)}${esc(m.name)}</button>`).join("")}</div>
       <textarea id="bText" placeholder="e.g. Limits reset in 20 minutes: write your progress notes now and keep going." style="min-height:110px"></textarea>
-      <div class="row" style="margin-top:12px;gap:8px"><button class="btn primary" id="bSend">${icon("send", 16)}Send to selected</button><span class="hint" id="bStatus"></span></div>`
-      : `<p class="muted" style="margin-top:0">No running lanes can take a message right now.</p>`}</div>`;
-  $("dialog").showModal();
-  if ($("bText")) { $("bText").value = preset; $("bText").focus(); }
+      <p class="hint">{{seat}}, {{lane_title}} and {{reset_time}} are filled in for each one. Lanes you hired here get it at once; a terminal session holds it until someone approves it there.</p>
+      <div class="row" style="margin-top:8px;gap:8px"><button class="btn primary" id="bSend" ${dry.targets.length ? "" : "disabled"}>${icon("send", 16)}Send</button><span class="hint" id="bStatus"></span></div></div>`;
+  if (!$("dialog").open) $("dialog").showModal();
+  $("bText").value = draft; $("bText").focus();
   $("bClose").addEventListener("click", () => $("dialog").close());
-  const send = $("bSend");
-  if (send) send.addEventListener("click", async () => {
-    const text = $("bText").value.trim();
-    const picked = [...document.querySelectorAll("[data-bt]")].filter(c => c.checked).map(c => c.dataset.bt.split("|"));
-    if (!text || !picked.length) { toast("Write a message and pick at least one lane.", "warn"); return; }
-    send.disabled = true;
-    let ok = 0, held = 0, failed = 0, demo = false;
-    for (const [seat, id] of picked) {
-      try { const r = await app.post("/api/message", { seat, id, text }); if (r.demo) demo = true; else if (r.delivery === "review") held++; else ok++; office.plane(seat, id); if (!r.demo) app.chatSent(seat, id, text, r); }
-      catch { failed++; }
-      $("bStatus").textContent = `${ok + held + failed} of ${picked.length} sent…`;
-    }
-    $("dialog").close();
-    if (demo) { toast("Demo office: nothing was sent."); return; }
-    sound.play("hire");
-    toast(`Sent to ${ok + held} lane${ok + held === 1 ? "" : "s"}${held ? `, ${held} waiting for approval` : ""}${failed ? `; ${failed} failed` : ""}.`, failed ? "warn" : "good");
+  const again = () => { const [g, v] = $("bGroup").value.split("|"); broadcast($("bText").value, g, v, $("bTerm") ? $("bTerm").checked : terminals); };
+  $("bGroup").addEventListener("change", again);
+  if ($("bTerm")) $("bTerm").addEventListener("change", again);
+  $("dialogBody").querySelectorAll("[data-macro]").forEach(b => b.addEventListener("click", () => { $("bText").value = dry.macros[+b.dataset.macro].text; $("bText").focus(); }));
+  const picked = () => [...document.querySelectorAll("[data-bt]")].filter(c => c.checked).map(c => c.dataset.bt);
+  const count = () => { const n = picked().length; $("bSend").innerHTML = `${icon("send", 16)}Send to ${n}`; $("bSend").disabled = !n || n > dry.max; };
+  document.querySelectorAll("[data-bt]").forEach(c => c.addEventListener("change", count)); if (dry.targets.length) count();
+  $("bSend").addEventListener("click", async () => {
+    const text = $("bText").value.trim(), only = picked();
+    if (!text || !only.length) { toast("Write a message and pick at least one session.", "warn"); return; }
+    $("bSend").disabled = true; $("bStatus").textContent = "Sending…";
+    try {
+      const r = await app.post("/api/broadcast", { group, value, terminals: terminals || group === "all", only, expect: only.length, text });
+      $("dialog").close();
+      if (r.demo) { toast("Demo office: nothing was sent."); return; }
+      for (const x of r.results || []) if (!x.error) { office.plane(x.seat, x.id); app.bump("messages", 10, "talker"); }   // each counts toward Talker
+      sound.play("hire");
+      toast(`Sent to ${r.sent + r.held}${r.held ? `, ${r.held} waiting for approval` : ""}${r.failed ? `; ${r.failed} failed` : ""}.`, r.failed ? "warn" : "good");
+    } catch (e) { $("bSend").disabled = false; $("bStatus").textContent = ""; toast(e.message, "bad"); if (/changed/.test(e.message)) again(); }
   });
 }
 // The palette's verbs: each row names the exact session or lane it acts on, so Enter on it is the confirmation.
-//   "msg atlas status?" (a live session on Atlas, or one whose name has "atlas"), "stop docs", "resume billing"
+//   "msg atlas status?" or "message atlas: status?" (a live session on Atlas, or one whose name has "atlas"),
+//   "stop docs", "resume billing"
 function verbItems(q) {
   const out = [], priv = prefs.privacy;
   if (!snap) return out;
-  let m = /^(?:msg|message)\s+(\S+)\s*:?\s+([\s\S]{1,2000})$/i.exec(q);
+  // "message" needs a colon after who ("message atlas: status?"), so typing a command's name ("Message a group")
+  // never turns into a message; the short "msg atlas status?" is clearly meant.
+  let m = /^msg\s+(\S+)\s*:?\s+([\s\S]{1,2000})$/i.exec(q) || /^message\s+(\S+)\s*:\s*([\s\S]{1,2000})$/i.exec(q);
   if (m) {
     const who = m[1].toLowerCase(), text = m[2].trim();
     for (const s of snap.seats) {
@@ -1620,7 +1641,7 @@ function paletteItems() {
     { icon: icon("bell", 16), label: "Remind me…", keywords: "reminder remind later timer alarm note", run: () => openRemind() },
     { icon: icon("moon", 16), label: lightsOut() ? "Lights on" : "Goodnight…", hint: "G", keywords: "goodnight night lights out bed sleep wrap", run: nightToggle },
     { icon: icon("eye", 16), label: prefs.director ? "Director cam: off" : "Director cam: on", keywords: "director camera follow auto tour", run: () => setDirector(!prefs.director) },
-    { icon: icon("send", 16), label: "Message all lanes", keywords: "broadcast everyone announce", run: broadcast },
+    { icon: icon("send", 16), label: "Message a group: every lane, the stuck ones, a seat or a programme", keywords: "broadcast everyone announce all lanes stuck programme macro", run: () => broadcast() },
     { icon: icon(prefs.privacy ? "eye" : "eyeOff", 16), label: prefs.privacy ? "Turn share-safe off" : "Turn share-safe on", hint: "P", run: () => setPref("privacy", !prefs.privacy) },
     { icon: icon("volume", 16), label: prefs.sound ? "Mute sound effects" : "Turn on sound effects", run: () => setPref("sound", !prefs.sound) },
     { icon: icon("moon", 16), label: "Night theme", run: () => setPref("theme", "dark") },

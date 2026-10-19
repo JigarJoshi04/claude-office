@@ -179,7 +179,11 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 - **Ask about it** (with the office analyst on): ask a question about any session ("did it run the tests?") and get
   an answer from its transcript, citing the entries it relied on, without the session knowing.
 - **Follow up** on a finished session. Your message starts a lane that resumes that exact conversation.
-- **Message all lanes** at once, for example "limits reset in 20 minutes: write your notes now".
+- **Message a group** at once (the menu, the palette, or Message on a programme's card): every lane, the stuck or
+  looping ones, one seat's or one programme's, with terminal sessions only if you tick them. You see who is in the
+  group and can untick anyone; `{{seat}}`, `{{lane_title}}` and `{{reset_time}}` are filled in for each. Ready-made
+  messages (Notes now, Status, Wrap up, Unstick) sit above the box; add your own as `"message_macros": [{"name":
+  "...", "text": "..."}]` in `config.json`. From a terminal: `claude-office message --programme apollo "Status?"`.
 
 **The CEO's briefing**
 - Always in the same order: how many sessions are working, idle and stopped (and who gets the next lane), what
@@ -298,6 +302,7 @@ claude-office checkpoint             write the office down
 claude-office top                    the office in this terminal (SSH, tmux): seats, Needs you, sessions, lanes, news
 claude-office events [-f] [--kind K] the news, and with --follow every new line as it comes (--json for scripts)
 claude-office token [--rotate]      where the write token is kept; --rotate makes a new one (restart the office)
+claude-office message [--stuck|--all|--seat ID|--programme KEY] [--terminals] [--dry] TEXT   one message to a group
 ```
 
 ## Configuration

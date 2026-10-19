@@ -177,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.167.0"
+    server_version = "ClaudeOffice/3.168.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -576,7 +576,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(429, {"error": "Too many events: at most 30 a minute"})
                 self.office.emit("external", ev["text"], ev["seat"], ev["level"], extra={"source": ev["source"], "banner": ev["banner"]})
                 return self._json(200, {"ok": True})
-            if self.demo and path not in ("/api/checkpoint", "/api/divider/preview"):
+            if self.demo and path not in ("/api/checkpoint", "/api/divider/preview") and not (path == "/api/broadcast" and body.get("dry")):
                 return self._json(200, {"ok": True, "demo": True, "note": "Demo office: nothing was changed"})
             snap = self.office.get()
             seat_ids = [s["id"] for s in snap.get("seats", [])]
@@ -594,6 +594,8 @@ class Handler(BaseHTTPRequestHandler):
                                                                   "ranking": ev["ranking"]}})
             if path == "/api/message":
                 return self._json(200, talk.send(self.office, body, seat_ids))
+            if path == "/api/broadcast":                   # one message to a group (talk.broadcast); "dry" lists who
+                return self._json(200, talk.broadcast(self.office, body, seat_ids))
             if path == "/api/nudge":                      # the stuck rescuer's first step: a standard nudge (rescue.py)
                 x = self.office.find_session(str(body.get("seat", "")), str(body.get("id", "")))
                 if not x or not (x.get("state") == "stuck" or ((x.get("loop") or {}).get("count") or 0) >= 8):

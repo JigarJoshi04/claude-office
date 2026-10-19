@@ -487,7 +487,7 @@ export function makePanels(app) {
   }
   function progCard(p) {
     const done = p.sessions.filter(s => s.report_status).length;
-    return `<div class="card" style="margin-bottom:8px"><div class="row between"><b>${esc(p.name)}</b>${p.url ? `<a class="pill info" href="${esc(p.url)}" target="_blank" rel="noopener">${icon("external", 13)}Mission Control</a>` : ""}</div>
+    return `<div class="card" style="margin-bottom:8px"><div class="row between"><b>${esc(p.name)}</b><span class="row" style="gap:6px">${p.key ? `<button class="btn sm ghost" data-prog-msg="${esc(p.key)}" title="One message to this programme's lanes">${icon("send", 13)}Message</button>` : ""}${p.url ? `<a class="pill info" href="${esc(p.url)}" target="_blank" rel="noopener">${icon("external", 13)}Mission Control</a>` : ""}</span></div>
       <div class="muted" style="font-size:13px;margin-top:4px">${p.sessions.length} at work${done ? ` · ${done} reported` : ""} · ${[...new Set(p.sessions.map(s => nameOf(s.seat)))].map(esc).join(", ")}</div></div>`;
   }
 

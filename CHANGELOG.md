@@ -3,6 +3,21 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.168.0] - 2026-10-19
+
+### Added
+- Message a group (it replaces Message all lanes): every lane, the stuck or looping ones, one seat's or one
+  programme's (Message on its whiteboard card), terminal sessions only when ticked. The office lists the group, you
+  can untick anyone, and the send carries how many were shown, so a list that changed meanwhile is refused rather
+  than reaching more sessions than were on screen (at most 20 at once). `{{seat}}`, `{{lane_title}}` and
+  `{{reset_time}}` are filled in per session. Ready-made messages, plus your own from `message_macros` in config.json.
+- `claude-office message [--stuck|--all|--seat ID|--programme KEY] [--terminals] [--dry] TEXT`.
+
+### Fixed
+- Typing a command's name into the palette could send a message: "message all lanes" was read as the verb "send
+  'lanes' to a session named like 'all'". The long form now needs a colon (`message atlas: status?`); `msg atlas
+  status?` works as before.
+
 ## [3.167.0] - 2026-10-19
 
 ### Security

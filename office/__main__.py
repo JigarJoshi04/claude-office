@@ -159,6 +159,34 @@ def cmd_post(args) -> int:
     return 0
 
 
+def cmd_message(args) -> int:
+    """One message to a group of live sessions, through the running office (talk.broadcast): lanes by default."""
+    group, value = ("stuck", "") if args.stuck else ("all", "") if args.all else ("seat", args.seat) if args.seat \
+        else ("programme", args.programme) if args.programme else ("lanes", "")
+    body = {"group": group, "value": value, "terminals": args.terminals or group == "all"}
+    code, out = _post("/api/broadcast", dict(body, dry=True), args.port)
+    if code != 200 or out is None:
+        print((out or {}).get("error") or f"HTTP {code}", file=sys.stderr)
+        return 1
+    for t in out["targets"]:
+        print(f"  {t['seat']:<9} {t.get('kind') or '':<6} {t.get('name') or t['id']}{'  (waits for approval)' if t.get('talk') == 'review' else ''}")
+    if not out["targets"]:
+        print("Nobody in that group can take a message right now.", file=sys.stderr)
+        return 1
+    if args.dry:
+        return 0
+    code, out = _post("/api/broadcast", dict(body, text=args.text, expect=out["count"]), args.port)
+    if code != 200 or out is None or out.get("error"):
+        print((out or {}).get("error") or f"HTTP {code}", file=sys.stderr)
+        return 1
+    if out.get("demo"):
+        print("Demo office: nothing was sent.")
+        return 0
+    print(f"Sent to {out['sent'] + out['held']}" + (f", {out['held']} waiting for approval" if out["held"] else "")
+          + (f"; {out['failed']} failed" if out["failed"] else "") + ".")
+    return 0 if not out["failed"] else 1
+
+
 def cmd_lanes(_args) -> int:
     for l in lanes.list_lanes():
         when = time.strftime("%d %b %H:%M", time.localtime(l["created_at"]))
@@ -254,6 +282,16 @@ def main(argv=None) -> int:
     po.add_argument("--source", help="who says it: deploy, cron, CI (1-24 characters)")
     po.add_argument("--banner", action="store_true", help="also a banner across the floor (at Full game intensity)")
     po.add_argument("--port", type=int)
+    ms = sub.add_parser("message", help="one message to a group of live sessions (office lanes by default)")
+    ms.add_argument("text", help="{{seat}}, {{lane_title}} and {{reset_time}} are filled in for each")
+    who = ms.add_mutually_exclusive_group()
+    who.add_argument("--stuck", action="store_true", help="the stuck or looping ones")
+    who.add_argument("--all", action="store_true", help="every session that can take a message, terminals too")
+    who.add_argument("--seat", help="the ones on this seat")
+    who.add_argument("--programme", help="the ones in this programme (its key)")
+    ms.add_argument("--terminals", action="store_true", help="terminal sessions too (each waits for approval there)")
+    ms.add_argument("--dry", action="store_true", help="only list who would get it")
+    ms.add_argument("--port", type=int)
     tp = sub.add_parser("top", help="the office in this terminal (for SSH and tmux)")
     tp.add_argument("--port", type=int)
     ev = sub.add_parser("events", help="the office's news in this terminal")
@@ -301,6 +339,8 @@ def main(argv=None) -> int:
         return 0
     if args.cmd == "post":
         return cmd_post(args)
+    if args.cmd == "message":
+        return cmd_message(args)
     if args.cmd == "ask":
         return cmd_ask(args)
     if args.cmd == "backups":
