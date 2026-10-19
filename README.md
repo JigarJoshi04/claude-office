@@ -91,6 +91,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   today's burners, the day so far, what shipped and how many things need you (counts only). The screen stays awake,
   the cursor hides, it dims at night and reloads itself after an update. `&slides=burn,today,shipped,needs` (or
   `none`), `&every=12` (seconds) and `&dim=22-7` (or `0`) tune it.
+- **Presenter lock** (menu → Lock this screen, the palette, or `/?lock=1`): for a screen share or a shared screen.
+  Share-safe is on (your own setting is kept), the Hire, menu and search buttons go, and nothing can be changed from
+  that tab until someone holds Esc, or the padlock, for two seconds. **`/tv`** goes further: TV mode on a page that
+  carries no office token at all, so the office refuses anything it sends, and it cannot be unlocked.
 
 **The office levels up**
 - Everyone's XP adds up to an office level (the gold ring next to the name). Each level unlocks something on the floor:

@@ -325,6 +325,14 @@ class ServerTests(unittest.TestCase):
         self.assertIn("script-src 'self'", headers["Content-Security-Policy"])
         self.assertNotIn("Access-Control-Allow-Origin", headers)
 
+    def test_the_tv_page_carries_no_token(self):
+        status, headers, body = self.request(path="/tv")
+        parser = MetaParser()
+        parser.feed(body.decode())
+        self.assertEqual((status, parser.meta["office-token"], headers["Cache-Control"]), (200, "", "no-store"))
+        self.assertNotIn(self.token.encode(), body)
+        self.assertEqual(self.post(headers={"X-Office-Token": ""})[0], 403)      # what it would send is refused
+
     def test_usage_cache_contains_no_credentials(self):
         body = (self.root / "state/usage-cache.json").read_text()
         for forbidden in (ACCESS, REFRESH, "accessToken", "refreshToken"):

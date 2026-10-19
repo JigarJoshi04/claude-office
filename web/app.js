@@ -40,6 +40,8 @@ import { setLooks } from "./engine/sprites.js";
 const TOKEN = document.querySelector('meta[name="office-token"]').content;
 const DEMO = document.querySelector('meta[name="office-demo"]').content === "1";
 const QS = new URLSearchParams(location.search);
+const HARD_LOCK = !TOKEN;            // the /tv page: no token, read-only for good (the presenter lock, setLocked)
+let locked = HARD_LOCK || QS.get("lock") === "1" || (() => { try { return sessionStorage.getItem("office.locked") === "1"; } catch { return false; } })();
 
 const prefs = Object.assign({ theme: "dark", motion: matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduced" : "full",
   sound: false, notify: false, privacy: false, view: "floor", tlHours: 6, statsDay: null, textSize: "auto", panel: true, seasonal: true, game: "full" }, store.get("prefs", {}));
@@ -110,6 +112,7 @@ const app = {
   rerender: (force) => renderPanel(force),
   refresh: () => pollOnce(),
   async post(path, body) {
+    if (locked) throw new Error(HARD_LOCK ? "This is the read-only TV page." : "This screen is locked: hold Esc for 2 seconds to unlock it.");
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Office-Token": TOKEN }, body: JSON.stringify(body || {}) });
     const data = await r.json().catch(() => ({ error: "Bad response" }));
     if (!r.ok || data.error) throw new Error(data.error || "HTTP " + r.status);
@@ -511,6 +514,48 @@ function setPref(k, v) {
     else if (Notification.permission === "default") Notification.requestPermission().then(p => { if (p !== "granted") refuse("Notifications are blocked by the browser.", true); });
   }
 }
+// The presenter lock: a screen on a TV or in a screen share stays share-safe and read-only until someone holds
+// Escape (or the padlock) for two seconds. Share-safe is forced without touching the saved setting. On this page it is
+// a courtesy; /tv is the guard, since that page carries no token and the office refuses its every write.
+let holdT = null;
+function setLocked(on) {
+  if (HARD_LOCK || on === locked) return;
+  locked = on;
+  try { if (on) sessionStorage.setItem("office.locked", "1"); else sessionStorage.removeItem("office.locked"); } catch { /* a reload unlocks */ }
+  if (on) {
+    document.querySelector(".menu")?.remove(); document.querySelector(".palette-back")?.remove();
+    if ($("dialog").open) $("dialog").close();
+    if (!("privacy" in qsOver)) { qsOver.privacy = prefs.privacy; prefs.privacy = true; }
+  } else if ("privacy" in qsOver) { prefs.privacy = qsOver.privacy; delete qsOver.privacy; }
+  document.body.classList.toggle("locked", on); lockChip();
+  office.setPrivacy(prefs.privacy); renderPanel(true); renderMain(); rnSig = ""; if (snap) renderRightNow();
+  toast(on ? "Screen locked: share-safe and read-only. Hold Esc (or the padlock) for 2 seconds to unlock." : "Screen unlocked.", "info", { ic: "lock", ms: 5000 });
+}
+function holdStart() {
+  if (holdT) return;
+  if (HARD_LOCK) { toast("This is the read-only TV page. Open the office without /tv to change things.", "info", { ic: "lock" }); return; }
+  $("lockChip").classList.add("holding");
+  holdT = setTimeout(() => { holdT = null; $("lockChip").classList.remove("holding"); setLocked(false); }, 2000);
+}
+function holdStop() { clearTimeout(holdT); holdT = null; const c = $("lockChip"); if (c) c.classList.remove("holding"); }
+function lockChip() {
+  let c = $("lockChip");
+  if (!c) {
+    c = document.createElement("button");
+    c.id = "lockChip"; c.type = "button"; c.className = "lockchip";
+    c.innerHTML = `${icon("lock", 14)}<span>${HARD_LOCK ? "TV page: read-only" : "Locked · hold to unlock"}</span>`;
+    c.title = HARD_LOCK ? "The read-only TV page: the office refuses its writes" : "Share-safe and read-only. Hold here, or hold Esc, for 2 seconds to unlock.";
+    c.addEventListener("pointerdown", holdStart);
+    for (const ev of ["pointerup", "pointerleave", "pointercancel"]) c.addEventListener(ev, holdStop);
+    c.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); holdStart(); } });
+    c.addEventListener("keyup", (e) => { if (e.key === "Enter" || e.key === " ") holdStop(); });
+    document.body.appendChild(c);
+  }
+  c.hidden = !locked;
+}
+// While locked only looking around works: views, the floor's camera, TV, replay and the radio.
+const LOCK_KEYS = /^(?:[ftbsklvrgm?0-9=+-]|Arrow\w+| )$/;
+addEventListener("keyup", (e) => { if (e.key === "Escape") holdStop(); });
 
 // ------------------------------------------------------------------------------------------------ routing
 function hashFor(v) {
@@ -1210,6 +1255,7 @@ const WHATS_NEW = [
   ["gift", "Gifts and a sticker album", "Reports and finished lanes sometimes leave a gift box on the floor, and a delivery waits every morning. Open them for 24 stickers in four rarities."],
   ["star", "The office levels up", "Everyone's XP adds up to an office level that unlocks palms, a vacuum, a dog, fireworks and more. Click the gold ring."],
   ["rewind", "Replay the day", "Press R and the floor plays back the last hours."],
+  ["lock", "Lock the screen", "Presenting? Lock this screen from the menu: share-safe and read-only until you hold Esc for two seconds. /tv is a page that can never change anything."],
   ["tv", "TV mode", "Press V for the floor alone, full screen: room tours, big slides and a news ticker, and the screen stays awake."],
   ["flame", "Goals, combos and a weekly challenge", "Three new goals every day, combos for reports in a row, and a challenge to beat last week."],
   ["calendar", "Last 7 days", "Today now charts the last seven days."],
@@ -1255,7 +1301,7 @@ function openMenu(focusItem) {
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
     + item("dnd", "moon", "Do not disturb", dndOn() ? `Until ${clock(snap.office.dnd_until)}` : "Off", dndOn())
     + item("night", lightsOut() ? "sun" : "moon", lightsOut() ? "Lights on" : "Goodnight…")
-    + "<hr>" + item("daycard", "star", "Share today's card") + item("clip", "play", "Record a 15-second clip") + item("timelapse", "rewind", "Record today's timelapse") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("clip", "play", "Record a 15-second clip") + item("timelapse", "rewind", "Record today's timelapse") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("lock", "lock", "Lock this screen") + item("broadcast", "send", "Message all lanes") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -1280,6 +1326,7 @@ function openMenu(focusItem) {
     else if (k === "night") { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); nightToggle(); return; }
     else if (k === "checkpoint") checkpoint();
     else if (k === "tv") floor.setTv(true);
+    else if (k === "lock") setLocked(true);
     else if (k === "daycard") shareDay();
     else if (k === "week") weekReview.play();
     else if (k === "wrapped") wrapped.play();
@@ -1549,6 +1596,7 @@ function paletteItems() {
     { icon: icon("star", 16), label: "Last month, wrapped", keywords: "month wrapped review recap story year", run: () => wrapped.play() },
     { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
+    { icon: icon("lock", 16), label: "Lock this screen: share-safe and read-only", keywords: "lock presenter screen share present meeting tv kiosk read only", run: () => setLocked(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },
     { icon: icon("rewind", 16), label: "Replay the last 24 hours", keywords: "history playback rewind day yesterday", run: () => { setView("floor"); replay.open(24); } },
     { icon: icon("timeline", 16), label: "Timeline", hint: "T", keywords: "gantt history", run: () => setView("timeline") },
@@ -1650,10 +1698,14 @@ document.addEventListener("keydown", (e) => {
   setTimeout(() => office.setHappy(giftBox.happy()), 20000);   // back to normal (or to the real happy hour)
 });
 document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap) openPalette(landFocus(paletteItems()), commandItems); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap && !locked) openPalette(landFocus(paletteItems()), commandItems); return; }
   // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).
   if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back, dialog[open]")) return;
   const k = e.key;
+  if (locked) {
+    if (k === "Escape") { if (!e.repeat) holdStart(); return; }
+    if (!LOCK_KEYS.test(k)) return;
+  }
   if (replay.active()) {
     if (k === "Escape") { e.preventDefault(); replay.close(); return; }
     if (k === " ") { e.preventDefault(); replay.toggle(); return; }
@@ -1701,12 +1753,13 @@ document.documentElement.dataset.motion = prefs.motion;
 office.setReducedMotion(prefs.motion === "reduced");
 if (["full", "calm", "off"].includes(QS.get("game"))) { qsOver.game = prefs.game; prefs.game = QS.get("game"); }   // ?game=calm for a screen share
 applyGame(true);
+if (locked) { qsOver.privacy = prefs.privacy; prefs.privacy = true; document.body.classList.add("locked"); lockChip(); }   // ?lock=1, /tv or a locked tab reloaded
 office.setPrivacy(prefs.privacy);
 office.setSeasonal(prefs.seasonal);
 sound.set(prefs.sound);
 setView(QS.get("view") || prefs.view || "floor");
 view = viewFromHash();
 connect();
-const startT = setInterval(() => { if (snap) { clearInterval(startT); go(view, true); if (QS.get("tv") === "1") floor.setTv(true); } }, 100);
+const startT = setInterval(() => { if (snap) { clearInterval(startT); go(view, true); if (QS.get("tv") === "1" || location.pathname === "/tv") floor.setTv(true); } }, 100);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !es) pollOnce(); });
 export { app };

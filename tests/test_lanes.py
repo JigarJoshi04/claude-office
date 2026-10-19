@@ -319,6 +319,18 @@ class WorktreeTests(unittest.TestCase):
         branches = subprocess.run(["git", "-C", str(self.repo), "branch", "--list", t["branch"]], capture_output=True, text=True).stdout
         self.assertIn(t["branch"], branches)
 
+    def test_a_worktree_keeps_your_umask_not_the_offices(self):
+        import stat
+        old = os.umask(0o077)                                # as serve() runs: the office's own files private
+        try:
+            with patch.object(lanes, "REPO_UMASK", 0o022), patch.object(lanes, "start_unit"):
+                lane = lanes.create_lane("Fix it", "Brief.", str(self.repo), "auto", "opus", "acceptEdits", ["c1"], self.cfg, worktree=True)
+        finally:
+            os.umask(old)
+        mode = lambda p: stat.S_IMODE(os.stat(p).st_mode)
+        self.assertEqual(mode(Path(lane["worktree"]["path"]) / "src" / "a.py"), 0o644)
+        self.assertEqual(mode(self.root / "proj.lanes"), 0o755)
+
     def test_from_inside_a_worktree_the_copy_goes_beside_the_main_checkout(self):
         inner = self.repo / "wt" / "x"
         subprocess.run(["git", "-C", str(self.repo), "worktree", "add", "-q", "-b", "inner", str(inner)], capture_output=True, check=True)

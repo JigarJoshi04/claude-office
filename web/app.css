@@ -1860,3 +1860,13 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .sh-proj li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; font-size: 13.5px; }
 .sh-proj li code { font-size: 12px; color: var(--accent-2); } .sh-proj li span:nth-child(2) { overflow-wrap: anywhere; }
 .sh-who { color: var(--muted); font-size: 12px; white-space: nowrap; } .sh-pr { font-size: 12.5px; } .good-t { color: var(--good); }
+
+/* The presenter lock (app.js setLocked): read-only and share-safe until the padlock or Esc is held for 2 s */
+body.locked #btnHire, body.locked #btnMenu, body.locked #btnPalette, body.locked .composer, body.locked [data-tv-exit] { display: none !important; }
+.lockchip { position: fixed; top: calc(12px * var(--ui-zoom, 1)); right: 16px; z-index: 60; display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+  font: 600 13px var(--font, inherit); cursor: pointer; overflow: hidden; touch-action: none; user-select: none; }
+.lockchip svg { color: var(--accent, #ff7a45); }
+.lockchip::after { content: ""; position: absolute; inset: auto 0 0 0; height: 3px; background: var(--accent, #ff7a45); transform: scaleX(0); transform-origin: left; }
+.lockchip.holding::after { transform: scaleX(1); transition: transform 2s linear; }
+body.tv .lockchip { top: auto; bottom: calc(52px * var(--ui-zoom, 1)); right: 12px; }

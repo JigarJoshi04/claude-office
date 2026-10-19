@@ -410,11 +410,14 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
     return load_lane(lane_id) or lane
 
 
+REPO_UMASK = -1      # the umask the office started with (serve() sets its own to 077): git checkouts in your repositories use it
+
+
 def make_worktree(workdir: str, lane_id: str) -> tuple[str, dict]:
     """A git worktree for a lane: a new branch lane/<id> from the repository's HEAD, checked out in <repo>.lanes/<id>
     beside the repository (never inside it, where its tests and searches would find the copy). Returns the folder the
     lane works in (the same place inside the copy as workdir was in the repository) and {path, branch, repo}."""
-    git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True, timeout=60)
+    git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True, timeout=60, umask=REPO_UMASK)
     r = git("-C", workdir, "rev-parse", "--show-toplevel")
     if r.returncode != 0:
         raise ValueError(f"{workdir} is not in a git repository, so the lane cannot have its own worktree there")
@@ -425,7 +428,10 @@ def make_worktree(workdir: str, lane_id: str) -> tuple[str, dict]:
         main = os.path.dirname(c.stdout.strip().rstrip("/"))
     dest, branch = os.path.join(os.path.dirname(main), os.path.basename(main) + ".lanes", lane_id), f"lane/{lane_id}"
     try:
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        if not os.path.isdir(os.path.dirname(dest)):
+            os.makedirs(os.path.dirname(dest))
+            if REPO_UMASK >= 0:                              # made like your other folders, not like the office's own
+                os.chmod(os.path.dirname(dest), 0o777 & ~REPO_UMASK)
     except OSError as e:
         raise ValueError(f"Could not make a folder for the lane's worktree beside the repository: {e.strerror or e}") from None
     r = git("-C", top, "worktree", "add", "-q", "-b", branch, dest, "HEAD")

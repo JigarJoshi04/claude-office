@@ -3,6 +3,21 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.165.0] - 2026-10-19
+
+### Added
+- A presenter lock: menu → Lock this screen (or the palette, or `/?lock=1`) makes a tab share-safe and read-only
+  for a screen share or a shared screen. Your own share-safe setting is kept; Hire, the menu and search go away, only
+  looking around works (views, the floor's camera, TV, replay), and anything that would change the office is refused.
+  Hold Esc, or the padlock, for two seconds to unlock; a locked tab stays locked when it is reloaded.
+- `/tv`: TV mode on a page with no office token in it, so the office refuses anything it sends and it cannot be
+  unlocked: the page for a screen in a shared room.
+
+### Security
+- Every file the office writes is now private (umask 077), not only the ones it made private by hand, so the
+  start-up tightening has nothing to fix after the first time. A lane's git worktree keeps the umask you started the
+  office with.
+
 ## [3.164.0] - 2026-10-19
 
 ### Added

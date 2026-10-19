@@ -11,6 +11,7 @@ import hmac
 import json
 import re
 import mimetypes
+import os
 import select
 import signal
 import socket
@@ -176,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.164.0"
+    server_version = "ClaudeOffice/3.165.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -230,7 +231,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         """Headers only, for the page, its files and the health check (monitors and curl -I); never for a stream."""
         path = urlparse(self.path).path
-        if path in ("/", "/index.html", "/healthz") or path.startswith("/static/"):
+        if path in ("/", "/index.html", "/tv", "/healthz") or path.startswith("/static/"):
             return self.do_GET()
         return self._send(405, b"", "text/plain", {"Allow": "GET"})
 
@@ -240,9 +241,11 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
         try:
-            if url.path in ("/", "/index.html"):
+            if url.path in ("/", "/index.html", "/tv"):
+                # /tv is the page for a big screen: no token in it, so the office refuses its every write, and it
+                # starts locked (share-safe, read-only) with no way to unlock from the page.
                 html = (config.WEB_DIR / "index.html").read_text()
-                html = html.replace("{{TOKEN}}", self.token).replace("{{DEMO}}", "1" if self.demo else "0")
+                html = html.replace("{{TOKEN}}", "" if url.path == "/tv" else self.token).replace("{{DEMO}}", "1" if self.demo else "0")
                 csp = ("default-src 'self'; img-src 'self' data: blob:; media-src blob:; style-src 'self' 'unsafe-inline'; "
                        "font-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")   # nothing from elsewhere
                 return self._send(200, html.encode(), "text/html; charset=utf-8", {"Content-Security-Policy": csp})
@@ -672,8 +675,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(port: int, demo: bool = False) -> None:
     config.ensure_dirs()
-    if not demo and config.lock_down():                    # folders 0700, the files in them 0600
-        print("Tightened the permissions of the office's own files.", flush=True)
+    if not demo:
+        if config.lock_down():                             # folders 0700, the files in them 0600
+            print("Tightened the permissions of the office's own files.", flush=True)
+        lanes.REPO_UMASK = os.umask(0o077)                 # and every file it writes from now on (a worktree keeps yours)
     if demo:
         from .demo import DemoOffice
         office = DemoOffice()
