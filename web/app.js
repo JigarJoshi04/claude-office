@@ -380,7 +380,8 @@ function chapterTick() {
 // Your data (export.py): CSV and JSON downloads and the month's report. They need the office token, so the page
 // fetches them and saves the file itself.
 async function fetchExport(qs) {
-  const r = await fetch("/api/export?" + qs + (prefs.privacy ? "&safe=1" : ""), { headers: { "X-Office-Token": TOKEN } });
+  const names = encodeURIComponent(JSON.stringify(Object.fromEntries(snap.seats.map(s => [s.id, panels.persona(s).name]))));   // the characters' names, as the page shows them
+  const r = await fetch("/api/export?" + qs + (prefs.privacy ? "&safe=1" : "") + "&names=" + names, { headers: { "X-Office-Token": TOKEN } });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "HTTP " + r.status);
   return r;
 }

@@ -26,10 +26,19 @@ def _iso(ts) -> str:
     return time.strftime("%Y-%m-%d %H:%M", time.localtime(ts)) if ts else ""
 
 
-def rows(office, what: str, private: bool = False) -> list[dict]:
+def names_from(raw) -> dict:
+    """The page's names for the characters (they are made in the browser): {seat id: name}, checked."""
+    try:
+        d = json.loads(raw or "{}")
+    except ValueError:
+        return {}
+    return {k: v.strip()[:40] for k, v in (d if isinstance(d, dict) else {}).items() if isinstance(k, str) and isinstance(v, str) and v.strip()}
+
+
+def rows(office, what: str, private: bool = False, names: dict | None = None) -> list[dict]:
     snap = office.get() or {}
     seats = snap.get("seats", [])
-    label = {s["id"]: s.get("nickname") or s.get("label") or s["id"] for s in seats}
+    label = {s["id"]: (names or {}).get(s["id"]) or s.get("nickname") or s.get("label") or s["id"] for s in seats}
     if what == "days":
         out = []
         ledger = getattr(office.samples, "ledger", None)
@@ -95,7 +104,7 @@ def render(items: list[dict], fmt: str) -> tuple[bytes, str]:
     return buf.getvalue().encode(), "text/csv; charset=utf-8"
 
 
-def report(office, month: str, private: bool = False) -> str:
+def report(office, month: str, private: bool = False, names: dict | None = None) -> str:
     """A month in Markdown: the work, the tokens and their list price, what shipped, promises, who did what, best days."""
     try:
         y, m = int(month[:4]), int(month[5:7])
@@ -106,9 +115,9 @@ def report(office, month: str, private: bool = False) -> str:
     inside = lambda d: first.isoformat() <= d <= last.isoformat()
     snap = office.get() or {}
     seats = snap.get("seats", [])
-    label = {s["id"]: s.get("nickname") or s.get("label") or s["id"] for s in seats}
-    days = [r for r in rows(office, "days") if inside(r["day"])]
-    toks = [r for r in rows(office, "tokens") if inside(r["day"])]
+    label = {s["id"]: (names or {}).get(s["id"]) or s.get("nickname") or s.get("label") or s["id"] for s in seats}
+    days = [r for r in rows(office, "days", names=names) if inside(r["day"])]
+    toks = [r for r in rows(office, "tokens", names=names) if inside(r["day"])]
     who: dict = {}
     for r in days:
         e = who.setdefault(r["seat"], {"min": 0, "reports": 0, "sessions": 0, "mvp": 0, "limits": 0})

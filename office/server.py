@@ -246,13 +246,13 @@ class Handler(BaseHTTPRequestHandler):
                 given = self.headers.get("X-Office-Token") or ""
                 if not self.token or not hmac.compare_digest(given.encode(), self.token.encode()):
                     return self._json(403, {"error": "Missing or wrong office token"})
-                private = q.get("safe") == "1"
+                private, names = q.get("safe") == "1", export.names_from(q.get("names"))
                 if q.get("what") == "report":
                     month = q.get("month") or time.strftime("%Y-%m")
-                    body = export.report(self.office, month, private).encode()
+                    body = export.report(self.office, month, private, names).encode()
                     return self._send(200, body, "text/markdown; charset=utf-8", {"Content-Disposition": f'attachment; filename="claude-office-{month}.md"'})
                 what, fmt = q.get("what", ""), q.get("format", "csv")
-                body, ctype = export.render(export.rows(self.office, what, private), fmt)
+                body, ctype = export.render(export.rows(self.office, what, private, names), fmt)
                 return self._send(200, body, ctype, {"Content-Disposition": f'attachment; filename="claude-office-{what}.{fmt}"'})
             if url.path == "/api/postmortem":                # why a seat last ran out of plan (history.postmortem)
                 snap = self.office.get()

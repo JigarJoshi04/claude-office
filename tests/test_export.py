@@ -61,6 +61,8 @@ class ExportTests(unittest.TestCase):
         self.assertIn("Nothing on record", export.report(self.office, "2025-01"))
         with self.assertRaises(ValueError):
             export.report(self.office, "Oct")
+        self.assertIn("| Hercules | 3.0 |", export.report(self.office, "2026-10", names=export.names_from('{"claude2": "Hercules", "x": 5}')))
+        self.assertEqual(export.names_from("not json"), {})
 
 
 if __name__ == "__main__":
