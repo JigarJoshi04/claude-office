@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.132.0] - 2026-10-19
+
+### Added
+- Gets the most done: the tokens page's leaderboard switches between who burns the most and who ships the most per
+  token, ranked by fresh tokens (input, cache writes, output) per commit or merged PR, among characters past a million
+  tokens in the range. The leanest wears a ribbon; each row shows what it shipped and its cache share. Codex is listed
+  apart, since it counts its tokens its own way, and characters with nothing shipped are listed last.
+
 ## [3.131.0] - 2026-10-19
 
 ### Fixed

@@ -130,7 +130,7 @@ const rangeWord = { today: "today", 7: "in the last 7 days", 30: "in the last 30
 const prevWord = { today: "yesterday", 7: "the 7 days before", 30: "the 30 days before", 90: "the 90 days before" };
 
 // The control that had focus before a redraw, as an attribute and value to find it again afterwards.
-const FOCUS_KEYS = ["data-tp-range", "data-tok-metric", "data-tp-seat", "data-tp-csv", "data-tp-share", "data-tok-open", "data-seat-go"];
+const FOCUS_KEYS = ["data-tp-range", "data-tp-board", "data-tok-metric", "data-tp-seat", "data-tp-csv", "data-tp-share", "data-tok-open", "data-seat-go"];
 export function focusKey(el) {
   const a = document.activeElement;
   if (!a || !el.contains(a)) return null;
@@ -187,6 +187,27 @@ function renderTokensInner(el, app) {
         <span class="tb-bar"><i style="width:${(val(s) / max * 100).toFixed(1)}%"></i></span></span>
       <span class="tb-v"><b>${fmt(val(s))}</b><small>${sum ? Math.round(val(s) / sum * 100) : 0}% · ${s.sessions} session${s.sessions === 1 ? "" : "s"}</small></span></div>`;
   }).join("") || `<div class="muted">No tokens ${esc(rangeWord[rng])}.</div>`;
+  // Gets the most done: fewest fresh tokens per commit or merged PR, among characters past a million tokens. Codex
+  // counts its tokens its own way, so it is listed apart. A ratio of output, not a judgement of the work.
+  const boardKind = !seat && p.tokBoard === "done" ? "done" : "burn";
+  const doneRows = (() => {
+    if (boardKind !== "done") return "";
+    const items = (s) => (s.commits || 0) + (s.prs_merged || 0), isCodex = (s) => (seatOf(s.seat) || {}).kind === "codex";
+    const big1 = (t.seats || []).filter(s => s.all >= 1e6);
+    const ranked = big1.filter(s => items(s) && !isCodex(s)).map(s => ({ s, per: s.fresh / items(s) })).sort((a, b) => a.per - b.per);
+    const apart = big1.filter(s => isCodex(s) && items(s)), none = big1.filter(s => !items(s));
+    const best = ranked.length ? ranked[0].per : 1;
+    const row = (s, i, per, note) => {
+      const st = seatOf(s.seat), color = st ? st.color : "#82889f", cache = s.all ? Math.round((s.all - s.fresh) / s.all * 100) : 0;
+      return `<div class="tb-row ${i === 0 ? "first" : ""} ${note ? "dim" : ""}" style="--seat:${esc(color)}" ${st ? `data-tp-seat="${esc(s.seat)}" role="button" tabindex="0" aria-label="${esc(who(s.seat))}: ${per ? big(per) + " fresh tokens a commit or merge" : esc(note)}, show only ${esc(who(s.seat))}"` : ""}>
+        <span class="rk">${i >= 0 ? i + 1 : "·"}</span>${st ? `<i data-portrait="mascot-${esc(s.seat)}|${esc(color)}|"></i>` : `<span class="tb-unk">?</span>`}
+        <span class="grow"><span class="tb-name"><b>${esc(who(s.seat))}</b>${i === 0 && !gameOff ? `<em class="tb-flame tb-lean" title="Fewest fresh tokens per commit or merged PR ${esc(rangeWord[rng])}">${icon("star", 13)}Leanest</em>` : ""}</span>
+          ${per ? `<span class="tb-bar"><i style="width:${Math.max(4, best / per * 100).toFixed(1)}%"></i></span>` : `<small class="muted" title="${esc(note)}">${esc(note.split(":")[0])}</small>`}</span>
+        <span class="tb-v"><b>${per ? big(per) : "–"}</b><small>${items(s).toLocaleString()} shipped · ${cache}% cache</small></span></div>`;
+    };
+    return ranked.map((r, i) => row(r.s, i, r.per)).join("") + apart.map(s => row(s, -1, null, "Not comparable: Codex counts its tokens its own way")).join("")
+      + none.map(s => row(s, -1, null, "No commits or merges counted")).join("") || `<div class="muted">Nobody past a million tokens shipped a commit ${esc(rangeWord[rng])}.</div>`;
+  })();
   // days in the range, as bars
   const days = t.days || [], dmax = Math.max(1, ...days.map(val));
   const bars = days.map((d, i) => { const h = val(d) > 0 ? Math.max(2, Math.round(val(d) / dmax * 100)) : 0, w = 100 / days.length;
@@ -274,9 +295,13 @@ function renderTokensInner(el, app) {
         ${rng !== "today" && todayOf(t) ? `<em>${fmt(todayOf(t))} today</em>` : ""}</div>
       ${t.rebuilding ? `<p class="hint">${icon("refresh", 13)} Counting again from the transcripts after an update: these are the numbers from before, until it is done.</p>` : ""}
       <div class="tok-parts"><span>${icon("refresh", 13)}${big(t.total.cache)} cache reads</span><span>${icon("zap", 13)}${big(t.total.fresh)} fresh</span><span>${icon("send", 13)}${big(t.total.output)} output</span><span>${icon("chat", 13)}${(t.total.sessions || 0).toLocaleString()} sessions</span></div></div>
-    <div class="tp-grid"><div class="view-card"><h5>${seat ? "Where it ranks" : "Who burns the most"} · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5><div class="tb-list">${rows}</div>
-        ${(() => { const b = beltHolders(t.weeks); return b.holder && !gameOff ? `<p class="tp-belt">${icon("belt", 15)}<span><b>Burner Belt: ${esc(who(b.holder))}</b>, the most tokens last week${b.leader && b.leader !== b.holder ? ` · ${esc(who(b.leader))} leads this week` : b.leader ? " and leads this week too" : ""}.</span></p>` : ""; })()}
-        ${!seat && board.length ? `<p class="hint">Click a character to see only theirs.${rng === "all" ? "" : " Arrows: places moved since " + esc(prevWord[rng]) + "."}</p>` : ""}</div>
+    <div class="tp-grid"><div class="view-card">${seat ? `<h5>Where it ranks · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>`
+        : `<div class="tp-board-h"><h5>${boardKind === "done" ? "Gets the most done" : "Who burns the most"} · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+          <div class="seg-ctl sm" role="group" aria-label="Board"><button data-tp-board="burn" class="${boardKind === "burn" ? "on" : ""}">Burns most</button><button data-tp-board="done" class="${boardKind === "done" ? "on" : ""}" title="Fewest fresh tokens per commit or merged PR">Most done</button></div></div>`}
+        <div class="tb-list">${boardKind === "done" ? doneRows : rows}</div>
+        ${boardKind === "done" ? `<p class="hint">Fresh tokens (input, cache writes, output) per commit or merged PR, among characters past a million tokens. It counts output, not how hard or good the work was.</p>` : ""}
+        ${(() => { const b = beltHolders(t.weeks); return b.holder && !gameOff && boardKind === "burn" ? `<p class="tp-belt">${icon("belt", 15)}<span><b>Burner Belt: ${esc(who(b.holder))}</b>, the most tokens last week${b.leader && b.leader !== b.holder ? ` · ${esc(who(b.leader))} leads this week` : b.leader ? " and leads this week too" : ""}.</span></p>` : ""; })()}
+        ${!seat && board.length && boardKind === "burn" ? `<p class="hint">Click a character to see only theirs.${rng === "all" ? "" : " Arrows: places moved since " + esc(prevWord[rng]) + "."}</p>` : ""}</div>
       <div class="view-card"><h5>Per day${firstDay ? ` · from ${esc(firstDay)}` : ""}</h5><svg class="tp-bars" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${esc(label)} per day">${bars}</svg>
         <div class="tok-months">${(t.months || []).slice(-4).map(m => `<span><b>${fmt(val(m))}</b>${esc(new Date(m.month + "-15T12:00:00").toLocaleDateString([], { month: "long" }))}</span>`).join("")}</div></div></div>
     <div class="tp-grid"><div class="view-card"><h5>Calendar · 26 weeks</h5><div class="tp-cal" role="img" aria-label="Tokens per day over 26 weeks">${cells}</div>
@@ -302,6 +327,7 @@ function renderTokensInner(el, app) {
       b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
     });
     el.querySelectorAll("[data-tp-range]").forEach(b => b.addEventListener("click", () => { app.setPref("tokRange", b.dataset.tpRange); rerender(); }));
+    el.querySelectorAll("[data-tp-board]").forEach(b => b.addEventListener("click", () => { app.setPref("tokBoard", b.dataset.tpBoard); rerender(); }));
     el.querySelectorAll("[data-tok-metric]").forEach(b => b.addEventListener("click", () => { app.setPref("tokenMetric", b.dataset.tokMetric); rerender(); }));
     el.querySelectorAll("[data-tp-seat]").forEach(b => {
       const go = () => { const v = b.dataset.tpSeat || null; app.setPref("tokSeat", v === seat ? null : v); rerender(); };
