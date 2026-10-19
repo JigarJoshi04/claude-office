@@ -678,6 +678,7 @@ function apply(next) {
   const first = !snap;
   prevLive = snap ? snap.seats.reduce((n, s) => n + live(s).length, 0) : null;   // who was in before this refresh (First one in)
   snap = next; setNow(snap.now);
+  if (DEMO && QS.has("faults")) snap.office.faults = [{ part: "The token ledger", what: "PermissionError: [Errno 13] Permission denied: 'tokens.json'", count: 37, since: snap.now - 1500, last: snap.now - 4 }];   // the demo's ?faults=1
   apiWeather(snap.api_weather);
   chapterTick();
   if (!DEMO && snap.promises && snap.promises.kept >= 5) badge(award("reliable"));   // the fifth kept promise (award says it once)

@@ -22,6 +22,7 @@ from . import asks, brain, cabinet, checkpoint, config, egress, prelimit, promis
 from .career import CATALOGUE, Career
 from . import save as save_mod
 from . import utilities
+from .faults import Faults
 from .presence import Presence
 from .reminders import Reminders
 from .history import DayLedger, HistoryStore
@@ -237,13 +238,17 @@ def programme_for(cfg: dict, *texts: str | None) -> dict | None:
     return None
 
 
-def _codex_seat(meta: dict, now: float) -> dict:
+def _codex_seat(meta: dict, now: float, faults: Faults | None = None) -> dict:
     data = {}
     if read_codex_seat:
         try:
             data = read_codex_seat(home=str(config.HOME), now=now) or {}
+            if faults:
+                faults.ok("The Codex reader")
         except Exception as e:  # a format change in ~/.codex must not take the office down
             data = {"error": f"{type(e).__name__}: {e}"}
+            if faults:
+                faults.fault("The Codex reader", e, meta.get("id"))
     usage = data.get("usage")
     view = None
     if usage:
@@ -362,6 +367,8 @@ class Office(LiveOffice):
         self._codex: dict | None = None
         self._codex_at = 0.0
         self.stop = threading.Event()
+        self.faults = Faults(lambda kind, text, seat, level: self.emit(kind, text, seat, level))   # office problems, said once (faults.py)
+        self.usage.on_fault, self.usage.on_ok = (lambda e: self.faults.fault("Plan readings", e)), (lambda: self.faults.ok("Plan readings"))
         self.perf: deque = deque(maxlen=120)              # the last refreshes: (seconds, {phase: seconds}) for the doctor
         self._phases: dict = {}
         self.light = False                                # refreshing every 12 s instead of 4 while the machine is busy
@@ -509,9 +516,10 @@ class Office(LiveOffice):
         for s in self.claude_seats:
             try:
                 live = sessions.list_sessions(s, self.cache, now)
+                self.faults.ok(f"Reading {s['label']}")
             except Exception as e:  # one unreadable seat must not freeze the whole office
                 live = []
-                self.emit("error", f"Could not read {s['label']}: {type(e).__name__}", s["id"], "bad")
+                self.faults.fault(f"Reading {s['label']}", e, s["id"])
             keep.update(x["transcript"] for x in live if x.get("transcript"))
             health = seatmod.credential_meta(s["config_dir"], now)
             seats_out.append(dict(s, account=seatmod.account_meta(s["account_file"]), health=health,
@@ -519,7 +527,7 @@ class Office(LiveOffice):
         self.cache.forget_except(keep)
         if self.codex_meta:
             if now - self._codex_at > 8 or self._codex is None:
-                self._codex = _codex_seat(self.codex_meta, now)
+                self._codex = _codex_seat(self.codex_meta, now, self.faults)
                 self._codex_at = now
             seats_out.append(self._codex)
         self._mark("seats")
@@ -598,7 +606,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.168.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.169.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -612,6 +620,7 @@ class Office(LiveOffice):
             "suggested_weights": divider.suggest(seats_out, div),
         }
         self._ci_lamps(seats_out, now)
+        snap["office"]["faults"] = self.faults.view()                  # office problems still open (faults.py)
         snap["office"]["risk_mute"] = mute = risk.mute_list(cfg)        # the risky-action watch (risk.py)
         for s in seats_out:
             for x in s.get("sessions", []):
@@ -704,8 +713,9 @@ class Office(LiveOffice):
             self._ledger_at = snap["now"]
             try:
                 self.samples.stats(snap, None, list(self.events))
-            except Exception:                         # the ledger is a nicety; never let it stop the office
-                pass
+                self.faults.ok("The day ledger")
+            except Exception as e:                    # the ledger is a nicety; never let it stop the office
+                self.faults.fault("The day ledger", e)
         return snap
 
     @staticmethod
@@ -875,8 +885,9 @@ class Office(LiveOffice):
         while not self.stop.is_set():
             try:
                 self.build()
+                self.faults.ok("The refresh")
             except Exception as e:  # keep serving the last good picture
-                self.emit("error", f"Snapshot failed: {type(e).__name__}: {e}", level="bad")
+                self.faults.fault("The refresh", e)
             sdnotify.notify("WATCHDOG=1")                  # the loop is alive (a hung refresh stops this, and systemd restarts us)
             light = self._busy()
             if light != self.light:
@@ -902,8 +913,9 @@ class Office(LiveOffice):
                 cur = self.get() or {}
                 for l in lanes.start_scheduled(cur.get("seats", []), can_hire=bool((cur.get("next_pick") or {}).get("seat"))):
                     self.emit("lane", f"{'Backlog' if (l.get('schedule') or {}).get('backlog') else 'Scheduled'} lane '{l['title']}' is starting", None, "good")
-            except Exception:
-                pass
+                self.faults.ok("Starting scheduled lanes")
+            except Exception as e:
+                self.faults.fault("Starting scheduled lanes", e)
             try:
                 self.tokens.scan(live)
                 seats = {s["id"]: s for s in snap.get("seats", [])}
@@ -926,8 +938,9 @@ class Office(LiveOffice):
                     self.emit("commit", f"{proj}: {n} commit{'' if n == 1 else 's'}", seat, "good")
                 for sid, kind, text in self.career.shipped_totals(self.tokens.shipped_by_seat(set(seats), next((k for k, s in seats.items() if s.get("kind") == "codex"), None)), labels):
                     self.emit(kind, text, sid, "good")
-            except Exception:                         # the ledger is a nicety; never let it stop the office
-                pass
+                self.faults.ok("The token ledger")
+            except Exception as e:                    # the ledger is a nicety; never let it stop the office
+                self.faults.fault("The token ledger", e)
             self.stop.wait(60)
 
     def _gh_repos(self, now: float) -> dict:

@@ -88,6 +88,9 @@ def checkup(office, snap: dict) -> list[dict]:
         out.append(_check("The page", "warn", f"It reported {len(errs)} error{'s' if len(errs) > 1 else ''} in the last day; the latest: {errs[-1]['message']}"
                           + (f" ({errs[-1]['where']})" if errs[-1].get("where") else ""),
                           "Reload the page. If it keeps happening, report it with these words."))
+    for f in (snap.get("office") or {}).get("faults") or []:            # parts of the office that keep failing (faults.py)
+        out.append(_check(f["part"], "bad", f"Failing since {time.strftime('%H:%M', time.localtime(f['since']))}, {f['count']} time{'s' if f['count'] != 1 else ''}: {f['what']}",
+                          "It tries again by itself. If it does not stop, look at `journalctl --user -u claude-office -n 50`."))
     perf = office.perf_view() if hasattr(office, "perf_view") else {}
     if perf.get("builds"):
         slow = f"; the slowest part is {perf['slowest_phase']}" if perf.get("slowest_phase") else ""

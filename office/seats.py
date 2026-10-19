@@ -171,12 +171,17 @@ class UsagePoller:
             except OSError:
                 pass
 
+    on_fault = on_ok = None          # the office's problem log (faults.py), when it listens
+
     def run(self, stop: threading.Event) -> None:
         while not stop.is_set():
             try:
                 self.tick()
-            except Exception:  # never let one bad response kill the poller
-                pass
+                if self.on_ok:
+                    self.on_ok()
+            except Exception as e:  # never let one bad response kill the poller
+                if self.on_fault:
+                    self.on_fault(e)
             self._wake.wait(10)
             self._wake.clear()
 

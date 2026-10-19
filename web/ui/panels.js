@@ -392,6 +392,7 @@ export function makePanels(app) {
     // Three blocks, always in this order: how the office is doing, what needs you, who is on the team.
     return { html: `${awayHtml()}${rhythmHtml()}
       ${snap.office.config_error ? `<div class="need bad"><span class="ico">${icon("alert", 16)}</span><div class="grow"><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
+      ${(snap.office.faults || []).length ? `<div class="need bad faults" role="status"><span class="ico">${icon("alert", 16)}</span><div class="grow"><div class="t">Office problem${snap.office.faults.length > 1 ? "s" : ""}</div>${snap.office.faults.slice(0, 3).map(f => `<div class="d">${esc(f.part)} keeps failing: ${f.count} time${f.count === 1 ? "" : "s"} since ${esc(clock(f.since))}${app.privacy() ? "" : ` · ${esc(f.what)}`}</div>`).join("")}</div><button class="btn sm ghost" data-go="doctor">${icon("heart", 14)}Doctor</button></div>` : ""}
       <section class="b-status" aria-label="Sessions right now">
         <div class="b-nums">${num(working, "Working", "working")}${num(idle, "Idle", "idle")}${num(stopped, "Stopped", "limited", "Out of plan or stuck")}</div>
         <button class="b-next" data-go="divider" title="How new lanes are divided">${icon("sliders", 16)}<span>${next ? `Next lane goes to <b style="color:${esc(next.color)}">${esc(P(next).name)}</b>` : "No seat can take a new lane right now"}</span>${icon("chevronRight", 16)}</button>

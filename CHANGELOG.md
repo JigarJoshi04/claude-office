@@ -3,6 +3,18 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.169.0] - 2026-10-19
+
+### Added
+- Office problems: when a part of the office keeps failing (the refresh, reading a seat, the plan readings, the token
+  ledger, the day ledger, the Codex reader, starting scheduled lanes), the news says so once, then at most every ten
+  minutes with how many times, and once more when it works again. Failures that went unsaid before (plan readings,
+  the ledgers, scheduled lanes) are now said. Open problems show as a card at the top of the briefing and in the
+  doctor. The demo shows one with `?faults=1`.
+
+### Fixed
+- A refresh failing every four seconds no longer floods the news (and pushes real events out of it).
+
 ## [3.168.0] - 2026-10-19
 
 ### Added
