@@ -243,13 +243,19 @@ def cmd_events(args) -> int:
         print("No news yet.", file=sys.stderr)
         return 1
     try:
-        last = collections.deque((e for e in map(parse, f) if e), maxlen=args.lines)   # the kind first, then the last N
+        last, seen = collections.deque(maxlen=args.lines), None
+        for line in f:                                    # the kind first, then the last N
+            if line.endswith("\n"):
+                seen = line                               # the last whole line: where a rotation carries on from
+            e = parse(line)
+            if e:
+                last.append(e)
         for e in last:
             show(e)
         if not args.follow:
             return 0
         f.seek(0, os.SEEK_END)
-        ino, part, seen = os.fstat(f.fileno()).st_ino, "", None
+        ino, part = os.fstat(f.fileno()).st_ino, ""
         while True:                                       # tail -f, and it follows the office's rotation of the file
             chunk = f.readline()
             if chunk:

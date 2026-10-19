@@ -283,6 +283,8 @@ test("the week in review sums the last seven days and what was collected in them
   days[0].per_seat = { b: [9999, 99, 9999, 9e9] };                      // the week before does not count
   const aw = Object.fromEntries(weekSummary(days).awards.map(x => [x.key, [x.seat, x.value]]));
   assert.deepEqual(aw, { hours: ["a", 840], reports: ["b", 14], calls: ["b", 581], tokens: ["a", 14e6] });
+  days.slice(-7).forEach(d => { d.per_seat = { a: [60, 1, 10, 5], b: [60, 2, 10, 5] }; });   // ties: no winner
+  assert.deepEqual(weekSummary(days).awards.map(x => x.key), ["reports"]);
 });
 
 test("Bug Squash: features and red bugs grow more common, spawns speed up, golden bugs stay rare", async () => {

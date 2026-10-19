@@ -36,7 +36,7 @@ class PublicViewTests(unittest.TestCase):
         s = v["seats"][0]
         self.assertEqual((s["name"], s["sessions"], s["working"], s["stuck"], s["lanes"]), ("Atlas", 2, 1, 1, 1))
         self.assertEqual((s["five_hour"]["used_pct"], s["weekly"]), (40, None))
-        self.assertEqual((v["office"]["level"], v["totals"]["needs_you"], v["totals"]["problems"], v["lanes"]), (5, 1, 1, {"running": 2, "done": 1}))
+        self.assertEqual((v["office"]["level"], v["totals"]["needs_you"], v["totals"]["problems"], v["lanes"]), (5, 1, 1, {"running": 2}))   # lanes still to finish (all in the snapshot)
 
     def test_metrics_lines_and_label_escaping(self):
         text = public.metrics(snap(), {"builds": 3, "p50_ms": 20.0, "p95_ms": 900.0})

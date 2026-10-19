@@ -57,7 +57,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(rows[0]["report"], "STATUS: DONE - bought")
         safe = export.rows(self.office, "lanes", private=True)
         self.assertNotIn("initech", json.dumps(safe).lower())
-        self.assertRegex(safe[0]["id"], r"^lane-[0-9a-f]{8}$")
+        self.assertEqual([r["id"] for r in safe], ["lane-1", "lane-2"])         # numbered: a hash of a title confirms a guess
         self.assertIn("'\t=1+1", export.render([{"a": "\t=1+1"}], "csv")[0].decode())
 
     def test_csv_cannot_run_a_formula(self):

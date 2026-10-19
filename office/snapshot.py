@@ -545,6 +545,10 @@ class Office(LiveOffice):
                 self._codex = _codex_seat(self.codex_meta, now, self.faults)
                 self._codex_at = now
             seats_out.append(self._codex)
+        here = {f"Reading {x['label']}" for x in self.claude_seats}      # problems of parts no longer here are dropped
+        beacon = cfg.get("beacon") if isinstance(cfg.get("beacon"), dict) else {}
+        self.faults.forget(lambda part: not ((part.startswith("Reading ") and part not in here) or (part == "The Codex reader" and not self.codex_meta)
+                                             or (part == "The beacon file" and not beacon.get("path"))))
         self._mark("seats")
         limits = lanes.read_limits()
         for s in seats_out:
@@ -621,7 +625,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.185.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.186.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),

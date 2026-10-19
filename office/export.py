@@ -7,7 +7,6 @@ from __future__ import annotations
 import calendar
 import csv
 import io
-import hashlib
 import json
 import time
 from datetime import date
@@ -87,9 +86,9 @@ def rows(office, what: str, private: bool = False, names: dict | None = None) ->
                 for (d, k), v in sorted(per.items(), key=lambda kv: (kv[0][0], kv[0][1] or ""))]
     if what == "lanes":
         out = []
-        for l in sorted(_all_lanes(office, snap), key=lambda l: l.get("created_at") or 0):
+        for n, l in enumerate(sorted(_all_lanes(office, snap), key=lambda l: l.get("created_at") or 0), 1):
             runs = l.get("runs") or []
-            out.append({"id": ("lane-" + hashlib.sha256(l["id"].encode()).hexdigest()[:8]) if private else l["id"],   # an id is made from its title
+            out.append({"id": f"lane-{n}" if private else l["id"],     # an id is made from its title: share-safe numbers them
                         "title": "" if private else l.get("title", ""), "status": l.get("status"), "seat": l.get("seat") or l.get("seat_pref"),
                         "model": l.get("model"), "hired": _iso(l.get("created_at")), "finished": _iso(l.get("finished_at")), "runs": len(runs),
                         "report": "" if private else (l.get("report_status") or "")[:300]})

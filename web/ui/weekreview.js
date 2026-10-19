@@ -25,7 +25,10 @@ export function weekSummary(days, { album = {}, badges = {}, goalDays = [], end 
   // The week's awards: who led on hours, reports, tool calls and fresh tokens (a lead of nothing is no award).
   const per = {};
   for (const d of last) for (const [id, v] of Object.entries(d.per_seat || {})) { const e = per[id] || (per[id] = [0, 0, 0, 0]); v.forEach((x, i) => { e[i] += x || 0; }); }
-  const awards = AWARDS.map(([key, i]) => { const [id, v] = Object.entries(per).sort((a, b) => b[1][i] - a[1][i] || (a[0] < b[0] ? -1 : 1))[0] || []; return v && v[i] > 0 ? { key, seat: id, value: v[i] } : null; }).filter(Boolean);
+  const awards = AWARDS.map(([key, i]) => {             // a lead shared by two is no one's award
+    const [first, second] = Object.entries(per).sort((a, b) => b[1][i] - a[1][i]);
+    return first && first[1][i] > 0 && !(second && second[1][i] === first[1][i]) ? { key, seat: first[0], value: first[1][i] } : null;
+  }).filter(Boolean);
   return {
     awards,
     from, to, reports, prev,
@@ -82,8 +85,9 @@ export function makeWeekReview(ctx) {
     const won = (w.awards || []).map(a => ({ ...a, s: seat(a.seat) })).filter(a => a.s);
     const bySeat = [];                                    // one card a character, with every award it took
     for (const a of won) { const g = bySeat.find(x => x.s.id === a.s.id); if (g) g.list.push(a); else bySeat.push({ s: a.s, list: [a] }); }
-    if (won.length >= 2) out.push({ k: "awards", html: `<div class="wr-eyebrow">${bySeat.length === 1 ? "A clean sweep" : "The week's awards"}</div>
-      <div class="wr-awards ${bySeat.length === 1 ? "one" : ""}">${bySeat.map(g => `<div class="wr-award" style="--seat:${esc(g.s.color)}">${avatar("mascot-" + g.s.id, g.s.color, g.list.length === won.length ? "crown" : "")}<span><b>${esc(persona(g.s).name)}</b>
+    const sweep = bySeat.length === 1 && won.length === AWARDS.length;   // every award, none shared, none to someone who left
+    if (won.length >= 2) out.push({ k: "awards", html: `<div class="wr-eyebrow">${sweep ? "A clean sweep" : "The week's awards"}</div>
+      <div class="wr-awards ${bySeat.length === 1 ? "one" : ""}">${bySeat.map(g => `<div class="wr-award" style="--seat:${esc(g.s.color)}">${avatar("mascot-" + g.s.id, g.s.color, sweep ? "crown" : "")}<span><b>${esc(persona(g.s).name)}</b>
         ${g.list.map(a => { const [, , title, words] = AWARDS.find(x => x[0] === a.key); return `<small><em>${esc(title)}</em> ${esc(words(a.value))}</small>`; }).join("")}</span></div>`).join("")}</div>` });
     const st = w.stickers.map(id => STICKERS.find(s => s.id === id)).filter(Boolean), bs = w.badges.map(id => BADGES.find(b => b.id === id)).filter(Boolean);
     out.push({ k: "collection", html: `<div class="wr-eyebrow">Your collection</div>

@@ -23,7 +23,9 @@ class FaultTests(unittest.TestCase):
         self.assertEqual(len(self.said), 2)
         self.assertIn("still failing (151 times since", self.said[1][1])
         self.assertEqual(self.f.view()[0]["count"], 151)
-        self.now += 60
+        self.f.ok("The refresh")                               # it works: over once it has worked for a minute
+        self.assertEqual(len(self.said), 2)
+        self.now += 61
         self.f.ok("The refresh"); self.f.ok("The refresh")
         self.assertEqual(self.said[2][:2], ("good", "The refresh works again, after 11 minutes"))
         self.assertEqual((len(self.said), self.f.view()), (3, []))
@@ -34,10 +36,19 @@ class FaultTests(unittest.TestCase):
         self.f.fault("Plan readings", TimeoutError("slow"))
         self.assertEqual(len(self.said), 3)
         self.assertEqual(self.said[0][2], "claude2")
-        self.f.ok("Plan readings")
+        self.f.ok("Plan readings"); self.now += 61; self.f.ok("Plan readings")
         self.assertEqual({v["part"] for v in self.f.view()}, {"Reading claude2"})
-        self.f.ok("Reading claude2")
+        self.f.ok("Reading claude2"); self.now += 61; self.f.ok("Reading claude2")
         self.assertEqual(sum(1 for lv, _, _ in self.said if lv == "good"), 2)   # one recovery line per part
+
+    def test_flapping_is_one_problem_and_gone_parts_are_forgotten(self):
+        for i in range(30):                                    # fails every other refresh for two minutes
+            self.f.fault("The beacon file", OSError("disk full")) if i % 2 else self.f.ok("The beacon file")
+            self.now += 4
+        self.assertEqual([t for _, t, _ in self.said], ["The beacon file failed: OSError: disk full"])
+        self.f.forget(lambda part: part != "The beacon file")  # taken out of the config
+        self.assertEqual(self.f.view(), [])
+        self.assertEqual(len(self.said), 1)                     # quietly
 
     def test_ok_without_a_problem_says_nothing(self):
         self.f.ok("The token ledger")

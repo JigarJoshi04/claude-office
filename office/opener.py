@@ -49,7 +49,8 @@ def command(office, body: dict, which=shutil.which) -> list[str]:
     folder, lane, seat = _target(office, body)
     if not os.path.isdir(folder):
         raise ValueError("That folder is not there any more")
-    own = ((getattr(office, "cfg", {}) or {}).get("open") or {}).get(what)
+    opens = (getattr(office, "cfg", {}) or {}).get("open")
+    own = opens.get(what) if isinstance(opens, dict) else None
     if isinstance(own, list) and own and all(isinstance(a, str) for a in own):
         return [a.replace("{dir}", folder) for a in own]
     if what == "folder":
@@ -66,17 +67,26 @@ def command(office, body: dict, which=shutil.which) -> list[str]:
         raise ValueError("No terminal found (ptyxis, gnome-terminal, kitty, konsole, xterm): set config open.terminal")
     argv, run = [a.replace("{dir}", folder) for a in term[0]], term[1]
     sid = (lane or {}).get("last_session_id")
-    if lane and sid and messaging.SESSION_ID.fullmatch(sid) and lane.get("status") not in ("running", "starting") and seat and seat.get("kind") == "claude":
-        resume = f"cd {shlex.quote(folder)} && CLAUDE_CONFIG_DIR={shlex.quote(seat['config_dir'])} claude --resume {sid}; exec bash"
+    if lane and sid and messaging.SESSION_ID.fullmatch(sid) and lane.get("status") not in lanes.UNFINISHED and seat and seat.get("kind") == "claude":
+        # the main account keeps its .claude.json in $HOME: it runs without CLAUDE_CONFIG_DIR (as lanes.py does)
+        env = "" if seat["id"] == "claude" else f"CLAUDE_CONFIG_DIR={shlex.quote(seat['config_dir'])} "
+        resume = f"cd {shlex.quote(folder)} && {env}claude --resume {sid}; exec bash"
         return argv + run + ["bash", "-lc", resume]       # a finished lane: carry its conversation on
     return argv
 
 
-def open_target(office, body: dict, popen=subprocess.Popen) -> dict:
+def open_target(office, body: dict, popen=subprocess.Popen, which=shutil.which) -> dict:
+    argv = command(office, body, which)
+    folder = _target(office, body)[0]
     with _lock:                                        # one a second: a double click opens one window
-        if time.time() - _last[0] < 1:
+        if time.monotonic() - _last[0] < 1:
             raise ValueError("One moment: it is opening")
-        _last[0] = time.time()
-    argv = command(office, body)
-    popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, umask=lanes.REPO_UMASK)
+        _last[0] = time.monotonic()
+    # In a scope of its own, so restarting the office (whose unit kills its whole cgroup) never closes your editor
+    # or terminal, and it does not count against the office's memory cap.
+    run = (["systemd-run", "--user", "--scope", "--collect", "--quiet", "--"] if which("systemd-run") else []) + argv
+    try:
+        popen(run, cwd=folder, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, umask=lanes.REPO_UMASK)
+    except OSError as e:
+        raise ValueError(f"Could not start {os.path.basename(argv[0])}: {e.strerror or e}") from None
     return {"ok": True, "opened": body.get("what"), "program": os.path.basename(argv[0])}

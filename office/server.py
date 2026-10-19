@@ -31,16 +31,16 @@ _GZIP_TYPES = ("text/", "application/javascript", "application/json", "image/svg
 
 
 def _accepts_gzip(header: str) -> bool:
-    """Accept-Encoding allows gzip (or *) with a q-value above zero."""
+    """Accept-Encoding allows gzip with a q-value above zero (gzip named outright wins over *)."""
+    q = {}
     for part in header.lower().split(","):
         name, _, params = part.strip().partition(";")
-        if name.strip() in ("gzip", "*"):
-            q = re.search(r"q\s*=\s*([0-9.]+)", params)
-            try:
-                return not q or float(q.group(1)) > 0
-            except ValueError:
-                return False
-    return False
+        m = re.search(r"q\s*=\s*([0-9.]+)", params)
+        try:
+            q[name.strip()] = float(m.group(1)) if m else 1.0
+        except ValueError:
+            q[name.strip()] = 0.0
+    return q.get("gzip", q.get("*", 0.0)) > 0
 
 
 def _fmt_tok(n: float) -> str:
@@ -194,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
     port = config.DEFAULT_PORT
     demo = False
     same_user = True       # only this Unix user (peer.py); config "same_user_only": false turns it off
-    server_version = "ClaudeOffice/3.185.0"
+    server_version = "ClaudeOffice/3.186.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -228,9 +228,14 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin")
         if origin and origin.lower() not in {"http://" + h for h in allowed}:
             return False
-        addr, srv = getattr(self, "client_address", None), getattr(self, "server", None)    # (absent on a handler built by hand)
-        if self.same_user and addr and srv and not peer.same_user(addr[1], srv.server_port):   # another account on this machine
-            return False
+        addr, conn = getattr(self, "client_address", None), getattr(self, "connection", None)   # (absent on a handler built by hand)
+        if self.same_user and addr and conn is not None:                 # another account on this machine: refused
+            try:
+                here = conn.getsockname()
+            except OSError:
+                return False
+            if not peer.same_user(addr, here):
+                return False
         return True
 
     def _send(self, code: int, body: bytes, ctype: str, extra: dict | None = None):
@@ -576,9 +581,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/announce":                      # the CEO's announcements (announce.py): post one, or take one down
                 an = self.office.announcements
                 if body.get("action") == "clear":
-                    return self._json(200, {"ok": an.clear(body.get("id"))})
+                    done = an.clear(body.get("id"))
+                    self.office.build()                      # the page sees it gone on its next look
+                    return self._json(200, {"ok": done})
                 item = an.post(body.get("text"), body.get("hours", 4))
                 self.office.emit("announce", f"CEO: {item['text']}", None, "info")
+                self.office.build()
                 return self._json(200, {"ok": True, "announcement": item})
             if path == "/api/reminders":                     # notes to yourself (reminders.py); the demo keeps them in memory
                 rem = self.office.reminders

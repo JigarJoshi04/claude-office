@@ -38,7 +38,9 @@ class Announcements:
             pass
 
     def post(self, text, hours) -> dict:
-        text = " ".join(str(text or "").split())
+        if not isinstance(text, str):
+            raise ValueError("An announcement is text")
+        text = " ".join("".join(ch for ch in text if ch.isprintable() or ch.isspace()).split())   # no terminal escapes
         if not 1 <= len(text) <= MAX_TEXT:
             raise ValueError(f"An announcement is 1 to {MAX_TEXT} characters")
         if type(hours) not in (int, float) or not 0.25 <= hours <= 72:

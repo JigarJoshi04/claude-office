@@ -89,7 +89,9 @@ class TokenFollowTests(unittest.TestCase):
             self.assertNotEqual(h._token(), first)                   # no restart needed
             self.assertEqual(h._token(), (Path(tmp) / "token").read_text().strip())
             (Path(tmp) / "token").write_text("")
-            self.assertTrue(config.api_token())                      # an empty token file is never the token
+            self.assertEqual(config.api_token(), "")                 # just made, perhaps still being written: left alone
+            os.utime(Path(tmp) / "token", (time.time() - 60, time.time() - 60))
+            self.assertTrue(config.api_token())                      # an old empty token file is made again
 
 
 class LockDownTests(unittest.TestCase):

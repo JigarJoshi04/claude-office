@@ -3,6 +3,34 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.186.0] - 2026-10-19
+
+### Security (QA round 25)
+- The same-user guard (3.173) matched a connection by its port numbers only. Another account could bind its source
+  port to the office's own port, from another loopback address, and be taken for the office's accepted socket: the
+  page (with the token) was then served to it. The guard now matches the whole connection, both addresses and both
+  ports, and also recognises your own clients that connect over IPv6 or half-close after sending.
+
+### Fixed (QA round 25: server and data)
+- Open in…: programs start in a systemd scope of their own, so restarting the office no longer closes an editor or a
+  terminal it opened (nor counts it against the office's memory cap); a terminal opens in the folder whatever the
+  program; resuming is offered only for lanes that have finished, and never sets CLAUDE_CONFIG_DIR for the main
+  account; a refused request does not use up the one-a-second allowance, and a missing program is said plainly.
+- Office problems: a race could stop the token ledger's thread; a part that failed every other refresh flooded the
+  news (a problem now ends once it has worked for a minute); problems of a part that is gone (a beacon taken out of
+  the config, a seat that left, Codex turned off) no longer stay open.
+- The MCP server no longer exits on a malformed message, a non-UTF-8 byte, or something other than the office on
+  its port: each gets an error reply, a tool's own failure is its result, and responses sent to it are ignored.
+- `events --follow` no longer replays the file after the office rotates it before anything new arrived.
+- Announcements show at once, and must be text (terminal escapes are dropped).
+- The token ledger: a count of Infinity no longer stops it, and a helper's response written over several lines is
+  counted whole for the price tag.
+- The week's awards: a tied lead is no one's award, and "a clean sweep" needs every award.
+- Share-safe lane rows are numbered (a hash of a guessable title confirmed a guess). The beacon's folder is readable
+  by the programs it is for. Public lane counts are of the lanes still to finish (all of them, not a recent few).
+  gzip;q=0 wins over `*`. The doctor gives each seat its own MCP command. A just-created empty token file is left to
+  be written.
+
 ## [3.185.0] - 2026-10-19
 
 ### Added

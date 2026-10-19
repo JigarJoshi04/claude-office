@@ -101,11 +101,13 @@ def checkup(office, snap: dict) -> list[dict]:
                           "Nothing to do: the office refreshes less often until it is quick again." if busy else None))
     if claude and not getattr(office, "is_demo", False):         # agents that can ask the office things (mcp.py)
         has = [s for s in claude if "office" in (_user_mcp(s.get("account_file")) or {})]
-        cmd = f"CLAUDE_CONFIG_DIR=<seat folder> claude mcp add --scope user office -- {config.REPO_DIR / 'bin' / 'claude-office'} mcp"
+        missing = [s for s in claude if s not in has]
+        add = lambda s: ("" if s["id"] == "claude" else f"CLAUDE_CONFIG_DIR={s.get('config_dir')} ") + f"claude mcp add --scope user office -- {config.REPO_DIR / 'bin' / 'claude-office'} mcp"
+        cmd = "`, then `".join(add(s) for s in missing[:4])   # the main account keeps its config in $HOME: no variable
         out.append(_check("Office for agents (MCP)", "ok" if len(has) == len(claude) else "info",
                           f"On {', '.join(x.get('label', x['id']) for x in has) or 'no seat yet'}: agents can see the plans and lanes, post news and ask you"
                           + ("" if len(has) == len(claude) else f"; not on {', '.join(x.get('label', x['id']) for x in claude if x not in has)}"),
-                          None if len(has) == len(claude) else f"Add it to a seat with `{cmd}`."))
+                          None if len(has) == len(claude) else f"Add it with `{cmd}`."))
     if not getattr(office, "is_demo", False):
         wd = sdnotify.watchdog_s()
         out.append(_check("Watchdog", "ok" if wd else "info", f"systemd restarts the office if its loop stops for {wd:.0f} s" if wd

@@ -304,6 +304,7 @@ class TokenLedger:
         self._tool_opens: dict = {}             # per transcript file: its tool calls still waiting for a result
         self.api_recent: deque = deque(maxlen=500)   # (when, kind, seat) of the last day's API errors, as they are read
         self._xusd = 0                          # the same, for its price
+        self._xhf = None                        # the same, for a helper's tokens (spent: fresh_main)
         self.data = self._load()
 
     # -- state ----------------------------------------------------------------------------------------------------
@@ -468,6 +469,7 @@ class TokenLedger:
             self._tool_opens.pop(key, None)
             return True
         out_off, self._xlast, self._xusd = out[0], out[1], (out[2] if len(out) > 2 else 0)
+        self._xhf = None
         self._wait_end = out[3] if len(out) > 3 else None
         out_off = min(out_off, size)
         start = min(offset, out_off)
@@ -501,7 +503,7 @@ class TokenLedger:
                         changed |= self._ship(raw, sid)
                         if not self._helper_file:          # helpers never wait on a person
                             changed |= self._note_wait(raw, sid)
-                except (TypeError, AttributeError, KeyError, ValueError, IndexError):   # a malformed line is passed over:
+                except Exception:                              # a malformed line (Infinity in a count, …) is passed over:
                     self.bad_lines += 1                    # it must never stop the read of everything after it
         self.data["files_out"][key] = [pos, self._xlast, self._xusd, self._wait_end]
         if pos <= offset:
@@ -787,21 +789,29 @@ class TokenLedger:
         mid = m.get("id")
         model = m.get("model") or "?"
         usd = prices.response_cost(model, u) or 0
+        helper = self._helper_file if side is None else side
+        n = lambda k: u.get(k) if isinstance(u.get(k), int) else 0
+        fresh = n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens")
         if mid and mid == self._xlast:                      # one response, several lines as its output grows
+            if helper and getattr(self, "_xhf", None) is not None and fresh > self._xhf:   # a helper's: what it adds
+                with self.lock:
+                    h = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+                    h["hf"] = h.get("hf", 0) + fresh - self._xhf
+                self._xhf = fresh
             if self._xusd is None or usd <= self._xusd:
                 return False
             usd, self._xusd = usd - self._xusd, usd           # price only what this line adds
         else:
             self._xlast = mid
             if mid and self._seen("cost", sid, mid):          # priced in another file of this session
-                self._xusd = None
+                self._xusd = self._xhf = None
                 return False
             self._xusd = usd
-            if self._helper_file if side is None else side:  # helpers' own tokens, kept apart (spent: fresh_main)
-                n = lambda k: u.get(k) if isinstance(u.get(k), int) else 0
+            self._xhf = fresh if helper else None
+            if helper:                                       # helpers' own tokens, kept apart (spent: fresh_main)
                 with self.lock:
                     h = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
-                    h["hf"] = h.get("hf", 0) + n("input_tokens") + n("cache_creation_input_tokens") + n("output_tokens")
+                    h["hf"] = h.get("hf", 0) + fresh
                 if not usd:
                     return True
             else:

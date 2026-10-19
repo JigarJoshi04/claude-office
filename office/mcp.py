@@ -3,11 +3,13 @@ the next lane would go to, how the lanes are doing and what one reported; and it
 CEO a question. It speaks JSON-RPC 2.0 over stdio, one message a line (the standard library only), and is a client of
 the running office's local API with this user's token, like `claude-office ask` and `post`.
 
-Add it to a seat with:  claude mcp add office -- /path/to/claude-office/bin/claude-office mcp
+Add it to a seat with:  claude mcp add --scope user office -- /path/to/claude-office/bin/claude-office mcp
+(with CLAUDE_CONFIG_DIR=~/.claude2 and so on in front for the other seats).
 It cannot hire lanes or stop them: work that spends a plan stays with the CEO (the hiring desk, or `claude-office hire`).
 """
 from __future__ import annotations
 
+import http.client
 import json
 import sys
 import urllib.error
@@ -16,6 +18,7 @@ import urllib.request
 from . import config
 
 PROTOCOL = "2025-06-18"
+KNOWN = ("2024-11-05", "2025-03-26", "2025-06-18")         # versions this server speaks; anything else gets ours
 TOOLS = [
     {"name": "office_status", "description": "The office now: each seat's state, plan used in its 5-hour window and week (and when each resets), live and working sessions, lanes, and how many things need the CEO.",
      "inputSchema": {"type": "object", "properties": {}}},
@@ -37,20 +40,23 @@ def _port() -> int:
 
 
 def _call(method: str, path: str, body: dict | None = None) -> dict:
-    req = urllib.request.Request(f"http://127.0.0.1:{_port()}{path}", method=method,
-                                 data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"Content-Type": "application/json", "X-Office-Token": config.api_token()})
     try:
+        req = urllib.request.Request(f"http://127.0.0.1:{_port()}{path}", method=method,
+                                     data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Content-Type": "application/json", "X-Office-Token": config.api_token()})
         with urllib.request.urlopen(req, timeout=8) as r:
-            return json.loads(r.read() or b"{}")
+            out = json.loads(r.read() or b"{}")
+            if not isinstance(out, dict):
+                raise RuntimeError("The office answered something that is not an object")
+            return out
     except urllib.error.HTTPError as e:
         try:
             msg = json.loads(e.read() or b"{}").get("error")
         except ValueError:
             msg = None
         raise RuntimeError(msg or f"The office answered HTTP {e.code}") from None
-    except OSError as e:
-        raise RuntimeError(f"The office is not running on port {_port()} ({e})") from None
+    except (OSError, http.client.HTTPException, ValueError) as e:      # down, slow, or not the office on that port
+        raise RuntimeError(f"The office did not answer on port {_port()} ({type(e).__name__})") from None
 
 
 def _status() -> str:
@@ -101,7 +107,12 @@ def _ask(question: str) -> str:
             if out.get("found_session") else "Asked. The office could not tell which session this is, so the answer waits in its Inbox.")
 
 
+NAMES = {t["name"] for t in TOOLS}
+
+
 def call_tool(name: str, args: dict) -> str:
+    if name not in NAMES:
+        raise KeyError(name)
     if name == "office_status":
         return _status()
     if name == "next_seat":
@@ -120,12 +131,18 @@ def call_tool(name: str, args: dict) -> str:
 
 def handle(msg: dict) -> dict | None:
     """One JSON-RPC message in, its reply out (None for a notification)."""
-    mid, method, params = msg.get("id"), msg.get("method"), msg.get("params") or {}
+    mid, method, params = msg.get("id"), msg.get("method"), msg.get("params")
     reply = lambda result: {"jsonrpc": "2.0", "id": mid, "result": result}
-    if mid is None:                                   # a notification (initialized, cancelled): nothing to say
+    bad = lambda why: {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": why}}
+    if mid is None or not isinstance(method, str):    # a notification, or a response sent our way: nothing to say
         return None
+    if params is None:
+        params = {}
+    if not isinstance(params, dict):
+        return bad("params must be an object")
     if method == "initialize":
-        return reply({"protocolVersion": params.get("protocolVersion") or PROTOCOL, "capabilities": {"tools": {}},
+        asked = params.get("protocolVersion")
+        return reply({"protocolVersion": asked if asked in KNOWN else PROTOCOL, "capabilities": {"tools": {}},
                       "serverInfo": {"name": "claude-office", "version": "1"},
                       "instructions": "The Claude Office on this machine: seats, plans, lanes and the CEO. Ask before assuming a seat has plan left."})
     if method == "ping":
@@ -133,20 +150,27 @@ def handle(msg: dict) -> dict | None:
     if method == "tools/list":
         return reply({"tools": TOOLS})
     if method == "tools/call":
+        args = params.get("arguments")
+        if args is None:
+            args = {}
+        if not isinstance(args, dict):
+            return bad("arguments must be an object")
+        if params.get("name") not in NAMES:
+            return bad(f"No tool named {params.get('name')}")
         try:
-            text = call_tool(str(params.get("name")), params.get("arguments") or {})
+            text = call_tool(str(params.get("name")), args)
             return reply({"content": [{"type": "text", "text": text}]})
-        except KeyError:
-            return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32602, "message": f"No tool named {params.get('name')}"}}
-        except (RuntimeError, ValueError) as e:
-            return reply({"content": [{"type": "text", "text": str(e)}], "isError": True})
+        except (RuntimeError, ValueError, KeyError, TypeError) as e:
+            return reply({"content": [{"type": "text", "text": str(e) or type(e).__name__}], "isError": True})
     return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"Unknown method {method}"}}
 
 
 def serve(stdin=None, stdout=None) -> int:
-    stdin, stdout = stdin or sys.stdin, stdout or sys.stdout
-    for line in stdin:
-        line = line.strip()
+    """One message a line until stdin closes. Nothing a client sends ends the server: a bad line gets an error reply."""
+    stdin = stdin if stdin is not None else sys.stdin.buffer
+    stdout = stdout or sys.stdout
+    for raw in stdin:
+        line = (raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw).strip()
         if not line:
             continue
         try:
@@ -154,7 +178,10 @@ def serve(stdin=None, stdout=None) -> int:
         except ValueError:
             out = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}}
         else:
-            out = handle(msg) if isinstance(msg, dict) else {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid request"}}
+            try:
+                out = handle(msg) if isinstance(msg, dict) else {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid request"}}
+            except Exception as e:                       # never let one message take the agent's tools away
+                out = {"jsonrpc": "2.0", "id": msg.get("id"), "error": {"code": -32603, "message": f"Internal error: {type(e).__name__}"}}
         if out is not None:
             stdout.write(json.dumps(out) + "\n")
             stdout.flush()

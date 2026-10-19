@@ -68,6 +68,22 @@ class McpTests(unittest.TestCase):
         self.assertTrue(err)
         self.assertIn("not running", text)
 
+    def test_nothing_a_client_sends_ends_it(self):
+        out = io.BytesIO()
+        lines = [b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":[1]}', b'{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"office_status","arguments":"x"}}',
+                 b'{"jsonrpc":"2.0","id":3,"result":{}}', b"\xff\xfe", b'{"jsonrpc":"2.0","id":4,"method":"initialize","params":{"protocolVersion":{"x":1}}}',
+                 b'{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"lane_report","arguments":{"id":"x"}}}', b'{"jsonrpc":"2.0","id":6,"method":"ping"}']
+        text = io.StringIO()
+        with patch.object(mcp, "_call", side_effect=KeyError("lane")):
+            mcp.serve(io.BytesIO(b"\n".join(lines) + b"\n"), text)
+        got = {r.get("id"): r for r in map(json.loads, text.getvalue().splitlines())}
+        self.assertEqual(got[1]["error"]["code"], -32602)
+        self.assertEqual(got[2]["error"]["code"], -32602)
+        self.assertNotIn(3, got)                                   # a response sent to it gets no reply
+        self.assertEqual(got[4]["result"]["protocolVersion"], mcp.PROTOCOL)
+        self.assertTrue(got[5]["result"]["isError"])              # a tool's own failure is its result, not "no such tool"
+        self.assertEqual(got[6]["result"], {})                    # and it is still answering
+
     def test_over_stdio_one_message_a_line(self):
         out = io.StringIO()
         mcp.serve(io.StringIO('{"jsonrpc":"2.0","id":7,"method":"ping"}\nnot json\n\n[1]\n'), out)

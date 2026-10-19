@@ -58,13 +58,32 @@ class OpenerTests(unittest.TestCase):
         self.office.cfg = {"open": {"editor": ["nvim-qt", "{dir}"], "folder": "not a list"}}
         self.assertEqual(self.cmd(what="editor", seat="c2", id="s1"), ["nvim-qt", self.dir])
         self.assertEqual(self.cmd(what="folder", seat="c2", id="s1"), ["xdg-open", self.dir])
+        self.office.cfg = {"open": "nonsense"}
+        self.assertEqual(self.cmd(what="folder", seat="c2", id="s1"), ["xdg-open", self.dir])
         ran = []
-        with patch.object(opener.shutil, "which", side_effect=lambda n: n in self.have):
-            r = opener.open_target(self.office, {"what": "folder", "seat": "c2", "id": "s1"}, popen=lambda argv, **kw: ran.append((argv, kw)))
-            self.assertEqual((r["program"], ran[0][0], ran[0][1]["start_new_session"]), ("xdg-open", ["xdg-open", self.dir], True))
-            with self.assertRaisesRegex(ValueError, "One moment"):
-                opener.open_target(self.office, {"what": "folder", "seat": "c2", "id": "s1"}, popen=lambda argv, **kw: ran.append(argv))
+        pop = lambda argv, **kw: ran.append((argv, kw))
+        w = lambda n: n in self.have | {"systemd-run"}
+        with self.assertRaisesRegex(ValueError, "not running"):          # a refused request does not use up the second
+            opener.open_target(self.office, {"what": "folder", "seat": "c2", "id": "gone"}, popen=pop, which=w)
+        r = opener.open_target(self.office, {"what": "folder", "seat": "c2", "id": "s1"}, popen=pop, which=w)
+        argv, kw = ran[0]
+        self.assertEqual((r["program"], argv[:3], argv[-2:], kw["cwd"], kw["start_new_session"]), ("xdg-open", ["systemd-run", "--user", "--scope"], ["xdg-open", self.dir], self.dir, True))
+        with self.assertRaisesRegex(ValueError, "One moment"):
+            opener.open_target(self.office, {"what": "folder", "seat": "c2", "id": "s1"}, popen=pop, which=w)
+        opener._last[0] = -10
+        def missing(argv, **kw): raise FileNotFoundError(2, "No such file or directory")
+        with self.assertRaisesRegex(ValueError, "Could not start xdg-open"):
+            opener.open_target(self.office, {"what": "folder", "seat": "c2", "id": "s1"}, popen=missing, which=lambda n: n in self.have)
 
+    def test_resume_only_when_finished_and_never_with_the_main_seats_dir(self):
+        self.snap["seats"].append({"id": "claude", "kind": "claude", "config_dir": "/home/u/.claude", "sessions": []})
+        lane = {"id": "l1", "workdir": self.dir, "seat": "claude", "status": "waiting", "last_session_id": SID}
+        with patch.object(lanes, "load_lane", return_value=lane):
+            self.assertNotIn("bash", self.cmd(what="terminal", lane="l1"))      # a waiting lane resumes itself
+            lane["status"] = "blocked"
+            line = self.cmd(what="terminal", lane="l1")[-1]
+            self.assertIn(f"claude --resume {SID}", line)
+            self.assertNotIn("CLAUDE_CONFIG_DIR", line)                           # the main account keeps it in $HOME
 
 if __name__ == "__main__":
     unittest.main()

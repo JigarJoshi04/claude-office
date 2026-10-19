@@ -45,8 +45,9 @@ def view(snap: dict) -> dict:
         })
     t, o = snap.get("totals") or {}, snap.get("office") or {}
     lanes: dict[str, int] = {}
-    for l in snap.get("lanes") or []:
-        lanes[str(l.get("status") or "unknown")] = lanes.get(str(l.get("status") or "unknown"), 0) + 1
+    for l in snap.get("lanes") or []:                  # the ones still to finish (the snapshot keeps all of them)
+        if l.get("status") in ("scheduled", "queued", "starting", "running", "waiting", "interrupted"):
+            lanes[str(l["status"])] = lanes.get(str(l["status"]), 0) + 1
     return public({
         "schema": SCHEMA, "at": snap.get("now"), "version": o.get("version"),
         "office": {"name": o.get("name"), "level": office_level(snap.get("seats", []))},
@@ -61,7 +62,9 @@ def write_beacon(snap: dict, path: str) -> Path:
     """The public view as a file other programs read (a web server, a wall screen): written whole each time, and
     readable by others (0644), since that is what it is for. Readers should check "at" for its age."""
     dest = Path(os.path.expanduser(path))
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    if not dest.parent.is_dir():
+        dest.parent.mkdir(parents=True)
+        os.chmod(dest.parent, 0o755)                     # readable by the programs it is for (the office's umask is 077)
     fd, tmp = tempfile.mkstemp(prefix=".beacon-", dir=dest.parent)
     try:
         with os.fdopen(fd, "w") as f:
