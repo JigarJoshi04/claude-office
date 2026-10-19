@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.146.0"
+    server_version = "ClaudeOffice/3.147.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -430,7 +430,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/save":                          # one key of the CEO's game save; the demo keeps nothing
                 if self.demo:
                     return self._json(200, {"ok": True, "demo": True})
-                return self._json(200, self.office.save.put(body.get("key"), body.get("v"), body.get("at"), body.get("base")))
+                return self._json(200, self.office.save.put(body.get("key"), body.get("v"), body.get("at"), body.get("base"), body.get("dev")))
             if path == "/api/promises":                      # the CEO's promises (promises.py): make one on a lane, or drop it
                 pr = self.office.promises
                 if body.get("action") == "drop":

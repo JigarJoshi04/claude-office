@@ -29,7 +29,7 @@ class Save:
         with self.lock:
             return {"keys": {k: dict(v) for k, v in self.keys.items()}, "at": max((v.get("at") or 0 for v in self.keys.values()), default=0)}
 
-    def put(self, key, value, at, base=None) -> dict:
+    def put(self, key, value, at, base=None, dev=None) -> dict:
         """One key's new value, when the page changed it (ms) and the version of the office's copy it was merged
         against. A write based on an older version is refused with the current copy, for the page to merge and send
         again (two screens never undo each other). A page that sends no version gets the old rule: an older write
@@ -40,6 +40,8 @@ class Save:
             raise ValueError("at is when it changed, in milliseconds")
         if base is not None and (isinstance(base, bool) or not isinstance(base, int) or base < 0):
             raise ValueError("base is the version the write was merged against")
+        if dev is not None and (not isinstance(dev, str) or not re.fullmatch(r"[a-z0-9]{1,16}", dev)):
+            raise ValueError("dev is the screen's short id")
         raw = json.dumps(value, separators=(",", ":"))
         if len(raw) > MAX_VALUE:
             raise ValueError("That value is too big to keep")
@@ -47,7 +49,7 @@ class Save:
             old = self.keys.get(key)
             ver = (old or {}).get("ver") or 0
             if base is not None and base != ver:
-                return {"ok": False, "conflict": True, "v": old["v"] if old else None, "ver": ver, "at": (old or {}).get("at") or 0}
+                return {"ok": False, "conflict": True, "v": old["v"] if old else None, "ver": ver, "at": (old or {}).get("at") or 0, "dev": (old or {}).get("dev")}
             if base is None and old and (old.get("at") or 0) > at:
                 return {"ok": True, "kept": "newer", "ver": ver}
             if old and json.dumps(old.get("v"), separators=(",", ":")) == raw:
@@ -55,7 +57,7 @@ class Save:
             total = sum(len(json.dumps(v.get("v"), separators=(",", ":"))) for k, v in self.keys.items() if k != key) + len(raw)
             if total > MAX_TOTAL:
                 raise ValueError("The save is full")
-            self.keys[key] = {"v": value, "at": at, "ver": ver + 1}
+            self.keys[key] = {"v": value, "at": at, "ver": ver + 1, **({"dev": dev} if dev else {})}   # dev: which screen wrote it
             self._write()
         return {"ok": True, "ver": ver + 1}
 

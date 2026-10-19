@@ -10,7 +10,7 @@ import { store, setStoreHook, toast } from "./util.js";
 
 export const SYNC = new Set(["album", "badges", "counts", "gifts", "giftLog", "giftMiss", "giftDay", "mailroom", "goalDays", "questStamps",
   "squashBest", "squashDays", "squashGiftDay", "visits", "combo", "officeLevel", "milestone", "milestoneGift", "tokRecords", "tokRecordsDay",
-  "weeklyDone", "frozenDays", "freezes", "freezeDay", "happyDay", "anniversaries", "lanesHired", "myTemplates", "belt"]);
+  "weeklyDone", "frozenDays", "freezes", "freezeDay", "happyDay", "anniversaries", "lanesHired", "myTemplates", "belt", "giftOpened"]);
 
 const obj = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
 const arr = (x) => (Array.isArray(x) ? x : []);
@@ -30,7 +30,11 @@ const byId = (id, cap) => (l, s, b, known) => {
     if (known && B.has(k) && !L.has(k)) continue;                       // removed here
     out.push(L.has(k) && (!known || !B.has(k) || !same(L.get(k), B.get(k))) ? L.get(k) : x);
   }
-  for (const x of arr(l)) { const k = id(x); if (!seen.has(k)) { seen.add(k); out.push(x); } }   // added here
+  for (const x of arr(l)) {                                            // added here (not ones the office has since removed)
+    const k = id(x);
+    if (seen.has(k) || (known && B.has(k) && same(x, B.get(k)))) continue;
+    seen.add(k); out.push(x);
+  }
   return cap ? cap(out) : out;
 };
 const giftKey = (g) => (g && (g.id ?? JSON.stringify(g)));
@@ -59,6 +63,7 @@ export const MERGE = {
   goalDays: days(90),
   frozenDays: days(90),
   visits: days(400),
+  giftOpened: (l, s) => [...new Set([...arr(l), ...arr(s)])].slice(-400),   // every gift opened anywhere stays opened
   squashDays: (l, s) => { const o = { ...obj(l) }; for (const [d, v] of Object.entries(obj(s))) o[d] = Math.max(o[d] || 0, v || 0); return Object.fromEntries(Object.entries(o).sort().slice(-30)); },
   squashBest: (l, s) => Math.max(num(l), num(s)),
   officeLevel: (l, s) => Math.max(num(l), num(s)),
@@ -66,7 +71,7 @@ export const MERGE = {
   questStamps: (l, s) => { const o = { ...obj(l) }; for (const [m, ids] of Object.entries(obj(s))) o[m] = [...new Set([...arr(o[m]), ...arr(ids)])]; return o; },
   anniversaries: (l, s) => ({ ...obj(s), ...obj(l) }),
   tokRecords: (l, s) => (l == null && s == null ? l : { ...obj(s), ...obj(l) }),
-  myTemplates: byId(t => t && t.name, xs => xs.slice(0, 12)),
+  myTemplates: byId(t => t && t.name, xs => xs.slice(0, 40)),
   gifts: byId(giftKey),
   mailroom: byId(giftKey),
   giftLog: byId(e => e && `${e.at}|${e.sticker}`, xs => xs.sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 60)),
@@ -92,30 +97,44 @@ const stamps = () => read("__at", {}) || {};
 const bases = () => read("__base", {}) || {};
 const setBase = (k, v, ver) => { const b = bases(); b[k] = { v, ver }; write("__base", b); };
 
-let ready = false, post = null, onChange = () => {};
+let ready = false, post = null, onChange = () => {}, flushing = false;
 const queue = new Set();
 let timer = null;
+// This browser, and the writes it sent: an office copy that is one of them is this browser's own (a reply that never
+// came back, a tab that sent it), so it is the base, not a change to add on top again.
+const DEV = (() => { let d = read("__dev"); if (!d) { d = Math.random().toString(36).slice(2, 10); write("__dev", d); } return d; })();
+const sentAt = (k) => (read("__sent", {}) || {})[k] || [];
+function noteSent(k, at) { const s = read("__sent", {}) || {}; s[k] = [...(s[k] || []), at].slice(-8); write("__sent", s); }
+const mine = (k, s) => s && s.dev === DEV && sentAt(k).includes(s.at);
+const baseOf = (k, s, b) => (mine(k, s) ? s.v : b ? b.v : undefined);
 
 // Send this screen's copy of the queued keys, each with the version it was merged against; a refused write comes back
 // with the office's copy, is merged in, and goes again.
 function flush() {
   timer = null;
+  if (flushing) { timer = setTimeout(flush, 400); return; }            // one at a time: a slow reply must not overlap the next
+  flushing = true;
   const keys = [...queue]; queue.clear();
   (async () => {
     let changed = false;
-    for (const k of keys) {
-      for (let tries = 0; tries < 4; tries++) {
-        const v = read(k), b = bases()[k];
-        if (v === undefined || (b && same(v, b.v))) break;                  // nothing new to send
-        let r;
-        try { r = await post("/api/save", { key: k, v, at: Date.now(), base: b ? b.ver || 0 : 0 }); } catch { break; }   // the next write tries again
-        if (r && r.ok) { setBase(k, v, r.ver); break; }
-        if (!r || !r.conflict) break;
-        const m = merge3(k, read(k), r.v === null ? undefined : r.v, b ? b.v : undefined, stamps()[k], r.at);
-        setBase(k, r.v === null ? undefined : r.v, r.ver);
-        if (!same(m, read(k))) { write(k, m); changed = true; }
+    try {
+      for (const k of keys) {
+        for (let tries = 0; tries < 4; tries++) {
+          const v = read(k), b = bases()[k];
+          if (v === undefined || (b && same(v, b.v))) break;                // nothing new to send
+          const at = Date.now();
+          noteSent(k, at);
+          let r;
+          try { r = await post("/api/save", { key: k, v, at, base: b ? b.ver || 0 : 0, dev: DEV }); } catch { break; }   // the next write tries again
+          if (r && r.ok) { setBase(k, v, r.ver); break; }
+          if (!r || !r.conflict) break;
+          const srv = r.v === null ? undefined : r.v;
+          const m = merge3(k, read(k), srv, baseOf(k, r, b), stamps()[k], r.at);
+          setBase(k, srv, r.ver);
+          if (!same(m, read(k))) { write(k, m); changed = true; }
+        }
       }
-    }
+    } finally { flushing = false; }
     if (changed) onChange();
   })();
 }
@@ -130,9 +149,10 @@ async function pull() {
   let changed = false;
   for (const k of SYNC) {
     const local = read(k), s = srv.keys[k], b = bs[k];
-    const merged = merge3(k, local, s ? s.v : undefined, b ? b.v : undefined, st[k], s ? s.at : 0);
+    const merged = merge3(k, local, s ? s.v : undefined, baseOf(k, s, b), st[k], s ? s.at : 0);
     if (merged === undefined) continue;
     if (s) setBase(k, s.v, s.ver || 0);
+    else if (b) { const bb = bases(); delete bb[k]; write("__base", bb); }  // the office lost its copy: send this one again
     if (!same(merged, local)) { if (write(k, merged)) changed = true; }
     if (!s || !same(s.v, merged)) send(k);
   }
@@ -161,6 +181,7 @@ export async function syncSave({ post: p, demo, changed }) {
   };
   document.addEventListener("visibilitychange", again);
   window.addEventListener("focus", again);
+  setInterval(() => { if (!document.hidden && Date.now() - last >= 55000) { last = Date.now(); pull().then(c => { if (c) onChange(); }); } }, 60000);   // two screens both in view
 }
 
 // Settings → Your data: the whole save as a file, and back.

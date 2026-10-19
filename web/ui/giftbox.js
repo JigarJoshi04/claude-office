@@ -101,9 +101,9 @@ export function makeGiftBox(ctx) {
   }
   function daily(streak) { if (!off() && gifts.daily(localDay(), streak)) sync(); }
   // A gift earned for sure (all goals, a big combo, a level up, a record week); never from a replay.
-  function grant(seatId, from, min) {
+  function grant(seatId, from, min, _name, id) {          // id: a once-only gift (today's goals, a week, an office level)
     if (replay.active() || off()) return false;
-    const g = gifts.grant(seatId, from, min, seatName(seatId));
+    const g = gifts.grant(seatId, from, min, seatName(seatId), id);
     if (g) { sync(); sound.play("drop"); }
     return g || false;                                  // the gift ({ mail: true } when it went to the mailroom)
   }

@@ -284,6 +284,20 @@ class BakeoffTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 lanes.judge_bakeoff("nope", "A")
 
+    def test_if_b_cannot_start_a_is_stopped_too(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(lanes, "lanes_dir", return_value=Path(tmp) / "lanes"):
+            cfg = {"default_workdir": tmp, "lane_policy": {}, "lane_defaults": {"model": "opus"}}
+            calls = []
+            def start(lid):
+                calls.append(lid)
+                if len(calls) == 2:
+                    raise RuntimeError("systemd-run failed")
+            with patch.object(lanes, "start_unit", side_effect=start), patch.object(lanes, "stop_lane") as stop:
+                with self.assertRaises(RuntimeError):
+                    lanes.hire_bakeoff("T", "Brief.", tmp, {"A": {}, "B": {}}, "acceptEdits", ["c1"], cfg)
+            stop.assert_called_once_with(calls[0])
+            self.assertEqual({lanes.load_lane(l)["status"] for l in calls}, {"failed"})
+
     def test_a_bad_contender_or_an_empty_brief_hires_neither(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(lanes, "lanes_dir", return_value=Path(tmp) / "lanes"):
             cfg = {"default_workdir": tmp, "lane_policy": {}, "lane_defaults": {"model": "opus"}}

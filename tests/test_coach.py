@@ -78,8 +78,15 @@ class CoachTests(unittest.TestCase):
         self.assertIsNone(coach.estimate(rows))
         rows.append({"minutes": None, "tokens": 9, "outcome": "done", "model": "sonnet"})
         e = coach.estimate(rows)
-        self.assertEqual((e["n"], e["minutes"], e["tokens"], e["done"]), (3, 20, 3, 2))
+        self.assertEqual((e["n"], e["minutes"], e["tokens"], e["done"]), (3, None, 3, 2))      # two runtimes are not enough for a median
+        rows[2]["minutes"] = 50
+        self.assertEqual(coach.estimate(rows)["minutes"], 30)
         self.assertEqual(e["models"][0], {"model": "opus", "n": 2, "done": 1})
+
+    def test_a_report_that_does_not_claim_done_is_not_done(self):
+        self.assertEqual(coach.outcome({"status": "stopped", "report_status": "Notes so far: half the tables"}), "stopped")
+        self.assertEqual(coach.outcome({"status": "done", "report_status": "STATUS: DONE - all of it"}), "done")
+        self.assertNotIn("file", coach.words("Edit the files"))                                 # a plural of a stop word is one too
 
     def test_brief_length_is_checked(self):
         with self.assertRaisesRegex(ValueError, "20 to"):

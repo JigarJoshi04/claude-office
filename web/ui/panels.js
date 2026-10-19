@@ -49,7 +49,7 @@ export function makePanels(app) {
   const STATUS_WORD = { READY: "ready for review", DONE: "done", BLOCKED: "blocked", FAILED: "failed", PARTIAL: "partly done", COMPLETE: "done", SUCCESS: "done" };
   // A Needs-you item's words; share-safe keeps out what a session is doing (the question, the call it repeats, its report).
   const needText = (a) => (!app.privacy() ? humanise(a.text) : a.ask ? "An agent asks you a question"
-    : a.collision ? "Two sessions are editing one working tree" : a.bakeoff ? "A bake-off is ready to judge"
+    : a.collision ? "Two sessions are editing one working tree" : a.bakeoff ? "A bake-off is ready to judge" : a.promise ? "A promise is due soon"
     : humanise(a.text.replace(/( in a row| is blocked): [\s\S]*$/, "$1")));
   const humanise = (text) => {
     let t = String(text || "");
@@ -87,7 +87,7 @@ export function makePanels(app) {
   // only who and what kind, as the toasts do.
   const PRIVATE_ROW = { reminder: "A reminder you set", report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news",
     external: "has news", reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer",
-    ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you", risk: "did something risky", collision: "has two sessions in one working tree" };
+    ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you", risk: "did something risky", collision: "has two sessions in one working tree", promise: "has news of a promise" };
   function actRow(e) {
     const s = e.seat && seatById(e.seat), said = app.privacy() && PRIVATE_ROW[e.kind]
       ? (e.kind === "reminder" ? PRIVATE_ROW.reminder : !s && e.kind === "lane" ? "Office lane news" : `${s ? P(s).name : "The office"} ${PRIVATE_ROW[e.kind]}`) : humanise(e.text);
@@ -333,7 +333,7 @@ export function makePanels(app) {
   function needs(snap) {
     const out = [], spent = new Map(), nearly = new Map();
     for (const a of snap.attention || []) {
-      if (a.ask || a.ci || a.review || a.risk || a.trust || a.collision || a.bakeoff || a.ghost || a.loop) { out.push(a); continue; }     // their own words; never read as plan items
+      if (a.ask || a.ci || a.review || a.risk || a.trust || a.collision || a.bakeoff || a.ghost || a.loop || a.promise || a.stuck) { out.push(a); continue; }     // their own words; never read as plan items
       const st = a.seat && seatById(a.seat);
       const planItem = /usage at \d+%|stopped by the usage limit|runs out of its/i.test(a.text);
       // A seat close to its limit says so once: "Orion has 1% of its 5-hour window left, out in ~2 min".
@@ -1337,10 +1337,10 @@ export function makePanels(app) {
   function promiseDue(key) {
     const d = new Date(), at = (days, h) => { const x = new Date(d); x.setDate(x.getDate() + days); x.setHours(h, 0, 0, 0); return x.getTime() / 1000; };
     if (key === "2h") return Math.round(Date.now() / 1000 + 7200);
-    if (key === "eod") return d.getHours() < 17 ? at(0, 18) : at(1, 18);
+    if (key === "eod") return at(0, 18) - Date.now() / 1000 >= 300 ? at(0, 18) : at(1, 18);   // today until five minutes before
     if (key === "tom") return at(1, 10);
-    if (key === "fri") return at(((5 - d.getDay() + 7) % 7) || (d.getHours() < 17 ? 0 : 7), 18);
-    if (key === "mon") return at(((1 - d.getDay() + 7) % 7) || 7, 10);
+    if (key === "fri") return at(((5 - d.getDay() + 7) % 7) || (at(0, 18) - Date.now() / 1000 >= 300 ? 0 : 7), 18);
+    if (key === "mon") return at(((1 - d.getDay() + 7) % 7) || (at(0, 10) - Date.now() / 1000 >= 300 ? 0 : 7), 10);
     return null;
   }
   const promiseSelect = (id, none) => `<select id="${id}" style="width:auto;height:30px;padding:0 8px">${none ? `<option value="">${esc(none)}</option>` : ""}${PROMISE_BY.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
@@ -1598,6 +1598,8 @@ export function makePanels(app) {
         const coachPaint = () => {
           const el = q("hCoach");
           if (!el) return;
+          const had = document.activeElement && el.contains(document.activeElement) ? [...document.activeElement.attributes].find(a => a.name.startsWith("data-coach")) : null;
+          setTimeout(() => { const b = had && el.querySelector(`[${had.name}]`); if (b) b.focus(); else if (had) q("hBrief").focus(); }, 0);   // the keyboard stays put
           el.innerHTML = coachHtml(coachState, { now: q("hBrief").value, model: q("hModel").value, privacy: app.privacy() });
           q("hSharpen").disabled = !!(coachState && coachState.pending);
           el.querySelectorAll("[data-coach-x]").forEach(b => b.addEventListener("click", () => { coachState = null; coachPaint(); }));
@@ -1605,11 +1607,11 @@ export function makePanels(app) {
           el.querySelectorAll("[data-coach-model]").forEach(b => b.addEventListener("click", () => {
             q("hModel").value = b.dataset.coachModel; save(); q("hModelHint").innerHTML = modelHint(q("hSeat").value, q("hModel").value); coachPaint();
           }));
-          const put = (text, applied) => { q("hBrief").value = text; save(); q("hCheck").innerHTML = briefCheck(text); coachState = { ...coachState, applied }; coachPaint(); };
+          const put = (text, applied, extra) => { q("hBrief").value = text; save(); q("hCheck").innerHTML = briefCheck(text); coachState = { ...coachState, applied, ...extra }; coachPaint(); };
           const use = el.querySelector("[data-coach-use]");
-          if (use) use.addEventListener("click", () => put(coachState.data.coach.rewrite.trim(), true));
+          if (use) use.addEventListener("click", () => put(coachState.data.coach.rewrite.trim(), true, { before: q("hBrief").value }));   // Undo puts back what was typed
           const undo = el.querySelector("[data-coach-undo]");
-          if (undo) undo.addEventListener("click", () => put(coachState.brief, false));
+          if (undo) undo.addEventListener("click", () => put(coachState.before != null ? coachState.before : coachState.brief, false));
         };
         coachPaint();
         q("hBrief").addEventListener("input", debounce(() => { if (coachState && !coachState.pending) coachPaint(); }, 400));
@@ -1630,6 +1632,7 @@ export function makePanels(app) {
         q("hStart").addEventListener("change", () => { save(); app.rerender(true); });
         if (q("hStartAt")) q("hStartAt").addEventListener("input", save);
         const useTpl = (t) => {
+          coachState = null;                                // the coach read the old brief
           save();
           const mine = (hireDraft.title.trim() || hireDraft.brief.trim()) && ![...TEMPLATES, ...myTemplates()].some(x => x.brief === hireDraft.brief);
           if (mine && !confirm(`Replace your title and brief with the "${t.name}" template?`)) return;
@@ -1655,7 +1658,7 @@ export function makePanels(app) {
           const n = nextUp().find(x => x.key === b.dataset.next);        // by key: the list may have changed since it was drawn
           if (!n) { toast("That suggestion is gone now.", "info"); app.rerender(true); return; } save();
           if ((hireDraft.title.trim() || hireDraft.brief.trim()) && !confirm("Replace your title and brief with this suggestion?")) return;
-          hireDraft = { ...hireDraft, title: n.title, brief: n.brief, workdir: n.workdir || hireDraft.workdir }; store.set("hireDraft", hireDraft); app.rerender(true);
+          coachState = null; hireDraft = { ...hireDraft, title: n.title, brief: n.brief, workdir: n.workdir || hireDraft.workdir }; store.set("hireDraft", hireDraft); app.rerender(true);
           const ti = document.getElementById("hBrief"); if (ti) ti.focus();
         }));
         root.querySelectorAll("[data-next-x]").forEach(b => b.addEventListener("click", () => {
@@ -1668,7 +1671,7 @@ export function makePanels(app) {
           hireDraft.title = t.title; hireDraft.brief = t.brief; store.set("hireDraft", hireDraft); app.rerender(true);
           const ti = document.getElementById("hTitle"); if (ti) { ti.focus(); ti.setSelectionRange(ti.value.length, ti.value.length); }
         }));
-        q("hClear").addEventListener("click", () => { hireDraft = { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true }; store.set("hireDraft", hireDraft); app.rerender(true); });
+        q("hClear").addEventListener("click", () => { coachState = null; hireDraft = { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true }; store.set("hireDraft", hireDraft); app.rerender(true); });
         q("hGo").addEventListener("click", async () => {
           save();
           if (!hireDraft.title.trim() || !hireDraft.brief.trim()) {
@@ -1685,9 +1688,11 @@ export function makePanels(app) {
                 max_minutes: hireDraft.max_minutes, a: { seat: hireDraft.seat || "auto", model: hireDraft.model || ld.model }, b: { seat: q("hSeatB").value, model: q("hModelB").value } });
               if (r.demo) toast("Demo office: no lanes were hired.");
               else { sound.play("hire"); toast("Bake-off started: two contenders, one brief. Judge them when both report.", "good"); app.badge("hiring");
-                hireDraft = { ...hireDraft, title: "", brief: "", bake: false }; store.set("hireDraft", hireDraft); app.go({ kind: "bakeoff", id: r.id }); }
+                if (hireDraft.promise) for (const ln of r.lanes || []) makePromise(ln.id, hireDraft.promise);   // a promise on each contender
+                coachState = null; hireDraft = { ...hireDraft, title: "", brief: "", bake: false, promise: "" }; store.set("hireDraft", hireDraft); app.go({ kind: "bakeoff", id: r.id }); }
             } catch (e) { toast("Could not start the bake-off: " + e.message, "bad"); }
-            q("hGo").disabled = false; app.refresh(); return;
+            const go = q("hGo"); if (go) go.disabled = false;      // gone once the bake-off's page is open
+            app.refresh(); return;
           }
           const list = items();
           const fill = (t, item, sep) => (t.includes("{{item}}") ? t.split("{{item}}").join(item) : t + sep + item);
@@ -1701,6 +1706,7 @@ export function makePanels(app) {
               try {
                 const r = await app.post("/api/lanes", { ...hireDraft, title: fill(hireDraft.title, item, " · ").slice(0, 80), brief: fill(hireDraft.brief, item, "\n\nThis lane's item: "), start: { backlog: true } });
                 if (r.demo) { demo = true; break; } ok++;
+                if (hireDraft.promise && r.lane) makePromise(r.lane.id, hireDraft.promise);   // each lane of the list, promised alike
               } catch (e) { failed.push(item); errors.push(e.message); }
             }
             if (demo) toast("Demo office: no lanes were hired.");
@@ -1722,7 +1728,7 @@ export function makePanels(app) {
             const r = await app.post("/api/lanes", { ...hireDraft, ...one, start: hireDraft.start === "at" ? { at: startAt } : hireDraft.start === "left" ? { left: 30 } : hireDraft.start === "backlog" ? { backlog: true } : null });
             if (r.demo) toast("Demo office: no lane was started.");
             else { if (hireDraft.promise && r.lane) makePromise(r.lane.id, hireDraft.promise);
-              sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true, chain: "" }; store.set("hireDraft", hireDraft); }
+              sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); coachState = null; hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true, chain: "" }; store.set("hireDraft", hireDraft); }
             app.refresh(); app.rerender(true);
           } catch (e) { toast("Could not hire: " + e.message, "bad"); q("hGo").disabled = false; }
         });
@@ -1802,12 +1808,29 @@ export function makePanels(app) {
       paint(w);
     }));
   }
+  const egressListHtml = () => egressData.calls.length ? `<dl class="facts">${egressData.calls.map(c => `<dt>${esc(c.host)}</dt><dd>${esc(c.why)} · ${c.calls.toLocaleString()} call${c.calls === 1 ? "" : "s"}${c.failed ? ` (${c.failed} failed)` : ""}${c.last_at ? `, the last ${relTime(c.last_at)}` : ""}</dd>`).join("")}</dl>` : `<p class="hint">None in the last day.</p>`;
+  let egressTimer = 0;
   function settings() {
+    if (!egressTimer) egressTimer = setInterval(() => {                  // Settings is not redrawn while open: its own clock
+      if (!document.getElementById("egressList")) { clearInterval(egressTimer); egressTimer = 0; return; }
+      if (!document.hidden) { egressAt = 0; refreshEgress(); }
+    }, 60000);
+    refreshEgress();
+    return settingsPage();
+  }
+  function refreshEgress() {
     if (Date.now() - egressAt > 60000) {             // the outbound calls and the analyst's spend, fresh each minute it is open
       egressAt = Date.now();
-      fetch("/api/egress").then(r => r.ok ? r.json() : null).then(j => { if (j && JSON.stringify(j) !== JSON.stringify(egressData)) { egressData = j; if (settingsData) app.rerender(); } }).catch(() => {});
+      fetch("/api/egress").then(r => r.ok ? r.json() : null).then(j => {
+        if (!j || JSON.stringify(j) === JSON.stringify(egressData)) return;
+        egressData = j;
+        const el = document.getElementById("egressList");               // Settings is a form: only this list is drawn again
+        if (el) el.innerHTML = egressListHtml(); else if (settingsData) app.rerender();
+      }).catch(() => {});
       fetch("/api/ai").then(r => r.ok ? r.json() : null).then(j => { aiSpend = j && j.spent; }).catch(() => {});
     }
+  }
+  function settingsPage() {
     if (!settingsData && !settingsLoading) {
       settingsLoading = true;
       fetch("/api/settings").then(r => r.ok ? r.json() : null).then(j => { settingsData = j || { unavailable: true }; settingsLoading = false; app.rerender(true); })
@@ -1871,7 +1894,7 @@ export function makePanels(app) {
       ${section("Your data", `<p class="hint" style="margin-top:0">Your game (stickers, badges, gifts, streaks, bests and hire templates) is kept by the office, so every screen shares it. Save it to a file, or merge a saved file in.</p>
         <div class="row" style="gap:8px"><button class="btn sm" data-save-export>${icon("download", 14)}Export</button><label class="btn sm" style="cursor:pointer">${icon("file", 14)}Import<input type="file" accept="application/json,.json" data-save-import hidden></label></div>`)}
       ${egressData ? section("What leaves this machine", `<p class="hint" style="margin-top:0">The office's own outbound calls in the last day. The page fetches nothing from elsewhere: its fonts and code come from the office. Your agents' traffic is theirs.</p>
-        ${egressData.calls.length ? `<dl class="facts">${egressData.calls.map(c => `<dt>${esc(c.host)}</dt><dd>${esc(c.why)} · ${c.calls.toLocaleString()} call${c.calls === 1 ? "" : "s"}${c.failed ? ` (${c.failed} failed)` : ""}${c.last_at ? `, the last ${relTime(c.last_at)}` : ""}</dd>`).join("")}</dl>` : `<p class="hint">None in the last day.</p>`}`) : ""}
+        <div id="egressList">${egressListHtml()}</div>`) : ""}
       ${section("About", `<div class="hint">Claude Office ${esc(S().office.version || "")} · up ${S().office.started_at ? ago(S().office.started_at).replace(" ago", "") : "–"} · ${esc(app.liveMode())}</div>`)}`,
       bind(root) {
         root.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => { app.setPref("theme", b.dataset.themeSet); app.rerender(true); }));

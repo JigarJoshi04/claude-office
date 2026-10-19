@@ -256,15 +256,36 @@ def strip_heredocs(cmd: str) -> str:
     return "".join(out) + cmd[pos:]
 
 
-_QUOTED_TARGET = re.compile(r"(>{1,2})\s*([\"'])([^\"'\n]{1,300})\2")
+def _blank_quotes(cmd: str) -> str:
+    """Quoted strings become '' (a message or a script's text never reads as a command), except a redirect's quoted
+    target, which keeps its name (`>> "/x/STATE.md"`). One pass, left to right, so a `>` inside quotes is just text."""
+    out, i, n, last = [], 0, len(cmd), ""
+    while i < n:
+        c = cmd[i]
+        if c not in "'\"":
+            out.append(c)
+            if not c.isspace():
+                last = c
+            i += 1
+            continue
+        j = i + 1
+        while j < n and cmd[j] != c:
+            j += 2 if c == '"' and cmd[j] == "\\" else 1
+        body = cmd[i + 1:j]
+        if last == ">" and body and "\n" not in body and len(body) <= 300:
+            out.append(body.replace(" ", "_"))
+            last = "x"
+        else:
+            out.append("''")
+            last = "'"
+        i = j + 1
+    return "".join(out)
 
 
 def _segments(cmd: str) -> list[str]:
     """A shell command's simple commands, with quoted strings and heredoc bodies taken out first, so a commit message
     or a script's text never reads as a command."""
-    cmd = strip_heredocs(cmd)
-    cmd = _QUOTED_TARGET.sub(lambda m: m.group(1) + " " + m.group(3).replace(" ", "_"), cmd)   # `>> "/x/STATE.md"` keeps its name
-    cmd = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", cmd)
+    cmd = _blank_quotes(strip_heredocs(cmd))
     return [seg.strip() for seg in re.split(r"&&|\|\||[;|\n(]", cmd)]
 
 

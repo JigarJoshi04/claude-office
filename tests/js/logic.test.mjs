@@ -637,3 +637,23 @@ test("the team set: a character's gift can hold its sticker, never swapped, done
   assert.ok(!give("c2").sticker.id.startsWith("team-"));
   assert.ok(!give(null).sticker.id.startsWith("team-")); // an office gift never holds one
 });
+
+test("the save keeps removals: an item another screen removed never comes back, an opened gift stays opened", async () => {
+  const { merge3 } = await import("../../web/ui/sync.js");
+  // A opened g1 (the office now has none); B still holds g1 from the same base, and gets g2.
+  assert.deepEqual(merge3("gifts", [{ id: "g1" }, { id: "g2" }], [], [{ id: "g1" }]).map(g => g.id), ["g2"]);
+  assert.deepEqual(merge3("myTemplates", [{ name: "A" }, { name: "B" }], [{ name: "B" }], [{ name: "A" }, { name: "B" }]).map(t => t.name), ["B"]);
+  assert.deepEqual(merge3("myTemplates", [{ name: "A", brief: "new" }], [], [{ name: "A", brief: "old" }]).map(t => t.brief), ["new"]);   // changed here: kept
+  assert.deepEqual(merge3("giftOpened", ["a", "b"], ["b", "c"], ["b"]), ["a", "b", "c"]);
+  const { makeGifts } = await import("../../web/ui/gifts.js");
+  const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? JSON.parse(mem.get(k)) : d), set: (k, v) => mem.set(k, JSON.stringify(v)) };
+  const g = makeGifts({ store, rand: () => 0.9 });
+  const a = g.grant(null, "goals", "rare", null, "goals-2026-10-19");
+  assert.ok(a);
+  assert.equal(g.grant(null, "goals", "rare", null, "goals-2026-10-19"), null);   // once a day, whichever screen gives it
+  g.open(a.id);
+  assert.equal(g.grant(null, "goals", "rare", null, "goals-2026-10-19"), null);   // and not again once opened
+  mem.set("gifts", JSON.stringify([{ id: a.id, at: Date.now() / 1000, from: "goals" }]));   // another screen's stale copy comes back in a merge
+  assert.equal(g.waiting().length, 0);
+  assert.equal(g.open(a.id), null);
+});

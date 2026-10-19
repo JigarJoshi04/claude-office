@@ -3,6 +3,35 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.147.0] - 2026-10-19
+
+### Fixed (QA round 22)
+- The game save could bring back what another screen removed: a gift opened on one screen came back from another
+  and could be opened twice, and removed templates returned. Gifts opened on any screen are now kept in the save for
+  every screen, a removal elsewhere is never undone, and once-a-day or once-a-week gifts (the morning delivery, all
+  goals, a record week, a quest, an office level) have fixed ids, so two screens never both give one.
+- Counters in the save (stickers, counts, freezes) could be added twice when a reply was lost, a write was slow or
+  an older tab sent it. Each write carries the screen that made it, so the office's copy of this screen's own write
+  is never added again, and writes go one at a time. Screens in view merge every minute, an office that lost its
+  save gets it back from the next screen, and the template cap no longer drops this screen's own.
+- A lane that exited without a report kept its promise; it needs its DONE report now. Share-safe hid promise titles
+  nowhere (news, Needs you, notifications); it does now. "Promise it by" is honoured for bake-offs and list hires.
+  Today 6 pm and Monday 10 am mean today when there is time; an unseated lane's promise no longer opens a seat
+  called auto; the Reliable badge comes with the fifth kept promise; Help's Show me opens the briefing.
+- The analyst's spend log kept a coached brief's credentials in clear; they are masked.
+- A `>` inside quotes hid later commands from the session reader (`echo "==>" && pytest` missed the test run), since
+  3.135. Quotes and redirect targets are read in one pass.
+- `claude-office top` in share-safe still showed some lane titles, commands and activities.
+- What leaves this machine did not refresh while Settings was open; it has its own clock now.
+- The brief coach: Undo puts back what was typed, the panel clears with a new draft, buttons keep keyboard focus,
+  medians need three lanes, and a report that does not claim done is not counted as done.
+- Standup mode opened with focus on End, so Space ended it.
+- A bake-off whose second contender could not start left the first running alone; both stop now.
+- Egress counts are kept at exit, and damaged egress or utilities files no longer break the snapshot.
+- The prompt cache card says rebuilds are not measured for Codex; rebuild cost counts fast mode and regional prices.
+- The week chart's plan measure hatches days without readings, and its tooltips give the share.
+- Starting a bake-off showed an error toast after it started.
+
 ## [3.146.0] - 2026-10-19
 
 ### Added

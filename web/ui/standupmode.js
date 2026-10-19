@@ -74,7 +74,7 @@ export function openStandupMode({ data, snap, persona, humanise, privacy, onClos
   el.querySelector("[data-su-pause]").addEventListener("click", pause);
   el.querySelector("[data-su-x]").addEventListener("click", close);
   show(0);
-  el.querySelector("[data-su-x]").focus();
+  el.querySelector('[data-su="1"]').focus();          // Next first: Space and Enter go on, as the header says
   current = { close };
   return current;
 }

@@ -5,6 +5,7 @@ from elsewhere (its fonts are served by the office). Agents' own traffic is thei
 """
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import threading
@@ -35,12 +36,13 @@ def init(path: Path | None) -> None:
     with _LOCK:
         _HOURS.clear()
         _HOURS.update({k: v for k, v in (d if isinstance(d, dict) else {}).items()
-                       if isinstance(k, str) and "|" in k and isinstance(v, list) and len(v) == 3})
+                       if isinstance(k, str) and "|" in k and k.split("|", 1)[0].isdigit() and isinstance(v, list) and len(v) == 3
+                       and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v)})   # a damaged file is read as far as it is sound
 
 
-def _save(now: float) -> None:
+def _save(now: float, force: bool = False) -> None:
     global _SAVED
-    if not _PATH or now - _SAVED < 60:
+    if not _PATH or (now - _SAVED < 60 and not force):
         return
     _SAVED = now
     try:
@@ -50,6 +52,15 @@ def _save(now: float) -> None:
         os.replace(tmp, _PATH)
     except OSError:
         pass
+
+
+def flush() -> None:
+    """Keep the last minute's counts too (at exit)."""
+    with _LOCK:
+        _save(time.time(), force=True)
+
+
+atexit.register(flush)
 
 
 def note(kind: str, ok: bool = True, now: float | None = None) -> None:

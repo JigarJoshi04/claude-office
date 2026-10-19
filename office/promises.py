@@ -32,7 +32,7 @@ def final_stage(lane: dict | None, load=lanes.load_lane) -> dict | None:
 
 def done_at(lane: dict) -> float | None:
     """When a lane finished with a DONE report and nothing left in its chain, or None."""
-    if lane.get("status") not in ("done", "finished") or lane.get("chain"):
+    if lane.get("status") != "done" or lane.get("chain"):            # "finished" is an exit without a report: it keeps nothing
         return None
     runs = lane.get("runs") or []
     return lane.get("finished_at") or (runs[-1].get("ended_at") if runs else None) or None
@@ -64,7 +64,8 @@ class Promises:
             else:
                 if sum(p["status"] == "open" for p in self.items) >= MAX_OPEN:
                     raise ValueError(f"At most {MAX_OPEN} open promises")
-                p = {"id": os.urandom(4).hex(), "lane": lane_id, "title": lane.get("title") or lane_id, "seat": lane.get("seat") or lane.get("seat_pref"),
+                p = {"id": os.urandom(4).hex(), "lane": lane_id, "title": lane.get("title") or lane_id,
+                     "seat": lane.get("seat") or (lane.get("seat_pref") if lane.get("seat_pref") != "auto" else None),
                      "due": float(due), "made_at": now, "status": "open"}
                 self.items.append(p)
             self._save()
@@ -90,7 +91,7 @@ class Promises:
                     continue
                 last = final_stage(get(p["lane"]), get)
                 if last is None:                               # the lane was deleted: nothing can keep it
-                    p.update(status="broken", settled_at=now, why="its lane is gone")
+                    p.update(status="broken", settled_at=now, why="lost its lane")
                     out.append(dict(p))
                     continue
                 at = done_at(last)
@@ -100,7 +101,7 @@ class Promises:
                     p.update(status="kept", settled_at=now, done_at=at, early_s=round(p["due"] - at), trust=(last.get("trust") or {}).get("level"))
                     out.append(dict(p))
                 elif now > p["due"]:
-                    p.update(status="broken", settled_at=now, why="it was not done in time" if not at else "it finished late")
+                    p.update(status="broken", settled_at=now, why="was not done in time" if not at else "finished late")
                     out.append(dict(p))
             if out:
                 done = [p for p in self.items if p["status"] != "open"]

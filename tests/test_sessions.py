@@ -447,7 +447,8 @@ class PhaseTests(unittest.TestCase):
                  ("Bash", {"command": "gh pr comment 12 -b hi"}, None, "run"), ("Bash", {"command": "gh issue create -t x"}, None, "run"),
                  ("Bash", {"command": "gh pr view 12"}, None, "look"), ("Bash", {"command": "find . -name x"}, None, "look"),
                  ("Bash", {"command": 'echo "- did x" >> "/l/my lane/STATE.md"'}, None, "run"), ("Bash", {"command": "echo ok > '/x/REPORT.md'"}, None, "run"),
-                 ("Bash", {"command": 'echo "x" > "/w/app.py"'}, None, "edit")]
+                 ("Bash", {"command": 'echo "x" > "/w/app.py"'}, None, "edit"), ("Bash", {"command": 'echo "<div>" > "index.html"'}, None, "edit"),
+                 ("Bash", {"command": 'echo "==>" && pytest -q'}, "test", "test"), ("Bash", {"command": "git commit -m 'a > b' && git push"}, None, "ship")]
         for name, inp, screen, want in cases:
             self.assertEqual(step_kind(name, inp, screen), want, (name, inp))
 
@@ -479,6 +480,15 @@ class RedactTests(unittest.TestCase):
                              ('{"SessionToken": "AQoDYXdzEJr1234"}', "AQoDYXdzEJr1234")):
             self.assertNotIn(secret, redact(text), text)
         self.assertEqual(redact("tokentoken" * 5000)[:10], "tokentoken")      # long runs of the word stay quick
+
+
+class QuoteTests(unittest.TestCase):
+    def test_quotes_and_redirect_targets_in_one_pass(self):
+        from office.sessions import _blank_quotes, _segments
+        self.assertEqual(_blank_quotes('echo "<div>" > "index.html"'), "echo '' > index.html")
+        self.assertEqual(_blank_quotes("echo \"a \\\" b\" >> '/x/my notes.md'"), "echo '' >> /x/my_notes.md")
+        self.assertIn("pytest -q", _segments('echo "==>" && pytest -q'))
+        self.assertEqual(_blank_quotes('echo "unclosed'), "echo ''")
 
 
 class HeredocTests(unittest.TestCase):

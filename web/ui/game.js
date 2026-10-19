@@ -68,7 +68,7 @@ export function makeGame(ctx) {
       fresh.forEach(g => goalsSeen.ids.add(g.id));
       const all = gl.every(x => x.done), what = fresh.map(g => g.label).join(" and ");
       if (prefs.view === "floor") fxNow().banner(all ? "All goals!" : "Goal!", all ? "Every goal for today is done" : what, "#ffd24a");
-      if (all) { gifts.grant(null, "goals", "rare"); if (!replay.active()) scrapbook.capture(office, prefs, "goals", "Every goal done today", null); }
+      if (all) { gifts.grant(null, "goals", "rare", null, "goals-" + day); if (!replay.active()) scrapbook.capture(office, prefs, "goals", "Every goal done today", null); }
       chime(all ? "levelup" : "achievement");
       note(all ? "All three goals done today." : `Goal done: ${what}.`, "good", { ic: "goal" });
     }
@@ -94,7 +94,7 @@ export function makeGame(ctx) {
       if (prefs.view === "floor") fxNow().banner(full ? "Punch card full!" : "Quest done!", full ? `${PUNCH} quests this month` : x.label, "#ff7a45");
       chime(full ? "levelup" : "achievement");
       note(full ? `Punch card full: ${PUNCH} quests done this month.` : `Quest done: ${x.label}.`, "good", { ic: "flame", ms: 7000 });
-      gifts.grant(null, "week", full ? "epic" : "rare");
+      gifts.grant(null, "week", full ? "epic" : "rare", null, `quest-${month}-${x.id}`);
       if (x.kind === "reports") badge(award("record_week"));
     }
   }
@@ -113,7 +113,7 @@ export function makeGame(ctx) {
     chime("levelup");
     note(`Record week: ${w.have} reports, beating last week's ${w.last}.`, "good", { ic: "flame", ms: 7000 });
     badge(award("record_week"));
-    gifts.grant(null, "week", "epic");
+    gifts.grant(null, "week", "epic", null, "week-" + w.week);
   }
 
   // The visit streak: days in a row this browser has opened the office (a flame by the level chip from two days on).
@@ -220,7 +220,7 @@ export function makeGame(ctx) {
       if (prefs.view === "floor") fxNow().banner("Office level up!", got.length ? `Unlocked: ${got.map(u => u.name).join(", ")}` : `The office is now level ${ol.level}`, "#ffd24a");
       chime("levelup");
       note(got.length ? `Office level ${ol.level}! Unlocked ${got.map(u => u.name).join(", ")}.` : `Office level ${ol.level}!`, "good", { ic: "star", ms: 7000 });
-      gifts.grant(null, "office", "epic");
+      gifts.grant(null, "office", "epic", null, "office-" + ol.level);
       if (!replay.active()) scrapbook.capture(office, prefs, "office", `The office reached level ${ol.level}`, null);
     }
     if (ol.level > olSeen) { olSeen = ol.level; store.set("officeLevel", ol.level); }   // only rises: a dip never re-celebrates

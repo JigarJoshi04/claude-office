@@ -664,8 +664,9 @@ class TokenLedger:
             s["lm"] = max(prev or 0, at)
             if not prev or at - prev <= ttl or cw < REBUILD_MIN:
                 return
-            extra = max(0, (prices.response_cost(model, {"cache_creation_input_tokens": cw, "cache_creation": split}) or 0)
-                        - (prices.response_cost(model, {"cache_read_input_tokens": cw}) or 0))
+            mode = {k: u[k] for k in ("speed", "inference_geo") if k in u}     # fast mode and regional prices apply too
+            extra = max(0, (prices.response_cost(model, {"cache_creation_input_tokens": cw, "cache_creation": split, **mode}) or 0)
+                        - (prices.response_cost(model, {"cache_read_input_tokens": cw, **mode}) or 0))
             day, _ = _when(ts)
             r = s.setdefault("rb", {}).setdefault(day or "?", [0, 0, 0])
             r[0] += 1; r[1] += cw; r[2] += extra

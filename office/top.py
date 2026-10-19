@@ -46,7 +46,10 @@ def _private_need(a: dict) -> str:
             else "A risky action" if a.get("risk") else "A report its own tests contradict" if a.get("trust") else None)
     if kind:
         return kind + (f" on {a['seat']}" if a.get("seat") else "")
-    return a.get("text", "").split(":")[0]
+    if a.get("lane"):
+        return "An office lane needs you"
+    t = a.get("text", "")
+    return t.split(":")[0] if ":" in t else "Something needs you" + (f" on {a['seat']}" if a.get("seat") else "")
 
 
 def lines(snap: dict, width: int, private: bool = False, pick: int = 0) -> list[tuple[str, str]]:
@@ -83,9 +86,10 @@ def lines(snap: dict, width: int, private: bool = False, pick: int = 0) -> list[
     ws = working(snap)
     rows.append((f"SESSIONS ({len(ws)})  up/down pick · m message · s stop its lane", "dim"))
     for i, (s, x) in enumerate(ws[:14]):
-        act = STATE.get(x.get("state"), x.get("state") or "") if private and x.get("kind") == "desk" else (x.get("activity") or STATE.get(x.get("state"), ""))
+        act = STATE.get(x.get("state"), x.get("state") or "") if private else (x.get("activity") or STATE.get(x.get("state"), ""))
+        title = ("a lane" if x.get("kind") == "lane" else "a session") if private else (x.get("name") or "")
         phase = f" [{x['phase']}]" if x.get("phase") else ""
-        line = f"{'>' if i == pick else ' '} {(s.get('nickname') or s.get('label') or s['id'])[:10]:<11}{(x.get('name') or '')[:22]:<23}{STATE.get(x.get('state'), x.get('state') or '')[:11]:<12}{phase} {act}"
+        line = f"{'>' if i == pick else ' '} {(s.get('nickname') or s.get('label') or s['id'])[:10]:<11}{title[:22]:<23}{STATE.get(x.get('state'), x.get('state') or '')[:11]:<12}{phase} {act}"
         rows.append((cut(line), "sel" if i == pick else "good" if x.get("state") == "working" else ""))
     lanes = [l for l in snap.get("lanes") or [] if l.get("status") in ("scheduled", "queued", "starting", "running", "waiting", "interrupted")]
     if lanes:

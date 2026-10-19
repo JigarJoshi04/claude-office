@@ -109,6 +109,8 @@ class Brain:
     def _log(self, entry: dict) -> None:
         if not self.root:
             return
+        if entry.get("about"):
+            entry = dict(entry, about=redact(str(entry["about"]))[:80])   # Settings shows it: never a credential
         try:
             p = self._path("spend.jsonl")
             fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)

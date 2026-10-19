@@ -529,8 +529,22 @@ def hire_bakeoff(title: str, brief: str, workdir: str, sides: dict, permission_m
         out.append(create_lane(f"{title} · {side}", brief + BAKEOFF_NOTE.format(side=side, id=bid, low=side.lower()),
                                workdir, v.get("seat") or "auto", v.get("model") or cfg["lane_defaults"]["model"], permission_mode,
                                seat_ids, cfg, launch=False, max_minutes=max_minutes, bakeoff={"id": bid, "side": side}))
-    for lane in out:
-        start_unit(lane["id"])
+    started = []
+    try:
+        for lane in out:
+            start_unit(lane["id"])
+            started.append(lane["id"])
+    except Exception:                               # B could not start: A does not race alone
+        for lid in started:
+            try:
+                stop_lane(lid)
+            except (ValueError, OSError):
+                pass
+        for lane in out:
+            full = load_lane(lane["id"]) or lane
+            full.update(status="failed", error="the bake-off could not start both contenders")
+            save_lane(full)
+        raise
     return [load_lane(l["id"]) or l for l in out]
 
 

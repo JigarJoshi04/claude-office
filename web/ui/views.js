@@ -251,9 +251,11 @@ function weekCard(app, shown) {
   const wd = (d) => new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short" });
   const bars = last.map((d, i) => {
     const v = get(d), h = v > 0 ? Math.max(3, Math.round(v / max * H)) : 0, x = i * 64 + 14, on = d.day === shown, B = H + T;
+    if (key === "plan" && !d.avail_min && !noRecord(d)) return `<g class="wk-bar norec"><rect class="hatch" x="${x}" y="${B - H}" width="36" height="${H}" rx="4" fill="url(#wkHatch)"/>
+      <text class="ax" x="${x + 18}" y="${B + 18}" text-anchor="middle">${wd(d.day)}</text><title>No plan readings that day</title></g>`;
     if (noRecord(d)) return `<g class="wk-bar norec"><rect class="hatch" x="${x}" y="${B - H}" width="36" height="${H}" rx="4" fill="url(#wkHatch)"/>
       <text class="ax" x="${x + 18}" y="${B + 18}" text-anchor="middle">${wd(d.day)}</text><title>No record: the office opened ${esc(new Date(born * 1000).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" }))}</title></g>`;
-    const tip = `${new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })} · ${d.reports} report${d.reports === 1 ? "" : "s"} · ${WEEK_METRICS.hours[2](d.active_min / 60)} · ${d.tool_calls.toLocaleString()} tool calls · ${d.sessions} session${d.sessions === 1 ? "" : "s"}`;
+    const tip = `${new Date(d.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })} · ${d.reports} report${d.reports === 1 ? "" : "s"} · ${WEEK_METRICS.hours[2](d.active_min / 60)} · ${d.tool_calls.toLocaleString()} tool calls · ${d.sessions} session${d.sessions === 1 ? "" : "s"}${d.avail_min ? ` · plan in use ${Math.round(d.busy_min / d.avail_min * 100)}%` : ""}`;
     return `<g class="wk-bar ${on ? "on" : ""}" data-week-day="${d.day}" tabindex="0" role="button" aria-label="${tip}">
       <rect class="hit" x="${x - 8}" y="0" width="52" height="${B + 26}" fill="transparent"/>
       ${h ? `<path class="val" d="M${x} ${B} V${B - h + 4} q0 -4 4 -4 h28 q4 0 4 4 V${B} Z"/>` : `<rect class="zero" x="${x}" y="${B - 2}" width="36" height="2" rx="1"/>`}

@@ -542,6 +542,7 @@ function apply(next) {
   const first = !snap;
   prevLive = snap ? snap.seats.reduce((n, s) => n + live(s).length, 0) : null;   // who was in before this refresh (First one in)
   snap = next; setNow(snap.now);
+  if (!DEMO && snap.promises && snap.promises.kept >= 5) badge(award("reliable"));   // the fifth kept promise (award says it once)
   setLooks(Object.fromEntries([...snap.seats.filter(s => s.look).map(s => ["mascot-" + s.id, s.look]),   // the character creator's looks
     ...(snap.office.ceo && snap.office.ceo.look ? [["ceo-" + (snap.office.ceo.name || "CEO"), snap.office.ceo.look]] : [])]));
   if (!replay.active()) office.update(snap);   // while replaying, live data waits underneath
@@ -652,7 +653,8 @@ if (DEMO && QS.get("help")) setTimeout(() => office.help("claude2", "Quiet in he
 // In share-safe mode, news whose words could name a session, a project or a report says only who and what kind.
 const PRIVATE_NEWS = { report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news", external: "has news",
   reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer", risk: "did something risky",
-  ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you", collision: "has two sessions in one working tree" };
+  ask: "has a question for you", limit: "has a session that hit its usage limit", message: "got a message from you", collision: "has two sessions in one working tree",
+  promise: "has news of a promise" };
 const NOFX = { celebrate() {}, alarm() {}, banner() {}, say() {}, sayAtSeat() {}, shipPop() {}, plane() {}, mail() {}, ringBell() {} };
 // One item of news going wrong is logged and skipped; it never stops the rest of the snapshot or the stream.
 // A page error says so once, quietly, and reports itself to the office (the doctor lists it). Errors from browser
@@ -753,7 +755,7 @@ function onNews(e) {
       const kept = e.level === "good";
       if (kept) {
         fx.celebrate(e.seat, null, "Promise kept!");
-        if (prefs.game !== "off") { giftBox.grant(e.seat, "promise", "rare"); if (!DEMO) { const n = ((snap && snap.promises) || {}).kept || 0; badge(award("word_kept")); if (n >= 5) badge(award("reliable")); } }
+        if (prefs.game !== "off") { giftBox.grant(e.seat, "promise", "rare"); if (!DEMO) badge(award("word_kept")); }
         if (prefs.game === "full") sound.play("report");
       }
       toast(text, kept ? "good" : "warn", { ic: "flag", ms: 7000 });

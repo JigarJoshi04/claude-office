@@ -41,7 +41,15 @@ class PromiseTests(unittest.TestCase):
         self.lanes["l2"] = lane("l2")
         self.make("l2")
         self.lanes["l2"] = lane("l2", "done", finished=NOW + 8000)              # done, but after the time
-        self.assertEqual(self.p.evaluate([], NOW + 8100, self.load)[0]["why"], "it finished late")
+        self.assertEqual(self.p.evaluate([], NOW + 8100, self.load)[0]["why"], "finished late")
+
+    def test_an_exit_without_a_report_keeps_nothing(self):
+        self.make()
+        self.lanes["l1"] = lane("l1", "finished", finished=NOW + 600)            # exited cleanly, no report
+        self.assertEqual(self.p.evaluate([], NOW + 700, self.load), [])
+        self.assertEqual(self.p.evaluate([], NOW + 7300, self.load)[0]["status"], "broken")
+        self.lanes["l5"] = dict(lane("l5"), seat=None, seat_pref="auto")
+        self.assertIsNone(self.make("l5")["seat"])                               # not seated yet: no seat, not "auto"
 
     def test_a_chain_is_kept_by_its_last_stage(self):
         self.make()

@@ -129,7 +129,9 @@ class Utilities:
     def __init__(self, path: Path | None):
         self.path, self.lock = path, threading.Lock()
         d = config.read_state(path) if path else None
-        self.history: dict[str, int] = d.get("days", {}) if isinstance(d, dict) and isinstance(d.get("days"), dict) else {}
+        days = d.get("days") if isinstance(d, dict) and isinstance(d.get("days"), dict) else {}
+        self.history: dict[str, int] = {k: v for k, v in days.items() if isinstance(k, str) and len(k) == 10 and k[4] == "-"
+                                        and isinstance(v, int) and not isinstance(v, bool)}   # only sound days: a bad file never breaks a snapshot
         self.disk: dict | None = None
         self.memory: dict | None = None
         self._mem_at = 0.0
@@ -191,6 +193,9 @@ class Utilities:
     def view(self) -> dict:
         with self.lock:
             days = sorted(self.history.items())
-            span = (date.fromisoformat(days[-1][0]) - date.fromisoformat(days[0][0])).days if len(days) >= 2 else 0
+            try:
+                span = (date.fromisoformat(days[-1][0]) - date.fromisoformat(days[0][0])).days if len(days) >= 2 else 0
+            except ValueError:
+                span = 0
             grow = (days[-1][1] - days[0][1]) / span if span > 0 else None           # per calendar day, gaps included
             return {"disk": self.disk, "memory": self.memory, "days": days, "per_day": grow}

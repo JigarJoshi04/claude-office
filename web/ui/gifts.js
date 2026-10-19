@@ -51,7 +51,10 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
   const mem = new Map();
   const get = (k, d) => (demo ? (mem.has(k) ? mem.get(k) : d) : store.get(k, d));
   const set = (k, v) => (demo ? mem.set(k, v) : store.set(k, v));
-  const mailroom = () => get("mailroom", []);
+  // Gifts opened on any screen (the save keeps them for every screen), so a copy another screen still holds never
+  // comes back to be opened twice.
+  const opened = () => new Set(get("giftOpened", []));
+  const mailroom = () => { const o = opened(), m = get("mailroom", []); return o.size ? m.filter(g => !o.has(g.id)) : m; };
   // Over the cap the oldest plain gift goes; one that promises something (a swap, a rarity) never does.
   const toMail = (list) => {
     const m = [...mailroom(), ...list];
@@ -60,7 +63,7 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
   };
   // The floor's gifts; any that waited a day unopened move to the mailroom.
   const waiting = () => {
-    const all = get("gifts", []), fresh = all.filter(g => now() - g.at < KEEP_S);
+    const o = opened(), all = get("gifts", []).filter(g => !o.has(g.id)), fresh = all.filter(g => now() - g.at < KEEP_S);
     if (fresh.length < all.length) { set("gifts", fresh); toMail(all.filter(g => now() - g.at >= KEEP_S).map(g => ({ ...g, late: true }))); }
     return fresh;
   };
@@ -68,6 +71,7 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
   // A new gift: on the floor while it has room, else in the mailroom ({ mail: true } says which).
   const add = (g, room = 0) => {
     const list = waiting();
+    if (g.id && (opened().has(g.id) || list.some(x => x.id === g.id) || mailroom().some(x => x.id === g.id))) return null;   // a once-a-day gift another screen gave
     const gift = { id: Math.floor(now() * 1000).toString(36) + "-" + (seq++).toString(36), at: now(), ...g };
     if (list.length >= MAX_WAITING + room) { toMail([gift]); return { ...gift, mail: true }; }
     set("gifts", [...list, gift]);
@@ -97,13 +101,13 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
       return add({ seat, from, ...(name ? { name } : {}) });   // the name stays with the gift if the seat leaves
     },
     // A gift earned for sure: all goals done, a level up, a big combo. `min` lifts the rarity.
-    grant(seat, from, min, name) { return add({ seat, from, ...(min ? { min } : {}), ...(name ? { name } : {}) }, GRANT_ROOM); },
+    grant(seat, from, min, name, id) { return add({ seat, from, ...(min ? { min } : {}), ...(name ? { name } : {}), ...(id ? { id } : {}) }, GRANT_ROOM); },
     // The first visit of a local day: a morning delivery at the CEO desk. A visit streak makes it better: from three
     // days in a row it is rare or better, and every seventh day epic or better. With the floor full it waits for room.
     daily(day, streak = 0) {
       if (get("giftDay", "") === day) return null;
       const min = streak >= 7 && streak % 7 === 0 ? "epic" : streak >= 3 ? "rare" : null;
-      const g = add({ seat: null, from: "daily", ...(min ? { min, streak } : {}) });
+      const g = add({ id: "daily-" + day, seat: null, from: "daily", ...(min ? { min, streak } : {}) });
       if (g) set("giftDay", day);
       return g;
     },
@@ -123,6 +127,7 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
       const list = waiting(), m = mailroom(), g = list.find(x => x.id === id) || m.find(x => x.id === id);
       if (!g) return null;
       if (list.includes(g)) set("gifts", list.filter(x => x.id !== id)); else set("mailroom", m.filter(x => x.id !== id));
+      set("giftOpened", [...get("giftOpened", []).filter(x => x !== id), id].slice(-400));
       const min = ORDER.indexOf(g.min || "common"), season = seasonFor(new Date(now() * 1000));
       const rank = (x) => (x.rarity === "seasonal" || x.rarity === "team" ? 1 : ORDER.indexOf(x.rarity));     // seasonal and team stickers count as rare
       const mate = g.seat ? team(g.seat) : null;            // {id, name, color}: the character the gift came from

@@ -12,6 +12,7 @@ import statistics
 
 from . import askabout, brain, lanes
 from .sessions import redact, report_blocked
+from .trust import _CLAIM as _DONE
 
 MIN_BRIEF, MAX_BRIEF = 20, 8000
 MIN_SCORE, MIN_SHARED, SHOW, SCAN = 0.3, 3, 5, 400
@@ -44,7 +45,7 @@ def _stem(w: str) -> str:
 
 
 def words(text: str) -> set[str]:
-    return {_stem(w) for w in _WORD.findall(str(text or "").lower()) if w not in _STOP}
+    return {w for w in (_stem(x) for x in _WORD.findall(str(text or "").lower())) if w not in _STOP}   # plurals first: "files" is a stop word too
 
 
 def score(mine: set[str], theirs: set[str], idf: dict[str, float], top: float, least: int = MIN_SHARED) -> float:
@@ -56,9 +57,9 @@ def score(mine: set[str], theirs: set[str], idf: dict[str, float], top: float, l
 
 
 def outcome(lane: dict) -> str:
-    """done, blocked, stopped or failed: how a finished lane ended."""
+    """done, blocked, stopped or failed: how a finished lane ended (done only when its report says so)."""
     st = lane.get("report_status")
-    if st:
+    if st and (report_blocked(st) or _DONE.match(st)):
         return "blocked" if report_blocked(st) else "done"
     return {"done": "done", "blocked": "blocked", "finished": "done"}.get(lane.get("status"), lane.get("status") or "unknown")
 
@@ -109,7 +110,7 @@ def estimate(samples: list[dict]) -> dict | None:
     """How big a job like this tends to be, from at least ESTIMATE_FROM similar lanes (medians, and how they ended)."""
     if len(samples) < ESTIMATE_FROM:
         return None
-    mins = [r["minutes"] for r in samples if r["minutes"]]
+    mins = [r["minutes"] for r in samples if r["minutes"]]           # a median needs ESTIMATE_FROM values: one lane is not a size
     toks = [r["tokens"] for r in samples if r["tokens"]]
     models: dict[str, list[int]] = {}
     for r in samples:
@@ -117,8 +118,8 @@ def estimate(samples: list[dict]) -> dict | None:
             e = models.setdefault(r["model"], [0, 0])
             e[0] += 1
             e[1] += r["outcome"] == "done"
-    return {"n": len(samples), "minutes": round(statistics.median(mins)) if mins else None,
-            "tokens": round(statistics.median(toks)) if toks else None, "done": sum(r["outcome"] == "done" for r in samples),
+    return {"n": len(samples), "minutes": round(statistics.median(mins)) if len(mins) >= ESTIMATE_FROM else None,
+            "tokens": round(statistics.median(toks)) if len(toks) >= ESTIMATE_FROM else None, "done": sum(r["outcome"] == "done" for r in samples),
             "models": [{"model": m, "n": v[0], "done": v[1]} for m, v in sorted(models.items(), key=lambda kv: -kv[1][0])]}
 
 
@@ -167,7 +168,7 @@ def coach(office, body: dict, demo: bool = False) -> dict:
         return out
     try:
         r = office.brain.ask("coach", prompt_for(title, brief, model, samples), SCHEMA, askabout.analyst_seat(office.get() or {}),
-                             office.cfg, about=f"coach: {title or brief[:60]}")
+                             office.cfg, about=f"coach: {redact(title or brief[:60])}")
     except brain.Unavailable as e:
         out["unavailable"] = str(e)
         return out
