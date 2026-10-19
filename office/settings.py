@@ -25,12 +25,18 @@ def view(cfg, seats):
                    "voice": {k: cfg.get("voice", {}).get(k, v) for k, v in VOICE_DEFAULTS.items()},
                    "risk_watch": {"mute": risk_mute(cfg), "rules": risk_rules()},
                    "ai": ai_settings(cfg),
+                   "automation": automation(cfg),
                    "voice_available": shutil.which("jarvis-say") is not None})
 
 
 def risk_rules():
     from .risk import RULES                  # (risk.py imports sessions, which this module need not load early)
     return RULES
+
+
+def automation(cfg):
+    from .prelimit import settings as pre
+    return pre(cfg)
 
 
 def ai_settings(cfg):
@@ -110,6 +116,9 @@ def validate(body):
     if "ai" in body:                                  # the opt-in analyst (brain.py)
         from .brain import validate as ai_validate
         out["ai"] = ai_validate(body["ai"])
+    if "automation" in body:                          # what the office does on its own (prelimit.py)
+        from .prelimit import validate as pre_validate
+        out["automation"] = pre_validate(body["automation"])
     if "risk_watch" in body:                          # rules of the risky-action watch muted in this office
         rw = body["risk_watch"]
         mute = rw.get("mute") if isinstance(rw, dict) else None

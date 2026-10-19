@@ -18,7 +18,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, brain, cabinet, checkpoint, config, egress, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, trust, weeks
+from . import asks, brain, cabinet, checkpoint, config, egress, prelimit, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, trust, weeks
 from .career import CATALOGUE, Career
 from . import save as save_mod
 from . import utilities
@@ -337,6 +337,7 @@ class Office(LiveOffice):
         self.save = save_mod.Save(config.STATE_DIR / "save.json")        # the CEO's game, shared by every screen
         self.utilities = utilities.Utilities(config.STATE_DIR / "utilities.json")   # disk and memory the AI team uses
         egress.init(config.STATE_DIR / "egress.json")                   # outbound calls, counted across restarts
+        self.prelimit = prelimit.PreLimit(config.STATE_DIR / "prelimit.json")   # lanes asked to save their notes before a limit
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
         self._events_path = config.STATE_DIR / "events.jsonl"
@@ -525,6 +526,15 @@ class Office(LiveOffice):
                     x["talk"] = "direct" if x.get("pid") in direct else "review"
                 else:
                     x["talk"] = "later"   # running without a message socket: follow up once it finishes
+        inbox = getattr(self, "inbox", None)
+        if inbox is not None and not self.demo:            # lanes on a seat about to run out write their notes first (prelimit.py)
+            def ask_save(seat, x, text):
+                msg_id = messaging.send(x["socket"], text, inbox.address, cfg.get("message_from_name") or "Claude Office")
+                inbox.record_out(msg_id, x["socket"], seat["id"], x["id"], text)
+            for sid, window, names in self.prelimit.run(seats_out, cfg, now, ask_save):
+                label = next((s.get("label") or s["id"] for s in seats_out if s["id"] == sid), sid)
+                self.emit("checkpoint", f"Asked {', '.join(names[:3])}{' and more' if len(names) > 3 else ''} on {label} to write "
+                          f"{'its' if len(names) == 1 else 'their'} notes before its {window} runs out", sid)
         evaluation = divider.evaluate(seats_out, div, limited_until=limits, now=now)
         if evaluation["pick"] and not getattr(self, "_pick_was", None) and any(l.get("status") == "waiting" for l in lane_list if isinstance(l, dict)):
             lanes.wake_waiting()                           # a seat can take a lane again: waiting lanes go now, not in 30 min
@@ -540,7 +550,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.136.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.137.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),

@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.137.0] - 2026-10-19
+
+### Added
+- Save notes before a limit (Settings → Automation, off until turned on). When a seat is about to run out of its
+  5-hour window or its week at the pace it is going (5 to 30 minutes ahead, or nearly full), the office asks each lane
+  working on it to write its STATE notes now: what is done, what is in progress and the exact next step, so the seat
+  that picks the lane up next loses nothing. Only lanes that take the office's messages directly are asked, each once
+  per window, and the news says who was asked.
+
 ## [3.136.0] - 2026-10-19
 
 ### Fixed

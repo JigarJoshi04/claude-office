@@ -1776,6 +1776,9 @@ export function makePanels(app) {
           <label class="f">Daily budget (tokens)<input type="number" id="setAiBudget" min="10000" max="10000000" step="10000" value="${sd.ai.daily_tokens}"></label></div>
         ${aiSpend ? `<div class="hint">Today: ${aiSpend.calls} call${aiSpend.calls === 1 ? "" : "s"}, ${fmtTok(aiSpend.tokens)} of ${fmtTok(sd.ai.daily_tokens)} tokens.</div>
           ${aiSpend.recent.length ? `<details class="ai-log"><summary>What was sent</summary><ul>${aiSpend.recent.map(r => `<li><small>${r.ts ? relTime(r.ts) : ""}</small> ${esc(r.kind || "")}${r.about && !app.privacy() ? `: ${esc(r.about)}` : ""} · ${r.cached ? "from the cache" : `${fmtTok(r.tokens || 0)} tokens on ${esc(nameOf(r.seat))}, ${(r.chars || 0).toLocaleString()} characters`}</li>`).join("")}</ul></details>` : ""}` : ""}`) : ""}
+      ${sd.automation ? section("Automation", `<div class="setrow" style="border-top:0;padding-top:0"><div class="grow">Save notes before a limit<small>When a seat is about to run out of its 5-hour window or its week at the pace it is going, the office asks each lane on it to write its STATE notes, so the seat that picks it up loses nothing. Lanes that take messages only; once per window; it shows in the news.</small></div>
+          <label class="switch"><input type="checkbox" id="setPre" ${sd.automation.prelimit_save ? "checked" : ""} aria-label="Save notes before a limit"><span></span></label></div>
+        <label class="f" style="max-width:260px">How early<select id="setPreLead">${[5, 10, 20, 30].map(m => `<option value="${m}" ${sd.automation.lead_min === m ? "selected" : ""}>${m} minutes before</option>`).join("")}</select></label>`) : ""}
       ${sd.risk_watch ? section("Risky-action watch", `<p class="hint" style="margin-top:0">A session that does one of these shows up in Needs you within seconds, with the command. It warns after the fact; it cannot stop anything. Untick what your agents do on purpose.</p>
         <div class="row wrap" style="gap:6px;margin:10px 0">${Object.entries(sd.risk_watch.rules || {}).map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-rwatch="${esc(k)}" ${(sd.risk_watch.mute || []).includes(k) ? "" : "checked"}> ${esc(l)}</label>`).join("")}</div>`) : ""}
       <div class="row" style="margin-top:8px"><button class="btn primary" id="setSave">Save office settings</button></div>`}
@@ -1803,6 +1806,7 @@ export function makePanels(app) {
               quiet_hours: [+root.querySelector("#setQ1").value || 0, +root.querySelector("#setQ2").value || 0] } };
           if (root.querySelector("#setAi")) body.ai = { enabled: root.querySelector("#setAi").checked, allow_transcripts: root.querySelector("#setAiTx").checked,
             model: root.querySelector("#setAiModel").value, daily_tokens: Math.min(10000000, Math.max(10000, Math.round(+root.querySelector("#setAiBudget").value || 300000))) };
+          if (root.querySelector("#setPre")) body.automation = { prelimit_save: root.querySelector("#setPre").checked, lead_min: +root.querySelector("#setPreLead").value };
           if (root.querySelector("[data-rwatch]")) body.risk_watch = { mute: [...root.querySelectorAll("[data-rwatch]")].filter(c => !c.checked).map(c => c.dataset.rwatch) };
           const put = (id, k, val) => { body.seats[id] = { ...(body.seats[id] || {}), [k]: val }; };
           root.querySelectorAll("[data-nick]").forEach(i => put(i.dataset.nick, "nickname", i.value.trim()));
