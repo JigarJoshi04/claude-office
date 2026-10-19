@@ -199,6 +199,16 @@ def _demo_token_ledger() -> TokenLedger:
                     for x in waits:
                         hist[next(j for j, e in enumerate(tokens.WAIT_EDGES) if x <= e)] += 1
                     sessions[sid]["w"] = {d.isoformat(): [sum(waits), n, waits[-1], int(rnd("wa", d, seat, k) < 0.3), int(start + 1800)] + hist}
+                if seat != "astra":                                   # where the time went, tool by tool
+                    q = lambda key: rnd(key, d, seat, k)
+                    sessions[sid]["tt"] = {d.isoformat(): {"Bash": [int(20 + q("tb") * 60), round(600 + q("tbs") * 2400, 1), round(60 + q("tbm") * 500, 1)],
+                                                             "Read": [int(30 + q("tr") * 80), round(40 + q("trs") * 90, 1), round(2 + q("trm") * 6, 1)],
+                                                             "Edit": [int(10 + q("te") * 40), round(20 + q("tes") * 60, 1), round(2 + q("tem") * 5, 1)],
+                                                             "MCP: github": [int(q("tg") * 12), round(q("tgs") * 140, 1), round(4 + q("tgm") * 20, 1)],
+                                                             "Agent": [int(q("ta") * 3), round(q("tas") * 1800, 1), round(q("tam") * 900, 1)],
+                                                             "WebFetch": [int(q("tw") * 8), round(q("tws") * 90, 1), round(3 + q("twm") * 18, 1)]}}
+                    for e in sessions[sid]["tt"][d.isoformat()].values():   # the longest call is at least the average
+                        e[2] = max(e[2], round(e[1] / max(1, e[0]) * 1.6, 1))
                 if seat != "astra" and rnd("rb", d, seat, k) < 0.45:   # sessions left idle past the cache's life
                     nrb = 1 + int(rnd("rbn", d, seat, k) * (4 if seat == "claude2" else 2))
                     sessions[sid]["rb"] = {d.isoformat(): [nrb, nrb * 140_000, nrb * 600_000]}
@@ -532,7 +542,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.143.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.144.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},

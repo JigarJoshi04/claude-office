@@ -30,7 +30,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 13               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 14               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -61,6 +61,14 @@ _COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|aborting
 
 
 REBUILD_MIN = 20_000           # a cache write this big after the cache expired counts as a cold rebuild
+TOOL_MAX_S = 4 * 3600          # a tool call longer than this is a session left open, not a slow tool
+
+
+def tool_group(name: str) -> str:
+    """A tool's name for Where the time goes: MCP tools by their server, the rest as they are."""
+    if name.startswith("mcp__"):
+        return "MCP: " + (name.split("__")[1] if name.count("__") >= 2 else name[5:])
+    return "Agent" if name in ("Task", "Agent") else name or "?"
 
 
 def _redact(text: str) -> str:
@@ -255,6 +263,7 @@ class TokenLedger:
         self._read_sids: set = set()            # sessions whose files this scan read
         self._counted = None                    # what the response being read (self._last) has been counted at so far
         self._helper_file = False               # the file being read is a helper's (a subagent's)
+        self._tool_open: dict = {}
         self._xusd = 0                          # the same, for its price
         self.data = self._load()
 
@@ -275,7 +284,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
-                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm") if k in r}
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm", "tt") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
@@ -423,6 +432,7 @@ class TokenLedger:
         project_dir, sid = self._session_of(root, path)
         self._read_sids.add(sid)
         self._helper_file = "subagents" in path.relative_to(root).parts      # a helper's own transcript
+        self._tool_open: dict = {}                                           # tool calls still waiting for their result (_tool_time)
         changed = False
         pos = start
         self._ts = None
@@ -479,6 +489,8 @@ class TokenLedger:
         if m:
             self._ts = m.group(1).decode()
         priced = self._cost(raw, sid) if b'"usage"' in raw and b'"assistant"' in raw else False   # a line can carry both
+        if not self._helper_file and (b'"tool_use"' in raw or b'"tool_result"' in raw):
+            priced |= self._tool_time(raw, sid)
         if b'"tool_use"' in raw and (b'"WebSearch"' in raw or b'"WebFetch"' in raw):
             priced |= self._web(raw, sid)
         if b'"tool_use"' in raw and b'"Bash"' in raw and (b"git" in raw or b"gh " in raw):
@@ -591,6 +603,38 @@ class TokenLedger:
                 w[2], w[4] = round(gap), round(end)
             w[5 + next(i for i, e in enumerate(WAIT_EDGES) if gap <= e)] += 1
         return True
+
+    def _tool_time(self, raw: bytes, sid: str) -> bool:
+        """How long each tool call took, from its call to its result (main conversations only): per day and tool,
+        [calls, seconds, longest]. MCP tools go by their server; helpers (Agent) by themselves."""
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return False
+        m = d.get("message") if isinstance(d, dict) else None
+        content = m.get("content") if isinstance(m, dict) else None
+        at = _epoch(d.get("timestamp")) if isinstance(d, dict) else None
+        if not isinstance(content, list) or not at:
+            return False
+        changed = False
+        for c in content:
+            if not isinstance(c, dict):
+                continue
+            if c.get("type") == "tool_use" and c.get("id"):
+                self._tool_open[c["id"]] = (tool_group(str(c.get("name") or "")), at)
+                if len(self._tool_open) > 400:
+                    self._tool_open.pop(next(iter(self._tool_open)))
+            elif c.get("type") == "tool_result":
+                p = self._tool_open.pop(c.get("tool_use_id"), None)
+                if not p or not 0 <= at - p[1] <= TOOL_MAX_S:
+                    continue
+                dur, (day, _) = at - p[1], _when(d.get("timestamp"))
+                with self.lock:
+                    s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+                    e = s.setdefault("tt", {}).setdefault(day or "?", {}).setdefault(p[0], [0, 0.0, 0.0])
+                    e[0] += 1; e[1] = round(e[1] + dur, 1); e[2] = max(e[2], round(dur, 1))
+                changed = True
+        return changed
 
     def _rebuild(self, sid: str, model: str, u: dict, ts) -> None:
         """A cold-cache rebuild: a response that wrote a large prompt back into the cache after the conversation sat
@@ -1083,6 +1127,13 @@ class TokenLedger:
             for d, v in (r.get("web") or {}).items():                    # counted from the calls (see _web)
                 if cur is None or d in cur:
                     where[2] += v[0]; where[3] += v[1]
+        tools: dict = {}                                                  # where the time goes: per tool, [calls, seconds, longest]
+        for r in mine.values():
+            for d, per in (r.get("tt") or {}).items():
+                if cur is None or d in cur:
+                    for name, v in per.items():
+                        e = tools.setdefault(name, [0, 0.0, 0.0])
+                        e[0] += v[0]; e[1] += v[1]; e[2] = max(e[2], v[2])
         waits, longest, wait_days = [0, 0, 0] + [0] * len(WAIT_EDGES), [], {}  # seconds, replies, away, histogram
         for sid, r in mine.items():
             for d, v in (r.get("w") or {}).items():
@@ -1163,6 +1214,8 @@ class TokenLedger:
             "where": {"helpers": where[0], "main": max(0, tot[0] + tot[1] - where[0]), "thinking": where[1], "output": tot[2],
                       "searches": where[2], "fetches": where[3],
                       "rebuilds": rebuilt[0], "rebuild_tokens": rebuilt[1], "rebuild_usd": round(rebuilt[2] / 1e6, 2)},
+            "tools": [{"tool": k, "calls": v[0], "seconds": round(v[1]), "avg": round(v[1] / v[0], 1) if v[0] else 0, "max": round(v[2])}
+                      for k, v in sorted(tools.items(), key=lambda kv: -kv[1][1])[:14]],
             "waits": {"seconds": waits[0], "replies": waits[1], "away": waits[2], "median_s": wait_median(waits[3:]),
                       "days": dict(sorted(wait_days.items())) if cur is not None else None,
                       "longest": [{"wait_s": w, "at": at, "id": short_id(sid), "project": r.get("p"), "seat": seat_of(r)}

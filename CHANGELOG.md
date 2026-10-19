@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.144.0] - 2026-10-19
+
+### Added
+- Where the time goes, on the tokens page: each tool's calls in the range, from the call to its result, with the time
+  in all, the average and the longest, slowest first; MCP tools grouped by their server and helpers (Agent) on their
+  own. Main conversations only; a call left open more than four hours is not counted, and in a terminal the time
+  includes waiting for approval. The ledger reads its transcripts once more to count them.
+
 ## [3.143.0] - 2026-10-19
 
 ### Added

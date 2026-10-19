@@ -279,6 +279,18 @@ function renderTokensInner(el, app) {
       <div class="tok-parts" style="margin:12px 0 0">${w.output ? `<span title="Thinking is part of the output: what the models reasoned before they wrote">${icon("sparkles", 13)}${tp}% of the output was thinking (${big(w.thinking)})</span>` : ""}
         ${w.searches || w.fetches ? `<span>${icon("search", 13)}${w.searches.toLocaleString()} web search${w.searches === 1 ? "" : "es"} · ${w.fetches.toLocaleString()} page fetch${w.fetches === 1 ? "" : "es"}</span>` : ""}</div></div>`;
   }
+  // Where the time goes: each tool's calls, from the call to its result, slowest first (MCP servers as one).
+  function timeCard() {
+    const ts = (t.tools || []).filter(x => x.calls);
+    if (!ts.length) return "";
+    const most = Math.max(1, ...ts.map(x => x.seconds)), all = ts.reduce((a, x) => a + x.seconds, 0) || 1;
+    const span = (s) => s < 60 ? `${Math.round(s)} s` : s < 3600 ? `${Math.floor(s / 60)} min${s % 60 >= 1 && s < 600 ? ` ${Math.round(s % 60)} s` : ""}` : `${Math.floor(s / 3600)} h ${String(Math.round(s % 3600 / 60)).padStart(2, "0")}`;
+    return `<div class="view-card"><h5>Where the time goes · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+      <div class="table-scroll"><table class="league ship tools-t"><thead><tr><th>Tool</th><th style="width:26%"></th><th class="num">Calls</th><th class="num">In all</th><th class="num">Average</th><th class="num">Longest</th></tr></thead>
+      <tbody>${ts.map(x => `<tr><td>${esc(x.tool)}</td><td><span class="tb-bar"><i style="width:${(x.seconds / most * 100).toFixed(1)}%"></i></span></td><td class="num">${x.calls.toLocaleString()}</td>
+        <td class="num" title="${Math.round(x.seconds / all * 100)}% of the time in tools">${span(x.seconds)}</td><td class="num">${span(x.avg)}</td><td class="num">${span(x.max)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="hint">From each call to its result, in the main conversations. In a terminal it includes waiting for you to approve the call; a call left open more than four hours is not counted. MCP tools are grouped by their server.</p></div>`;
+  }
   // The prompt cache: how much of the input came from it, and what sessions left idle past its life cost to rebuild.
   function cacheCard() {
     const tt = t.total, w = t.where || {};
@@ -327,6 +339,7 @@ function renderTokensInner(el, app) {
     ${valueCard()}
     ${whereCard()}
     ${cacheCard()}
+    ${timeCard()}
     ${waitCard(t, { label: RANGES.find(r => r[0] === rng)[1].toLowerCase(), who, priv })}
     ${shipCard()}
     ${records ? `<div class="view-card"><h5>Records${seat ? ` · ${esc(who(seat))}` : ""}</h5><div class="tp-recs">${records}</div></div>` : ""}

@@ -65,6 +65,23 @@ class TokenLedgerTests(unittest.TestCase):
         self.assertGreater(v["where"]["rebuild_usd"], 0)
         self.assertEqual({s["seat"]: s["rebuilds"] for s in v["seats"]}.get("claude"), 2)
 
+    def test_where_the_time_goes_by_tool(self):
+        use = lambda ts, tid, name: json.dumps({"type": "assistant", "timestamp": ts, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": tid, "name": name, "input": {}}]}}) + "\n"
+        res = lambda ts, tid: json.dumps({"type": "user", "timestamp": ts, "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": tid, "content": "ok"}]}}) + "\n"
+        (self.proj / "s-main.jsonl").write_text(
+            line("m1", "2026-10-18T10:00:00Z")
+            + use("2026-10-18T10:00:01Z", "t1", "Bash") + res("2026-10-18T10:00:31Z", "t1")              # 30 s
+            + use("2026-10-18T10:01:00Z", "t2", "Bash") + res("2026-10-18T10:01:10Z", "t2")              # 10 s
+            + use("2026-10-18T10:02:00Z", "t3", "mcp__docs__search") + res("2026-10-18T10:02:04Z", "t3")
+            + use("2026-10-18T10:03:00Z", "t4", "Read") + res("2026-10-18T16:00:00Z", "t4")             # left open for hours: not counted
+            + use("2026-10-18T10:04:00Z", "t5", "Grep"))                                                  # no result yet
+        self.ledger.scan()
+        tools = {t["tool"]: t for t in self.ledger.view(self.seats, today="2026-10-18")["tools"]}
+        self.assertEqual((tools["Bash"]["calls"], tools["Bash"]["seconds"], tools["Bash"]["avg"], tools["Bash"]["max"]), (2, 40, 20.0, 30))
+        self.assertEqual(tools["MCP: docs"]["seconds"], 4)
+        self.assertNotIn("Read", tools)
+        self.assertNotIn("Grep", tools)
+
     def test_counts_dedupes_attributes_and_resumes(self):
         (self.proj / "s-main.jsonl").write_text(line("m1", "2026-10-17T10:00:00Z") + line("m1", "2026-10-17T10:00:00Z")
                                                 + '{"type":"user","message":{"content":"hi"}}\n' + line("m2", "2026-10-18T10:00:00Z"))
