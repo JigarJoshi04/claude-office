@@ -162,6 +162,7 @@ class Brain:
             try:
                 r = self.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout, cwd=str(work), env=env)
             except subprocess.TimeoutExpired:
+                egress.note("analyst", False)
                 raise Unavailable("The analyst took too long to answer.") from None
             except OSError as e:
                 raise Unavailable(f"The analyst could not start: {e}") from None

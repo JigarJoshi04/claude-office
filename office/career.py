@@ -323,7 +323,7 @@ class Career:
         if not best:
             return None
         k, b = best
-        other = next(x for x in k.split("|") if x != sid) if k.count(sid) == 1 else sid
+        other = next((x for x in k.split("|") if x != sid), sid)        # by name, not by substring: claude in claude|claude2
         lv = bond_level(b.get("pts", 0))
         return {"with": other, "pts": round(b.get("pts", 0)), "level": lv, "name": BOND_NAMES[lv],
                 "cowork_h": round(b.get("cowork_s", 0) / 3600, 1), "reports": b.get("reports", 0), "covers": b.get("covers", 0),

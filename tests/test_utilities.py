@@ -23,6 +23,13 @@ class UtilitiesTests(unittest.TestCase):
             self.assertEqual(parts["codex"]["bytes"], 500)
             self.assertEqual(d["bytes"], 1500)
 
+    def test_growth_is_per_calendar_day(self):
+        u = utilities.Utilities(None)
+        u.history = {"2026-09-29": 1_000_000_000, "2026-10-19": 3_000_000_000}            # 20 days apart, nothing between
+        self.assertEqual(u.view()["per_day"], 100_000_000)
+        u.history = {"2026-10-19": 5}
+        self.assertIsNone(u.view()["per_day"])
+
     def test_memory_of_this_process_tree(self):
         kids = utilities.children_map()
         self.assertGreater(utilities.tree_rss(os.getpid(), kids), 0)

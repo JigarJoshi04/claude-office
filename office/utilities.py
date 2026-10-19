@@ -10,6 +10,7 @@ import os
 import shutil
 import threading
 import time
+from datetime import date
 from pathlib import Path
 
 from . import config
@@ -190,5 +191,6 @@ class Utilities:
     def view(self) -> dict:
         with self.lock:
             days = sorted(self.history.items())
-            grow = (days[-1][1] - days[0][1]) / max(1, len(days) - 1) if len(days) >= 2 else None
+            span = (date.fromisoformat(days[-1][0]) - date.fromisoformat(days[0][0])).days if len(days) >= 2 else 0
+            grow = (days[-1][1] - days[0][1]) / span if span > 0 else None           # per calendar day, gaps included
             return {"disk": self.disk, "memory": self.memory, "days": days, "per_day": grow}

@@ -256,10 +256,14 @@ def strip_heredocs(cmd: str) -> str:
     return "".join(out) + cmd[pos:]
 
 
+_QUOTED_TARGET = re.compile(r"(>{1,2})\s*([\"'])([^\"'\n]{1,300})\2")
+
+
 def _segments(cmd: str) -> list[str]:
     """A shell command's simple commands, with quoted strings and heredoc bodies taken out first, so a commit message
     or a script's text never reads as a command."""
     cmd = strip_heredocs(cmd)
+    cmd = _QUOTED_TARGET.sub(lambda m: m.group(1) + " " + m.group(3).replace(" ", "_"), cmd)   # `>> "/x/STATE.md"` keeps its name
     cmd = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", cmd)
     return [seg.strip() for seg in re.split(r"&&|\|\||[;|\n(]", cmd)]
 

@@ -39,6 +39,16 @@ def working(snap: dict) -> list[tuple[dict, dict]]:
     return sorted(out, key=lambda p: (order.get(p[1].get("state"), 5), p[0]["id"], p[1].get("name") or ""))
 
 
+def _private_need(a: dict) -> str:
+    """What needs you, in share-safe words: the kind of thing and the seat, never a title, a repo or a command."""
+    kind = ("An agent asks you a question" if a.get("ask") else "A bake-off is ready to judge" if a.get("bakeoff")
+            else "Two sessions share a working tree" if a.get("collision") else "Review comments wait on a pull request" if a.get("review")
+            else "A risky action" if a.get("risk") else "A report its own tests contradict" if a.get("trust") else None)
+    if kind:
+        return kind + (f" on {a['seat']}" if a.get("seat") else "")
+    return a.get("text", "").split(":")[0]
+
+
 def lines(snap: dict, width: int, private: bool = False, pick: int = 0) -> list[tuple[str, str]]:
     """The screen as (text, style) rows, styles: head, dim, good, warn, bad, sel or "". Pure, for tests."""
     w = max(40, width)
@@ -65,7 +75,7 @@ def lines(snap: dict, width: int, private: bool = False, pick: int = 0) -> list[
     names = {s.get("label") or s["id"]: s.get("nickname") for s in snap.get("seats", []) if s.get("nickname")}
     named = lambda t: re.sub(r"\b(" + "|".join(map(re.escape, sorted(names, key=len, reverse=True))) + r")\b(?![-\w])", lambda m: names[m.group(1)], t) if names else t
     for a in att[:6]:
-        text = named(("An agent asks you a question" if a.get("ask") else a.get("text", "").split(":")[0]) if private else a.get("text", ""))
+        text = named(_private_need(a) if private else a.get("text", ""))
         rows.append((cut("  " + text), "bad" if a.get("level") == "bad" else "warn"))
     if not att:
         rows.append(("  All clear.", "good"))
@@ -75,14 +85,14 @@ def lines(snap: dict, width: int, private: bool = False, pick: int = 0) -> list[
     for i, (s, x) in enumerate(ws[:14]):
         act = STATE.get(x.get("state"), x.get("state") or "") if private and x.get("kind") == "desk" else (x.get("activity") or STATE.get(x.get("state"), ""))
         phase = f" [{x['phase']}]" if x.get("phase") else ""
-        line = f"{'>' if i == pick else ' '} {(s.get('nickname') or s['id'])[:10]:<11}{(x.get('name') or '')[:22]:<23}{STATE.get(x.get('state'), x.get('state') or '')[:11]:<12}{phase} {act}"
+        line = f"{'>' if i == pick else ' '} {(s.get('nickname') or s.get('label') or s['id'])[:10]:<11}{(x.get('name') or '')[:22]:<23}{STATE.get(x.get('state'), x.get('state') or '')[:11]:<12}{phase} {act}"
         rows.append((cut(line), "sel" if i == pick else "good" if x.get("state") == "working" else ""))
     lanes = [l for l in snap.get("lanes") or [] if l.get("status") in ("scheduled", "queued", "starting", "running", "waiting", "interrupted")]
     if lanes:
         rows.append(("", ""))
         rows.append((f"LANES OUT ({len(lanes)})", "dim"))
         for l in lanes[:6]:
-            rows.append((cut(f"  {(l.get('title') or l['id'])[:40]:<41}{l.get('status')}"), "warn" if l.get("status") in ("waiting", "interrupted") else ""))
+            rows.append((cut(f"  {('A lane' if private else l.get('title') or l['id'])[:40]:<41}{l.get('status')}"), "warn" if l.get("status") in ("waiting", "interrupted") else ""))
     rows.append(("", ""))
     rows.append(("NEWS", "dim"))
     for e in list(snap.get("events") or [])[-8:][::-1]:

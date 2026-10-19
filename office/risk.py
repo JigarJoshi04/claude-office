@@ -118,6 +118,11 @@ def _after_opts(words: list[str], value_opts: set) -> list[str]:
 
 
 _PREFIX = {"env", "time", "nohup", "exec", "command", "builtin", "then", "do", "else", "elif", "{", "!", "xargs", "stdbuf", "ionice"}
+# The options of a prefix that take a value as the next word (`env -u NAME`, `xargs -n 1`, `ionice -c 3`); the rest are
+# single words (`env -i`, `time -p`, `xargs -0`, `stdbuf -oL`, `ionice -c3`).
+_PREFIX_VALUE = {"env": {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}, "time": {"-f", "--format", "-o", "--output"},
+                 "xargs": {"-n", "-I", "-P", "-L", "-d", "-E", "-s", "-a", "--max-args", "--max-procs", "--delimiter", "--arg-file"},
+                 "stdbuf": {"-i", "-o", "-e"}, "ionice": {"-c", "-n", "-p", "-P", "-u"}, "exec": {"-a"}}
 
 
 def _strip(words: list[str]) -> list[str]:
@@ -126,8 +131,15 @@ def _strip(words: list[str]) -> list[str]:
     w = list(words)
     while w:
         n = _name(w[0])
-        if re.fullmatch(r"[A-Za-z_]\w*=.*", w[0]) or n in _PREFIX:
+        if re.fullmatch(r"[A-Za-z_]\w*=.*", w[0]):
             w = w[1:]
+        elif n in _PREFIX:
+            w, vals = w[1:], _PREFIX_VALUE.get(n, set())
+            while w and w[0].startswith("-") and w[0] != "-":
+                if w[0] == "--":
+                    w = w[1:]
+                    break
+                w = w[2:] if w[0] in vals else w[1:]
         elif n == "sudo":
             w = w[1:]
             while w and w[0].startswith("-"):
@@ -200,7 +212,7 @@ def _bash(cmd: str, depth: int = 0) -> set[str]:
         hit |= _word_rules(words)
         words = _strip(words)
         n = _name(words[0]) if words else ""
-        if any(_name(x) in _DB for x in words[:6]) and (_DROP_SQL.search(" ".join(words)) or "<<" in cmd and _DROP_SQL.search(cmd)):
+        if any(_name(x) in _DB for x in words) and (_DROP_SQL.search(" ".join(words)) or "<<" in cmd and _DROP_SQL.search(cmd)):
             hit.add("drop_table")                       # SQL sent to a database client (docker exec … psql too): -c "…" or a heredoc
         flag = next((i for i, w in enumerate(words[:-1]) if i and re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", w)), None)
         if depth < 2 and n in _SHELLS and flag:          # bash -c "…" (or -lc): read the script it runs

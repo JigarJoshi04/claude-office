@@ -55,6 +55,16 @@ class RuleTests(unittest.TestCase):
         for cmd, want in BASH.items():
             self.assertEqual([r for r, _ in risk.check("Bash", {"command": cmd})], want, cmd)
 
+    def test_prefixes_with_options_and_database_clients_further_in(self):
+        for cmd, want in (("stdbuf -oL git push -f origin main", "force_push"), ("ionice -c3 terraform destroy -auto-approve", "infra"),
+                          ("ionice -c 3 -n 7 terraform destroy", "infra"), ("env -i PATH=/bin git push --force", "force_push"),
+                          ("env -u HOME terraform apply -auto-approve", "infra"), ("time -p git push -f", "force_push"),
+                          ("xargs -0 git push --force", "force_push"), ("xargs -n 1 git push -f", "force_push"),
+                          ('docker exec -it -u postgres db psql -c "DROP TABLE users"', "drop_table"),
+                          ('kubectl exec pod -- psql -c "drop table x"', "drop_table")):
+            self.assertIn(want, [r for r, _ in risk.check("Bash", {"command": cmd})], cmd)
+        self.assertEqual(risk.check("Bash", {"command": "env -i PATH=/bin git status"}), [])
+
     def test_path_rules(self):
         for path, want in PATHS.items():
             self.assertEqual([r for r, _ in risk.check("Write", {"file_path": path})], want, path)

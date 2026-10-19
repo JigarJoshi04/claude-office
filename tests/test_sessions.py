@@ -445,7 +445,9 @@ class PhaseTests(unittest.TestCase):
                  ("Bash", {"command": "git -C /repo commit -qm x"}, None, "ship"), ("Bash", {"command": "git -C /r -c user.name=a push"}, None, "ship"),
                  ("Bash", {"command": "cat > app.py <<'EOF'\nx = 1\nEOF"}, None, "edit"), ("Bash", {"command": "find . -name '*.pyc' -delete"}, None, "run"),
                  ("Bash", {"command": "gh pr comment 12 -b hi"}, None, "run"), ("Bash", {"command": "gh issue create -t x"}, None, "run"),
-                 ("Bash", {"command": "gh pr view 12"}, None, "look"), ("Bash", {"command": "find . -name x"}, None, "look")]
+                 ("Bash", {"command": "gh pr view 12"}, None, "look"), ("Bash", {"command": "find . -name x"}, None, "look"),
+                 ("Bash", {"command": 'echo "- did x" >> "/l/my lane/STATE.md"'}, None, "run"), ("Bash", {"command": "echo ok > '/x/REPORT.md'"}, None, "run"),
+                 ("Bash", {"command": 'echo "x" > "/w/app.py"'}, None, "edit")]
         for name, inp, screen, want in cases:
             self.assertEqual(step_kind(name, inp, screen), want, (name, inp))
 

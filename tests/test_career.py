@@ -143,3 +143,6 @@ class BondTests(unittest.TestCase):
         cl = c.closest("b")
         self.assertEqual((cl["with"], cl["level"], cl["name"], cl["next"]), ("a", 1, "Teammates", 30))
         self.assertIsNone(c.closest("c"))
+        c.bonds["claude|claude2"] = {"pts": 50}                   # seat ids where one is the start of another
+        self.assertEqual(c.closest("claude")["with"], "claude2")
+        self.assertEqual(c.closest("claude2")["with"], "claude")

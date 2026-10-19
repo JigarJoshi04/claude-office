@@ -5,12 +5,18 @@ from elsewhere (its fonts are served by the office). Agents' own traffic is thei
 """
 from __future__ import annotations
 
+import json
+import os
 import threading
 import time
-from collections import deque
+from pathlib import Path
 
 _LOCK = threading.Lock()
-_LOG: deque = deque(maxlen=5000)          # (ts, host, purpose, ok)
+# Calls per hour and kind: {"<hour>|<kind>": [calls, failed, last_at]}, the last 25 hours. Kept in state/egress.json
+# (at most once a minute), so a restart does not empty Settings' list; counts, so no cap undercounts a busy day.
+_HOURS: dict[str, list] = {}
+_PATH: Path | None = None
+_SAVED = 0.0
 WHY = {
     "usage": ("api.anthropic.com", "Plan usage readings for each Claude seat (its own login)"),
     "github": ("api.github.com", "Pull requests, checks and review comments (gh)"),
@@ -18,22 +24,59 @@ WHY = {
 }
 
 
-def note(kind: str, ok: bool = True) -> None:
-    host, _ = WHY.get(kind, (kind, kind))
+def init(path: Path | None) -> None:
+    """Where the counts are kept; read what an earlier run counted."""
+    global _PATH
+    _PATH = path
+    try:
+        d = json.loads(path.read_text()) if path else {}
+    except (OSError, ValueError):
+        d = {}
     with _LOCK:
-        _LOG.append((time.time(), kind, ok))
+        _HOURS.clear()
+        _HOURS.update({k: v for k, v in (d if isinstance(d, dict) else {}).items()
+                       if isinstance(k, str) and "|" in k and isinstance(v, list) and len(v) == 3})
+
+
+def _save(now: float) -> None:
+    global _SAVED
+    if not _PATH or now - _SAVED < 60:
+        return
+    _SAVED = now
+    try:
+        _PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(_HOURS, separators=(",", ":")))
+        os.replace(tmp, _PATH)
+    except OSError:
+        pass
+
+
+def note(kind: str, ok: bool = True, now: float | None = None) -> None:
+    now = now or time.time()
+    key = f"{int(now // 3600)}|{kind}"
+    with _LOCK:
+        e = _HOURS.setdefault(key, [0, 0, 0])
+        e[0] += 1
+        e[1] += 0 if ok else 1
+        e[2] = max(e[2], now)
+        old = int(now // 3600) - 25
+        for k in [k for k in _HOURS if int(k.split("|", 1)[0]) < old]:
+            del _HOURS[k]
+        _save(now)
 
 
 def view(now: float | None = None) -> list[dict]:
-    """The last day's outbound calls by kind: [{kind, host, why, calls, failed, last_at}]."""
+    """The last day's outbound calls by kind (to the hour): [{kind, host, why, calls, failed, last_at}]."""
     now = now or time.time()
     out: dict[str, dict] = {}
+    start = int(now // 3600) - 23
     with _LOCK:
-        rows = [r for r in _LOG if now - r[0] < 86400]
-    for ts, kind, ok in rows:
+        rows = [(k.split("|", 1)[1], v) for k, v in _HOURS.items() if int(k.split("|", 1)[0]) >= start]
+    for kind, (calls, failed, last) in rows:
         host, why = WHY.get(kind, (kind, kind))
         e = out.setdefault(kind, {"kind": kind, "host": host, "why": why, "calls": 0, "failed": 0, "last_at": 0})
-        e["calls"] += 1
-        e["failed"] += 0 if ok else 1
-        e["last_at"] = max(e["last_at"], ts)
+        e["calls"] += calls
+        e["failed"] += failed
+        e["last_at"] = max(e["last_at"], last)
     return sorted(out.values(), key=lambda e: -e["calls"])

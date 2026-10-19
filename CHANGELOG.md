@@ -3,6 +3,25 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.135.0] - 2026-10-19
+
+### Fixed
+- A seat could be its own closest teammate when one seat's id starts another's (claude in claude|claude2).
+- A bake-off with a bad contender B started contender A anyway behind the error, and an empty title and brief were
+  accepted. Both contenders are now checked first, and both written down before either starts.
+- A quoted write to a lane's STATE or REPORT notes (`echo … >> "/x/STATE.md"`) counted as a code change, so a passing
+  report read Unverified.
+- Shipped showed a quiet commit's whole message, and Claude Code's own `-m "$(cat <<'EOF' …)"` form as `$(cat )`. It
+  shows the subject line, and subjects and branches are masked like everything else. The ledger reads its transcripts
+  once more.
+- The risky-action watch skips the options of `env -i/-u`, `time -p`, `xargs -0/-n`, `stdbuf -oL` and `ionice -c3`,
+  and finds a database client anywhere in a command (`docker exec … psql`, `kubectl exec … -- psql`).
+- `claude-office top` in share-safe showed bake-off titles, collision repositories and lane titles; it uses share-safe
+  words for them now, and nicknames for seats.
+- Disk growth per day divided by the number of readings instead of the days between them.
+- What leaves this machine counted calls up to a cap of 5,000, forgot them at a restart and left out timed-out calls.
+  It counts per hour now, keeps the counts across restarts, and counts a timeout as a failed call.
+
 ## [3.134.0] - 2026-10-19
 
 ### Fixed

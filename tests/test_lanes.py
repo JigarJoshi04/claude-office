@@ -284,6 +284,17 @@ class BakeoffTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 lanes.judge_bakeoff("nope", "A")
 
+    def test_a_bad_contender_or_an_empty_brief_hires_neither(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(lanes, "lanes_dir", return_value=Path(tmp) / "lanes"):
+            cfg = {"default_workdir": tmp, "lane_policy": {}, "lane_defaults": {"model": "opus"}}
+            with patch.object(lanes, "start_unit") as su:
+                for title, brief, sides in (("T", "B", {"A": {"model": "opus"}, "B": {"model": "gpt-9"}}),
+                                            ("T", "B", {"A": {"seat": "nope"}, "B": {}}), ("", "", {"A": {}, "B": {}}), ("  ", "x", {"A": {}, "B": {}})):
+                    with self.assertRaises(ValueError):
+                        lanes.hire_bakeoff(title, brief, tmp, sides, "acceptEdits", ["c1"], cfg)
+            su.assert_not_called()
+            self.assertFalse((Path(tmp) / "lanes").exists() and any((Path(tmp) / "lanes").iterdir()))
+
     def test_ready_to_judge_needs_you_once_both_finish(self):
         from office.snapshot import Office, attention_key
         pair = [{"id": "x-a", "title": "T · A", "status": "done", "bakeoff": {"id": "b1", "side": "A"}},

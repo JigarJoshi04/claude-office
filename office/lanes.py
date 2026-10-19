@@ -513,14 +513,25 @@ def hire_bakeoff(title: str, brief: str, workdir: str, sides: dict, permission_m
     """The same brief to two contenders, A and B (each {"seat", "model"}), each on its own branch: two lanes."""
     if set(sides) != {"A", "B"} or not all(isinstance(v, dict) for v in sides.values()):
         raise ValueError("A bake-off needs contenders A and B")
+    title, brief = " ".join(str(title or "").split())[:72], str(brief or "").strip()
+    if not title or not brief:
+        raise ValueError("A lane needs a title and a brief")
+    for side in ("A", "B"):                         # both contenders checked before either is hired
+        v = sides[side]
+        if (v.get("seat") or "auto") != "auto" and v.get("seat") not in seat_ids:
+            raise ValueError(f"Contender {side}: unknown seat {v.get('seat')}")
+        if (v.get("model") or cfg["lane_defaults"]["model"]) not in MODELS:
+            raise ValueError(f"Contender {side}: model must be one of {', '.join(MODELS)}")
     bid = os.urandom(3).hex()
     out = []
-    for side in ("A", "B"):
+    for side in ("A", "B"):                         # both written down first, then both started: never one alone
         v = sides[side]
-        out.append(create_lane(f"{' '.join(str(title).split())[:72]} · {side}", str(brief).strip() + BAKEOFF_NOTE.format(side=side, id=bid, low=side.lower()),
+        out.append(create_lane(f"{title} · {side}", brief + BAKEOFF_NOTE.format(side=side, id=bid, low=side.lower()),
                                workdir, v.get("seat") or "auto", v.get("model") or cfg["lane_defaults"]["model"], permission_mode,
-                               seat_ids, cfg, max_minutes=max_minutes, bakeoff={"id": bid, "side": side}))
-    return out
+                               seat_ids, cfg, launch=False, max_minutes=max_minutes, bakeoff={"id": bid, "side": side}))
+    for lane in out:
+        start_unit(lane["id"])
+    return [load_lane(l["id"]) or l for l in out]
 
 
 def judge_bakeoff(bid: str, winner: str) -> list[dict]:

@@ -451,6 +451,15 @@ class ShipItemsTests(unittest.TestCase):
         mixed = "cat >> t.py <<'EOF'\nx = 'git commit -qm \"Not this\"'\nEOF\ngit add -A && git commit -q -m \"The real one\" && git push -q"
         k = ship_kinds(mixed)
         self.assertEqual(ship_items(k, mixed, "", shipped(k, ""))[0]["sub"], "The real one")                    # not text in a heredoc
+        body = 'git commit -q -m "3.74.0: Lounge posters\n\nUnlock something, and more lines" && git push -q'
+        k = ship_kinds(body)
+        self.assertEqual(ship_items(k, body, "", shipped(k, ""))[0]["sub"], "3.74.0: Lounge posters")          # the subject line only
+        cc = "git commit -q -m \"$(cat <<'EOF'\nAdd the brief coach\n\nLonger body here.\nEOF\n)\" && git push -q"
+        k = ship_kinds(cc)
+        self.assertEqual(ship_items(k, cc, "", shipped(k, ""))[0]["sub"], "Add the brief coach")               # Claude Code's own form
+        leak = 'git commit -qm "Use ghp_abcdefghijklmnopqrstuvwxyz0123 for CI" && git push -q'
+        k = ship_kinds(leak)
+        self.assertNotIn("ghp_abcdefghijklmnopqrstuvwxyz0123", ship_items(k, leak, "", shipped(k, ""))[0]["sub"])
         cmd = "gh pr create --title 'Smooth bursts' --body x"
         k = ship_kinds(cmd)
         self.assertEqual(ship_items(k, cmd, "https://github.com/a/b/pull/482\n", shipped(k, "https://github.com/a/b/pull/482\n")),

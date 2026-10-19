@@ -65,6 +65,9 @@ def _list(gh: str, repo: str, state: str, limit: int, search: str | None = None,
         r = subprocess.run([gh, "pr", "list", "-R", repo, "--state", state, "--limit", str(limit), "--json", fields]
                            + (["--search", search] if search else []),
                            capture_output=True, text=True, timeout=30, env={**os.environ, "GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
+    except subprocess.TimeoutExpired:
+        egress.note("github", False)                     # it went out, and no answer came
+        return None
     except (OSError, subprocess.SubprocessError):
         return None
     egress.note("github", r.returncode == 0)
@@ -112,6 +115,9 @@ def fetch_reviews(repo: str, number: int) -> list[dict] | None:
         if r.returncode != 0:
             return None
         nodes = (((json.loads(r.stdout or "{}").get("data") or {}).get("repository") or {}).get("pullRequest") or {}).get("reviewThreads", {}).get("nodes") or []
+    except subprocess.TimeoutExpired:
+        egress.note("github", False)
+        return None
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError):
         return None
     out = []
@@ -142,6 +148,9 @@ def fetch_mine(which: str) -> list[dict] | None:
         if r.returncode != 0:
             return None
         rows = json.loads(r.stdout or "[]")
+    except subprocess.TimeoutExpired:
+        egress.note("github", False)
+        return None
     except (OSError, subprocess.SubprocessError, ValueError):
         return None
     out = []

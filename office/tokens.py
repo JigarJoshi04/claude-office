@@ -30,7 +30,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 11               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 12               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -58,6 +58,11 @@ _MERGE_YES = re.compile(r"\bmerged pull request\b|\"state\":\s*\"merged\"|^merge
 _MERGE_ERR = re.compile(r"graphql|is expected|could not|^x |^! |^error|^fatal", re.M)
 _COMMIT_LINE = re.compile(r"^\[[^\]\n]+ [0-9a-f]{7,40}\]", re.M)
 _COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|aborting commit")   # not "error:": later commands print those
+
+
+def _redact(text: str) -> str:
+    from .sessions import redact
+    return redact(text)
 
 
 def strip_heredocs(cmd: str) -> str:
@@ -117,6 +122,7 @@ def shipped(kinds: set, text: str) -> list:
 
 _COMMIT_ITEM = re.compile(r"^\[([^\]\n]+?) ([0-9a-f]{7,40})\] (.+)$", re.M)
 _COMMIT_MSG = re.compile(r"\bcommit\b[^|;&\n]*?\s-[a-zA-Z]*m[ =]?(?:\"((?:\\.|[^\"\\])*)\"|'([^']*)'|(\S+))")
+_COMMIT_HEREDOC = re.compile(r"\bcommit\b[^\n]*?-[a-zA-Z]*m[ =]?\"?\$\(cat\s*<<-?\s*['\"]?(\w+)['\"]?[^\n]*\n\s*([^\n]*)")
 _PR_TITLE = re.compile(r"--title[ =](?:\"((?:\\.|[^\"\\])*)\"|'([^']*)'|(\S+))")
 
 
@@ -126,14 +132,18 @@ def ship_items(kinds: set, cmd: str, text: str, v: list) -> list[dict]:
     out = []
     if v[0]:
         for m in _COMMIT_ITEM.finditer(text):
-            out.append({"k": "c", "sha": m.group(2)[:9], "sub": " ".join(m.group(3).split())[:120], "b": m.group(1).split()[-1][:60]})
+            out.append({"k": "c", "sha": m.group(2)[:9], "sub": _redact(" ".join(m.group(3).split()))[:120], "b": _redact(m.group(1).split()[-1])[:60]})
         if not out:                                       # a quiet commit (-q) prints nothing: its message from the command
             ms = list(_COMMIT_MSG.finditer(strip_heredocs(cmd)))   # the command itself, not a script or a file it writes
             msg = next((g for g in ms[-1].groups() if g), "") if ms else ""
-            out.append({"k": "c", "sha": None, "sub": " ".join(msg.split())[:120] or "a commit"})
+            if msg.lstrip().startswith("$(cat"):         # -m "$(cat <<'EOF' … EOF)": the subject is the heredoc's first line
+                hs = list(_COMMIT_HEREDOC.finditer(cmd))
+                msg = hs[-1].group(2) if hs else ""
+            sub = next((ln.strip() for ln in msg.replace("\\n", "\n").splitlines() if ln.strip()), "")   # the subject line only
+            out.append({"k": "c", "sha": None, "sub": _redact(sub)[:120] or "a commit"})
     if v[2]:
         t = _PR_TITLE.search(cmd)
-        out.append({"k": "po", "n": pr_number({"pr_open"}, cmd, text), "sub": " ".join((next((g for g in t.groups() if g), "") if t else "").split())[:120]})
+        out.append({"k": "po", "n": pr_number({"pr_open"}, cmd, text), "sub": _redact(" ".join((next((g for g in t.groups() if g), "") if t else "").split()))[:120]})
     if v[3]:
         out.append({"k": "pm", "n": pr_number(kinds, cmd, text)})
     return out
