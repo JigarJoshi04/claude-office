@@ -1408,8 +1408,43 @@ function broadcast(preset = "") {
     toast(`Sent to ${ok + held} lane${ok + held === 1 ? "" : "s"}${held ? `, ${held} waiting for approval` : ""}${failed ? `; ${failed} failed` : ""}.`, failed ? "warn" : "good");
   });
 }
+// The palette's verbs: each row names the exact session or lane it acts on, so Enter on it is the confirmation.
+//   "msg atlas status?" (a live session on Atlas, or one whose name has "atlas"), "stop docs", "resume billing"
+function verbItems(q) {
+  const out = [], priv = prefs.privacy;
+  if (!snap) return out;
+  let m = /^(?:msg|message)\s+(\S+)\s*:?\s+([\s\S]{1,2000})$/i.exec(q);
+  if (m) {
+    const who = m[1].toLowerCase(), text = m[2].trim();
+    for (const s of snap.seats) {
+      if (s.kind !== "claude") continue;
+      const name = panels.persona(s).name;
+      for (const x of live(s)) {
+        if (out.length >= 4 || !x.talk || x.talk === "none" || x.talk === "later") continue;
+        if (!(name.toLowerCase().startsWith(who) || s.id === who || (x.name || "").toLowerCase().includes(who))) continue;
+        out.push({ verb: true, icon: icon("send", 16), label: `Message ${priv && x.kind !== "lane" ? "a session" : x.name} on ${name}: ${text}`,
+          hint: x.talk === "direct" ? "↵ sends it" : "↵ sends it; it waits for approval at its terminal", run: async () => {
+            try { const r = await app.post("/api/message", { seat: s.id, id: x.id, text }); toast(r.demo ? "Demo office: nothing was sent." : `Sent to ${x.name}.`, r.demo ? "info" : "good"); if (!r.demo) app.bump("messages", 10, "talker"); pollOnce(); }
+            catch (e) { toast("Could not send it: " + e.message, "bad"); } } });
+      }
+    }
+  }
+  const laneVerb = (re, statuses, word, path, done) => {
+    const mm = re.exec(q);
+    if (!mm) return;
+    const words = mm[1].toLowerCase().split(/\s+/).filter(Boolean);
+    for (const l of (snap.lanes || []).filter(l => statuses.includes(l.status) && words.every(w => (l.title || "").toLowerCase().includes(w))).slice(0, 4))
+      out.push({ verb: true, icon: icon(word === "Stop" ? "stop" : "play", 16), label: `${word} lane ${priv ? "(a lane)" : `“${l.title}”`}`, hint: `${l.status} · ↵ to ${word.toLowerCase()}`, run: async () => {
+        if (word === "Stop" && !confirm(`Stop the lane “${l.title}”? Its notes stay, so you can resume it.`)) return;
+        try { const r = await app.post(path, { id: l.id, seat: null }); toast(r.demo ? "Demo office: nothing was changed." : done, r.demo ? "info" : "good"); pollOnce(); }
+        catch (e) { toast(e.message, "bad"); } } });
+  };
+  laneVerb(/^stop\s+(?:lane\s+)?(.{2,80})$/i, ["running", "starting", "waiting", "queued", "scheduled"], "Stop", "/api/lanes/stop", "Lane stopped.");
+  laneVerb(/^resume\s+(?:lane\s+)?(.{2,80})$/i, ["interrupted", "failed", "stopped", "blocked", "finished"], "Resume", "/api/lanes/resume", "Resuming the lane.");
+  return out;
+}
 function commandItems(q) {
-  return paletteCommands(q).map(c => c.kind === "remind"
+  return [...verbItems(q), ...paletteCommands(q).map(c => c.kind === "remind"
     ? { icon: icon("bell", 16), label: `Remind me ${c.when}: ${c.text}`, hint: "↵ to set", run: async () => {
         try { await app.post("/api/reminders", { text: c.text, trigger: { kind: "at", at: c.at }, label: `at ${dayTime(c.at)}` }); toast(`Reminder set, ${c.when}.`, "good", { ic: "bell" }); pollOnce(); }
         catch (e) { toast("Could not set it: " + e.message, "bad"); } } }
@@ -1420,7 +1455,7 @@ function commandItems(q) {
         go({ kind: "hire" });
         setTimeout(() => { const f = document.getElementById("hBrief"); if (f) f.focus(); }, 50);
       } }
-    : { icon: icon("layers", 16), label: `Project ${c.name}`, hint: "its page", run: () => go({ kind: "project", name: c.name }) });
+    : { icon: icon("layers", 16), label: `Project ${c.name}`, hint: "its page", run: () => go({ kind: "project", name: c.name }) })];
 }
 function paletteItems() {
   const items = [

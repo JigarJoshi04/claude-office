@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.152.0] - 2026-10-19
+
+### Added
+- Ctrl+K takes verbs: `msg <who> <text>` (a live session on that character, or one whose name has the word), `stop
+  <lane>` and `resume <lane>`. Each match is its own row naming the exact session or lane, so Enter on it is the
+  confirmation (stopping asks once more). Share-safe keeps terminal sessions' names out of the rows.
+- With nothing typed, what you used most recently comes first, marked recent. The search is a proper combobox for
+  screen readers, which follow the selection.
+
 ## [3.151.0] - 2026-10-19
 
 ### Added

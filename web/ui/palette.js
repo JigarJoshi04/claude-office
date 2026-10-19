@@ -8,13 +8,17 @@ export function openPalette(items, commands = null) {
   const back = document.createElement("div");
   back.className = "palette-back";
   back.innerHTML = `<div class="palette" role="dialog" aria-label="Search and commands">
-    <input type="text" placeholder="Search seats, sessions, lanes, actions…" aria-label="Search" autocomplete="off">
-    <ul role="listbox"></ul></div>`;
+    <input type="text" placeholder="Search, or type: msg Atlas …, stop …, resume …, hire …, remind me …" aria-label="Search and commands" autocomplete="off"
+      role="combobox" aria-expanded="true" aria-controls="palList" aria-autocomplete="list">
+    <ul role="listbox" id="palList" aria-label="Results"></ul></div>`;
   document.body.appendChild(back);
   const input = back.querySelector("input"), ul = back.querySelector("ul");
   let sel = 0, shown = [];
+  // What you use most comes first with nothing typed (kept in this browser).
+  const used = () => { try { return JSON.parse(localStorage.getItem("office.paletteUse") || "{}") || {}; } catch { return {}; } };
+  const remember = (it) => { try { const u = used(); u[it.label] = Date.now(); const keep = Object.entries(u).sort((a, b) => b[1] - a[1]).slice(0, 30); localStorage.setItem("office.paletteUse", JSON.stringify(Object.fromEntries(keep))); } catch { /* */ } };
   const score = (it, q) => {
-    if (!q) return 1;
+    if (!q) return 1 + (used()[it.label] || 0) / 1e13;
     const hay = (it.label + " " + (it.hint || "") + " " + (it.keywords || "")).toLowerCase();
     let s = 0, i = 0;
     for (const w of q.toLowerCase().split(/\s+/).filter(Boolean)) {
@@ -28,17 +32,22 @@ export function openPalette(items, commands = null) {
     const q = input.value.trim();
     shown = [...(commands && q ? commands(q) : []), ...items.map(it => [score(it, q), it]).filter(([s]) => s > 0).sort((a, b) => b[0] - a[0]).slice(0, 40).map(([, it]) => it)];
     sel = Math.min(sel, Math.max(0, shown.length - 1));
-    ul.innerHTML = shown.length ? shown.map((it, i) => `<li role="option" data-i="${i}" class="${i === sel ? "on" : ""}" aria-selected="${i === sel}">
-      <span class="ico">${it.icon || "›"}</span><span>${esc(it.label)}</span><small>${esc(it.hint || "")}</small></li>`).join("")
+    const recent = !q ? used() : {};
+    ul.innerHTML = shown.length ? shown.map((it, i) => `<li role="option" id="pal-${i}" data-i="${i}" class="${i === sel ? "on" : ""}" aria-selected="${i === sel}">
+      <span class="ico">${it.icon || "›"}</span><span>${esc(it.label)}</span><small>${esc(recent[it.label] ? "recent" : it.hint || "")}</small></li>`).join("")
       : `<div class="empty">Nothing matches “${esc(q)}”.</div>`;
     ul.querySelectorAll("li").forEach(li => {
       li.addEventListener("mousemove", () => { if (sel !== +li.dataset.i) { sel = +li.dataset.i; mark(); } });
       li.addEventListener("click", () => run(+li.dataset.i));
     });
   }
-  function mark() { ul.querySelectorAll("li").forEach((li, i) => { li.classList.toggle("on", i === sel); li.setAttribute("aria-selected", String(i === sel)); }); const on = ul.querySelector("li.on"); if (on) on.scrollIntoView({ block: "nearest" }); }
+  function mark() {
+    ul.querySelectorAll("li").forEach((li, i) => { li.classList.toggle("on", i === sel); li.setAttribute("aria-selected", String(i === sel)); });
+    const on = ul.querySelector("li.on");
+    if (on) { on.scrollIntoView({ block: "nearest" }); input.setAttribute("aria-activedescendant", on.id); } else input.removeAttribute("aria-activedescendant");   // the screen reader follows the selection
+  }
   function close() { back.remove(); }
-  function run(i) { const it = shown[i]; close(); if (it) it.run(); }
+  function run(i) { const it = shown[i]; close(); if (it) { if (!it.verb) remember(it); it.run(); } }
   input.addEventListener("input", () => { sel = 0; render(); });
   input.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown") { e.preventDefault(); sel = Math.min(shown.length - 1, sel + 1); mark(); }
@@ -48,6 +57,7 @@ export function openPalette(items, commands = null) {
   });
   back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
   render();
+  mark();
   input.focus();
   return close;
 }
