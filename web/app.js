@@ -1324,7 +1324,7 @@ function whatsNew() {
 }
 
 function shortcuts() {
-  const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S K L", "Floor, Timeline, Team, Today, Tokens, Lanes"],
+  const keys = [["Ctrl K", "Search seats, sessions and actions"], ["N", "The next thing that needs you"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S K L", "Floor, Timeline, Team, Today, Tokens, Lanes"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
     ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["G", "Goodnight (again: lights on)"], ["M", "Office radio: lo-fi on or off"], ["Z", "Game intensity: Full, Calm, Off"], ["\\", "Hide or show the inspector"],
     ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
@@ -1584,6 +1584,22 @@ function announceDialog() {
     } catch (e) { toast(e.message, "bad"); }
   });
 }
+// N: walk Needs you one item at a time, opening what each is about (its session, lane or seat), round and round.
+let needIdx = -1;
+function nextNeed() {
+  const list = panels.needsList ? panels.needsList() : [];
+  if (!list.length) { toast("Nothing needs you right now.", "good", { ic: "check" }); return; }
+  needIdx = (needIdx + 1) % list.length;
+  const a = list[needIdx];
+  if (a.session && a.seat) go({ kind: "session", seat: a.seat, id: a.session });
+  else if (a.bakeoff) go({ kind: "bakeoff", id: a.bakeoff });
+  else if (a.lane) go({ kind: "lane", id: a.lane });
+  else if (a.ask) go({ kind: "inbox" });
+  else if (a.ci || a.review) go({ kind: "prs" });
+  else if (a.seat) go({ kind: "seat", seat: a.seat });
+  else go({ kind: "ceo" });
+  toast(`${needIdx + 1} of ${list.length}: ${panels.humanise ? panels.humanise(a.text || "") : a.text || ""}`.slice(0, 160), a.level === "bad" ? "bad" : "warn", { ic: "alert", ms: 4500 });
+}
 // One message to a group (talk.broadcast on the office): every lane, the stuck ones, one seat's or one programme's.
 // The office says who is in the group (a dry run), the CEO can untick some, and the send carries how many it showed,
 // so a list that changed meanwhile is refused instead of messaging more sessions than were on screen.
@@ -1827,6 +1843,7 @@ document.addEventListener("keydown", (e) => {
   if (k === "m") { setRadio(!radio.on); return; }
   if (k === "z") { cycleGame(); return; }
   if (k === "Escape") { const m = document.querySelector(".menu"); if (m) { m.remove(); $("btnMenu").setAttribute("aria-expanded", "false"); $("btnMenu").focus(); } else { const back = $("panel").contains(document.activeElement); go({ kind: "ceo" }); if (back) $("panel").focus({ preventScroll: true }); } }
+  else if (k === "n") nextNeed();
   else if (k === "h") go({ kind: "hire" });
   else if (k === "d") go({ kind: "divider" });
   else if (k === "f") setView("floor");

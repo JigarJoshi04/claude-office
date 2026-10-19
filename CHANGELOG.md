@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.185.0] - 2026-10-19
+
+### Added
+- N walks Needs you: each press opens the next thing that needs you (its session, lane, bake-off, the inbox or the
+  pull requests) and says which of how many it is, round and round.
+
 ## [3.184.0] - 2026-10-19
 
 ### Added
