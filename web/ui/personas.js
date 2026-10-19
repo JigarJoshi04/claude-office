@@ -227,7 +227,8 @@ export const PERSONALITIES = [...ARCHETYPES, CODEX].map(a => ({ role: a.role, mo
 // among the candidates, skipping the ones said lately.
 const BANTER = [
   { when: (o) => o.bond >= 1, lines: [["Good to be on this with you, {b}.", "Same repo, same coffee."], ["Want to pair on this one?", "Always do."]] },
-  { when: (o) => o.bond >= 2, lines: [["Remember when you covered my limit?", "Anytime. You'd do the same."], ["Best team on the floor.", "Don't tell the others."]] },
+  { when: (o) => o.bond >= 2, lines: [["Best team on the floor.", "Don't tell the others."], ["We should pair more often.", "Book it."]] },
+  { when: (o) => o.bond >= 2 && o.covers > 0, lines: [["Remember when you covered my limit?", "Anytime. You'd do the same."]] },   // only when one did
   { when: (o) => o.bond >= 3, lines: [["Best friends, officially.", "Took us long enough."], ["Who reviews your work?", "{a} does. Nobody else gets it."]] },
   { when: (o) => o.napper, lines: [["{n}'s napping again.", "Let them. They earned it."], ["Is {n} out of plan?", "Back after the reset. More coffee for us."]] },
   { when: (o) => o.leader, lines: [["{t} is burning through tokens today.", "Someone get {t} a fire extinguisher."], ["Who's top of the burner board?", "{t}. Again."]] },

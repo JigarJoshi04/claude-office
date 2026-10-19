@@ -6,7 +6,8 @@ import { store, esc } from "./util.js";
 
 const KEY = "scrapbook", MAX = 36;
 
-export const photos = () => (store.get(KEY, []) || []).filter(p => p && p.img);
+// Albums from before 3.125 can hold two photos with one id: each gets its own, so removing one keeps the other.
+export const photos = () => { const seen = new Set(); return (store.get(KEY, []) || []).filter(p => p && p.img).map((p, i) => { const id = seen.has(p.id) || !p.id ? `${p.id || "p"}~${i}` : p.id; seen.add(id); return id === p.id ? p : { ...p, id }; }); };
 
 function keep(items) {
   let it = items.slice(-MAX);

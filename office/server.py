@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.135.0"
+    server_version = "ClaudeOffice/3.136.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -190,10 +190,11 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def _send(self, code: int, body: bytes, ctype: str, extra: dict | None = None):
+        extra = dict(extra or {})
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", extra.pop("Cache-Control", "no-store"))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("X-Frame-Options", "DENY")
@@ -364,7 +365,8 @@ class Handler(BaseHTTPRequestHandler):
         ctype = mimetypes.guess_type(p.name)[0] or ("font/woff2" if p.suffix == ".woff2" else "application/octet-stream")
         if p.suffix == ".js":
             ctype = "text/javascript"
-        return self._send(200, p.read_bytes(), ctype)
+        # Fonts never change between versions: kept a week. Code and styles are always fetched fresh (an update shows at once).
+        return self._send(200, p.read_bytes(), ctype, {"Cache-Control": "public, max-age=604800"} if p.suffix == ".woff2" else None)
 
     def _session_detail(self, seat_id: str, session_id: str) -> dict:
         if self.demo:

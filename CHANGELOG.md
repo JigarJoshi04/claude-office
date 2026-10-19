@@ -3,6 +3,20 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.136.0] - 2026-10-19
+
+### Fixed
+- The Team view lost keyboard focus every few seconds as sessions moved; it keeps it now. News, unlock and away rows
+  that share a character found focus again on that character's first row; they find the same row.
+- Standup mode's buttons ignored Enter and Space.
+- Help's "Show me" for Tokens opened the briefing instead of the Tokens page, and a Help topic opened from Ctrl+K could
+  be hidden by an old search.
+- Removing a scrapbook photo also removed others that shared its id (albums from before 3.125).
+- What leaves this machine showed the counts from when the page was loaded; it refreshes each minute Settings is open.
+- "Remember when you covered my limit?" played between teammates who never covered one.
+- A seasonal sticker opened with the common chime.
+- Fonts were fetched again on every load; they are kept for a week.
+
 ## [3.135.0] - 2026-10-19
 
 ### Fixed

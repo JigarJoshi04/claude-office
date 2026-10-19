@@ -599,7 +599,8 @@ setInterval(() => {
   let [a, b] = awake.sort(() => Math.random() - 0.5);
   const pair = awake.find(s => s.career && s.career.bond && s.career.bond.level && awake.some(o => o.id === s.career.bond.with));
   if (pair && Math.random() < 0.5) [a, b] = [pair, awake.find(o => o.id === pair.career.bond.with)];   // teammates chat more
-  const bondOf = (x, y) => (x.career && x.career.bond && x.career.bond.with === y.id ? x.career.bond.level : y.career && y.career.bond && y.career.bond.with === x.id ? y.career.bond.level : 0);
+  const pairBond = (x, y) => (x.career && x.career.bond && x.career.bond.with === y.id ? x.career.bond : y.career && y.career.bond && y.career.bond.with === x.id ? y.career.bond : null);
+  const bondOf = (x, y) => (pairBond(x, y) || {}).level || 0;
   const third = (s) => s && s !== a && s !== b;        // the lines can be about someone, never about one of the speakers
   const napping = snap.seats.find(s => third(s) && s.status === "limited");
   const low = snap.seats.find(s => { const x = binding(s); return third(s) && x.left != null && x.left < 20 && s.status !== "limited"; });
@@ -610,7 +611,7 @@ setInterval(() => {
   const [l1, l2] = banter({ a: name(a), b: name(b), napper: name(napping), low: name(low), reporter: name(reporter), leader: name(leader),
     busy: snap.seats.flatMap(s => live(s)).filter(x => x.state === "working").length, recentReport: recent, night: h >= 22 || h < 5,
     goalsLeft: gl ? gl.filter(g => !g.done).length : undefined, happy: giftBox.happy(), merges: (snap.office.shipped_today || {}).prs_merged || 0,
-    weekday: now.getDay(), season: office.season(), bond: bondOf(a, b) }, banterSaid);
+    weekday: now.getDay(), season: office.season(), bond: bondOf(a, b), covers: (pairBond(a, b) || {}).covers || 0 }, banterSaid);
   lastReaction = Date.now();
   office.sayAtSeat(a.id, l1, 5000);
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
@@ -1193,7 +1194,7 @@ function renderMain(fromSnap) {
   if (fromSnap && !mainDrawn.has(v)) fromSnap = false;
   mainDrawn.add(v);
   const el = $({ timeline: "viewTimeline", board: "viewBoard", stats: "viewStats", tokens: "viewTokens" }[v]);
-  if (v === "board") { const sig = JSON.stringify(snap.seats.map(s => [s.status, s.usage && [s.usage.five_hour, s.usage.weekly], live(s).map(x => [x.id, x.state, x.activity])])) + prefs.privacy; if (fromSnap && sig === mainSig) return; mainSig = sig; renderBoard(el, app); }
+  if (v === "board") { const sig = JSON.stringify(snap.seats.map(s => [s.status, s.usage && [s.usage.five_hour, s.usage.weekly], live(s).map(x => [x.id, x.state, x.activity])])) + prefs.privacy; if (fromSnap && sig === mainSig) return; mainSig = sig; keepFocus(el, () => renderBoard(el, app)); }
   // Timeline and Today come from their own endpoints: refresh them on a clock (they redraw when the data lands),
   // keeping the old picture on screen meanwhile.
   else if (v === "timeline") { if (fromSnap) { const c = histCache.get(prefs.tlHours); if (!c || Date.now() - c.at > 60000) loadHistory(prefs.tlHours); return; } renderTimeline(el, app); }
@@ -1202,6 +1203,19 @@ function renderMain(fromSnap) {
 }
 
 // ------------------------------------------------------------------------------------------------ panel
+// A focused control as a selector from its data-* attributes (null: none to find it by).
+function focusSel(ae) {
+  const attrs = ae ? [...ae.attributes].filter(a => a.name.startsWith("data-")) : [];
+  return attrs.length ? attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join("") : null;
+}
+// Draw a view again without losing the keyboard's place in it.
+function keepFocus(el, draw) {
+  const ae = document.activeElement && el.contains(document.activeElement) ? document.activeElement : null;
+  const sel = ae && (ae.id ? "#" + CSS.escape(ae.id) : focusSel(ae)), nth = sel ? [...el.querySelectorAll(sel)].indexOf(ae) : 0;
+  draw();
+  const back = sel && (el.querySelectorAll(sel)[Math.max(0, nth)] || el.querySelector(sel));
+  if (back) back.focus({ preventScroll: true });
+}
 function renderPanel(force, keepScroll) {
   if (!snap) return;
   const p = $("panel"), k = view.kind;
@@ -1214,9 +1228,10 @@ function renderPanel(force, keepScroll) {
   if (!force && sel && !sel.isCollapsed && p.contains(sel.anchorNode)) return;
   const ae = document.activeElement && p.contains(document.activeElement) ? document.activeElement : null;
   const active = ae ? ae.id || null : null;
-  // Controls without an id (duty switches, share fields, handles) are found again by their first data-* attribute.
-  const dataAttr = ae && !ae.id ? [...ae.attributes].find(a => a.name.startsWith("data-")) : null;
-  const activeSel = active ? "#" + CSS.escape(active) : dataAttr ? `[${dataAttr.name}="${CSS.escape(dataAttr.value)}"]` : null;
+  // Controls without an id (duty switches, share fields, rows) are found again by their data-* attributes, and among
+  // rows that share them (a character's news), by their place.
+  const activeSel = active ? "#" + CSS.escape(active) : focusSel(ae);
+  const nth = activeSel && !active ? [...p.querySelectorAll(activeSel)].indexOf(ae) : 0;
   if (k === "session" && active === "chatBox" && !force) return;       // don't redraw under someone typing
   const caret = ae && typeof ae.selectionStart === "number" ? [ae.selectionStart, ae.selectionEnd] : null;   // a text field keeps its caret
   const out = (panels[k] || panels.ceo)(view);
@@ -1234,7 +1249,7 @@ function renderPanel(force, keepScroll) {
   const nc = chatScroll && p.querySelector(".chat");
   if (nc) nc.scrollTop = chatScroll.end ? nc.scrollHeight : chatScroll.top;
   if (!force || keepScroll) p.scrollTop = k === "session" && atBottom ? p.scrollHeight : top;
-  const back = activeSel && p.querySelector(activeSel);
+  const back = activeSel && (p.querySelectorAll(activeSel)[Math.max(0, nth)] || p.querySelector(activeSel));
   if (back) { back.focus({ preventScroll: true }); if (caret && back.setSelectionRange) try { back.setSelectionRange(caret[0], caret[1]); } catch { /* not a text field */ } }   // keep focus and the caret where they were
   else if (ae && !p.contains(document.activeElement)) p.focus({ preventScroll: true });   // its control went away: stay in the inspector
 }

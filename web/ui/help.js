@@ -16,7 +16,7 @@ export const TOPICS = [
     text: "The divider decides which seat gets the next lane: each seat's share, its cap, the usage guards, hours it is kept free for you, and the mode: Adapt to plan left, Spend the week evenly (more to a seat behind its week), or a fixed split. Scripts use it too: claude-office pick-seat." },
   { id: "talk", title: "Talking to a session", icon: "chat", go: null,
     text: "Open a session's Chat to read the conversation and send a message. Office lanes get it at once; terminal sessions hold it for approval at that terminal (Claude Code's own rule). Ask about it (with the analyst on) answers a question from the transcript without telling the session." },
-  { id: "tokens", title: "Tokens and API value", icon: "flame", go: { kind: "tokens" },
+  { id: "tokens", title: "Tokens and API value", icon: "flame", go: { view: "tokens" },
     text: "Every token since the oldest transcript on the machine, per character, project, model and day, priced at the providers' list prices against what the plans cost. The burn meter shows the last hour; a session's page says why it is burning when it burns hard." },
   { id: "trust", title: "Trust check", icon: "check", go: null,
     text: "When a session or lane reports DONE, its own transcript is checked: its last test run passed after its last code change (Verified), failed (Contradicted, which needs you), or nothing shows it (Unverified)." },

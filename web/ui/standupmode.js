@@ -66,7 +66,8 @@ export function openStandupMode({ data, snap, persona, humanise, privacy, onClos
     else if (e.key === "Tab") {                      // focus stays on the deck's own buttons
       const bs = [...el.querySelectorAll("button")], k = bs.indexOf(document.activeElement);
       e.preventDefault(); bs[(k + (e.shiftKey ? -1 : 1) + bs.length) % bs.length].focus();
-    } else if (!e.ctrlKey && !e.metaKey) e.preventDefault();
+    } else if ((e.key === "Enter" || e.key === " ") && e.target.closest("button")) return;   // a focused button's own click
+    else if (!e.ctrlKey && !e.metaKey) e.preventDefault();
   }
   document.addEventListener("keydown", key, true);
   el.querySelectorAll("[data-su]").forEach(b => b.addEventListener("click", () => { const n = i + +b.dataset.su; if (n >= slides.length) close(); else show(n); }));

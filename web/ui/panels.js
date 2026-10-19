@@ -35,7 +35,7 @@ export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
   let coachState = null;              // the brief coach's last read (coach.js), for this visit to the hiring desk
   let hireDraft = store.get("hireDraft", { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true });
-  let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null, egressData = null, helpQuery = "";
+  let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null, egressData = null, egressAt = 0, helpQuery = "", helpTopic = null;
   let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
   const sessTab = new Map();
   const chatFind = new Map();     // session id -> the text being searched for in its chat
@@ -1718,10 +1718,13 @@ export function makePanels(app) {
     }));
   }
   function settings() {
+    if (Date.now() - egressAt > 60000) {             // the outbound calls and the analyst's spend, fresh each minute it is open
+      egressAt = Date.now();
+      fetch("/api/egress").then(r => r.ok ? r.json() : null).then(j => { if (j && JSON.stringify(j) !== JSON.stringify(egressData)) { egressData = j; if (settingsData) app.rerender(); } }).catch(() => {});
+      fetch("/api/ai").then(r => r.ok ? r.json() : null).then(j => { aiSpend = j && j.spent; }).catch(() => {});
+    }
     if (!settingsData && !settingsLoading) {
       settingsLoading = true;
-      fetch("/api/ai").then(r => r.ok ? r.json() : null).then(j => { aiSpend = j && j.spent; }).catch(() => {});
-      fetch("/api/egress").then(r => r.ok ? r.json() : null).then(j => { egressData = j; }).catch(() => {});
       fetch("/api/settings").then(r => r.ok ? r.json() : null).then(j => { settingsData = j || { unavailable: true }; settingsLoading = false; app.rerender(true); })
         .catch(() => { settingsData = { unavailable: true }; settingsLoading = false; app.rerender(true); });
     }
@@ -1829,11 +1832,11 @@ export function makePanels(app) {
     draftHire: (d) => { hireDraft = { ...hireDraft, ...d }; store.set("hireDraft", hireDraft); },
     needsBySeat: () => needs(S()).reduce((m, a) => { if (a.seat) m[a.seat] = (m[a.seat] || 0) + 1; return m; }, {}), needsList: () => needs(S()), ceo, seat, session, services, programmes, loose, prs: prsPanel, inbox, cabinet: cabinetPanel, doctor: doctorPanel, project, stopAllLanes, lounge, news, trophies, lane, divider, hire, settings, laneListHtml,
     bakeoff,
-    help: (v) => ({ html: helpHtml({ crumbs, topic: v.topic, query: helpQuery }),
+    help: (v) => ({ html: helpHtml({ crumbs, topic: v.topic, query: v.topic && v !== helpTopic ? (helpTopic = v, helpQuery = "") : helpQuery }),   // a topic link (a new visit) starts with no search
       bind(root) {
         const f = root.querySelector("#helpFind");
         if (f) f.addEventListener("input", debounce(() => { helpQuery = f.value; app.rerender(true); const g = document.getElementById("helpFind"); if (g) { g.focus(); g.setSelectionRange(g.value.length, g.value.length); } }, 150));
-        root.querySelectorAll("[data-help-go]").forEach(b => b.addEventListener("click", () => app.go(JSON.parse(b.dataset.helpGo))));
+        root.querySelectorAll("[data-help-go]").forEach(b => b.addEventListener("click", () => { const g = JSON.parse(b.dataset.helpGo); if (g.view) app.setView(g.view); else app.go(g); }));
         if (v.topic) { const t = root.querySelector(`[data-topic="${CSS.escape(v.topic)}"]`); if (t) t.scrollIntoView({ block: "start" }); }
       } }),
     scrapbook: () => ({ html: scrapHtml({ crumbs, privacy: app.privacy() }),
