@@ -127,6 +127,18 @@ class StatsTests(unittest.TestCase):
         self.assertEqual((out["seats"]["a"]["limited_min"], out["seats"]["b"]["limited_min"]), (3, 3))
         self.assertEqual(out["office"]["all_out_min"], 2)                          # both out at once: no Claude seat free
 
+    def test_plan_in_use_counts_minutes_with_plan_left_and_who_worked(self):
+        t = self.start
+        def one(ts, p5, wk, working, status="working"):
+            return {"now": ts, "lanes": [], "seats": [{"id": "a", "kind": "claude", "status": status,
+                    "usage": {"five_hour": {"pct": p5}, "weekly": {"pct": wk}},
+                    "sessions": [{"id": "s1", "name": "x", "state": "working" if working else "idle", "live": True}]}]}
+        rows = [(40, 50, 1, "working"), (41, 50, 0, "idle"), (100, 50, 0, "limited"), (None, None, 0, "idle"), (45, 99, 1, "working")]
+        for i, (p5, wk, w, st) in enumerate(rows):
+            self.h.record(one(t + 60 + i * 60, p5, wk, w, st))
+        a = self.h.stats(one(t + 400, 45, 99, 0, "idle"), "2026-10-16")["seats"]["a"]
+        self.assertEqual((a["avail_min"], a["busy_min"]), (4, 2))     # with the reading now; out of plan and unread minutes do not count
+
     def test_baseline_survives_restart_without_a_previous_day_sample(self):
         t = self.start
         with tempfile.TemporaryDirectory() as tmp:

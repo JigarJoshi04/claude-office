@@ -47,7 +47,7 @@ export function makeRecorder({ office, replay, frame, onSaved }) {
   }
   function stop() { if (rec && rec.mr.state !== "inactive") rec.mr.stop(); }
 
-  // The last day as a timelapse: Replay (about a minute end to end), recorded until it reaches now.
+  // The last day as a timelapse: Replay (a minute or two end to end), recorded until it reaches now.
   async function timelapse(hours = 24) {
     if (rec) return;
     if (!supported()) { toast("This browser cannot record the floor (try Chrome or Edge).", "warn"); return; }
