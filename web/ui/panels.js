@@ -307,6 +307,11 @@ export function makePanels(app) {
     if (a.review && a.session) return `<button class="btn sm primary" data-forward-review="${esc(a.seat)}|${esc(a.session)}" title="Open the session with the comments written out as a message (you send it)">${icon("send", 14)}Forward to it</button>`;
     if (a.interrupted) return `<button class="btn sm primary" data-resume-all="${esc(JSON.stringify(a.interrupted))}">${icon("play", 14)}Resume ${a.interrupted.length > 1 ? "all" : "it"}</button>`;
     if (/logged out|login lapses/i.test(a.text) && st && st.kind === "claude") return `<button class="btn sm" data-copy="CLAUDE_CONFIG_DIR=${esc(st.config_dir)} claude" data-copy-note="Paste it in a terminal, then type /login.">${icon("copy", 14)}Login command</button>`;
+    if ((a.stuck || a.loop) && a.session) {            // the stuck rescuer's ladder (rescue.py): a nudge, then a restart
+      const again = a.nudged_at && S().now - a.nudged_at > 600;
+      if (a.lane_id && again) return `<button class="btn sm primary" data-restart-lane="${esc(a.lane_id)}" title="Stop it and start it again from its notes">${icon("refresh", 14)}Restart it</button>`;
+      if (a.talk === "direct" || a.talk === "review") return `<button class="btn sm ${a.nudged_at ? "" : "primary"}" data-nudge="${esc(a.seat)}|${esc(a.session)}" title="${a.talk === "review" ? "It waits for approval at its terminal" : "Send it a standard note about what the office sees"}">${icon("send", 14)}${a.nudged_at ? "Nudge again" : "Nudge it"}</button>`;
+    }
     if (a.session) return `<button class="btn sm" data-open-session="${esc(a.seat)}|${esc(a.session)}">${icon("chat", 14)}Open</button>`;
     if (a.lane) return `<button class="btn sm" data-lane-go="${esc(a.lane)}">${icon("briefcase", 14)}Open</button>`;
     if (a.unit) return `<button class="btn sm" data-go="services">${icon("server", 14)}Open</button>`;
@@ -385,7 +390,7 @@ export function makePanels(app) {
       </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
       ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
-          <span class="grow"><span class="t">${esc(needText(a))}</span>${a.cmd && !app.privacy() ? `<code class="d cmd">${esc(a.cmd)}</code>` : ""}${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? a.risk ? `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify([a.key]))}" data-snooze-min="1440" title="Seen: hide it on every screen" aria-label="Mark as seen">${icon("check", 14)}</button>`
+          <span class="grow"><span class="t">${esc(needText(a))}</span>${a.cmd && !app.privacy() ? `<code class="d cmd">${esc(a.cmd)}</code>` : ""}${a.nudged_at ? `<span class="d">Nudged ${esc(relTime(a.nudged_at))}${a.lane_id && S().now - a.nudged_at > 600 ? ", still stuck" : ""}</span>` : ""}${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? a.risk ? `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify([a.key]))}" data-snooze-min="1440" title="Seen: hide it on every screen" aria-label="Mark as seen">${icon("check", 14)}</button>`
             : `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify(a.keys || [a.key]))}" title="Snooze for an hour, on every screen" aria-label="Snooze for an hour">${icon("sleep", 14)}</button>` : ""}</div>`).join("")}
           ${S().snoozed ? `<p class="hint">${S().snoozed} snoozed for now.</p>` : ""}
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
@@ -434,6 +439,18 @@ export function makePanels(app) {
           store.set("hireDraft", hireDraft); app.go({ kind: "hire" });
         }));
         root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
+        root.querySelectorAll("[data-nudge]").forEach(b => b.addEventListener("click", async () => {
+          const [seatId, id] = b.dataset.nudge.split("|");
+          b.disabled = true;
+          try { const r = await app.post("/api/nudge", { seat: seatId, id }); toast(r.demo ? "Demo office: nothing was sent." : r.delivery === "review" ? "Nudged: it waits for approval at its terminal." : "Nudged. If it is still stuck in ten minutes, the next step shows here.", r.demo ? "info" : "good"); app.refresh(); }
+          catch (e) { toast("Could not nudge it: " + e.message, "bad"); b.disabled = false; }
+        }));
+        root.querySelectorAll("[data-restart-lane]").forEach(b => b.addEventListener("click", async () => {
+          if (!confirm("Restart this lane? It stops, then starts again from its progress notes.")) return;
+          b.disabled = true;
+          try { const id = b.dataset.restartLane, r = await app.post("/api/lanes/stop", { id }); if (!r.demo) await app.post("/api/lanes/resume", { id, seat: null }); toast(r.demo ? "Demo office: nothing was restarted." : "Restarting it from its notes.", r.demo ? "info" : "good"); app.refresh(); }
+          catch (e) { toast("Could not restart it: " + e.message, "bad"); b.disabled = false; }
+        }));
         root.querySelectorAll("[data-promise-drop]").forEach(b => b.addEventListener("click", async () => {
           if (!confirm("Drop this promise? It is not counted as kept or broken.")) return;
           try { await app.post("/api/promises", { action: "drop", id: b.dataset.promiseDrop }); app.refresh(); } catch (e) { toast(e.message, "bad"); }

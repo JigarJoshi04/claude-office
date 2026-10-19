@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import askabout, asks, brain, checkpoint, coach, config, divider, lanes, messaging, sessions, talk, settings, tokens
+from . import askabout, asks, brain, checkpoint, coach, rescue, config, divider, lanes, messaging, sessions, talk, settings, tokens
 from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.141.0"
+    server_version = "ClaudeOffice/3.142.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -517,6 +517,14 @@ class Handler(BaseHTTPRequestHandler):
                                                                   "ranking": ev["ranking"]}})
             if path == "/api/message":
                 return self._json(200, talk.send(self.office, body, seat_ids))
+            if path == "/api/nudge":                      # the stuck rescuer's first step: a standard nudge (rescue.py)
+                x = self.office.find_session(str(body.get("seat", "")), str(body.get("id", "")))
+                if not x or x.get("state") not in ("stuck", "working", "waiting"):
+                    raise ValueError("That session is not stuck or looping right now")
+                r = talk.send(self.office, {"seat": body.get("seat"), "id": x["id"], "text": rescue.nudge_text(x)}, seat_ids)
+                self.office.nudged[x["id"]] = time.time()
+                self.office.build()
+                return self._json(200, r)
             if path == "/api/lanes":
                 cfg = self.office.cfg
                 ld = cfg["lane_defaults"]

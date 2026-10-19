@@ -340,6 +340,7 @@ class Office(LiveOffice):
         self.utilities = utilities.Utilities(config.STATE_DIR / "utilities.json")   # disk and memory the AI team uses
         egress.init(config.STATE_DIR / "egress.json")                   # outbound calls, counted across restarts
         self.promises = promises.Promises(config.STATE_DIR / "promises.json")   # the CEO's promises, kept by lanes' reports
+        self.nudged: dict = {}                      # session id -> when the stuck rescuer nudged it (rescue.py)
         self.prelimit = prelimit.PreLimit(config.STATE_DIR / "prelimit.json")   # lanes asked to save their notes before a limit
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
@@ -553,7 +554,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.141.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.142.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -614,6 +615,8 @@ class Office(LiveOffice):
                 self.emit("promise", f"Promise broken: '{p['title']}' {p.get('why') or 'was not done in time'}", p.get("seat"), "bad")
         snap["promises"] = self.promises.view(now)
         snap["promise_due"] = self.promises.attention(now)
+        self.nudged = {k: v for k, v in self.nudged.items() if now - v < 6 * 3600}
+        snap["nudged"] = dict(self.nudged)
         snap["attention"] = self._attention(snap)
         for c in collisions(snap):                           # said once an hour per working tree and set of sessions
             k = c["root"] + "|" + ",".join(sorted(w["id"] for w in c["who"]))
@@ -727,7 +730,8 @@ class Office(LiveOffice):
             for x in s.get("sessions", []):
                 lp = x.get("loop")
                 if lp and lp["count"] >= 8 and x.get("live", True) and x.get("state") in ("working", "waiting"):
-                    items.append({"level": "warn", "seat": s["id"], "session": x["id"], "loop": True,
+                    items.append({"level": "warn", "seat": s["id"], "session": x["id"], "loop": True, "talk": x.get("talk"), "lane_id": x.get("lane_id"),
+                                  "nudged_at": (snap.get("nudged") or {}).get(x["id"]),
                                   "text": f"{x.get('name') or 'A session'} on {label} has made the same call {lp['count']} times in a row: {lp['text']}"})
                 ci = x.get("ci")
                 if ci and ci.get("threads") and x.get("live", True) and (ci.get("repo"), ci["number"]) not in reviewed:   # comments nobody resolved
@@ -762,7 +766,8 @@ class Office(LiveOffice):
                               "text": f"{label} is benched but still runs {s['lanes']} lane(s)"})
             for x in s["sessions"]:
                 if x["state"] == "stuck":
-                    items.append({"level": "warn", "seat": s["id"], "session": x["id"],
+                    items.append({"level": "warn", "seat": s["id"], "session": x["id"], "stuck": True, "talk": x.get("talk"), "lane_id": x.get("lane_id"),
+                                  "nudged_at": (snap.get("nudged") or {}).get(x["id"]),
                                   "text": f"{x['name']} on {label} quiet for {x['quiet_s'] // 60} min"})
                 if x["state"] == "limited":
                     items.append({"level": "warn", "seat": s["id"], "session": x["id"],

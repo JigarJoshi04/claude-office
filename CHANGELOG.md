@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.142.0] - 2026-10-19
+
+### Added
+- The stuck rescuer. A session that has gone quiet in the background, or keeps making the same call, gets a ladder
+  in Needs you: Nudge it sends a standard note saying what the office sees and what to do (write the STATE notes, then
+  carry on or report BLOCKED); the item then says when it was nudged, and if an office lane is still stuck ten minutes
+  later the next step is Restart it, which stops the lane and starts it again from its notes. A terminal session's
+  nudge waits for approval there, as every office message does.
+
 ## [3.141.0] - 2026-10-19
 
 ### Added
