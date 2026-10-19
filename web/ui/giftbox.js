@@ -94,7 +94,7 @@ export function makeGiftBox(ctx) {
       }
       return;                                          // not "left you a gift on the floor"
     }
-    if (!store.get("giftHint", false)) {
+    if (!store.get("giftHint", false) && !(app.locked && app.locked())) {
       store.set("giftHint", true);
       toast(`${nameOf(seatId) || "Someone"} left you a gift on the floor. Click the box to open it.`, "good", { ic: "gift", ms: 7000 });
     }

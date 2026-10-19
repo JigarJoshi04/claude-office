@@ -32,13 +32,14 @@ const TEMPLATES = [
   { name: "Refactor", ic: "layers", title: "Refactor: ", brief: "Refactor <module> to <goal> with no behaviour change.\nKeep every existing test green and add tests where coverage is thin.\nDone when: a PR is open with a summary of what moved and why." },
 ];
 const KIND_ICON = { type: "terminal", read: "search", think: "sparkles", talk: "chat", delegate: "bot", wait: "clock" };
-const EVENT_ICON = { promise: "flag", levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert",
+const EVENT_ICON = { announce: "pin", budget: "coin", promise: "flag", levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert",
   stuck: "clock", lane: "briefcase", divider: "sliders", checkpoint: "pin", message: "send", reply: "chat", error: "alert", par: "flag", risk: "alert", collision: "branch", reminder: "bell", bond: "heart" };
 
 export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
   let coachState = null;              // the brief coach's last read (coach.js), for this visit to the hiring desk
-  let teamTpl = null, teamTplAt = 0;  // the team's templates (GET /api/templates), read again each minute the desk is open
+  let teamTpl = null, teamTplAt = 0;
+  let showAllNotes = false;           // the briefing shows three pinned notes unless asked for all  // the team's templates (GET /api/templates), read again each minute the desk is open
   let hireDraft = store.get("hireDraft", { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true });
   let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null, egressData = null, egressAt = 0, helpQuery = "", helpTopic = null;
   let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
@@ -392,9 +393,11 @@ export function makePanels(app) {
     const num = (n, label, dot, tip = "") => `<div class="b-n ${n ? "" : "zero"}"${tip ? ` title="${tip}"` : ""}><b>${n}</b><span><i class="sdot ${dot}"></i>${label}</span></div>`;
     // The CEO's pinned notes (announce.py), at the very top until they expire; the x takes one down.
   function announceHtml() {
-    const list = S().announcements || [];
-    return list.map(a => `<div class="announce" role="note"><span class="ico">${icon("pin", 16)}</span><div class="grow"><div class="t">${esc(a.text)}</div>
-      <div class="d">Pinned ${esc(relTime(a.at))} · up until ${esc(clock(a.until))}</div></div>${app.locked && app.locked() ? "" : `<button class="btn sm ghost icon" data-unpin="${esc(a.id)}" aria-label="Take it down" title="Take it down">${icon("x", 14)}</button>`}</div>`).join("");
+    const list = S().announcements || [], shown = showAllNotes ? list : list.slice(0, 3);
+    const until = (t) => new Date(t * 1000).toDateString() === new Date(S().now * 1000).toDateString() ? clock(t) : dayTime(t);   // the day when it is not today
+    return shown.map(a => `<div class="announce" role="note"><span class="ico">${icon("pin", 16)}</span><div class="grow"><div class="t">${esc(a.text)}</div>
+      <div class="d">Pinned ${esc(relTime(a.at))} · up until ${esc(until(a.until))}</div></div>${app.locked && app.locked() ? "" : `<button class="btn sm ghost icon" data-unpin="${esc(a.id)}" aria-label="Take down the note: ${esc(a.text.slice(0, 60))}" title="Take it down">${icon("x", 14)}</button>`}</div>`).join("")
+      + (list.length > 3 ? `<button class="btn sm ghost" data-notes-all style="margin:-4px 0 12px">${showAllNotes ? "Fewer notes" : `${list.length - 3} more pinned`}</button>` : "");
   }
   // Three blocks, always in this order: how the office is doing, what needs you, who is on the team.
     return { html: `${announceHtml()}${awayHtml()}${rhythmHtml()}
@@ -425,8 +428,9 @@ export function makePanels(app) {
         <button data-go="services">${icon("server", 16)}Services</button><button data-go="cabinet">${icon("files", 16)}Filing cabinet</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="doctor">${icon("heart", 16)}Doctor</button><button data-go="help">${icon("sparkles", 16)}Help</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
+        const na = root.querySelector("[data-notes-all]"); if (na) na.addEventListener("click", () => { showAllNotes = !showAllNotes; app.rerender(true); });
         root.querySelectorAll("[data-unpin]").forEach(b => b.addEventListener("click", async () => {
-          try { const r = await app.post("/api/announce", { action: "clear", id: b.dataset.unpin }); toast(r.demo ? "Demo office: nothing was changed." : "Taken down.", "info", { ic: "pin" }); app.refresh(); }
+          try { const r = await app.post("/api/announce", { action: "clear", id: b.dataset.unpin }); toast(r.demo ? "Demo office: nothing was changed." : r.ok ? "Taken down." : "It was already down.", "info", { ic: "pin" }); app.refresh(); }
           catch (e) { toast(e.message, "bad"); }
         }));
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
@@ -646,7 +650,7 @@ export function makePanels(app) {
     const info = sel ? `<div class="badge-info"><b>${esc(sel.name)}</b> · ${esc(sel.desc)}${c.unlocked[sel.id] ? ` · unlocked ${esc(dayTime(c.unlocked[sel.id]))}` : " · not yet"}</div>` : "";
     const bd = c.bond, mate = bd && seatById(bd.with);
     const bondRow = mate ? `<div class="bond" style="--seat:${esc(mate.color)}">${icon("heart", 16)}<span class="grow"><b>${esc(P(mate).name)}</b> · ${esc(bd.name)}<small>${[bd.cowork_h ? `${bd.cowork_h} h in the same repository` : "", bd.reports ? `${bd.reports} report${bd.reports === 1 ? "" : "s"} within minutes of each other` : "", bd.covers ? `covered ${bd.covers} limit${bd.covers === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")}${bd.next ? ` · ${bd.next - bd.pts} to the next level` : ""}</small></span></div>` : "";
-    const lv = c.level || 1, room = ROOM_TIERS.map(([at, name]) => `<span class="rt ${lv >= at ? "on" : ""}" title="${lv >= at ? "In the room" : `At level ${at}`}">${icon(lv >= at ? "check" : "lock", 12)}${esc(name)}<small>${at}</small></span>`).join("");
+    const lv = c.level || 1, room = ROOM_TIERS.map(([at, name]) => `<span class="rt ${lv >= at ? "on" : ""}" title="${lv >= at ? "In the room" : `At level ${at}`}" aria-label="${esc(name)}: ${lv >= at ? "in the room" : `at level ${at}`}">${icon(lv >= at ? "check" : "lock", 12)}${esc(name)}<small>${at}</small></span>`).join("");
     return `<div class="career" style="--seat:${esc(s.color)}">` + (bondRow ? section("Closest teammate", bondRow) : "")
       + section("The room grows", `<div class="room-tiers">${room}</div>`) + section(`Achievements · ${got.length} of ${cat.length}`,
       `<div class="cstats">${tiles.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("")}</div>
@@ -1319,7 +1323,7 @@ export function makePanels(app) {
         ? emptyState("news", "Nothing under this filter", "", `<button class="btn sm" data-news="all">Show all the news</button>`)
         : emptyState("news", "No news yet", "Arrivals, reports, limits, resets and what you change show up here as they happen.")}</div>`,
       bind(root) { root.querySelectorAll("[data-news]").forEach(b => b.addEventListener("click", () => { newsFilter = b.dataset.news; app.rerender(true); }));
-        if (app.markNewsRead) setTimeout(() => app.markNewsRead(), 1500); } };   // read once it has been on screen a moment
+      } };
   }
 
   // -------------------------------------------------------------------------------------------- lane
@@ -1348,7 +1352,7 @@ export function makePanels(app) {
         <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">As before</option><option value="auto">Let the divider pick</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
         <button class="btn sm" id="lPack" title="The lane's brief, report, notes and runs as Markdown, to pass on">${icon("download", 15)}Handoff pack</button>
-        ${openIn({ lane: l.id }, !running && sid && (seatById(l.seat) || {}).kind === "claude" ? "Carry on in a terminal" : null)}
+        ${openIn({ lane: l.id }, !running && !scheduled && sid && (seatById(l.seat) || {}).kind === "claude" ? "Carry on in a terminal" : null)}
         ${running || scheduled ? `<button class="btn sm ghost" data-remind="${esc(JSON.stringify(["lane_end", l.id, `when lane '${l.title}' ends`]))}">${icon("bell", 14)}Remind me when it ends</button>` : ""}
       </div>
       ${(() => { const pm = ((S().promises || {}).open || []).find(p => p.lane === l.id), gone = !running && !scheduled && l.status !== "interrupted";
@@ -1371,6 +1375,7 @@ export function makePanels(app) {
         if (stop) stop.addEventListener("click", async () => { if (!confirm("Stop this lane? Its progress notes stay, so you can resume it.")) return; try { const r = await app.post("/api/lanes/stop", { id: v.id }); result(r, "Lane stopped.", "warn"); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
         if (res) res.addEventListener("click", async () => { try { const r = await app.post("/api/lanes/resume", { id: v.id, seat: root.querySelector("#lSeat").value || null }); result(r, "Resuming the lane."); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
         if (clone) clone.addEventListener("click", () => {
+          if (app.locked && app.locked()) { toast("The screen is locked: the hiring desk opens again once it is unlocked.", "info", { ic: "lock" }); return; }
           // A lane in its own worktree is hired again from its repository, at the same place inside it, not from the old copy.
           const wt = l.worktree, dir = wt && l.workdir.startsWith(wt.path) ? wt.repo + l.workdir.slice(wt.path.length) : l.workdir;
           hireDraft = { title: l.title, brief: d ? d.brief : "", workdir: dir, seat: l.seat_pref || "auto", model: l.model, permission_mode: l.permission_mode, allow_messages: l.allow_messages !== false, worktree: !!wt };

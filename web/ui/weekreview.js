@@ -47,10 +47,10 @@ export function weekSummary(days, { album = {}, badges = {}, goalDays = [], end 
 }
 
 // [key, index in a day's per_seat row, title, the number in words]
-const AWARDS = [["hours", 0, "The long haul", (v) => `${(v / 60).toFixed(v >= 600 ? 0 : 1)} hours at work`],
+const AWARDS = [["hours", 0, "The long haul", (v) => { const h = v / 60, t = h >= 10 || Number.isInteger(h) ? String(Math.round(h)) : h.toFixed(1); return `${t} hour${t === "1" ? "" : "s"} at work`; }],
   ["reports", 1, "The closer", (v) => `${v} report${v === 1 ? "" : "s"} filed`],
   ["calls", 2, "Busy hands", (v) => `${v.toLocaleString()} tool calls`],
-  ["tokens", 3, "The furnace", (v) => `${v >= 1e9 ? (v / 1e9).toFixed(1) + " B" : v >= 1e6 ? (v / 1e6).toFixed(1) + " M" : Math.round(v / 1e3) + " k"} fresh tokens`]];
+  ["tokens", 3, "The furnace", (v) => `${v >= 1e9 ? (v / 1e9).toFixed(1) + " B" : v >= 1e6 ? (v / 1e6).toFixed(1) + " M" : v >= 1e3 ? Math.round(v / 1e3) + " k" : Math.round(v)} fresh tokens`]];
 const SLIDE_MS = 5500;
 const fmtH = (h) => (h >= 10 ? Math.round(h).toLocaleString() : h.toFixed(1));
 const dayName = (d, o = { weekday: "long" }) => new Date(d + "T12:00:00").toLocaleDateString([], o);

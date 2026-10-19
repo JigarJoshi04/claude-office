@@ -253,7 +253,7 @@ const office = createOffice($("stage"), {
   onLegend: (btn) => floor.legend(btn),
   onGift: (id) => giftBox.open(id),
   onMailroom: () => giftBox.openNext(),
-  openArcade: () => arcade.open(),
+  openArcade: () => playArcade(),
   onRadio: () => setRadio(!radio.on),
   onDirector: () => setDirector(!prefs.director),
   onHoverSeat: (id) => document.querySelectorAll("#panel [data-spot], #rightnow [data-spot]").forEach(m => m.classList.toggle("hl", !!id && m.dataset.spot === id)),
@@ -548,7 +548,7 @@ function holdStart() {
   if (holdT) return;
   if (HARD_LOCK) { toast("This is the read-only TV page. Open the office without /tv to change things.", "info", { ic: "lock" }); return; }
   $("lockChip").classList.add("holding");
-  holdT = setTimeout(() => { holdT = null; $("lockChip").classList.remove("holding"); setLocked(false); }, 2000);
+  holdT = setTimeout(() => { holdT = null; $("lockChip").classList.remove("holding"); escHeld = true; setLocked(false); }, 2000);
 }
 function holdStop() { clearTimeout(holdT); holdT = null; const c = $("lockChip"); if (c) c.classList.remove("holding"); }
 function lockChip() {
@@ -573,7 +573,8 @@ new MutationObserver(() => { if (locked) lockChip(); }).observe(document.body, {
 const LOCKED_PAGES = ["hire", "settings", "divider", "inbox", "bakeoff"];
 // While locked only looking around works: views, the floor's camera, TV, replay and the radio.
 const LOCK_KEYS = /^(?:[ftbsklvrm?0-9=+-]|Arrow\w+| )$/;
-addEventListener("keyup", (e) => { if (e.key === "Escape") holdStop(); });
+let escHeld = false;                    // the Esc that unlocked is still down: its repeats are not "back"
+addEventListener("keyup", (e) => { if (e.key === "Escape") { holdStop(); escHeld = false; } });
 
 // ------------------------------------------------------------------------------------------------ routing
 function hashFor(v) {
@@ -601,7 +602,15 @@ function viewFromHash() {
 }
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 let revealT = 0;
+// Bug Squash, unless the screen is locked (a game writes its best score to the save).
+function playArcade() {
+  if (locked) { toast("The screen is locked: the arcade opens again once it is unlocked.", "info", { ic: "lock" }); return; }
+  arcade.open();
+}
+let newsOpenedAt = 0;
 function go(v, fromHash, opt = {}) {
+  if (view && view.kind === "news" && v && v.kind !== "news" && newsOpenedAt && Date.now() - newsOpenedAt > 2000) markNewsRead();   // read once looked at
+  if (v && v.kind === "news" && (!view || view.kind !== "news")) newsOpenedAt = Date.now();
   if (locked && v && LOCKED_PAGES.includes(v.kind)) {
     toast(HARD_LOCK ? "This is the read-only TV page." : "The screen is locked: hold Esc for 2 seconds to unlock it.", "info", { ic: "lock" });
     if (!fromHash) return;
@@ -703,6 +712,7 @@ function apply(next) {
   snap = next; setNow(snap.now);
   office.setAnnounce((next.announcements || []).length);
   if (!newsReadTs) { newsReadTs = snap.now; store.set("newsReadTs", newsReadTs); }
+  if (view && view.kind === "session" && !document.hidden) markTalkSeen(view.seat, view.id, true);   // what is on screen is seen
   if (!DEMO && office.season() === "birthday" && store.get("birthdayToast", "") !== localDay()) {   // once on the day
     store.set("birthdayToast", localDay());
     const born = Math.min(...snap.seats.map(z => (z.career || {}).since).filter(Boolean)), years = Math.round((snap.now - born) / (365.25 * 86400));
@@ -1100,10 +1110,12 @@ const textHash = (t) => { let h = 0; for (let i = 0; i < (t || "").length; i++) 
 const unreadNews = () => (snap && snap.events || []).filter(e => e.ts > newsReadTs).length;
 const saidNew = (s, x) => { const k = s.id + "/" + x.id, v = seenTalk[k]; return !!(v && x.last_text && textHash(x.last_text) !== v[0]); };
 function markNewsRead() { if (!snap) return; newsReadTs = snap.now; store.set("newsReadTs", newsReadTs); paintLatest(); }
-function markTalkSeen(seat, id) {
+function markTalkSeen(seat, id, quiet = false) {
   const s = snap && snap.seats.find(z => z.id === seat), x = s && live(s).find(z => z.id === id);
   if (!x) return;
-  seenTalk[seat + "/" + id] = [textHash(x.last_text), snap.now]; store.set("seenTalk", seenTalk); rnSig = ""; renderRightNow();
+  const h = textHash(x.last_text), was = seenTalk[seat + "/" + id];
+  if (quiet && was && was[0] === h) return;             // unchanged: no write each refresh
+  seenTalk[seat + "/" + id] = [h, snap.now]; store.set("seenTalk", seenTalk); rnSig = ""; if (!quiet) renderRightNow();
 }
 function paintLatest() {
   const el = $("latest");
@@ -1153,7 +1165,7 @@ function renderRightNow() {
     const act = prefs.privacy && x.kind === "desk" ? "Working…" : (x.activity || STATE[x.state]);
     const mins = x.started_at ? Math.max(0, Math.round((snap.now - x.started_at) / 60)) : null;
     const age = mins == null ? "" : mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, "0")}`;
-    return `<button class="rn st-${x.state}" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" data-spot="${esc(s.id)}" style="--seat:${s.color}" title="${esc(x.name)}: ${esc(act)}">
+    return `<button class="rn st-${x.state}" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" data-spot="${esc(s.id)}" style="--seat:${s.color}" title="${esc(x.name)}: ${esc(act)}${saidNew(s, x) ? " (said something new)" : ""}">
       <span class="av"><i data-portrait="${esc(x.id)}|${esc(s.color)}|${x.kind === "desk" ? "headset" : ""}"></i></span>
       <span class="rn-body"><span class="rn-top"><i class="sdot ${x.state}" title="${STATE[x.state]}"></i><b>${esc(x.name.replace(/^wt-/, ""))}</b>${saidNew(s, x) ? `<i class="rn-new" title="Said something new since you last looked"></i>` : ""}${x.state === "working" ? "" : `<span class="rn-state">${STATE[x.state]}</span>`}</span>
       <span class="rn-act">${esc(act)}</span><span class="rn-meta"><span class="rn-who">${esc(p.name)}</span> · ${x.kind === "lane" ? "lane" : "terminal"}${age ? " · " + age : ""}${x.phase ? ` · <span class="ph ph-${x.phase.replace(" ", "-")}">${x.phase}</span>` : x.tasks ? ` · ${x.tasks.done}/${x.tasks.total} tasks` : ""}</span></span></button>`;
@@ -1377,7 +1389,7 @@ function openMenu(focusItem) {
     else if (k === "daycard") shareDay();
     else if (k === "week") weekReview.play();
     else if (k === "wrapped") wrapped.play();
-    else if (k === "arcade") arcade.open();
+    else if (k === "arcade") playArcade();
     else if (k === "clip") { setView("floor"); recorder.clip(15); }
     else if (k === "timelapse") { setView("floor"); recorder.timelapse(24); }
     else if (k === "radio") setRadio(!radio.on);
@@ -1574,7 +1586,7 @@ function announceDialog() {
   $("anClose").addEventListener("click", () => $("dialog").close());
   $("anPost").addEventListener("click", async () => {
     const text = $("anText").value.trim();
-    if (!text) { toast("Write the note first.", "warn"); return; }
+    if (!text) { toast("Write the note first.", "warn"); $("anText").focus(); return; }
     try {
       const r = await app.post("/api/announce", { text, hours: +$("anHours").value });
       const also = $("anSend").checked;
@@ -1714,7 +1726,7 @@ function paletteItems() {
     { icon: icon("volume", 16), label: radio.on ? "Turn the office radio off" : "Turn the office radio on", keywords: "radio music lofi lo-fi sound play", run: () => setRadio(!radio.on) },
     ...(snap && snap.seats.length ? [{ icon: icon("star", 16), label: "Character cards", keywords: "card cards collectible trading character share picture", run: () => cards.open(snap.seats[0].id) }] : []),
     ...["full", "calm", "off"].filter(g => g !== (prefs.game || "full")).map(g => ({ icon: icon("sparkles", 16), label: `Game intensity: ${GAME_WORD[g]}`, keywords: "game calm work mode quiet focus off full celebrations", run: () => setPref("game", g) })),
-    { icon: icon("bug", 16), label: "Play Bug Squash", keywords: "game arcade bugs squash play fun", run: () => arcade.open() },
+    { icon: icon("bug", 16), label: "Play Bug Squash", keywords: "game arcade bugs squash play fun", run: () => playArcade() },
     { icon: icon("star", 16), label: "Last month, wrapped", keywords: "month wrapped review recap story year", run: () => wrapped.play() },
     { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
@@ -1826,6 +1838,7 @@ document.addEventListener("keydown", (e) => {
   // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).
   if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back, dialog[open]")) return;
   const k = e.key;
+  if (k === "Escape" && escHeld) return;
   if (locked) {
     if (k === "Escape") { if (!e.repeat) { if (replay.active()) replay.close(); holdStart(); } return; }
     if (!LOCK_KEYS.test(k)) return;

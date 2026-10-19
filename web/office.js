@@ -2,7 +2,7 @@
 // and click targets, a camera you can zoom and pan, agents that walk in from the elevator, and night lighting.
 import * as S from "./engine/sprites.js";
 import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, pathBetween, drawStatic, capFor, deskFor } from "./engine/scene.js";
-import { windowRect, drawDecorLive, roomTier } from "./engine/decor.js";
+import { windowRect, drawDecorLive, roomTier, drawCurtains } from "./engine/decor.js";
 import { officeLevel } from "./engine/unlocks.js";
 import { seasonFor, drawSeason, drawSnow, drawWindowFireworks } from "./engine/season.js";
 import { icon } from "./ui/icons.js";
@@ -796,8 +796,8 @@ export function createOffice(stage, handlers) {
     drawBoombox(dx + 2, dy + 14, t);
     S.rect(ctx, dx + 16, dy + 5, 8, 6, S.P.white); S.rect(ctx, dx + 17, dy + 6, 6, 1, "#9aa3b5"); S.rect(ctx, dx + 17, dy + 8, 4, 1, "#9aa3b5");
     if (announceN) {                                     // the CEO's announcement: a sticky note pinned by the paper
-      S.rect(ctx, dx + 25, dy + 1, 7, 7, "#ffe27a"); S.rect(ctx, dx + 25, dy + 7, 7, 1, "#c9a93a"); S.rect(ctx, dx + 27, dy, 2, 2, "#e8475a");
-      S.rect(ctx, dx + 26, dy + 3, 5, 1, "#8a6d1e"); S.rect(ctx, dx + 26, dy + 5, 3, 1, "#8a6d1e");
+      S.rect(ctx, dx + 24, dy + 1, 6, 7, "#ffe27a"); S.rect(ctx, dx + 24, dy + 7, 6, 1, "#c9a93a"); S.rect(ctx, dx + 26, dy, 2, 2, "#e8475a");
+      S.rect(ctx, dx + 25, dy + 3, 4, 1, "#8a6d1e"); S.rect(ctx, dx + 25, dy + 5, 3, 1, "#8a6d1e");
     }
     S.drawDeskLamp(ctx, dx + 50, dy - 4, true);
     lights.push({ x: dx + 39, y: dy + 4, r: 60, c: "#ffcf7a", i: 0.65 });
@@ -893,6 +893,7 @@ export function createOffice(stage, handlers) {
   function drawRoom(pod, t, lights, env) {
     const s = pod.seat, room = pod.room, wr = windowRect(room), st = s.status;
     S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, reduced ? 0 : t, env.night, weatherOf(s), windowExtras());   // still under reduced motion
+    if (roomTier(s.career && s.career.level) >= 1) drawCurtains(ctx, room, s.color);   // the room grows: curtains first
     // the wall clock, with a wedge to when the 5-hour plan comes back (red if it runs out first)
     const f5 = (s.usage || {}).five_hour, fc = ((s.forecast || {}).five_hour || {}).state;
     S.drawClock(ctx, room.x + 112, room.y + 12, clockAt ? new Date(clockAt * 1000) : new Date(),
@@ -1619,7 +1620,9 @@ export function createOffice(stage, handlers) {
     snap = next;
     const arch = (s) => (persona ? persona(s).archetype : null);
     ol = officeLevel(snap.seats);
-    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color, arch(s), roomTier(s.career && s.career.level)])) + "|"   // a room grows with its character + (snap.units || []).length + "|" + ["palms", "flowers", "statue"].filter(has).join();
+    // The static layer is drawn again when this changes: the seats, a room's tier (it grows with its character), the
+    // services and the office's unlocks.
+    const key = JSON.stringify(snap.seats.map(s => [s.id, s.color, arch(s), roomTier(s.career && s.career.level)])) + "|" + (snap.units || []).length + "|" + ["palms", "flowers", "statue"].filter(has).join();
     const relayout = key !== staticKey;
     if (relayout) { L = computeLayout(snap.seats, arch, plan); W = L.W; H = L.H; staticKey = key; L.pods.forEach(p => { p.y = null; }); }
     else L.pods.forEach((p, i) => { p.seat = snap.seats[i]; });

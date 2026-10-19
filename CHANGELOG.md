@@ -3,6 +3,26 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.187.0] - 2026-10-19
+
+### Fixed (QA round 25: the page)
+- Since 3.178 the floor did not draw a statue, palms or flowers unlocked during a visit (nor a new service rack)
+  until a reload: a comment cut the end off the line that decides when the building is drawn again.
+- Pinned notes say the day when they are up past today ("until Tue 9:51 AM"), and the briefing shows three with
+  "N more pinned". Taking down one that is already gone says so. In the TV news strip a note shows once (not also
+  as news), the strip keeps one pace however long the notes are, and notes are ticks and captions in the replay.
+- The week's awards: the portraits fit their cards and the crown shows; a tie is no one's award and "a clean sweep"
+  needs every award (3.186); small numbers read right ("1 hour", "420 fresh tokens").
+- Locked screens: Re-hire, Resume, the seat picker, the duty switch, "Remind me when it ends" and Hand to a fresh lane
+  are hidden or refused, the arcade waits, and no gift hint shows. Holding Esc past the unlock no longer goes on to
+  leave the page.
+- News counts as read when you leave the News page after looking at it (not 1.5 s after it opens), and its "N new"
+  line and marker stay while you read. The session on screen never gets its own "said something new" dot.
+- A lane's terminal button offers to carry the conversation on only when the office would (not for scheduled lanes).
+- Curtains are tied back at the window's edges, clear of the wall clock; the desk note no longer touches the
+  monitor; a long word in the news wraps instead of widening the panel; tier pills and the note buttons have proper
+  labels.
+
 ## [3.186.0] - 2026-10-19
 
 ### Security (QA round 25)

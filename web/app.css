@@ -300,7 +300,7 @@ body.resizing .stage, body.resizing .panel { pointer-events: none; }
 .minibar { height: 4px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin-top: 5px; }
 .minibar i { display: block; height: 100%; border-radius: 99px; background: var(--seat, var(--accent)); }
 .minibar.low i { background: var(--bad); } .minibar.mid i { background: var(--warn); }
-.act { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: start; padding: 9px 0; font-size: 13.5px; color: var(--text-2); }
+.act { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; overflow-wrap: anywhere; align-items: start; padding: 9px 0; font-size: 13.5px; color: var(--text-2); }
 .act + .act { border-top: 1px solid var(--line); }
 .act .ic { margin-top: 2px; color: var(--faint); }
 .act.good .ic { color: var(--good); } .act.warn .ic { color: var(--warn); } .act.bad .ic { color: var(--bad); }
@@ -1924,3 +1924,9 @@ body.locked [data-open] { display: none !important; }
 /* More sessions than desks (office.js renderPod): an honest "+N more" on the room */
 .pod-more { position: absolute; z-index: 3; padding: 2px 7px; border-radius: 99px; border: 0; cursor: pointer; font: 700 11px var(--mono);
   background: color-mix(in srgb, var(--seat) 30%, #10131e); color: #f2f4fa; box-shadow: 0 0 0 1px color-mix(in srgb, var(--seat) 60%, transparent); }
+.wr-award .av canvas { width: 30px; height: 38px; margin-top: 10px; }
+.wr-awards.one .av canvas { width: 46px; height: 58px; margin-top: 14px; }
+.wr-award small { white-space: nowrap; }
+body.locked #lClone, body.locked #lResume, body.locked #lStop, body.locked #lSeat, body.locked #lFront, body.locked [data-remind],
+body.locked #seatDuty, body.locked .duty .switch, body.locked [data-handoff] { display: none !important; }
+.rp-tick.info { background: #ffe27a; }

@@ -79,11 +79,6 @@ function drawRoomTier(c, room, color, tier) {
   if (tier >= 2) {                                     // a gold picture rail along the back wall
     r(c, x + 2, y + BACK - 11, w - 4, 1, "#d8b45a"); r(c, x + 2, y + BACK - 10, w - 4, 1, "#9c7a2e");
   }
-  if (tier >= 1) {                                     // curtains either side of the window, in the room's colour
-    const cl = S.shade(color, 0.75), cd = S.shade(color, 0.55);
-    r(c, wr.x - 6, wr.y - 4, wr.w + 12, 2, "#8a6d3c");                                           // the rod
-    for (const cx of [wr.x - 6, wr.x + wr.w + 1]) { r(c, cx, wr.y - 2, 5, wr.h + 6, cl); r(c, cx + 1, wr.y - 2, 1, wr.h + 6, cd); r(c, cx + 3, wr.y - 2, 1, wr.h + 6, cd); }
-  }
   if (tier >= 4) {                                     // a hanging plant between the window's curtain and the right wall
     const hx = x + w - 10, hy = y + 4;
     r(c, hx + 3, hy, 1, 6, "#8a8f9e");
@@ -93,6 +88,14 @@ function drawRoomTier(c, room, color, tier) {
   if (tier >= 5) {                                     // a brass plaque at the wall's left end: the corner office
     r(c, x + 3, y + 9, 9, 7, "#8a6a1e"); r(c, x + 4, y + 10, 7, 5, "#e2be5a"); r(c, x + 6, y + 11, 3, 1, "#fff2b0"); r(c, x + 5, y + 13, 5, 1, "#a8862c");
   }
+}
+
+// Curtains in the room's colour (tier 1), drawn over the window each frame since the window is redrawn: tied back at
+// both edges of the glass, as the wall clock hangs right against the window's left side.
+export function drawCurtains(c, room, color) {
+  const wr = windowRect(room), cl = S.shade(color, 0.75), cd = S.shade(color, 0.55);
+  r(c, wr.x - 1, wr.y - 4, wr.w + 2, 2, "#8a6d3c");                                              // the rod
+  for (const cx of [wr.x, wr.x + wr.w - 5]) { r(c, cx, wr.y - 2, 5, wr.h + 4, cl); r(c, cx + 1, wr.y - 2, 1, wr.h + 4, cd); r(c, cx + 3, wr.y - 2, 1, wr.h + 4, cd); r(c, cx, wr.y + 11, 5, 2, "#d8b45a"); }
 }
 
 export function windowRect(room) { return { x: room.x + room.w - 62, y: room.y + 8, w: 46, h: 22 }; }

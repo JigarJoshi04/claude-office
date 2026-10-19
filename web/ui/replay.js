@@ -47,7 +47,7 @@ export function makeReplay(app, office, frame) {
       if (m.kind === "report" && m.level === "good") office.celebrate(m.seat, null, "Shipped!");
       else if (m.kind === "levelup") { const s = app.snap().seats.find(x => x.id === m.seat); office.banner("Level up!", app.humanise(m.text), s ? s.color : "#ffd24a"); }
       else if (m.kind === "limit") office.alarm(m.seat, "Out of plan");
-      if (bar && ["report", "levelup", "achievement", "limit", "lane", "login"].includes(m.kind)) {
+      if (bar && ["report", "levelup", "achievement", "limit", "lane", "login", "announce"].includes(m.kind)) {
         const cap = bar.querySelector(".rp-news");
         cap.textContent = `${clock(m.ts)} · ${app.humanise(m.text)}`; cap.classList.remove("flash"); void cap.offsetWidth; cap.classList.add("flash");
       }
@@ -80,8 +80,8 @@ export function makeReplay(app, office, frame) {
 
   function buildBar() {
     const span = hist.now - hist.from;
-    const ticks = (hist.markers || []).filter(m => ["report", "levelup", "achievement", "limit", "login"].includes(m.kind)).map(m => {
-      const k = m.kind === "report" ? (m.level === "good" ? "good" : "warn") : m.kind === "limit" || m.kind === "login" ? "bad" : "gold";
+    const ticks = (hist.markers || []).filter(m => ["report", "levelup", "achievement", "limit", "login", "announce"].includes(m.kind)).map(m => {
+      const k = m.kind === "report" ? (m.level === "good" ? "good" : "warn") : m.kind === "limit" || m.kind === "login" ? "bad" : m.kind === "announce" ? "info" : "gold";
       return `<i class="rp-tick ${k}" style="left:${(((m.ts - hist.from) / span) * 100).toFixed(2)}%" title="${esc(clock(m.ts) + " · " + (app.privacy() ? `${m.kind} news` : app.humanise(m.text)))}"></i>`;
     }).join("");
     bar = document.createElement("div");
