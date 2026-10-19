@@ -1827,6 +1827,7 @@ export function makePanels(app) {
             q("hGo").disabled = false; app.refresh(); app.rerender(true);
             return;
           }
+          if (looksSecret(hireDraft.title + "\n" + hireDraft.brief) && !confirm("The brief has something that looks like a key or a password. The lane will read it and may write it into its notes and report. Hire anyway?")) return;
           q("hGo").disabled = true;
           try {
             const startAt = hireDraft.start === "at" && hireDraft.startAt ? Date.parse(hireDraft.startAt) / 1000 : null;

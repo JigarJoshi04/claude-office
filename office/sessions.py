@@ -29,6 +29,9 @@ PATH_RE = re.compile(r"(/[^\s'\"`]+?(STATE|REPORT)\.md)")
 SECRET_RE = re.compile(
     r"(sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}"
+    r"|glpat-[A-Za-z0-9_-]{20,}|[sr]k_(?:live|test)_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{35}|npm_[A-Za-z0-9]{36}|hf_[A-Za-z0-9]{30,}"
+    r"|hooks\.slack\.com/services/[A-Za-z0-9/_-]{20,}"
+    r"|-----BEGIN [A-Z ]{0,30}PRIVATE KEY-----[\s\S]{0,10000}?(?:-----END [A-Z ]{0,30}PRIVATE KEY-----|$)"
     r"|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{16,}"
     r"|(?i:(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)\w{0,30}[\"']?\s*[=:]\s*[\"']?)(?=[^\s'\",}]*[A-Za-z])[^\s'\",}]{6,}"
     r"|(?i:aws_secret_access_key|aws_session_token)\s+[^\s'\"]{12,})")   # (bounded, so a long run of "token" never backtracks)

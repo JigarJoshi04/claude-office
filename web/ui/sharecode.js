@@ -33,6 +33,6 @@ export function decodeBrief(code) {
 }
 
 // Text that looks like a key or a password (the office's own masks, sessions.SECRET_RE, in short): warned about
-// before a brief is shared, and before an imported one is kept.
-const SECRET = /(sk-ant-[\w-]{8,}|sk-[\w-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{6,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:password|passwd|secret|api[_-]?key|access[_-]?key)\w{0,30}["']?\s*[=:]\s*["']?(?=[^\s'",}]*[A-Za-z])[^\s'",}]{6,})/i;
+// before a brief is shared, before an imported one is kept, and before a lane is hired with it.
+const SECRET = /(sk-ant-[\w-]{8,}|sk-[\w-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{6,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|glpat-[\w-]{20,}|[sr]k_(?:live|test)_[A-Za-z0-9]{16,}|AIza[\w-]{35}|npm_[A-Za-z0-9]{36}|hf_[A-Za-z0-9]{30,}|hooks\.slack\.com\/services\/[\w/-]{20,}|\b(?:password|passwd|secret|api[_-]?key|access[_-]?key)\w{0,30}["']?\s*[=:]\s*["']?(?=[^\s'",}]*[A-Za-z])[^\s'",}]{6,})/i;
 export const looksSecret = (text) => SECRET.test(text || "");

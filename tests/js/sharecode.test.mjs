@@ -27,7 +27,8 @@ test("a broken, empty or oversized code says what is wrong", () => {
 });
 
 test("keys and passwords are noticed, ordinary briefs are not", () => {
-  for (const s of ["use ghp_abcdefghijklmnopqrstuvwxyz1234", "sk-ant-api03-abcdefghij", "password = hunter2x", "-----BEGIN RSA PRIVATE KEY-----", "AKIAABCDEFGHIJKLMNOP"])
+  for (const s of ["use ghp_abcdefghijklmnopqrstuvwxyz1234", "sk-ant-api03-abcdefghij", "password = hunter2x", "-----BEGIN RSA PRIVATE KEY-----", "AKIAABCDEFGHIJKLMNOP",
+    "glpat-abcdefghij0123456789", "sk_live_abcdefghij0123456789", "AIza" + "a1B2".repeat(9).slice(0, 35), "npm_" + "a1".repeat(18), "https://hooks.slack.com/services/T000/B000/abcdefghij0123"])
     assert.ok(looksSecret(s), s);
   for (const s of ["Done when: the tests pass", "Fix the token counter in tokens.py", "commit 4cb86f6", "api_key handling in auth.py"])
     assert.ok(!looksSecret(s), s);

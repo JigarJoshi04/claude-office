@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.167.0] - 2026-10-19
+
+### Security
+- The mask hides more kinds of credentials before any text reaches the page: private-key blocks (the whole block),
+  GitLab, Stripe, Google API, npm and Hugging Face tokens, and Slack webhook URLs. A corpus test pins what must be
+  hidden and what must stay readable (SHAs, PR numbers, UUIDs, paths, prose about tokens and passwords).
+- Hire asks first when a brief looks like it holds a key or a password: the lane would read it and could copy it
+  into its notes and report.
+
 ## [3.166.0] - 2026-10-19
 
 ### Added
