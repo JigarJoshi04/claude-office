@@ -983,8 +983,8 @@ body.tv .peek { width: 340px; }
 .combo .cb-w small { display: block; font-size: 11.5px; color: rgba(238,240,246,.7); }
 .combo .cb-bar { grid-column: 1 / -1; display: block; height: 4px; margin-top: 4px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; }
 .combo .cb-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #ff7a45, #ffd24a); transition: width 1s linear; }
-.combo.hot { box-shadow: 0 10px 30px rgba(0,0,0,.4), 0 0 0 1px #ff7a45, 0 0 24px rgba(255,122,69,.55); }
-.combo.hot .cb-x { animation: combohot 1s ease-in-out infinite alternate; }
+.combo.blazing { box-shadow: 0 10px 30px rgba(0,0,0,.4), 0 0 0 1px #ff7a45, 0 0 24px rgba(255,122,69,.55); }
+.combo.blazing .cb-x { animation: combohot 1s ease-in-out infinite alternate; }
 @keyframes combohot { to { transform: scale(1.12); color: #ffd24a; } }
 :root[data-motion="reduced"] .combo, :root[data-motion="reduced"] .combo .cb-x { animation: none; }
 
@@ -1507,10 +1507,10 @@ body:has(.floor-frame.replaying) .peek { display: none; }                       
 .burnchip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border: 0; border-radius: 99px; cursor: pointer;
   font: 700 12.5px var(--mono); color: #ff9b3d; background: rgba(255,140,50,.12); }
 .burnchip small { font-size: 10.5px; opacity: .8; } .burnchip:hover { background: rgba(255,140,50,.2); }
-.burnchip.hot .ic { animation: burnflick 1.2s ease-in-out infinite; }
+.burnchip.burning .ic { animation: burnflick 1.2s ease-in-out infinite; }
 @keyframes burnflick { 0%, 100% { transform: none; } 40% { transform: scale(1.18) rotate(-6deg); } 70% { transform: scale(.94) rotate(4deg); } }
 :root[data-theme="light"] .burnchip { color: #a8520d; }
-:root[data-motion="reduced"] .burnchip.hot .ic { animation: none; }
+:root[data-motion="reduced"] .burnchip.burning .ic { animation: none; }
 @media (max-width: 560px) { .burnchip small { display: none; } }
 .pace-week { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 14px; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; background: var(--surface-2); color: var(--text-2); }
 .pace-week.good > .ic { color: var(--good); } .pace-week.warn > .ic { color: var(--warn); } .pace-week.bad { box-shadow: inset 0 0 0 1px rgba(255,97,112,.4); } .pace-week.bad > .ic { color: var(--bad); }

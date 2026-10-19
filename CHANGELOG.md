@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.188.0] - 2026-10-19
+
+### Fixed
+- Above 50M tokens an hour the burn chip jumped onto the Floor tab: the class that makes its flame flicker was
+  named like the floor's clickable spots, whose style placed it at the start of the tab row. Its class is its own
+  now (and so is the combo's).
+
 ## [3.187.0] - 2026-10-19
 
 ### Fixed (QA round 25: the page)

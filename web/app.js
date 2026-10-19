@@ -1037,7 +1037,7 @@ function renderBurn() {
   if (b.dataset.html !== html) { b.innerHTML = html; b.dataset.html = html; }
   b.title = `${n.toLocaleString()} tokens in the last hour${top && top.tokens_1h_all ? `, most by ${panels.persona(top).name}` : ""}. Click for the Tokens tab.`;
   b.setAttribute("aria-label", b.title);
-  b.classList.toggle("hot", n >= 50e6);
+  b.classList.toggle("burning", n >= 50e6);             // not "hot": that class is the floor's clickable spots (absolutely placed)
 }
 $("burn").addEventListener("click", () => setView("tokens"));
 // Do not disturb, shared by every screen (POST /api/dnd): no sounds, no notifications, only serious toasts.

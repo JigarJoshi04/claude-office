@@ -200,7 +200,7 @@ export function makeGame(ctx) {
     const html = `<span class="cb-x">×${combo.n}</span><span class="cb-w"><b>Combo</b><small>${Math.ceil(left / 60)} min left${combo.best > combo.n ? ` · best ×${combo.best}` : ""}</small></span>`;
     if (el.dataset.html !== html) { el.innerHTML = html + '<i class="cb-bar"><i></i></i>'; el.dataset.html = html; }
     el.querySelector(".cb-bar i").style.width = (f * 100).toFixed(1) + "%";
-    el.classList.toggle("hot", combo.n >= 3);
+    el.classList.toggle("blazing", combo.n >= 3);         // not "hot": that is the floor's clickable spots
   }
 
   // The office level chip in the header, and a celebration when the office levels up (never on a reload).
