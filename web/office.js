@@ -4,7 +4,7 @@ import * as S from "./engine/sprites.js";
 import { WALL, POD_W, POD_H, ROOM_H, LOBBY_W, ELEVATOR, SPINE_X, WALK_Y, computeLayout, planFor, seatSpot, pathTo, pathBetween, drawStatic, capFor, deskFor } from "./engine/scene.js";
 import { windowRect, drawDecorLive, roomTier } from "./engine/decor.js";
 import { officeLevel } from "./engine/unlocks.js";
-import { seasonFor, drawSeason, drawSnow } from "./engine/season.js";
+import { seasonFor, drawSeason, drawSnow, drawWindowFireworks } from "./engine/season.js";
 import { icon } from "./ui/icons.js";
 
 const SPEED = 46;                 // logical px per second
@@ -451,10 +451,11 @@ export function createOffice(stage, handlers) {
     for (const pod of L.pods) drawRoom(pod, t, lights, env);
     drawHire(t, lights);
     drawShipBoard(t, lights);
-    const season = seasonal ? seasonFor(now) : null;
+    const season = seasonal ? demoSeason || seasonFor(now, officeBorn()) : null;
     if (season) {
       drawSeason(ctx, L, season, reduced ? 0 : t, env.night, lights);
       if (season === "winter") for (const pod of L.pods) { const wr = windowRect(pod.room); drawSnow(ctx, wr.x, wr.y, wr.w, wr.h, reduced ? 0 : t); }
+      if (season === "newyear" && !reduced) for (const pod of L.pods) { const wr = windowRect(pod.room); drawWindowFireworks(ctx, wr.x, wr.y, wr.w, wr.h, t); }
     }
     if (happy) drawParty(reduced ? 0 : t);
     drawGifts(t);
@@ -920,6 +921,9 @@ export function createOffice(stage, handlers) {
 
   function windowExtras() { return has("balloon") || has("fireworks") ? { balloon: has("balloon"), fireworks: has("fireworks") } : null; }
   // A room's mood weather in its window: rain while the seat is out of plan, clouds while its plan runs low.
+  // The office's first day: its earliest character's start (careers), for its birthday party.
+  const officeBorn = () => { const t = Math.min(...((snap && snap.seats) || []).map(s => (s.career || {}).since).filter(Boolean)); if (!Number.isFinite(t)) return null; const d = new Date(t * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  let demoSeason = null;
   let announceN = 0;                         // the CEO's pinned announcements (a sticky note on the desk)
   let apiSky = "clear";                      // the connection's weather (tokens.weather): a storm over every window
   function weatherOf(s) {
@@ -1707,6 +1711,7 @@ export function createOffice(stage, handlers) {
     officeLevel: () => ol,
     spotlight(id) { spot = id || null; },
     setSeasonal(on) { seasonal = !!on; },
+    demoSeason(name) { demoSeason = name || null; },       // the demo's ?season=lunar and so on
     setGifts(list) {
       gifts = list || [];
       const ids = new Set(gifts.map(g => g.id));
@@ -1773,7 +1778,7 @@ export function createOffice(stage, handlers) {
       if (p) pops.push({ el: div("pop ship", text, p.x + POD_W / 2 - 16, p.y + 70), until: performance.now() + 2800 });
     },
     unwrap(id) { const p = L && giftSpots().find(x => x.g.id === id); if (p && !reduced && game === "full") burst(p.x + 6, p.y + 4, 40, "confetti"); },
-    season: () => (seasonal ? seasonFor(new Date()) : null),
+    season: () => (seasonal ? seasonFor(new Date(), officeBorn()) : null),
     setClock(ts) { clockAt = ts || null; },
     setWalkBoost(k) { walkBoost = Math.max(1, Math.min(8, k || 1)); },
     // The next update seats everyone where they belong at once (no walking in or out): for jumps in time (replay).

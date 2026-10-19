@@ -93,7 +93,7 @@ test("a walker's path ends at its seat and never leaves the building", () => {
   }
 });
 
-test("seasons: Halloween, Diwali and the winter holidays", async () => {
+test("seasons: Halloween, Diwali, the winter holidays, New Year, Lunar New Year, Valentine's and the office's birthday", async () => {
   const { seasonFor } = await import("../../web/engine/season.js");
   const at = (s) => seasonFor(new Date(s + "T12:00:00"));
   assert.equal(at("2026-10-18"), "halloween");
@@ -106,6 +106,16 @@ test("seasons: Halloween, Diwali and the winter holidays", async () => {
   assert.equal(at("2027-01-05"), null);
   assert.equal(at("2027-10-29"), "diwali");                // in 2027 Diwali falls inside the Halloween weeks and wins
   assert.equal(at("2026-07-01"), null);
+  assert.equal(at("2026-12-31"), "newyear");               // inside the winter weeks, New Year wins
+  assert.equal(at("2027-01-01"), "newyear");
+  assert.equal(at("2027-02-06"), "lunar");                 // Lunar New Year 2027
+  assert.equal(at("2027-02-04"), "lunar");
+  assert.equal(at("2027-02-10"), null);
+  assert.equal(at("2027-02-14"), "valentine");
+  const born = (s, b) => seasonFor(new Date(s + "T12:00:00"), b);
+  assert.equal(born("2027-10-16", "2026-10-16"), "birthday"); // a year on, the office has a party (over Halloween)
+  assert.equal(born("2026-10-16", "2026-10-16"), "halloween"); // not on its first day
+  assert.equal(born("2027-10-16", "junk"), "halloween");
 });
 
 test("a personality picked in Settings sets the voice and room style", async () => {

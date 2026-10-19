@@ -703,6 +703,11 @@ function apply(next) {
   snap = next; setNow(snap.now);
   office.setAnnounce((next.announcements || []).length);
   if (!newsReadTs) { newsReadTs = snap.now; store.set("newsReadTs", newsReadTs); }
+  if (!DEMO && office.season() === "birthday" && store.get("birthdayToast", "") !== localDay()) {   // once on the day
+    store.set("birthdayToast", localDay());
+    const born = Math.min(...snap.seats.map(z => (z.career || {}).since).filter(Boolean)), years = Math.round((snap.now - born) / (365.25 * 86400));
+    setTimeout(() => toast(`Happy birthday, office: ${years} year${years === 1 ? "" : "s"} since its first day. There is cake on your desk.`, "good", { ic: "gift", ms: 9000 }), 1500);
+  }
   if (DEMO && QS.get("levels") === "tiers") snap.seats.forEach((s, i) => { if (s.career) s.career.level = [50, 35, 25, 18, 12][i % 5]; });   // the demo's ?levels=tiers: every room tier
   if (DEMO && QS.has("faults")) snap.office.faults = [{ part: "The token ledger", what: "PermissionError: [Errno 13] Permission denied: 'tokens.json'", count: 37, since: snap.now - 1500, last: snap.now - 4 }];   // the demo's ?faults=1
   apiWeather(snap.api_weather);
@@ -1851,6 +1856,7 @@ applyGame(true);
 if (locked) { qsOver.privacy = prefs.privacy; prefs.privacy = true; document.body.classList.add("locked"); lockChip(); }   // ?lock=1, /tv or a locked tab reloaded
 office.setPrivacy(prefs.privacy);
 office.setSeasonal(prefs.seasonal);
+if (DEMO && QS.get("season")) office.demoSeason(QS.get("season"));   // the demo's ?season=newyear|lunar|valentine|birthday|…
 sound.set(prefs.sound);
 setView(QS.get("view") || prefs.view || "floor");
 view = viewFromHash();

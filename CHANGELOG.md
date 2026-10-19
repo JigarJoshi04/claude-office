@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.181.0] - 2026-10-19
+
+### Added
+- More seasons on the floor: New Year's Eve and Day (confetti along the rooms and fireworks in their windows),
+  Lunar New Year (red lanterns along the corridors and in the rooms, lit at night, 2026 to 2030), Valentine's
+  (hearts), and the office's own birthday: a year to the day after its first character started, a cake on your desk,
+  balloons by it and in every room in its colour, and a greeting. The demo shows any of them with
+  `?season=newyear|lunar|valentine|birthday|halloween|diwali|winter`.
+
 ## [3.180.0] - 2026-10-19
 
 ### Added
