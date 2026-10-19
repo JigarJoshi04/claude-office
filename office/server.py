@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import askabout, asks, brain, checkpoint, coach, rescue, config, divider, lanes, messaging, sessions, talk, settings, tokens
+from . import askabout, asks, brain, checkpoint, coach, export, rescue, config, divider, lanes, messaging, sessions, talk, settings, tokens
 from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.152.0"
+    server_version = "ClaudeOffice/3.153.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -242,6 +242,18 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/history":
                 hours = _number(q.get("hours", "6"), "hours must be an integer from 1 to 24")
                 return self._json(200, self.office.samples.query(self.office.get(), hours, list(self.office.events)))
+            if url.path == "/api/export":                    # your data as CSV or JSON, or a month's report (export.py); token only
+                given = self.headers.get("X-Office-Token") or ""
+                if not self.token or not hmac.compare_digest(given.encode(), self.token.encode()):
+                    return self._json(403, {"error": "Missing or wrong office token"})
+                private = q.get("safe") == "1"
+                if q.get("what") == "report":
+                    month = q.get("month") or time.strftime("%Y-%m")
+                    body = export.report(self.office, month, private).encode()
+                    return self._send(200, body, "text/markdown; charset=utf-8", {"Content-Disposition": f'attachment; filename="claude-office-{month}.md"'})
+                what, fmt = q.get("what", ""), q.get("format", "csv")
+                body, ctype = export.render(export.rows(self.office, what, private), fmt)
+                return self._send(200, body, ctype, {"Content-Disposition": f'attachment; filename="claude-office-{what}.{fmt}"'})
             if url.path == "/api/postmortem":                # why a seat last ran out of plan (history.postmortem)
                 snap = self.office.get()
                 if not any(x["id"] == q.get("seat") for x in snap.get("seats", [])):

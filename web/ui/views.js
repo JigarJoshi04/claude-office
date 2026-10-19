@@ -80,6 +80,7 @@ export function renderStats(el, app) {
     .map(([id, at]) => ({ s, a: cat[id], at }))).sort((a, b) => a.at - b.at);
   el.innerHTML = `<div class="stats-grid">
     <div class="view-head"><div class="grow"><h3>${st.day === todayStr ? "Today" : st.day === shift0(todayStr, -1) ? "Yesterday" : esc(new Date(st.day + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }))}</h3><p>Who did what, from the office's own records.</p></div>
+      <button class="btn sm" data-export title="CSV and JSON of your data, and the month's report">${icon("download", 14)}Export</button>
       <button class="btn sm" data-copy-day title="The day as a few lines of text, for a standup or a channel">${icon("copy", 14)}Copy as text</button>
       <button class="btn sm" data-day="${shift(-1)}">${icon("chevronRight", 14, "flip")}Day before</button>${st.day !== todayStr ? `<button class="btn sm" data-day="${shift(1)}">Next day</button><button class="btn sm" data-day="">Today</button>` : ""}</div>
     <div class="stats-top">
@@ -129,6 +130,7 @@ export function renderStats(el, app) {
   });
   if (refocus) { const f = el.querySelector(refocus); if (f) { f.focus({ preventScroll: true }); refocus = null; } }
   el.querySelectorAll("[data-trophies]").forEach(b => b.addEventListener("click", () => app.go({ kind: "trophies" })));
+  el.querySelectorAll("[data-export]").forEach(b => b.addEventListener("click", () => app.openExport()));
   el.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { app.setPref("statsDay", b.dataset.day || null); app.loadStats(b.dataset.day || null, true); }));
 }
 

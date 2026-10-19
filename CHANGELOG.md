@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.153.0] - 2026-10-19
+
+### Added
+- Your data (Export on Today, or Ctrl+K): the month's report in Markdown for a status update (reports, hours,
+  sessions, tokens and their list price, what shipped, limits hit, promises kept, who did what, the best days and
+  the lanes finished), any month back, to copy or save; and downloads of the days per character, careers, tokens per
+  day and character, lanes (CSV) and the news (JSON). They need the office token, cells a spreadsheet could run are
+  quoted, and share-safe leaves out titles, reports and news text.
+
 ## [3.152.0] - 2026-10-19
 
 ### Added

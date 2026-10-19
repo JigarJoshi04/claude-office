@@ -7,6 +7,7 @@ import { openStandupMode } from "./ui/standupmode.js";
 import { makeRecorder } from "./ui/recorder.js";
 import { syncSave } from "./ui/sync.js";
 import { renderLanesBoard } from "./ui/lanesboard.js";
+import { md } from "./ui/md.js";
 import { trackNow, claim as claimChapter } from "./ui/chapters.js";
 import { TOPICS as HELP_TOPICS } from "./ui/help.js";
 import { openPoster } from "./ui/poster.js";
@@ -376,6 +377,42 @@ function chapterTick() {
   toast(`${words}. ${top.label}.`, "good", { ic: "star", ms: 6000 });
   if (!DEMO && top.tier === 30) badge(award("chapter"));
 }
+// Your data (export.py): CSV and JSON downloads and the month's report. They need the office token, so the page
+// fetches them and saves the file itself.
+async function fetchExport(qs) {
+  const r = await fetch("/api/export?" + qs + (prefs.privacy ? "&safe=1" : ""), { headers: { "X-Office-Token": TOKEN } });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "HTTP " + r.status);
+  return r;
+}
+async function downloadExport(qs, name) {
+  try {
+    const blob = await (await fetchExport(qs)).blob(), url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch (e) { toast("Could not export it: " + e.message, "bad"); }
+}
+async function openExport(month = localDay().slice(0, 7)) {
+  const prev = (() => { const d = new Date(month + "-15T12:00:00"); d.setMonth(d.getMonth() - 1); return localDay(d).slice(0, 7); })();
+  const next = (() => { const d = new Date(month + "-15T12:00:00"); d.setMonth(d.getMonth() + 1); return localDay(d).slice(0, 7); })();
+  let text = "";
+  try { text = await (await fetchExport("what=report&month=" + month)).text(); } catch (e) { text = "Could not read the report: " + e.message; }
+  const files = [["days", "csv", "Days per character"], ["careers", "csv", "Careers"], ["tokens", "csv", "Tokens per day"], ["lanes", "csv", "Lanes"], ["events", "json", "News"]];
+  $("dialogBody").innerHTML = `<div class="dh"><b>Your data</b><button class="btn sm ghost" id="exClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="row between" style="margin:4px 0 8px"><b>The month's report</b><span class="row" style="gap:6px"><button class="btn sm ghost" data-ex-month="${prev}" aria-label="The month before">${icon("back", 14)}</button>
+      <span class="hint" style="margin:0">${esc(new Date(month + "-15T12:00:00").toLocaleDateString([], { month: "long", year: "numeric" }))}</span>
+      ${month < localDay().slice(0, 7) ? `<button class="btn sm ghost" data-ex-month="${next}" aria-label="The month after">${icon("chevronRight", 14)}</button>` : ""}</span></div>
+    <div class="doc md ex-md">${md(text)}</div>
+    <div class="row" style="gap:6px;margin:8px 0 14px"><button class="btn sm primary" id="exCopy">${icon("copy", 14)}Copy as Markdown</button><button class="btn sm" id="exSave">${icon("download", 14)}Save as .md</button></div>
+    <b>Download</b><div class="row wrap" style="gap:6px;margin-top:8px">${files.map(([w, f, l]) => `<button class="btn sm" data-ex="${w}|${f}">${icon("download", 14)}${l} (${f.toUpperCase()})</button>`).join("")}</div>
+    <p class="hint">From the office's own records: days for 120 days, the token ledger since the first transcript, the newest lanes, the news it kept.${prefs.privacy ? " Share-safe is on, so titles, reports and news text are left out." : ""}</p>`;
+  if (!$("dialog").open) $("dialog").showModal();
+  $("exClose").addEventListener("click", () => $("dialog").close());
+  $("exCopy").addEventListener("click", () => navigator.clipboard.writeText(text).then(() => toast("The report is on the clipboard.", "good"), () => toast("Could not copy.", "warn")));
+  $("exSave").addEventListener("click", () => downloadExport("what=report&month=" + month, `claude-office-${month}.md`));
+  $("dialogBody").querySelectorAll("[data-ex]").forEach(b => b.addEventListener("click", () => { const [w, f] = b.dataset.ex.split("|"); downloadExport(`what=${w}&format=${f}`, `claude-office-${w}.${f}`); }));
+  $("dialogBody").querySelectorAll("[data-ex-month]").forEach(b => b.addEventListener("click", () => openExport(b.dataset.exMonth)));
+}
+app.openExport = () => openExport();
 app.badge = (id) => badge(award(id));            // badges from the panels (a hire, a replay)
 app.bump = (key, n, id) => badge(bump(key, n, id)); // counter badges (messages sent)
 app.badgeProgress = () => progress({ visits: game.visits(), stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });
@@ -1481,6 +1518,7 @@ function paletteItems() {
     { icon: icon("users", 16), label: "Team", hint: "B", keywords: "board cards", run: () => setView("board") },
     { icon: icon("trophy", 16), label: "Today: stats and MVP", hint: "S", keywords: "league employee of the day", run: () => setView("stats") },
     { icon: icon("briefcase", 16), label: "Lanes board", hint: "L", keywords: "kanban backlog lanes running done blocked", run: () => setView("lanes") },
+    { icon: icon("download", 16), label: "Your data: export and the month's report", keywords: "export csv json download report month status update data", run: () => openExport() },
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("star", 16), label: "Scrapbook", keywords: "photos moments memories album pictures", run: () => go({ kind: "scrapbook" }) },

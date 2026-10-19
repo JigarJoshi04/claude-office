@@ -887,6 +887,26 @@ class TokenLedger:
             self._last_call = (self.scanned_at, out)
             return out
 
+    def per_day_seat(self, known: set, codex: str | None = None) -> dict:
+        """Every day's tokens and shipped work per seat (for exports and the monthly report):
+        {(day, seat or None): [fresh, cache, output, usd, commits, prs_opened, prs_merged]}."""
+        out: dict = {}
+        with self.lock:
+            src = (self._serve or self.data)["sessions"]
+            for r in src.values():
+                k = codex if r.get("s") == "@codex" else (r.get("s") if r.get("s") in known else None)
+                usd = _usd_days(r)
+                for d, v in (r.get("d") or {}).items():
+                    f, c, o = v if isinstance(v, list) else [0, v, 0]
+                    e = out.setdefault((d, k), [0, 0, 0, 0.0, 0, 0, 0])
+                    e[0] += f; e[1] += c; e[2] += o
+                for d, v in usd.items():
+                    out.setdefault((d, k), [0, 0, 0, 0.0, 0, 0, 0])[3] += v
+                for d, v in (r.get("g") or {}).items():
+                    e = out.setdefault((d, k), [0, 0, 0, 0.0, 0, 0, 0])
+                    e[4] += v[0]; e[5] += v[2]; e[6] += v[3]
+        return out
+
     def shipped_by_seat(self, known: set, codex: str | None = None) -> dict:
         """All-time (commits, PRs merged) per seat, for the shipping achievements."""
         out: dict = {}
