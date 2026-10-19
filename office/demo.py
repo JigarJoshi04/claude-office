@@ -532,7 +532,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.139.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.140.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
@@ -656,7 +656,7 @@ class DemoOffice(LiveOffice):
                 "astra": [18.0 - hrs * 3 if hrs < 4 else 6.0, 30 - hrs, 1 if hrs < 0.42 or 3.1 < hrs < 3.9 else 0, 1 if hrs < 0.42 else 0, 90000],
             }
             seats = {k: [None if v is None else (round(max(0.0, min(100.0, v)), 1) if i < 2 else v) for i, v in enumerate(vals)]
-                     for k, vals in seats.items()}
+                     + [1 if k == "claude3" and hrs < 0.66 else 0] for k, vals in seats.items()}   # out of plan this minute
             rows.append({"ts": t, "seats": seats, "sessions": sessions, "first_seen": {}})
             t += 60
         with self.samples.lock:

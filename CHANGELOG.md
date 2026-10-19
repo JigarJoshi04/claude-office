@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.140.0] - 2026-10-19
+
+### Added
+- Why it ran out, on a character's page for a day after it runs out of plan: when, how fast its window filled against
+  the pace that lasts a whole window, its busiest hour, a chart of the window filling, and which sessions burned the
+  fresh tokens in the five hours before, with what would have spread the load. From the office's own minute history.
+
 ## [3.139.0] - 2026-10-19
 
 ### Added

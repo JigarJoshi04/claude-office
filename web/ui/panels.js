@@ -501,6 +501,7 @@ export function makePanels(app) {
         ${section("Today", `<div class="diary">${icon("news", 16)}<span>${esc(diary(p, dstats))}</span></div>`)}
         ${section("Plan, last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
           <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
+        ${postmortemHtml(s, p)}
         ${(u.scoped || []).length ? section("Per-model weekly limits", `${u.scoped.map(m => { const pc = Math.max(0, Math.min(100, Math.round(m.pct))), lvl = pc >= 90 ? "bad" : pc >= 70 ? "warn" : "";
             return `<div class="mlim ${lvl}"><span class="mdl m-${esc(modelFam(m.label))}">${esc(m.label)}</span><span class="mlim-bar"><i style="width:${pc}%"></i></span><b>${pc}%</b><small>${m.resets_at ? "resets " + dayTime(m.resets_at) : ""}</small></div>`; }).join("")}
           <div class="hint" style="margin-top:6px">Some plans cap a model's week on its own, apart from the seat's week. A lane that asks for that model stays off this seat past the weekly guard.</div>`) : ""}
@@ -1292,6 +1293,20 @@ export function makePanels(app) {
       pol.memory_max ? `Memory capped at ${pol.memory_max}${/%$/.test(pol.memory_max) ? " of RAM" : ""}` : "",
       pol.tasks_max ? `At most ${pol.tasks_max.toLocaleString()} processes` : ""].filter(Boolean);
     return `<div class="pol" title="The lane policy, set in config.json (lane_policy)">${icon("lock", 13)}${chips.map(c => `<span>${esc(c)}</span>`).join("")}</div>`;
+  }
+  // Why a seat last ran out of plan (history.postmortem): how fast its window filled, its busiest hour, and which
+  // sessions burned it, with what would have spread the load. Shown for a day after.
+  function postmortemHtml(s, p) {
+    const pm = app.detailFor("p:" + s.id), lm = pm && pm.limit;
+    if (!lm || S().now - lm.at > 86400) return "";
+    const wk = lm.window === "weekly", priv = app.privacy(), lead = lm.sessions[0];
+    const pace = lm.per_hour && !wk ? `, filling ${lm.per_hour}% an hour${lm.per_hour > 20 ? `: ${(lm.per_hour / 20).toFixed(1)}× the pace that lasts a whole window` : ""}` : "";
+    const tip = !lead ? "" : lead.share >= 50 ? `${priv ? "One session" : lead.name} burned ${lead.share}% of it. Running work like it on another seat, or on a smaller model, spreads the load.`
+      : `The burn was spread over ${lm.sessions.length} sessions. The divider's usage guard, or fewer lanes at once on this seat, keeps a window from running dry.`;
+    return section("Why it ran out", `<div class="pm"><p>${esc(p.name)} ran out of its ${wk ? "week" : "5-hour window"} ${esc(relTime(lm.at))}${esc(pace)}.${lm.busiest ? ` The busiest hour, from ${esc(clock(lm.busiest.start))}, used ${lm.busiest.pct}% of it.` : ""}</p>
+      ${lm.pace.length > 2 ? `<div class="card">${usageSpark(lm.pace, { color: s.color, now: lm.at, label: p.name + (wk ? " week" : " 5-hour window") + " before it ran out" })}</div>` : ""}
+      ${lm.sessions.length ? `<div class="pm-who">${lm.sessions.map(x => `<div class="pm-row"><span class="grow ${priv ? "private" : ""}">${esc(priv ? (x.kind === "lane" ? "A lane" : "A session") : x.name)}</span><span class="tb-bar"><i style="width:${x.share}%"></i></span><b>${x.share}%</b><small>${fmtTok(x.tokens)}</small></div>`).join("")}</div>` : ""}
+      ${tip ? `<p class="hint">${icon("sparkles", 13)} ${esc(tip)}</p>` : ""}</div>`);
   }
   // Promises (promises.py): by when a lane's work will be done, kept or broken by its own report.
   const PROMISE_BY = [["2h", "In 2 hours"], ["eod", "Today, 6 pm"], ["tom", "Tomorrow, 10 am"], ["fri", "Friday, 6 pm"], ["mon", "Monday, 10 am"]];

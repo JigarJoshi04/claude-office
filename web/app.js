@@ -452,6 +452,7 @@ function go(v, fromHash, opt = {}) {
   if (v.kind === "seat" && !fromHash && snap && !replay.active()) greet(v.seat);
   if (v.kind === "session") { loadDetail("s:" + v.seat + "/" + v.id, true); loadChat(v.seat, v.id, true); }
   if (v.kind === "lane") loadDetail("l:" + v.id, true);
+  if (v.kind === "seat") loadDetail("p:" + v.seat, true);
   office.setSelected(v.kind === "seat" ? { seat: v.seat } : v.kind === "session" ? { seat: v.seat, session: v.id } : null);
   renderPanel(true);
   $("panel").scrollTop = 0;
@@ -483,6 +484,7 @@ async function loadDetail(key, force) {
   if (!force && c && Date.now() - c.at < 9000) return;
   details.set(key, { data: c ? c.data : null, at: Date.now() });
   const url = key.startsWith("s:") ? (() => { const [seat, id] = key.slice(2).split("/"); return `/api/session?seat=${encodeURIComponent(seat)}&id=${encodeURIComponent(id)}`; })()
+    : key.startsWith("p:") ? `/api/postmortem?seat=${encodeURIComponent(key.slice(2))}`      // why a seat last ran out of plan
     : `/api/lane?id=${encodeURIComponent(key.slice(2))}`;
   try {
     const r = await fetch(url);
@@ -554,6 +556,7 @@ function apply(next) {
   lastEventTs = Math.max(lastEventTs, ...(snap.events || []).map(e => e.ts));
   if (view.kind === "session") { loadDetail("s:" + view.seat + "/" + view.id); app.chatFor(view.seat, view.id); }
   if (view.kind === "lane") loadDetail("l:" + view.id);
+  if (view.kind === "seat") { const c = details.get("p:" + view.seat); if (!c || Date.now() - c.at > 60000) loadDetail("p:" + view.seat, true); }
 }
 
 // A teammate reacts to someone's news: cheers a report or a level-up, offers to cover a limit. Only someone at a desk,

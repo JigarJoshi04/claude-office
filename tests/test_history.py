@@ -139,6 +139,23 @@ class StatsTests(unittest.TestCase):
         a = self.h.stats(one(t + 400, 45, 99, 0, "idle"), "2026-10-16")["seats"]["a"]
         self.assertEqual((a["avail_min"], a["busy_min"]), (4, 2))     # with the reading now; out of plan and unread minutes do not count
 
+    def test_postmortem_of_the_last_time_a_seat_ran_out(self):
+        t = self.start
+        def one(ts, p5, out, toks):
+            return {"now": ts, "lanes": [], "seats": [{"id": "a", "kind": "claude", "status": "limited" if out else "working",
+                    "usage": {"five_hour": {"pct": p5}, "weekly": {"pct": 30}},
+                    "sessions": [{"id": "big", "name": "api lane", "kind": "lane", "state": "working", "tokens_total": toks[0], "started_at": t, "live": True},
+                                 {"id": "small", "name": "docs", "kind": "desk", "state": "working", "tokens_total": toks[1], "started_at": t, "live": True}]}]}
+        self.assertEqual(self.h.postmortem(one(t, 10, 0, (0, 0)), "a"), {"limit": None})
+        for i in range(10):                                          # ten minutes filling the window, then out of plan
+            p5 = min(100, 10 + i * 10)
+            self.h.record(one(t + 60 * (i + 1), p5, 1 if p5 >= 100 else 0, (i * 3000, i * 1000)))
+        pm = self.h.postmortem(one(t + 700, 100, 1, (27000, 9000)), "a")["limit"]
+        self.assertEqual(pm["at"], t + 600)                          # the first minute out of plan
+        self.assertEqual(pm["window"], "five_hour")
+        self.assertEqual([(x["name"], x["share"]) for x in pm["sessions"]], [("api lane", 75), ("docs", 25)])
+        self.assertGreater(pm["per_hour"], 400)                      # 80 points in 9 minutes
+
     def test_baseline_survives_restart_without_a_previous_day_sample(self):
         t = self.start
         with tempfile.TemporaryDirectory() as tmp:

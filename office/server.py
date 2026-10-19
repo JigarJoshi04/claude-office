@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.139.0"
+    server_version = "ClaudeOffice/3.140.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -242,6 +242,11 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/history":
                 hours = _number(q.get("hours", "6"), "hours must be an integer from 1 to 24")
                 return self._json(200, self.office.samples.query(self.office.get(), hours, list(self.office.events)))
+            if url.path == "/api/postmortem":                # why a seat last ran out of plan (history.postmortem)
+                snap = self.office.get()
+                if not any(x["id"] == q.get("seat") for x in snap.get("seats", [])):
+                    raise ValueError("Unknown seat")
+                return self._json(200, self.office.samples.postmortem(snap, q.get("seat")))
             if url.path == "/api/stats":
                 return self._json(200, self.office.samples.stats(self.office.get(), q.get("day"),
                                                                list(self.office.events)))

@@ -247,6 +247,54 @@ class HistoryStore:
                 seen.add(key)
         return sorted(events, key=lambda e: e["ts"])
 
+    def postmortem(self, snapshot, seat_id):
+        """Why a seat last ran out of plan, from the last day's minutes: when, how fast its window filled, and which
+        sessions on it burned the fresh tokens in the five hours before. {"limit": None} when it has not run out."""
+        with self.lock:
+            rows = self._points(snapshot)
+        mine = [(r["ts"], r["seats"][seat_id]) for r in rows if seat_id in r["seats"]]
+        at = None
+        for i in range(len(mine) - 1, -1, -1):                       # the start of its latest run out of plan
+            x = mine[i][1]
+            if len(x) > 5 and x[5] == 1:
+                at = mine[i][0]
+            elif at is not None:
+                break
+        if at is None:
+            return {"limit": None}
+        before = [(ts, x) for ts, x in mine if ts <= at]
+        last = before[-1][1] if before else None
+        weekly = bool(last and (last[1] or 0) >= 99 and (last[0] or 0) < 99)
+        start = max(at - 5 * 3600, rows[0]["ts"] if rows else at)
+        window = [r for r in rows if start <= r["ts"] <= at]
+        burned, names, first = {}, {}, {}
+        for r in window:
+            for sid, x in r["sessions"].items():
+                if x[0] != seat_id:
+                    continue
+                names[sid] = (x[1] or "a session", x[2])
+                if sid not in first:                                   # a session already running counts from here
+                    seen = (r.get("first_seen") or {}).get(sid) or self.first_seen.get(sid) or r["ts"]
+                    first[sid] = 0 if seen >= start else (x[6] or 0)
+                burned[sid] = max(0, (x[6] or 0) - first[sid])
+        total = sum(burned.values())
+        sessions = sorted(({"id": sid, "name": names[sid][0], "kind": names[sid][1], "tokens": v, "share": round(v / total * 100) if total else 0}
+                           for sid, v in burned.items() if v), key=lambda e: -e["tokens"])[:6]
+        pace = [(ts, x[1] if weekly else x[0]) for ts, x in before if ts >= start and (x[1] if weekly else x[0]) is not None]
+        step = max(1, len(pace) // 60)
+        per_hour = busiest = None
+        if len(pace) >= 2 and pace[-1][0] > pace[0][0]:
+            per_hour = round((pace[-1][1] - pace[0][1]) / ((pace[-1][0] - pace[0][0]) / 3600), 1)
+            hours = {}
+            for (t0, p0), (t1, p1) in zip(pace, pace[1:]):
+                if p1 >= p0:
+                    hours[int(t1 // 3600)] = hours.get(int(t1 // 3600), 0) + p1 - p0
+            if hours:
+                h = max(hours, key=hours.get)
+                busiest = {"start": h * 3600, "pct": round(hours[h])}
+        return public({"limit": {"at": at, "from": start, "window": "weekly" if weekly else "five_hour", "per_hour": per_hour, "busiest": busiest,
+                                 "sessions": sessions, "tokens": total, "pace": pace[::step] + ([pace[-1]] if pace and step > 1 else [])}})
+
     def query(self, snapshot, hours=6, events=()):
         if type(hours) is not int or not 1 <= hours <= 24:
             raise ValueError("hours must be an integer from 1 to 24")
