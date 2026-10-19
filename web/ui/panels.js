@@ -17,6 +17,7 @@ import { openVersus } from "./versus.js";
 import { exportSave, importSave } from "./sync.js";
 import { helpHtml } from "./help.js";
 import { coachHtml } from "./coach.js";
+import { encodeBrief, decodeBrief, looksSecret } from "./sharecode.js";
 import { seasonFor, SEASON_NAME } from "../engine/season.js";
 import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
@@ -36,6 +37,7 @@ const EVENT_ICON = { promise: "flag", levelup: "star", achievement: "trophy", ar
 export function makePanels(app) {
   let dv = null, dvDirty = false, dvPreview = null;
   let coachState = null;              // the brief coach's last read (coach.js), for this visit to the hiring desk
+  let teamTpl = null, teamTplAt = 0;  // the team's templates (GET /api/templates), read again each minute the desk is open
   let hireDraft = store.get("hireDraft", { title: "", brief: "", workdir: "", seat: "auto", model: "", permission_mode: "", allow_messages: true });
   let settingsData = null, settingsLoading = false, newsFilter = "all", showAllNeeds = false, aiSpend = null, egressData = null, egressAt = 0, helpQuery = "", helpTopic = null;
   let seatTab = store.get("seatTab", "now");   // the character page's open tab, the same for every character
@@ -1570,6 +1572,38 @@ export function makePanels(app) {
   // ------------------------------------------------------------------------------------------ hiring
   // Templates of your own (Hire → Save as a template), kept in this browser.
   const myTemplates = () => { const l = store.get("myTemplates", []); return Array.isArray(l) ? l.filter(t => t && t.name && t.brief) : []; };
+  // Import a brief code (sharecode.js): the whole brief is shown before it is kept, and it is only ever kept as a
+  // template, never hired by itself.
+  function importTpl() {
+    const d = document.getElementById("dialog");
+    document.getElementById("dialogBody").innerHTML = `<div class="dh"><b>Import a brief code</b><button class="btn sm ghost" data-imp-close aria-label="Close">${icon("x", 16)}</button></div>
+      <div class="db"><label class="f">The code<textarea id="impCode" style="min-height:70px;font-family:var(--mono);word-break:break-all" placeholder="co-brief:v1:…" spellcheck="false"></textarea></label>
+      <div id="impOut" aria-live="polite"><p class="hint">A brief is instructions an agent will follow. You will see all of it before it is kept, and it only becomes a template: nothing starts until you hire.</p></div>
+      <div class="row" style="gap:8px;margin-top:10px"><button class="btn primary" id="impKeep" disabled>${icon("star", 15)}Keep as a template</button><button class="btn ghost" data-imp-close>Cancel</button></div></div>`;
+    if (!d.open) d.showModal();
+    let got = null;
+    const read = () => {
+      const code = document.getElementById("impCode").value, out = document.getElementById("impOut");
+      got = null; document.getElementById("impKeep").disabled = true;
+      if (!code.trim()) return;
+      try { got = decodeBrief(code); } catch (e) { out.innerHTML = `<p class="hint bad row" style="gap:6px">${icon("alert", 13)}${esc(e.message)}</p>`; return; }
+      const clash = myTemplates().some(t => t.name === got.name);
+      out.innerHTML = `<dl class="facts"><dt>Name</dt><dd>${esc(got.name)}</dd><dt>Title</dt><dd>${esc(got.title)}</dd></dl>
+        <pre class="pre" style="max-height:34vh;white-space:pre-wrap">${esc(got.brief)}</pre>
+        ${looksSecret(got.title + "\n" + got.brief) ? `<p class="hint bad row" style="gap:6px">${icon("alert", 13)}It has something that looks like a key or a password.</p>` : ""}
+        ${clash ? `<p class="hint row" style="gap:6px">${icon("alert", 13)}It replaces your template of the same name.</p>` : ""}`;
+      document.getElementById("impKeep").disabled = false;
+    };
+    document.getElementById("impCode").addEventListener("input", read);
+    d.querySelectorAll("[data-imp-close]").forEach(b => b.addEventListener("click", () => d.close()));
+    document.getElementById("impKeep").addEventListener("click", () => {
+      if (!got) return;
+      const list = myTemplates().filter(t => t.name !== got.name);
+      list.unshift(got); store.set("myTemplates", list.slice(0, 40));
+      d.close(); toast(`Kept "${got.name}" as a template: pick it under Start from a template.`, "good"); app.rerender(true);
+    });
+    document.getElementById("impCode").focus();
+  }
   // What a good brief has: a goal, where to look, and how to know it is done. The chips light up as the brief says so.
   const BRIEF_PARTS = [["Goal", /\b(goal|fix|make|build|add|write|find|investigate|review|refactor|update|remove|migrate)\b/i],
     ["Where to look", /(\bwhere\b|\bin (the )?\w+\/|[\w-]+\.(py|js|ts|go|rs|md|json|sql|ya?ml)\b|\brepo\b|\bfolder\b|\bfile\b|\bendpoint\b|\bpage\b|#\d+)/i],
@@ -1581,6 +1615,13 @@ export function makePanels(app) {
   }
   function hire() {
     const snap = S(), ld = snap.office.lane_defaults || {}, np = snap.next_pick, d = hireDraft, pol = snap.office.lane_policy || {};
+    if (Date.now() - teamTplAt > 60000) {
+      teamTplAt = Date.now();
+      fetch("/api/templates").then(r => r.ok ? r.json() : null).then(j => {
+        if (!j || JSON.stringify(j) === JSON.stringify(teamTpl)) return;
+        teamTpl = j; app.rerender(true);
+      }).catch(() => {});
+    }
     const dirs = [...new Set([snap.office.default_workdir, ...snap.seats.flatMap(s => s.sessions.map(x => x.cwd))].filter(Boolean))];
     const isCodex = d.seat && seatById(d.seat) && seatById(d.seat).kind === "codex";
     return { html: `${crumbs("Hiring desk")}
@@ -1588,7 +1629,8 @@ export function makePanels(app) {
       <p class="lede">A lane is an agent that works in the background on one brief. It keeps notes, moves to another seat if its seat runs out of plan, and files a report when it is done.</p>
       ${(() => { const nx = nextUp(); return nx.length ? section("Next up", `<div class="nextup">${nx.map((n, i) => `<span class="nx"><button data-next="${esc(n.key)}" title="${esc(app.privacy() ? "A suggestion from what the office saw" : n.why)}">${icon(n.ic, 16)}<span class="${app.privacy() ? "private" : ""}">${esc(n.title)}</span></button><button class="tpl-x" data-next-x="${esc(n.key)}" aria-label="Not now" title="Not now">${icon("x", 13)}</button></span>`).join("")}</div>
         <p class="hint">From what the office saw: blocked reports, lanes that failed and PRs whose checks fail. A click fills the form; nothing starts until you hire.</p>`) : ""; })()}
-      ${section("Start from a template", `<div class="templates">${myTemplates().map((t, i) => `<span class="tpl-mine"><button data-mytpl="${i}" title="${esc(t.title)}">${icon("star", 16)}${esc(t.name)}</button><button class="tpl-x" data-mytpl-del="${i}" aria-label="Delete the template ${esc(t.name)}" title="Delete">${icon("x", 13)}</button></span>`).join("")}${TEMPLATES.map((t, i) => `<button data-tpl="${i}">${icon(t.ic, 16)}${esc(t.name)}</button>`).join("")}</div>`)}
+      ${section("Start from a template", `<div class="templates">${myTemplates().map((t, i) => `<span class="tpl-mine"><button data-mytpl="${i}" title="${esc(t.title)}">${icon("star", 16)}${esc(t.name)}</button><button class="tpl-x" data-mytpl-share="${i}" aria-label="Copy a share code for ${esc(t.name)}" title="Copy a share code">${icon("copy", 13)}</button><button class="tpl-x" data-mytpl-del="${i}" aria-label="Delete the template ${esc(t.name)}" title="Delete">${icon("x", 13)}</button></span>`).join("")}${((teamTpl || {}).templates || []).map((t, i) => `<button data-teamtpl="${i}" title="${esc(t.title)} · the team's, from ${esc(t.file)}">${icon("users", 16)}${esc(t.name)}</button>`).join("")}${TEMPLATES.map((t, i) => `<button data-tpl="${i}">${icon(t.ic, 16)}${esc(t.name)}</button>`).join("")}</div>
+        ${teamTpl && teamTpl.skipped && teamTpl.skipped.length ? `<p class="hint">${icon("alert", 13)} Left out of the team's templates: ${teamTpl.skipped.slice(0, 3).map(x => `${esc(x.file)} (${esc(x.why)})`).join(", ")}.</p>` : ""}`)}
       ${section("The brief", `
         <label class="f">Title<input type="text" id="hTitle" maxlength="80" placeholder="e.g. Fix the flaky export test" value="${esc(d.title)}"></label>
         <label class="f">What should it do?<textarea id="hBrief" placeholder="The goal, where to look, how to check the work, and what counts as done.">${esc(d.brief)}</textarea></label>
@@ -1635,7 +1677,7 @@ export function makePanels(app) {
         <div class="setrow" style="border-top:0;padding-top:0"><div class="grow">Let me message it while it works<small>Messages from the office reach this lane directly instead of waiting for approval.</small></div>
           <label class="switch"><input type="checkbox" id="hMsg" ${d.allow_messages !== false ? "checked" : ""} ${isCodex ? "disabled" : ""} aria-label="Allow messages"><span></span></label></div>
         <div class="hint">${isCodex ? "Codex seat: it runs through the gpt bridge, so model, permissions and messages do not apply." : "Runs as a background service at low priority, with no windows."}</div>
-        <div class="row" style="margin-top:16px;gap:8px"><button class="btn primary" id="hGo">${icon("briefcase", 16)}Hire and start</button><button class="btn" id="hSaveTpl" title="Keep this title and brief as a template (in this browser)">${icon("star", 15)}Save as a template</button><button class="btn ghost" id="hClear">Clear</button></div>`)}
+        <div class="row" style="margin-top:16px;gap:8px"><button class="btn primary" id="hGo">${icon("briefcase", 16)}Hire and start</button><button class="btn" id="hSaveTpl" title="Keep this title and brief as a template (in this browser)">${icon("star", 15)}Save as a template</button><button class="btn ghost" id="hImportTpl" title="Paste a brief code a teammate shared">${icon("download", 15)}Import a code</button><button class="btn ghost" id="hClear">Clear</button></div>`)}
       ${section("Office lanes", `<div id="laneList">${laneListHtml()}</div>`)}`,
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
@@ -1697,6 +1739,14 @@ export function makePanels(app) {
           const ti = document.getElementById("hTitle"); if (ti) { ti.focus(); ti.setSelectionRange(ti.value.length, ti.value.length); }
         };
         root.querySelectorAll("[data-mytpl]").forEach(b => b.addEventListener("click", () => useTpl(myTemplates()[+b.dataset.mytpl])));
+        root.querySelectorAll("[data-teamtpl]").forEach(b => b.addEventListener("click", () => { const t = ((teamTpl || {}).templates || [])[+b.dataset.teamtpl]; if (t) useTpl(t); }));
+        root.querySelectorAll("[data-mytpl-share]").forEach(b => b.addEventListener("click", () => {
+          const t = myTemplates()[+b.dataset.mytplShare];
+          if (!t) return;
+          if (looksSecret(t.title + "\n" + t.brief) && !confirm(`"${t.name}" has something that looks like a key or a password. Copy its code anyway?`)) return;
+          navigator.clipboard.writeText(encodeBrief(t)).then(() => toast(`A share code for "${t.name}" is on the clipboard: a teammate pastes it into Import a code.`, "good"), () => toast("Could not copy.", "warn"));
+        }));
+        q("hImportTpl").addEventListener("click", () => importTpl());
         root.querySelectorAll("[data-mytpl-del]").forEach(b => b.addEventListener("click", () => {
           const list = myTemplates(), t = list[+b.dataset.mytplDel];
           if (!t || !confirm(`Delete the template "${t.name}"?`)) return;

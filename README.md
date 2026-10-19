@@ -229,6 +229,10 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
   Scripts follow it too: `seat=$(claude-office pick-seat --model opus)`.
 - **Hiring desk**: six brief templates, plus your own (Save as a template). *Next up* suggests ready briefs from
   blocked reports, failed lanes and PRs whose checks fail.
+  - Share a template as a one-line code (the copy button on it); a teammate pastes it into *Import a code*, sees the
+    whole brief first, and keeps it as a template. Only the name, title and brief travel; nothing starts by itself.
+  - Team templates: JSON files in `~/.config/claude-office/templates/` (a folder you can keep in git), each one
+    `{"name", "title", "brief"}` or a list of them, show up as *Team* chips. Keys in them are masked.
   - Lanes run as low-priority background services.
   - A lane keeps notes, moves to another seat if its seat hits a limit, and files a report when done.
   - You can stop, resume, re-hire or chat with any lane.

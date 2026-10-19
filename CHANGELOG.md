@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.166.0] - 2026-10-19
+
+### Added
+- Brief share codes: the copy button on one of your templates puts it on the clipboard as one line
+  (`co-brief:v1:…`); *Import a code* on the hiring desk shows the whole brief before it is kept, and only ever keeps
+  it as a template. Only the name, title and brief travel, and a brief that looks like it holds a key or a password
+  is flagged on both sides.
+- Team templates: lane briefs as JSON files in `~/.config/claude-office/templates/` show up as Team chips on the
+  hiring desk (at most 50 files of 32 KB; keys masked; a file that cannot be read is named with the reason).
+
 ## [3.165.0] - 2026-10-19
 
 ### Added

@@ -177,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.165.0"
+    server_version = "ClaudeOffice/3.166.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -288,6 +288,11 @@ class Handler(BaseHTTPRequestHandler):
                 what, fmt = q.get("what", ""), q.get("format", "csv")
                 body, ctype = export.render(export.rows(self.office, what, private, names), fmt)
                 return self._send(200, body, ctype, {"Content-Disposition": f'attachment; filename="claude-office-{what}.{fmt}"'})
+            if url.path == "/api/templates":                 # the team's lane briefs from the config folder (teamtpl.py)
+                from . import teamtpl
+                if self.demo:
+                    return self._json(200, {"templates": teamtpl.DEMO, "skipped": [], "folder": "~/.config/claude-office/templates"})
+                return self._json(200, teamtpl.load())
             if url.path == "/api/calendar.ics":              # plan resets and run-outs, for a calendar (export.plan_calendar)
                 body = export.plan_calendar(self.office.get(), export.names_from(q.get("names"))).encode()
                 return self._send(200, body, "text/calendar; charset=utf-8", {"Content-Disposition": 'attachment; filename="claude-office-plans.ics"'})
