@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.133.0] - 2026-10-19
+
+### Added
+- Plan in use: of the minutes a seat had plan left and could take work, the share someone was at work on it. Today
+  shows it as a tile (with the seat that sat idle longest with plan left), the League as a column per seat, and the
+  week chart as a measure pooled over the week's minutes that moves by points. Counted while the office runs.
+
 ## [3.132.0] - 2026-10-19
 
 ### Added

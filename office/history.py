@@ -111,6 +111,8 @@ class DayLedger:
                         "limits": o.get("limits") or 0, "lanes_hired": o.get("lanes_hired") or 0,
                         "mvp": (st.get("mvp") or {}).get("seat"),
                         "limited_min": {sid: (s or {}).get("limited_min") or 0 for sid, s in seats.items() if (s or {}).get("limited_min")},
+                        "avail_min": sum((s or {}).get("avail_min") or 0 for s in seats.values()),
+                        "busy_min": sum((s or {}).get("busy_min") or 0 for s in seats.values()),
                         "all_out_min": o.get("all_out_min") or 0})
         return out
 
@@ -304,13 +306,13 @@ class HistoryStore:
         return (self.ledger or DayLedger(None)).week(today, n)
 
     def _stats(self, snapshot, day, start, end, rows, points, events):
-        seats, active, ids, lane_ids, limited, all_out = {}, {}, {}, {}, {}, set()
+        seats, active, ids, lane_ids, limited, all_out, avail, busy = {}, {}, {}, {}, {}, set(), {}, {}
 
         def ensure(sid):
             if sid not in seats:
                 seats[sid] = dict(active_min=0, sessions=0, lanes=0, reports=0, limits=0,
-                                  tokens_fresh=0, tool_calls=0, peak_p5=None, limited_min=0)
-                active[sid], ids[sid], lane_ids[sid], limited[sid] = set(), set(), set(), set()
+                                  tokens_fresh=0, tool_calls=0, peak_p5=None, limited_min=0, avail_min=0, busy_min=0)
+                active[sid], ids[sid], lane_ids[sid], limited[sid], avail[sid], busy[sid] = set(), set(), set(), set(), set(), set()
             return seats[sid]
 
         for s in snapshot.get("seats", []):
@@ -344,6 +346,12 @@ class HistoryStore:
                         dest["peak_p5"] = max(dest["peak_p5"] or 0, x[0])
                     if len(x) > 5 and x[5] == 1:
                         limited[sid].add(int(row["ts"] // 60))
+                    # Plan in use: a minute the seat could take work (in plan, both windows read and short of 100%, not
+                    # out for another reason), and whether anyone was at work on it.
+                    if len(x) > 5 and not x[5] and x[0] is not None and x[0] < 100 and (x[1] is None or x[1] < 100):
+                        avail[sid].add(int(row["ts"] // 60))
+                        if x[2]:
+                            busy[sid].add(int(row["ts"] // 60))
                 claude = [x for sid, x in row["seats"].items() if sid in snap_claude]
                 # no Claude seat could take work this minute, and limits are why (benched or logged-out seats were out anyway)
                 if claude and all(len(x) > 5 and x[5] for x in claude) and any(x[5] == 1 for x in claude):
@@ -353,7 +361,8 @@ class HistoryStore:
             if e.get("seat") and e.get("kind") in ("report", "limit"):
                 ensure(e["seat"])["reports" if e["kind"] == "report" else "limits"] += 1
         for sid, dest in seats.items():
-            dest.update(active_min=len(active[sid]), sessions=len(ids[sid]), lanes=len(lane_ids[sid]), limited_min=len(limited[sid]))
+            dest.update(active_min=len(active[sid]), sessions=len(ids[sid]), lanes=len(lane_ids[sid]), limited_min=len(limited[sid]),
+                        avail_min=len(avail[sid]), busy_min=len(busy[sid]))
         sessions = timelines(points, min(snapshot["now"], end))
         duration = lambda s: sum(b - a for a, b, _ in s["segments"]) / 60
         longest = max(sessions, key=duration, default=None)

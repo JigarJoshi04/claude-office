@@ -69,6 +69,10 @@ export function renderStats(el, app) {
   const now = new Date(), todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const human = (t) => { let x = String(t); for (const s of snap.seats) { const n = nameOf(s.id); if (n !== s.label) x = x.replace(new RegExp(`\\b${s.label}\\b`, "g"), n); } return x; };
   const hours = Math.round(rows.reduce((a, r) => a + r.active_min, 0) / 6) / 10;
+  // Plan in use: of the minutes a seat had plan left and could take work, how many someone was at work on it.
+  const inUse = (r) => r.avail_min ? Math.round(r.busy_min / r.avail_min * 100) : null;
+  const availAll = rows.reduce((a, r) => a + (r.avail_min || 0), 0), busyAll = rows.reduce((a, r) => a + (r.busy_min || 0), 0);
+  const idle = rows.filter(r => r.avail_min).map(r => ({ r, h: (r.avail_min - r.busy_min) / 60 })).sort((a, b) => b.h - a.h)[0];
   // Trophies won on this day, from each seat's career.
   const d0 = new Date((st.day || todayStr) + "T00:00:00").getTime() / 1000;
   const cat = Object.fromEntries((snap.achievements || []).map(a => [a.id, a]));
@@ -88,6 +92,7 @@ export function renderStats(el, app) {
         <div class="tile"><div class="v">${fmtTok(rows.reduce((a, r) => a + (r.tokens_fresh || 0), 0))}</div><div class="tk">fresh tokens</div></div>
         <div class="tile"><div class="v">${hours}</div><div class="tk">hours of agent work</div></div>
         <div class="tile"><div class="v">${o.lanes_hired ?? 0}</div><div class="tk">lanes hired here</div></div>
+        ${availAll >= 30 ? `<div class="tile" title="Of the ${Math.round(availAll / 60)} seat-hours with plan left, the share someone was at work${idle && idle.h >= 1 ? `. ${esc(nameOf(idle.r.id))} had plan left and nobody at work for ${Math.round(idle.h)} h` : ""}. Counted while the office was running."><div class="v">${Math.round(busyAll / availAll * 100)}%</div><div class="tk">plan in use</div></div>` : ""}
       </div>
     </div>
     ${shippedCard(app, st.day || todayStr, nameOf)}
@@ -103,12 +108,13 @@ export function renderStats(el, app) {
     ${won.length ? `<div class="view-card"><div class="section-h"><h4>Trophies won · ${won.length}</h4><button class="btn sm ghost" data-trophies>${icon("trophy", 14)}Trophy room</button></div>
       <div class="won">${won.map(w => `<span class="wonchip" style="--seat:${esc(w.s.color)}" title="${esc(w.a.desc)}">${icon(w.a.icon, 15)}<b>${esc(nameOf(w.s.id))}</b>${esc(w.a.name)}<small>${clock(w.at)}</small></span>`).join("")}</div></div>` : ""}
     <div class="view-card"><div class="section-h"><h4>League</h4></div>
-      <div class="table-scroll"><table class="league"><thead><tr><th>Seat</th><th class="num">Level</th><th style="width:28%">Time at work</th><th class="num">Active</th><th class="num">Sessions</th><th class="num">Reports</th><th class="num">Limits</th><th class="num">Tool calls</th><th class="num">Fresh tokens</th><th class="num">Peak 5 h</th></tr></thead>
+      <div class="table-scroll"><table class="league"><thead><tr><th>Seat</th><th class="num">Level</th><th style="width:28%">Time at work</th><th class="num">Active</th><th class="num">Sessions</th><th class="num">Reports</th><th class="num">Limits</th><th class="num">Tool calls</th><th class="num">Fresh tokens</th><th class="num">Peak 5 h</th><th class="num" title="Of the minutes it had plan left, the share someone was at work on it">Plan in use</th></tr></thead>
       <tbody>${rows.map(r => `<tr style="--seat:${r.seat.color}"><td><span class="who"><i data-portrait="mascot-${esc(r.id)}|${esc(r.seat.color)}|${st.mvp && st.mvp.seat === r.id ? "crown" : ""}"></i>${esc(nameOf(r.id))}</span></td>
         <td class="num">${r.seat.career ? `<span class="lvchip">Lv ${r.seat.career.level}</span>` : "–"}</td>
         <td><div class="bar" style="width:${(r.active_min / maxMin * 100).toFixed(1)}%"></div></td>
         <td class="num">${Math.floor(r.active_min / 60)} h ${String(r.active_min % 60).padStart(2, "0")}</td><td class="num">${r.sessions}</td><td class="num">${r.reports}</td><td class="num">${r.limits}</td>
-        <td class="num">${fmtTok(r.tool_calls)}</td><td class="num">${fmtTok(r.tokens_fresh)}</td><td class="num">${r.peak_p5 == null ? "–" : Math.round(r.peak_p5) + "%"}</td></tr>`).join("")}</tbody></table></div>
+        <td class="num">${fmtTok(r.tool_calls)}</td><td class="num">${fmtTok(r.tokens_fresh)}</td><td class="num">${r.peak_p5 == null ? "–" : Math.round(r.peak_p5) + "%"}</td>
+        <td class="num" title="${r.avail_min ? `${Math.round(r.busy_min / 60 * 10) / 10} h at work of ${Math.round(r.avail_min / 60 * 10) / 10} h with plan left` : "No minutes with plan left on record"}">${inUse(r) == null ? "–" : inUse(r) + "%"}</td></tr>`).join("")}</tbody></table></div>
       ${o.longest_session ? `<div class="hint" style="margin-top:12px">Longest session: <b>${esc(o.longest_session.name)}</b> on ${esc(nameOf(o.longest_session.seat))}, ${Math.floor(o.longest_session.minutes / 60)} h ${Math.round(o.longest_session.minutes % 60)} min.${o.first_activity ? ` First activity ${clock(o.first_activity)}, last ${clock(o.last_activity)}.` : ""}</div>` : ""}
     </div>
   </div>`;
@@ -147,7 +153,10 @@ export function dayText(st, app, nameOf) {
 // The last seven days as bars, one measure at a time (no second axis): reports, agent hours or tool calls. The day on
 // show is highlighted; hovering a bar shows that day's numbers; the header compares with the seven days before.
 const WEEK_METRICS = { reports: ["Reports", (d) => d.reports, (v) => String(v)], hours: ["Agent hours", (d) => d.active_min / 60, (v) => v >= 10 ? Math.round(v) + " h" : v.toFixed(1) + " h"],
-  calls: ["Tool calls", (d) => d.tool_calls, (v) => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 10000 ? Math.round(v / 1000) + "k" : v.toLocaleString()] };
+  calls: ["Tool calls", (d) => d.tool_calls, (v) => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 10000 ? Math.round(v / 1000) + "k" : v.toLocaleString()],
+  // a share, so the week is its minutes pooled (not seven percentages added) and it moves by points
+  plan: ["Plan in use", (d) => d.avail_min ? d.busy_min / d.avail_min * 100 : 0, (v) => Math.round(v) + "%",
+    (xs) => { const a = xs.reduce((n, d) => n + (d.avail_min || 0), 0); return a ? xs.reduce((n, d) => n + (d.busy_min || 0), 0) / a * 100 : 0; }] };
 // Par for the week: each seat's weekly plan window scored like a round of golf (office/weeks.py), the last six and
 // this one so far, with the season total. Using most of the plan without running out is the good round.
 const PAR_TONE = { "-2": "eagle", "-1": "birdie", "0": "par", "1": "bogey", "2": "double" };
@@ -231,10 +240,10 @@ function weekCard(app, shown) {
   const days = app.weekCache();
   if (!days) return `<div class="view-card"><div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`;
   if (!days.length) return "";
-  const key = app.weekMetric(), [label, get, fmt] = WEEK_METRICS[key] || WEEK_METRICS.reports;
+  const key = app.weekMetric(), [label, get, fmt, pool] = WEEK_METRICS[key] || WEEK_METRICS.reports;
   const last = days.slice(-7), before = days.slice(-14, -7);
-  const sum = (xs) => xs.reduce((a, d) => a + get(d), 0), now = sum(last), prev = sum(before);
-  const delta = before.length === 7 && prev > 0 ? Math.round((now - prev) / prev * 100) : null;
+  const sum = pool || ((xs) => xs.reduce((a, d) => a + get(d), 0)), now = sum(last), prev = sum(before);
+  const delta = before.length === 7 && prev > 0 ? Math.round(pool ? now - prev : (now - prev) / prev * 100) : null;
   const max = Math.max(1e-9, ...last.map(get)), H = 120, W = 7 * 64, T = 22;   // T: room above the tallest bar for its label
   // Days before the office existed have no record: hatched, not drawn as zero.
   const born = Math.min(...app.snap().seats.map(s => (s.career || {}).since).filter(Boolean)), bornDay = Number.isFinite(born) ? localDay(new Date(born * 1000)) : null;
@@ -254,7 +263,7 @@ function weekCard(app, shown) {
   const empty = last.every(d => !d.sessions && !d.reports && !d.tool_calls);
   return `<div class="view-card week"><div class="section-h"><h4>Last 7 days</h4><button class="btn sm ghost" data-week-play title="Your week in review: a short story of the last seven days">${icon("play", 13)}Play the week</button><span class="grow"></span>
       <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(WEEK_METRICS).map(([k, [l]]) => `<button data-week-metric="${k}" class="${k === key ? "on" : ""}">${l}</button>`).join("")}</div></div>
-    <div class="wk-head"><b>${fmt(now)}</b><span>${label.toLowerCase()} in the last 7 days</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}% vs the week before</em>`}</div>
+    <div class="wk-head"><b>${fmt(now)}</b><span>${label.toLowerCase()} in the last 7 days</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}${pool ? ` point${Math.abs(delta) === 1 ? "" : "s"}` : "%"} vs the week before</em>`}</div>
     <div class="wk-body"><svg class="wk" viewBox="0 0 ${W} ${H + T + 26}" role="img" aria-label="${label} per day for the last seven days"><defs><pattern id="wkHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="hatch-line" width="2" height="6"/></pattern></defs><line class="base" x1="0" x2="${W}" y1="${H + T}" y2="${H + T}"/>${bars}</svg>
       ${weekFacts(app, last)}</div>
     <div class="hint">${empty ? "Nothing on record yet: the bars fill in as your agents work. " : ""}${last.some(noRecord) ? "Hatched days came before the office opened. " : ""}Click a day to open it. Earlier days come from the office's day ledger.</div></div>`;
