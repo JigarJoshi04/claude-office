@@ -548,7 +548,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.182.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.183.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
@@ -592,6 +592,9 @@ class DemoOffice(LiveOffice):
             self.announcements = Announcements(None)
             self.announcements.items = [{"id": "a-freeze", "text": "Merge freeze until 5 pm: the release is cut at 4.", "at": now - 1200, "until": now + 3 * 3600}]
         snap["announcements"] = self.announcements.active(now)
+        snap["budgets"] = [                                # the demo's budgets: the week nearly spent, one seat comfortable
+            {"id": "office|week|usd", "label": "The office, this week", "scope": "office", "period": "week", "unit": "usd", "limit": 3000, "used": 2481.5, "pct": 82.7, "since": "", "state": "warn"},
+            {"id": "seat:claude2|day|tokens", "label": "Atlas, today", "scope": "seat:claude2", "period": "day", "unit": "tokens", "limit": 40000000, "used": 13200000, "pct": 33.0, "since": "", "state": "ok"}]
         snap["attention"] = Office._attention(snap)
         if not hasattr(self, "quiet"):
             from .snapshot import Quiet

@@ -26,6 +26,7 @@ def view(cfg, seats):
                    "risk_watch": {"mute": risk_mute(cfg), "rules": risk_rules()},
                    "ai": ai_settings(cfg),
                    "automation": automation(cfg),
+                   "budgets": cfg.get("budgets") or [],
                    "voice_available": shutil.which("jarvis-say") is not None})
 
 
@@ -111,6 +112,9 @@ def validate(body):
                 if not isinstance(entry["color"], str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", entry["color"]):
                     raise ValueError("color must be #RRGGBB")
                 dest["color"] = entry["color"]
+    if "budgets" in body:                             # ceilings on API value or fresh tokens (budgets.py)
+        from .budgets import validate as budget_validate
+        out["budgets"] = budget_validate(body["budgets"])
     if "ceo_look" in body:
         out.setdefault("ceo", {})["look"] = look(body["ceo_look"])
     if "ai" in body:                                  # the opt-in analyst (brain.py)

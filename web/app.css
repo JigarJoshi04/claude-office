@@ -1911,3 +1911,12 @@ body.locked [data-go="inbox"], body.locked .snz { display: none !important; }   
 /* Open in… (opener.py) */
 .open-in { gap: 6px; margin-top: 12px; }
 body.locked [data-open] { display: none !important; }
+
+/* Budgets (budgets.py): bars in the briefing, rows in Settings */
+.bud { margin: 8px 0 10px; font-size: 13.5px; }
+.bud b { font-weight: 650; } .bud small { color: var(--muted); font-weight: 500; }
+.bud-bar { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-top: 5px; }
+.bud-bar i { display: block; height: 100%; background: var(--good); border-radius: 99px; }
+.bud.warn .bud-bar i { background: var(--warn); } .bud.over .bud-bar i { background: var(--bad); }
+.bud-row { padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+.bud-row select { width: auto; }

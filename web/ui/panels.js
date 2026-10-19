@@ -405,6 +405,7 @@ export function makePanels(app) {
         <button class="b-next" data-go="divider" title="How new lanes are divided">${icon("sliders", 16)}<span>${next ? `Next lane goes to <b style="color:${esc(next.color)}">${esc(P(next).name)}</b>` : "No seat can take a new lane right now"}</span>${icon("chevronRight", 16)}</button>
       </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
+      ${budgetsHtml()}
       ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
           <span class="grow"><span class="t">${esc(needText(a))}</span>${a.cmd && !app.privacy() ? `<code class="d cmd">${esc(a.cmd)}</code>` : ""}${a.nudged_at ? `<span class="d">Nudged ${esc(relTime(a.nudged_at))}${a.lane_id && S().now - a.nudged_at > 600 ? ", still stuck" : ""}</span>` : ""}${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? a.risk ? `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify([a.key]))}" data-snooze-min="1440" title="Seen: hide it on every screen" aria-label="Mark as seen">${icon("check", 14)}</button>`
             : `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify(a.keys || [a.key]))}" title="Snooze for an hour, on every screen" aria-label="Snooze for an hour">${icon("sleep", 14)}</button>` : ""}</div>`).join("")}
@@ -676,6 +677,26 @@ export function makePanels(app) {
     const extra = c.saves_usd ? `about ${money(c.saves_usd)} more at API prices` : "more";
     if (left > 0) return `<span class="pill cache warm ${left < 60 ? "soon" : ""}" data-cache-until="${c.until}" title="The prompt cache holds this session's ${ctx}-token context until ${esc(clock(c.until))}. A reply before then reads it back cheaply; after, the context is written to the cache again (${extra}). Its mug steams on the floor while it is warm.">${icon("coffee", 13)}Cache warm <b>${mmss(left)}</b></span>`;
     return `<span class="pill cache cold" title="The prompt cache cooled at ${esc(clock(c.until))}. The next reply writes the ${ctx}-token context to the cache again (${extra} than while it was warm).">${icon("coffee", 13)}Cache cooled · ${ctx}</span>`;
+  }
+  // One budget's row in Settings: who, how often, in what, how much (tokens in millions), and a remove button.
+  function budgetRow(b, sd) {
+    const seats = Object.entries((sd && sd.seats) || {});
+    const opt = (v, l, on) => `<option value="${esc(v)}" ${on ? "selected" : ""}>${esc(l)}</option>`;
+    return `<div class="row wrap bud-row" data-bud-row style="gap:6px;margin-bottom:6px">
+      <select data-bud-scope aria-label="For">${opt("office", "The office", b.scope === "office")}${seats.map(([id, x]) => opt("seat:" + id, x.nickname || x.label || id, b.scope === "seat:" + id)).join("")}</select>
+      <select data-bud-period aria-label="Every">${[["day", "a day"], ["week", "a week"], ["month", "a month"]].map(([v, l]) => opt(v, l, b.period === v)).join("")}</select>
+      <select data-bud-unit aria-label="In">${opt("usd", "$ of API value", b.usd != null)}${opt("tokens", "million fresh tokens", b.tokens != null)}</select>
+      <input type="number" data-bud-amount min="0" step="any" aria-label="Amount" style="width:110px" value="${b.usd != null ? b.usd : b.tokens != null ? +(b.tokens / 1e6).toFixed(2) : ""}">
+      <button class="btn sm ghost icon" data-bud-x aria-label="Remove this budget" title="Remove">${icon("x", 14)}</button></div>`;
+  }
+  function bindBudgetRows(root) { root.querySelectorAll("[data-bud-x]").forEach(b => { b.onclick = () => b.closest("[data-bud-row]").remove(); }); }
+  // The budgets now (budgets.py), as bars in the briefing.
+  function budgetsHtml() {
+    const list = S().budgets || [];
+    if (!list.length) return "";
+    const fmt = (b, v) => b.unit === "usd" ? "$" + Math.round(v).toLocaleString() : fmtTok(v);
+    return `<section class="b-sec"><h3 class="b-h">${icon("coin", 16)}Budgets</h3>${list.map(b => `<div class="bud ${b.state}"><div class="row between"><span>${esc(b.label)}</span><b>${fmt(b, b.used)} <small>of ${fmt(b, b.limit)}</small></b></div>
+      <div class="bud-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, Math.round(b.pct))}" aria-label="${esc(b.label)}"><i style="width:${Math.min(100, b.pct)}%"></i></div></div>`).join("")}</section>`;
   }
   // A fresh-start handoff: a brief for a new lane from a terminal session's title, task, folder, notes and last words,
   // so the work carries on without resuming a long (or stuck, or out-of-plan) conversation. Nothing starts until Hire.
@@ -2039,6 +2060,9 @@ export function makePanels(app) {
       ${sd.automation ? section("Automation", `<div class="setrow" style="border-top:0;padding-top:0"><div class="grow">Save notes before a limit<small>When a seat is about to run out of its 5-hour window or its week at the pace it is going, the office asks each lane on it to write its STATE notes, so the seat that picks it up loses nothing. Lanes that take messages only; once per window; it shows in the news.</small></div>
           <label class="switch"><input type="checkbox" id="setPre" ${sd.automation.prelimit_save ? "checked" : ""} aria-label="Save notes before a limit"><span></span></label></div>
         <label class="f" style="max-width:260px">How early<select id="setPreLead">${[5, 10, 20, 30].map(m => `<option value="${m}" ${sd.automation.lead_min === m ? "selected" : ""}>${m} minutes before</option>`).join("")}</select></label>`) : ""}
+      ${sd.budgets ? section("Budgets", `<p class="hint" style="margin-top:0">A ceiling on API value (at list prices) or fresh tokens, for the office or one seat, per day, week (Monday to Sunday) or month. You are warned at 80% and when it is spent; nothing is stopped.</p>
+        <div id="budRows">${sd.budgets.map(b => budgetRow(b, sd)).join("")}</div>
+        <button class="btn sm ghost" id="budAdd" style="margin-top:6px">${icon("plus", 14)}Add a budget</button>`) : ""}
       ${sd.risk_watch ? section("Risky-action watch", `<p class="hint" style="margin-top:0">A session that does one of these shows up in Needs you within seconds, with the command. It warns after the fact; it cannot stop anything. Untick what your agents do on purpose.</p>
         <div class="row wrap" style="gap:6px;margin:10px 0">${Object.entries(sd.risk_watch.rules || {}).map(([k, l]) => `<label class="pill" style="cursor:pointer"><input type="checkbox" data-rwatch="${esc(k)}" ${(sd.risk_watch.mute || []).includes(k) ? "" : "checked"}> ${esc(l)}</label>`).join("")}</div>`) : ""}
       <div class="row" style="margin-top:8px"><button class="btn primary" id="setSave">Save office settings</button></div>`}
@@ -2059,6 +2083,9 @@ export function makePanels(app) {
         bindLooks(root);
         const ex = root.querySelector("[data-save-export]"); if (ex) ex.addEventListener("click", () => exportSave());
         const im = root.querySelector("[data-save-import]"); if (im) im.addEventListener("change", () => { if (im.files[0]) importSave(im.files[0]); });
+        const ba = root.querySelector("#budAdd");
+        if (ba) ba.addEventListener("click", () => { root.querySelector("#budRows").insertAdjacentHTML("beforeend", budgetRow({ scope: "office", period: "week", usd: 100 }, settingsData)); bindBudgetRows(root); });
+        bindBudgetRows(root);
         const sv = root.querySelector("#setSave");
         if (sv) sv.addEventListener("click", async () => {
           const body = { office_name: root.querySelector("#setOffice").value.trim(), ceo_name: root.querySelector("#setCeo").value.trim(), seats: {},
@@ -2067,6 +2094,10 @@ export function makePanels(app) {
           if (root.querySelector("#setAi")) body.ai = { enabled: root.querySelector("#setAi").checked, allow_transcripts: root.querySelector("#setAiTx").checked,
             model: root.querySelector("#setAiModel").value, daily_tokens: Math.min(10000000, Math.max(10000, Math.round(+root.querySelector("#setAiBudget").value || 300000))) };
           if (root.querySelector("#setPre")) body.automation = { prelimit_save: root.querySelector("#setPre").checked, lead_min: +root.querySelector("#setPreLead").value };
+          if (root.querySelector("#budRows")) body.budgets = [...root.querySelectorAll("[data-bud-row]")].map(r => {
+            const amount = +r.querySelector("[data-bud-amount]").value, unit = r.querySelector("[data-bud-unit]").value;
+            return amount > 0 ? { scope: r.querySelector("[data-bud-scope]").value, period: r.querySelector("[data-bud-period]").value, [unit]: unit === "tokens" ? Math.round(amount * 1e6) : amount } : null;
+          }).filter(Boolean);
           if (root.querySelector("[data-rwatch]")) body.risk_watch = { mute: [...root.querySelectorAll("[data-rwatch]")].filter(c => !c.checked).map(c => c.dataset.rwatch) };
           const put = (id, k, val) => { body.seats[id] = { ...(body.seats[id] || {}), [k]: val }; };
           root.querySelectorAll("[data-nick]").forEach(i => put(i.dataset.nick, "nickname", i.value.trim()));

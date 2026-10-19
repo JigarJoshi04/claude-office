@@ -19,7 +19,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import announce, asks, brain, rescue, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, sdnotify, seats as seatmod, sessions, standup, trust, weeks
+from . import announce, asks, brain, budgets, rescue, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, sdnotify, seats as seatmod, sessions, standup, trust, weeks
 from .career import CATALOGUE, Career
 from . import save as save_mod
 from . import utilities
@@ -621,7 +621,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.182.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.183.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -686,6 +686,7 @@ class Office(LiveOffice):
         snap["api_weather"] = self.tokens.weather(now)          # the API's errors in the last half hour (tokens.api_kind)
         snap["promises"] = self.promises.view(now)
         snap["announcements"] = self.announcements.active(now)
+        snap["budgets"] = getattr(self, "budgets_now", [])
         snap["promise_due"] = self.promises.attention(now)
         stuck_now = {x["id"] for s in seats_out for x in s.get("sessions", []) if rescue.needs_rescue(x)}
         self.nudged = {k: v for k, v in self.nudged.items() if k in stuck_now and now - v < 6 * 3600}   # a new stuck spell starts at a nudge again
@@ -753,6 +754,10 @@ class Office(LiveOffice):
     def _attention(snap: dict) -> list[dict]:
         items = []
         labels = {s["id"]: s["label"] for s in snap.get("seats", [])}
+        for b in snap.get("budgets") or []:               # a budget nearly or wholly spent (budgets.py)
+            if b.get("state") in ("warn", "over"):
+                items.append({"level": "bad" if b["state"] == "over" else "warn", "budget": b["id"],
+                              "text": f"Budget: {b['label']} is at {b['pct']:.0f}%" + (" (over)" if b["state"] == "over" else "")})
         for a in snap.get("asks") or []:                 # an agent's question waits for the CEO
             if a.get("status") == "open":
                 who = a.get("name") or a.get("where") or "An agent"
@@ -911,6 +916,30 @@ class Office(LiveOffice):
                 sdnotify.notify("STATUS=" + ("Running light: refreshing every 12 s while the machine is busy" if light else "Refreshing every 4 s"))
             self.stop.wait(12 if self.light else 4)
 
+    def _check_budgets(self, snap: dict) -> None:
+        """The budgets against the ledger (budgets.py), once a ledger read; news once per budget, period and mark."""
+        items = self.cfg.get("budgets") or []
+        if not items:
+            self.budgets_now = []
+            return
+        seats = {s["id"]: s for s in snap.get("seats", [])}
+        codex = next((k for k, s in seats.items() if s.get("kind") == "codex"), None)
+        names = {k: s.get("nickname") or s.get("label") or k for k, s in seats.items()}
+        try:
+            view = budgets.evaluate(items, self.tokens.per_day_seat(set(seats), codex), datetime.now().date(), names)
+        except (ValueError, TypeError, KeyError):
+            return
+        told = getattr(self, "_budget_told", set())
+        for b in view:
+            for mark, level in ((budgets.OVER, "bad"), (budgets.WARN, "warn")):
+                key = (b["id"], b["since"], mark)
+                if b["pct"] >= mark and key not in told:
+                    told.add(key)
+                    used = f"${b['used']:,.0f} of ${b['limit']:,.0f}" if b["unit"] == "usd" else f"{b['used']:,} of {b['limit']:,} fresh tokens"
+                    self.emit("budget", f"Budget: {b['label']} is at {b['pct']:.0f}% ({used})", None, level)
+                    break
+        self._budget_told, self.budgets_now = told, view
+
     def _tokens_run(self) -> None:
         """The token ledger: a first full read once the seats are known, then what was appended, every minute. PRs
         opened or merged since the last read become office news."""
@@ -942,6 +971,7 @@ class Office(LiveOffice):
                 self.faults.fault("Starting scheduled lanes", e)
             try:
                 self.tokens.scan(live)
+                self._check_budgets(snap)
                 seats = {s["id"]: s for s in snap.get("seats", [])}
                 labels = {k: s.get("label", k) for k, s in seats.items()}
                 commits: dict = {}

@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.183.0] - 2026-10-19
+
+### Added
+- Budgets: in Settings, a ceiling on API value (at list prices) or fresh tokens for the office or one seat, per day,
+  week (Monday to Sunday) or month. The briefing shows each as a bar, Needs you lists one at 80% and when it is
+  spent, and the news says so once per period. They watch; nothing is stopped. (config `"budgets"`.)
+
 ## [3.182.0] - 2026-10-19
 
 ### Added
