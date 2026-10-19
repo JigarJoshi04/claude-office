@@ -1193,6 +1193,7 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .ch-line { margin: 0 0 4px; font-size: 13.5px; }
 .api-days { display: flex; align-items: flex-end; gap: 2px; height: 46px; margin: 8px 0; }
 .api-days i { flex: 1; min-width: 3px; background: color-mix(in srgb, var(--bad) 55%, transparent); border-radius: 2px 2px 0 0; }
+.vs-img { width: 100%; border-radius: 12px; display: block; }
 .wxchip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; border-radius: 99px; border: 0; cursor: pointer; font: 700 12px var(--mono); margin-right: 6px; }
 .wxchip.cloudy { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
 .wxchip.stormy { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }

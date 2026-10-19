@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.161.0] - 2026-10-19
+
+### Added
+- The versus card: two characters head to head over the last seven days (tokens, API value, commits, PRs merged,
+  sessions and fresh tokens a commit), a tick for whoever leads each row and the score, on a picture to save or copy.
+  From a character's Career tab or Ctrl+K; names, levels and counts only, so it is safe to share.
+
 ## [3.160.0] - 2026-10-19
 
 ### Added

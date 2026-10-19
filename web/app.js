@@ -8,6 +8,7 @@ import { makeRecorder } from "./ui/recorder.js";
 import { syncSave } from "./ui/sync.js";
 import { renderLanesBoard } from "./ui/lanesboard.js";
 import { md } from "./ui/md.js";
+import { openVersus } from "./ui/versus.js";
 import { trackNow, claim as claimChapter } from "./ui/chapters.js";
 import { TOPICS as HELP_TOPICS } from "./ui/help.js";
 import { openPoster } from "./ui/poster.js";
@@ -1545,6 +1546,7 @@ function paletteItems() {
     { icon: icon("users", 16), label: "Team", hint: "B", keywords: "board cards", run: () => setView("board") },
     { icon: icon("trophy", 16), label: "Today: stats and MVP", hint: "S", keywords: "league employee of the day", run: () => setView("stats") },
     { icon: icon("briefcase", 16), label: "Lanes board", hint: "L", keywords: "kanban backlog lanes running done blocked", run: () => setView("lanes") },
+    ...(snap && snap.seats.length > 1 ? [{ icon: icon("flag", 16), label: "Versus card: two characters head to head", keywords: "versus duel compare battle rival week card", run: () => openVersus(app, panels, snap.seats[0].id) }] : []),
     { icon: icon("download", 16), label: "Your data: export and the month's report", keywords: "export csv json download report month status update data", run: () => openExport() },
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },

@@ -88,7 +88,7 @@ class SettingsTests(unittest.TestCase):
                 self.assertEqual(after["seats"][0]["label"], "Atlas")
                 self.assertEqual(after["seats"][0]["color"], "#112233")
                 self.assertEqual(after["seats"][1]["label"], "Star")
-                self.assertEqual(after["office"]["version"], "3.160.0")
+                self.assertEqual(after["office"]["version"], "3.161.0")
                 self.assertEqual(before["office"]["started_at"], after["office"]["started_at"])
 
     def test_settings_redacts_configurable_names_and_omits_credentials(self):

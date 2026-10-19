@@ -704,3 +704,13 @@ test("the moon in the windows follows the real phase", async () => {
   assert.ok(at("2026-10-18") > 0.2 && at("2026-10-18") < 0.3);          // first quarter, waxing
   assert.ok(moonPhase(0) >= 0 && moonPhase(0) < 1);
 });
+
+test("the versus card: a tick for whoever leads each row, fewer tokens a commit wins", async () => {
+  const { duel, ROWS } = await import("../../web/ui/versus.js");
+  const a = { all: 100, usd: 5, commits: 10, prs_merged: 1, sessions: 3, fresh: 50 }, b = { all: 200, usd: 5, commits: 2, prs_merged: 1, sessions: 4, fresh: 40 };
+  const d = duel(a, b);
+  assert.equal(d.marks.length, ROWS.length);
+  assert.deepEqual(d.marks, ["b", null, "a", null, "b", "a"]);     // 5 a commit beats 20
+  assert.deepEqual([d.a, d.b], [2, 2]);
+  assert.deepEqual(duel({}, undefined).marks.filter(Boolean), []);  // nothing to compare: no ticks
+});

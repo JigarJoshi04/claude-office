@@ -13,6 +13,7 @@ import { SETS, setsDone, teamDone, happyHourFor, happyNow, SWAP } from "./gifts.
 import { md } from "./md.js";
 import { pageHtml as scrapHtml, bindPage as bindScrap } from "./scrapbook.js";
 import { TIERS, rewardFor } from "./chapters.js";
+import { openVersus } from "./versus.js";
 import { exportSave, importSave } from "./sync.js";
 import { helpHtml } from "./help.js";
 import { coachHtml } from "./coach.js";
@@ -522,7 +523,7 @@ export function makePanels(app) {
     const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || 'codex -C "$PWD"';
     const tabs = [["now", "Now", "clock"], ["career", "Career", "trophy"], ["settings", "Settings", "sliders"]];
     const tab = tabs.some(([k]) => k === seatTab) && (s.career || seatTab !== "career") ? seatTab : "now";
-    const body = tab === "career" ? `${levelRow(s)}${careerHtml(s)}`
+    const body = tab === "career" ? `${levelRow(s)}${careerHtml(s)}${S().seats.length > 1 ? `<div class="row" style="margin-top:12px"><button class="btn sm" data-versus="${esc(s.id)}">${icon("flag", 14)}Versus another character</button></div>` : ""}`
       : tab === "settings" ? `${section("Duty", `<div class="duty"><div class="grow"><b>${sc.enabled ? "On duty" : "On holiday"}</b>
           <span>${sc.enabled ? `Gets ${sc.weight}% of new lanes, up to ${sc.max_lanes} at once. Running ${s.lanes} now.` : "No new lanes go here."}${sc.note ? " " + esc(sc.note) : ""}</span></div>
           <label class="switch" title="On duty"><input type="checkbox" id="seatDuty" ${sc.enabled ? "checked" : ""} aria-label="On duty"><span></span></label></div>`)}
@@ -558,6 +559,7 @@ export function makePanels(app) {
       <div class="stabs-body" role="tabpanel">${body}</div>`,
       bind(root) {
         bindSparks(root);
+        root.querySelectorAll("[data-versus]").forEach(b => b.addEventListener("click", () => openVersus(app, { persona: P }, b.dataset.versus)));
         const pick = (k) => { seatTab = k; store.set("seatTab", k); app.rerender(true); const t = root.querySelector(`[data-seat-tab="${k}"]`); if (t) t.focus(); };
         root.querySelectorAll("[data-seat-tab]").forEach((b, i, all) => {
           b.addEventListener("click", () => pick(b.dataset.seatTab));
