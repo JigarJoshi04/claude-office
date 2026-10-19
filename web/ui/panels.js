@@ -683,7 +683,8 @@ export function makePanels(app) {
           ${x && x.tasks ? `<span class="pill ${x.tasks.done === x.tasks.total ? "good" : ""}" title="Its task list: ${x.tasks.done} of ${x.tasks.total} done">${icon("check", 13)}${x.tasks.done}/${x.tasks.total} tasks</span>` : ""}
           ${x && x.phase ? `<span class="pill ph ph-${x.phase.replace(" ", "-")}" title="Where it is in its work, from its last few steps (reading, editing, running tests, shipping)">${icon(PHASE_ICON[x.phase] || "dot", 13)}${x.phase[0].toUpperCase() + x.phase.slice(1)}</span>` : ""}
           ${x && x.programme ? pill(x.programme.name, "info") : ""}</div></div></div>
-      <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button></div>
+      <div class="subtabs" role="tablist"><button data-stab="chat" class="${tab === "chat" ? "on" : ""}">${icon("chat", 16)}Chat</button><button data-stab="overview" class="${tab === "overview" ? "on" : ""}">${icon("layers", 16)}Overview</button>
+        ${s && s.kind === "claude" ? `<button class="btn sm ghost" data-conv-export style="margin-left:auto" title="The conversation as Markdown, credentials masked">${icon("download", 14)}Export</button>` : ""}</div>
       ${tab === "chat" && conv ? `<div class="chat-find">${icon("search", 15)}<input type="search" id="chatFind" placeholder="Find in this conversation" aria-label="Find in this conversation" value="${esc(chatFind.get(v.id) || "")}" autocomplete="off"><span class="cf-n" aria-live="polite"></span></div>` : ""}
       ${tab === "chat" && conv && s && s.kind === "claude" ? askHtml(v.id) : ""}
       ${tab === "chat" ? chatHtml(s, x, conv, talk) : overviewHtml(s, x)}`,
@@ -699,6 +700,7 @@ export function makePanels(app) {
           app.rerender(true);
         });
         root.querySelectorAll("[data-ask-x]").forEach(b => b.addEventListener("click", () => { askAns.delete(v.id); app.rerender(true); }));
+        root.querySelectorAll("[data-conv-export]").forEach(b => b.addEventListener("click", () => app.showMarkdown("The conversation", `what=conversation&seat=${encodeURIComponent(v.seat)}&id=${encodeURIComponent(v.id)}`, `conversation-${v.id.slice(0, 8)}.md`)));
         root.querySelectorAll("[data-stab]").forEach(b => b.addEventListener("click", () => {
           sessTab.set(v.id, b.dataset.stab); app.rerender(true);
           if (b.dataset.stab === "chat") { const c = root.querySelector(".chat"); if (c && getComputedStyle(c).overflowY !== "visible") c.scrollTop = c.scrollHeight; else root.scrollTop = root.scrollHeight; }   // Chat opens at the newest
@@ -1275,6 +1277,7 @@ export function makePanels(app) {
         ${!running ? `<button class="btn sm" id="lResume">${icon("play", 15)}${scheduled ? "Start now" : "Resume"}</button>` : ""}
         <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">As before</option><option value="auto">Let the divider pick</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
+        <button class="btn sm" id="lPack" title="The lane's brief, report, notes and runs as Markdown, to pass on">${icon("download", 15)}Handoff pack</button>
         ${running || scheduled ? `<button class="btn sm ghost" data-remind="${esc(JSON.stringify(["lane_end", l.id, `when lane '${l.title}' ends`]))}">${icon("bell", 14)}Remind me when it ends</button>` : ""}
       </div>
       ${(() => { const pm = ((S().promises || {}).open || []).find(p => p.lane === l.id), gone = !running && !scheduled && l.status !== "interrupted";
@@ -1301,6 +1304,8 @@ export function makePanels(app) {
           store.set("hireDraft", hireDraft); app.go({ kind: "hire" }); toast("Brief copied to the hiring desk.");
         });
         if (chat) chat.addEventListener("click", () => { const [seatId, id] = chat.dataset.chatSession.split("|"); sessTab.set(id, "chat"); app.go({ kind: "session", seat: seatId, id }); });
+        const pack = root.querySelector("#lPack");
+        if (pack) pack.addEventListener("click", () => app.showMarkdown("Handoff pack", "what=lane&id=" + encodeURIComponent(l.id), `${l.id}.md`));
         const pg = root.querySelector("#lPromiseGo");
         if (pg) pg.addEventListener("click", () => makePromise(l.id, root.querySelector("#lPromise").value));
         const pd = root.querySelector("[data-promise-drop-lane]");

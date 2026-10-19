@@ -157,3 +157,63 @@ def report(office, month: str, private: bool = False, names: dict | None = None)
             out.append(f"- {l['title'] or 'A lane'}: {l['status']}" + (f" ({l['report']})" if l["report"] and not private else ""))
     out += ["", f"*From the office's own records, {time.strftime('%d %b %Y')}.*"]
     return "\n".join(out) + "\n"
+
+
+def conversation_md(items: list[dict], name: str, seat: str) -> str:
+    """A session's conversation as Markdown (already masked by conversation.read): its brief, the messages, and the
+    steps between them as short lists."""
+    out = [f"# {name or 'A session'} · {seat}", ""]
+    steps: list[str] = []
+    def flush():
+        if steps:
+            out.extend([f"- `{s[:160]}`" for s in steps] + [""])
+            steps.clear()
+    for x in items:
+        role, text = x.get("role"), str(x.get("text") or "").strip()
+        when = time.strftime("%d %b %H:%M", time.localtime(x["ts"])) if x.get("ts") else ""
+        if role == "step":
+            steps.append(text.replace("`", "'"))
+            continue
+        flush()
+        if role == "brief":
+            out += [f"**Brief: {x.get('title') or ''}**", "", text, ""]
+        elif role == "user":
+            out += [f"**You** · {when}", "", text, ""]
+        elif role == "assistant":
+            out += [f"**Claude** · {when}", "", text, ""]
+        elif role == "peer":
+            out += [f"**{x.get('from_name') or 'Another session'}** · {when}", "", text, ""]
+        elif text:
+            out += [f"*{text}*", ""]
+    flush()
+    out.append(f"*Exported from Claude Office, {time.strftime('%d %b %Y %H:%M')}. Credentials are masked.*")
+    return "\n".join(out) + "\n"
+
+
+def lane_pack(lane: dict, brief: str, report: str, state: str, names: dict | None = None) -> str:
+    """A lane's handoff pack in Markdown: what it was asked, what it reported, its notes and runs, where its work is."""
+    nm = lambda sid: (names or {}).get(sid) or sid or "the divider's pick"
+    runs = lane.get("runs") or []
+    out = [f"# {lane.get('title') or lane['id']}", "",
+           f"- **Status:** {lane.get('status')}" + (f" ({(lane.get('trust') or {}).get('level')}: {(lane.get('trust') or {}).get('why')})" if lane.get("trust") else ""),
+           f"- **Seat and model:** {nm(lane.get('seat') or lane.get('seat_pref'))}, {lane.get('model')}",
+           f"- **Hired:** {_iso(lane.get('created_at'))}" + (f" · **finished:** {_iso(lane.get('finished_at'))}" if lane.get("finished_at") else ""),
+           f"- **Folder:** `{lane.get('workdir')}`"]
+    if lane.get("worktree"):
+        out.append(f"- **Branch:** `{lane['worktree']['branch']}` (its own worktree)")
+    if (lane.get("spent") or {}).get("tokens"):
+        out.append(f"- **Tokens:** {lane['spent']['tokens']:,}" + (f" (${lane['spent']['usd']:,.2f} at list prices)" if lane["spent"].get("usd") else ""))
+    sh = lane.get("shipped") or {}
+    if sh.get("commits") or sh.get("prs_opened"):
+        out.append(f"- **Shipped:** {sh.get('commits', 0)} commits, {sh.get('prs_opened', 0)} PRs opened, {sh.get('prs_merged', 0)} merged")
+    out += ["", "## The brief", "", brief.strip() or "(none)", "", "## The report", "", report.strip() or "No report yet.", ""]
+    if state.strip():
+        out += ["## Its notes", "", state.strip(), ""]
+    if runs:
+        out += ["## Runs", ""]
+        for r in runs:
+            out.append(f"- {nm(r.get('seat'))}: {_iso(r.get('started_at'))} to {_iso(r.get('ended_at')) or 'now'}"
+                       + (f", ended by its {r['ended_by']}" if r.get("ended_by") else "") + (f", exit {r['rc']}" if r.get("rc") not in (None, 0) else ""))
+        out.append("")
+    out.append(f"*From Claude Office, {time.strftime('%d %b %Y %H:%M')}. Credentials are masked.*")
+    return "\n".join(out) + "\n"

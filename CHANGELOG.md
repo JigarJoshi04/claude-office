@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.156.0] - 2026-10-19
+
+### Added
+- Export a conversation: a Claude session's Chat has Export, the conversation as Markdown (its brief, the messages
+  with their times, the steps between them as short lists, credentials masked), to copy or save.
+- A lane's handoff pack: its status and trust verdict, seat and model, folder and branch, tokens and what it
+  shipped, then the brief, the report, its notes and its runs, as Markdown to pass on.
+
 ## [3.155.0] - 2026-10-19
 
 ### Added

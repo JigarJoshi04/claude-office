@@ -426,6 +426,19 @@ async function openExport(month = localDay().slice(0, 7)) {
   $("dialogBody").querySelectorAll("[data-ex-month]").forEach(b => b.addEventListener("click", () => openExport(b.dataset.exMonth)));
 }
 app.openExport = () => openExport();
+app.downloadExport = (qs, name) => downloadExport(qs, name);
+// A Markdown export in a dialog, to copy or save: a lane's handoff pack, a conversation.
+app.showMarkdown = async (title, qs, name) => {
+  let text = "";
+  try { text = await (await fetchExport(qs)).text(); } catch (e) { toast("Could not export it: " + e.message, "bad"); return; }
+  $("dialogBody").innerHTML = `<div class="dh"><b>${esc(title)}</b><button class="btn sm ghost" id="mdClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="doc md ex-md">${md(text)}</div>
+    <div class="row" style="gap:6px;margin-top:10px"><button class="btn sm primary" id="mdCopy">${icon("copy", 14)}Copy as Markdown</button><button class="btn sm" id="mdSave">${icon("download", 14)}Save as .md</button></div>`;
+  if (!$("dialog").open) $("dialog").showModal();
+  $("mdClose").addEventListener("click", () => $("dialog").close());
+  $("mdCopy").addEventListener("click", () => navigator.clipboard.writeText(text).then(() => toast("On the clipboard.", "good"), () => toast("Could not copy.", "warn")));
+  $("mdSave").addEventListener("click", () => downloadExport(qs, name));
+};
 app.badge = (id) => badge(award(id));            // badges from the panels (a hire, a replay)
 app.bump = (key, n, id) => badge(bump(key, n, id)); // counter badges (messages sent)
 app.badgeProgress = () => progress({ visits: game.visits(), stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });

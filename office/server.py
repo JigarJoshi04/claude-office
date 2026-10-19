@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import askabout, asks, brain, checkpoint, coach, export, rescue, config, divider, lanes, messaging, sessions, talk, settings, tokens
+from . import askabout, asks, brain, checkpoint, coach, conversation, export, rescue, config, divider, lanes, messaging, sessions, talk, settings, tokens
 from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.155.0"
+    server_version = "ClaudeOffice/3.156.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -247,6 +247,24 @@ class Handler(BaseHTTPRequestHandler):
                 if not self.token or not hmac.compare_digest(given.encode(), self.token.encode()):
                     return self._json(403, {"error": "Missing or wrong office token"})
                 private, names = q.get("safe") == "1", export.names_from(q.get("names"))
+                if q.get("what") == "conversation":         # a session's conversation, masked (conversation.read)
+                    snap = self.office.get()
+                    seat = next((x for x in snap.get("seats", []) if x["id"] == q.get("seat")), None)
+                    if not seat or not (messaging.SESSION_ID.fullmatch(q.get("id") or "") or self.demo and self.office.find_session(seat["id"], q.get("id") or "")):
+                        raise ValueError("Unknown session")
+                    if self.demo:
+                        items = self.office.demo_conversation(q["id"])
+                    else:
+                        x = self.office.find_session(seat["id"], q["id"])
+                        items = conversation.read(talk._transcript(seat, q["id"], (x or {}).get("transcript")), limit=400)
+                    x = self.office.find_session(seat["id"], q["id"]) or {}
+                    body = export.conversation_md(items, "a session" if private else x.get("name") or q["id"][:8], names.get(seat["id"]) or seat.get("label")).encode()
+                    return self._send(200, body, "text/markdown; charset=utf-8", {"Content-Disposition": 'attachment; filename="conversation.md"'})
+                if q.get("what") == "lane":                 # a lane's handoff pack
+                    d = self._lane_detail(q.get("id") or "")
+                    lane = next((l for l in self.office.get().get("lanes", []) if l.get("id") == d["lane"]["id"]), d["lane"])
+                    body = export.lane_pack(lane, d["brief"], d["report"] or "", d["state"] or "", names).encode()
+                    return self._send(200, body, "text/markdown; charset=utf-8", {"Content-Disposition": 'attachment; filename="lane.md"'})
                 if q.get("what") == "report":
                     month = q.get("month") or time.strftime("%Y-%m")
                     body = export.report(self.office, month, private, names).encode()

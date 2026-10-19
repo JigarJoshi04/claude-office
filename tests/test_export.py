@@ -65,5 +65,27 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(export.names_from("not json"), {})
 
 
+class MarkdownTests(unittest.TestCase):
+    def test_a_conversation_with_its_steps(self):
+        items = [{"ts": 1_800_000_000, "role": "brief", "title": "Fix it", "text": "Fix the export."},
+                 {"ts": 1_800_000_060, "role": "assistant", "text": "On it."}, {"ts": 1, "role": "step", "text": "Run `pytest`"},
+                 {"ts": 1, "role": "step", "text": "Editing a.py"}, {"ts": 1_800_000_120, "role": "user", "text": "Thanks"},
+                 {"ts": 1, "role": "notice", "text": "Earlier messages are not shown."}]
+        md = export.conversation_md(items, "api", "Atlas")
+        self.assertTrue(md.startswith("# api · Atlas"))
+        self.assertIn("**Brief: Fix it**", md)
+        self.assertIn("- `Run 'pytest'`\n- `Editing a.py`", md)
+        self.assertIn("**You** ·", md)
+        self.assertIn("*Earlier messages are not shown.*", md)
+
+    def test_a_lanes_handoff_pack(self):
+        lane = {"id": "l1", "title": "Fix it", "status": "done", "seat": "claude2", "model": "opus", "created_at": 1_800_000_000, "workdir": "/w",
+                "worktree": {"branch": "lane/l1"}, "spent": {"tokens": 1234567, "usd": 3.5}, "shipped": {"commits": 2, "prs_opened": 1, "prs_merged": 0},
+                "trust": {"level": "verified", "why": "its tests passed"}, "runs": [{"seat": "claude2", "started_at": 1_800_000_000, "ended_at": 1_800_000_600, "ended_by": "limit"}]}
+        md = export.lane_pack(lane, "The brief.", "STATUS: DONE - fixed", "10:00 started", {"claude2": "Atlas"})
+        for want in ("# Fix it", "verified: its tests passed", "Atlas, opus", "`lane/l1`", "1,234,567", "2 commits", "## The report", "ended by its limit"):
+            self.assertIn(want, md)
+
+
 if __name__ == "__main__":
     unittest.main()
