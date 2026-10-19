@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.154.0] - 2026-10-19
+
+### Added
+- The week chart on Today measures Tokens and API value too, from the token ledger (every transcript, so the days
+  before the office's own day records count), with the change on the week before.
+
 ## [3.153.0] - 2026-10-19
 
 ### Added

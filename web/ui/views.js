@@ -156,6 +156,8 @@ export function dayText(st, app, nameOf) {
 // show is highlighted; hovering a bar shows that day's numbers; the header compares with the seven days before.
 const WEEK_METRICS = { reports: ["Reports", (d) => d.reports, (v) => String(v)], hours: ["Agent hours", (d) => d.active_min / 60, (v) => v >= 10 ? Math.round(v) + " h" : v.toFixed(1) + " h"],
   calls: ["Tool calls", (d) => d.tool_calls, (v) => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 10000 ? Math.round(v / 1000) + "k" : v.toLocaleString()],
+  tokens: ["Tokens", (d) => d.tokens_all || 0, (v) => fmtTok(v)],
+  usd: ["API value", (d) => d.usd || 0, (v) => "$" + (v >= 1000 ? (v / 1000).toFixed(v >= 1e4 ? 0 : 1) + "k" : Math.round(v))],
   // a share, so the week is its minutes pooled (not seven percentages added) and it moves by points
   plan: ["Plan in use", (d) => d.avail_min ? d.busy_min / d.avail_min * 100 : 0, (v) => Math.round(v) + "%",
     (xs) => { const a = xs.reduce((n, d) => n + (d.avail_min || 0), 0); return a ? xs.reduce((n, d) => n + (d.busy_min || 0), 0) / a * 100 : 0; }] };
@@ -239,9 +241,12 @@ function limitsCard(app) {
 }
 
 function weekCard(app, shown) {
-  const days = app.weekCache();
-  if (!days) return `<div class="view-card"><div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`;
-  if (!days.length) return "";
+  const raw = app.weekCache();
+  if (!raw) return `<div class="view-card"><div class="skeleton" style="width:40%"></div><div class="skeleton"></div></div>`;
+  if (!raw.length) return "";
+  // Tokens and their list price per day come from the token ledger (every transcript), joined to the day records.
+  const td = Object.fromEntries((((app.tokensCache("30") || {}).days) || []).map(d => [d.day, d]));
+  const days = raw.map(d => ({ ...d, tokens_all: (td[d.day] || {}).all || 0, usd: (td[d.day] || {}).usd || 0 }));
   const key = app.weekMetric(), [label, get, fmt, pool] = WEEK_METRICS[key] || WEEK_METRICS.reports;
   const last = days.slice(-7), before = days.slice(-14, -7);
   const sum = pool || ((xs) => xs.reduce((a, d) => a + get(d), 0)), now = sum(last), prev = sum(before);
@@ -267,7 +272,7 @@ function weekCard(app, shown) {
   const empty = last.every(d => !d.sessions && !d.reports && !d.tool_calls);
   return `<div class="view-card week"><div class="section-h"><h4>Last 7 days</h4><button class="btn sm ghost" data-week-play title="Your week in review: a short story of the last seven days">${icon("play", 13)}Play the week</button><span class="grow"></span>
       <div class="seg-ctl" role="group" aria-label="Measure">${Object.entries(WEEK_METRICS).map(([k, [l]]) => `<button data-week-metric="${k}" class="${k === key ? "on" : ""}">${l}</button>`).join("")}</div></div>
-    <div class="wk-head"><b>${fmt(now)}</b><span>${label.toLowerCase()} in the last 7 days</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}${pool ? ` point${Math.abs(delta) === 1 ? "" : "s"}` : "%"} vs the week before</em>`}</div>
+    <div class="wk-head"><b>${fmt(now)}</b><span>${/^[A-Z]{2}/.test(label) ? label : label.toLowerCase()} in the last 7 days</span>${delta == null ? "" : `<em class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}${pool ? ` point${Math.abs(delta) === 1 ? "" : "s"}` : "%"} vs the week before</em>`}</div>
     <div class="wk-body"><svg class="wk" viewBox="0 0 ${W} ${H + T + 26}" role="img" aria-label="${label} per day for the last seven days"><defs><pattern id="wkHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="hatch-line" width="2" height="6"/></pattern></defs><line class="base" x1="0" x2="${W}" y1="${H + T}" y2="${H + T}"/>${bars}</svg>
       ${weekFacts(app, last)}</div>
     <div class="hint">${empty ? "Nothing on record yet: the bars fill in as your agents work. " : ""}${last.some(noRecord) ? "Hatched days came before the office opened. " : ""}Click a day to open it. Earlier days come from the office's day ledger.</div></div>`;
