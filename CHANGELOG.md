@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.141.0] - 2026-10-19
+
+### Added
+- Collab visits on the floor. When two characters have people at work in the same repository, every few minutes one
+  of them walks over to the other's room (along the corridor, through the lobby only between rows), stands a moment
+  with a line ("Got a minute on billing?", "Mind if I look at your diff?") and walks back. Full game intensity only,
+  never in replay or reduced motion; share-safe leaves out the repository. The demo shows one with `?visit=1`.
+
 ## [3.140.1] - 2026-10-19
 
 ### Fixed

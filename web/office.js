@@ -269,6 +269,32 @@ export function createOffice(stage, handlers) {
       if (st.walkers.every(w => w.gone)) standup = null;
     }
   }
+  // Collab visits: two characters at work in the same repository, and now and then one of the visitor's people walks
+  // over to the other's room, stands by its desk a moment with a line ("Got a minute on billing?"), and walks back.
+  let visits = [];           // [{seat, look, x, y, path, back, phase: "in" | "stay" | "out", until, text, gone}]
+  function startVisit(fromId, toId, text) {
+    if (!L || reduced || standup || visits.length >= 2 || visits.some(v => v.seat === fromId || v.host === toId)) return false;
+    const a = L.pods.find(p => p.seat.id === fromId), b = L.pods.find(p => p.seat.id === toId);
+    if (!a || !b || a === b) return false;
+    const wa = podWay(a), wb = podWay(b), spot = [wb.doorX + 26, wb.aisleY];
+    const spine = a.corr === b.corr ? [] : [[SPINE_X, wa.corrY], [SPINE_X, wb.corrY]];   // the lobby's spine only between rows
+    const route = [[wa.doorX, wa.aisleY], [wa.doorX, wa.corrY], ...spine, [wb.doorX, wb.corrY], [wb.doorX, wb.aisleY], spot]
+      .filter((q, k, arr) => k === 0 || q[0] !== arr[k - 1][0] || q[1] !== arr[k - 1][1]);
+    visits.push({ seat: fromId, host: toId, text, look: S.lookFor("mascot-" + fromId, a.seat.color), x: route[0][0], y: route[0][1],
+                  path: route.slice(1), back: route.slice(0, -1).reverse(), facing: "down", speed: SPEED * 1.8, phase: "in", until: 0, hold: 0, gone: false });
+    return true;
+  }
+  function stepVisits(dt, now) {
+    for (const v of visits) {
+      if (v.phase === "in" && walkStep(v, dt)) {
+        v.phase = "stay"; v.facing = "up"; v.hold = Infinity; v.until = now + 9000;
+        pops.push({ el: div("bubble persona", v.text, v.x + 5, v.y - 2), until: now + 4200 });
+        if (!reduced) burst(v.x + 5, v.y - 4, 4, "spark");
+      } else if (v.phase === "stay" && now >= v.until) { v.phase = "out"; v.hold = 0; v.path = v.back; }
+      else if (v.phase === "out" && walkStep(v, dt)) v.gone = true;
+    }
+    if (visits.some(v => v.gone)) visits = visits.filter(v => !v.gone);
+  }
   // The night janitor mops the corridors one after another, slowly, leaving a wet shine behind.
   const JANITOR = S.lookFor("janitor-night", "#3d7a5c");
   function drawJanitor(t) {
@@ -289,7 +315,7 @@ export function createOffice(stage, handlers) {
   const UFO_EVERY = 75000, UFO_FLIGHT = 12000;      // the epic set's saucer, out of step with the drone
   const ufoUp = (t) => sets.has("epic") && !reduced && (t + 31000) % UFO_EVERY > UFO_EVERY - UFO_FLIGHT;
   function walkingNow() {
-    if (couriers.length || standup) return true;
+    if (couriers.length || standup || visits.length) return true;
     for (const a of agents.values()) if (a.mode === "walking" || a.shift) return true;
     return !!L && L.pods.some(p => p.targetY != null && p.y !== p.targetY);
   }
@@ -416,7 +442,7 @@ export function createOffice(stage, handlers) {
     }
     if (happy) drawParty(reduced ? 0 : t);
     drawGifts(t);
-    const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers, ...couriers, ...(standup ? standup.walkers.filter(w => !w.gone) : [])].sort((a, b) => a.y - b.y);
+    const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers, ...couriers, ...(standup ? standup.walkers.filter(w => !w.gone) : []), ...visits].sort((a, b) => a.y - b.y);
     for (const a of walkers) {
       S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, !(a.hold && performance.now() < a.hold));   // a held worker stands still
       if (a.phase === "in" || a.carry) { S.rect(ctx, a.x + 2, a.y + 8, 7, 5, a.color); S.rect(ctx, a.x + 5, a.y + 8, 1, 5, "#ffd24a"); S.rect(ctx, a.x + 2, a.y + 8, 7, 1, "#ffffff"); }   // the box in both hands
@@ -1473,6 +1499,7 @@ export function createOffice(stage, handlers) {
     for (const a of agents.values()) if (a.mode === "walking") { a.mode = "seated"; a.path = []; }   // walkers on the old plan sit down
     leavers = leavers.filter(l => { if (l.tagEl) l.tagEl.remove(); return false; });
     standup = null;                                      // a new plan: the standup's routes no longer fit
+    visits = [];
     cat.x = cat.tx = 140; cat.y = cat.ty = WALK_Y + 10; cat.path = []; cat.mode = "sit"; cat.until = 0; cat.inPod = cat.after = null;
     dog.x = dog.tx = 40; dog.y = dog.ty = WALK_Y + 10; dog.path = []; dog.mode = "sit"; dog.until = 0; dog.inPod = dog.after = null;
     assign();
@@ -1514,7 +1541,7 @@ export function createOffice(stage, handlers) {
     if (snap && L) {
       const moving = applyCam(false);
       if (moving) { clearTimeout(reresTimer); reresTimer = setTimeout(() => reres(false), 160); }
-      stepAgents(dt); stepParticles(dt); stepPet(cat, dt, t); if (has("dog")) stepPet(dog, dt, t); stepStandup(dt, performance.now());
+      stepAgents(dt); stepParticles(dt); stepPet(cat, dt, t); if (has("dog")) stepPet(dog, dt, t); stepStandup(dt, performance.now()); stepVisits(dt, performance.now());
       // Full speed while something moves (walkers, confetti, the camera, the cat); a calm floor needs ~15 frames a second.
       // Full speed for the camera, people walking and confetti; pets, the vacuum and the drone look fine at the calm rate.
       const lively = moving || particles.length || pops.length || leavers.length || planes.length || bellRinging() || walkingNow();
@@ -1736,6 +1763,7 @@ export function createOffice(stage, handlers) {
     // Whoever just shipped gets a visit from both pets (the cat, and the dog once it is unlocked).
     petsCheer(seatId) { const pod = L && L.pods.find(p => p.seat.id === seatId); if (!pod) return; petVisit(cat, pod, "sit", 12000, 28); if (has("dog")) petVisit(dog, pod, "sit", 12000, 40); },
     standup: (lines) => startStandup(lines),
+    visit: (from, to, text) => startVisit(from, to, text),
     setSquash(n) { squashToday = n == null ? null : Math.max(0, Math.min(999, Math.round(n))); },
     focusShipBoard() { if (L) { const b = BOARD(); focusRect(b.x - 6, b.y - 18, 60, 64); } },
     setDirector(on) { const b = document.querySelector('[data-cam="director"]'); if (b) { b.setAttribute("aria-pressed", String(!!on)); b.classList.toggle("on", !!on); } },

@@ -620,6 +620,30 @@ setInterval(() => {
   setTimeout(() => office.sayAtSeat(b.id, l2, 5000), 2200);
 }, 45000);
 
+// Collab visits (office.visit): two characters at work in the same repository; every few minutes one walks over to
+// the other's room for a word. Floor only, full game, never in replay or reduced motion.
+const VISIT_LINES = ["Got a minute on {r}?", "Same repo! Compare notes on {r}?", "Mind if I look at your {r} diff?", "Are you touching {r} too?", "Pair on {r} for a bit?"];
+let visitAt = 0, visitN = 0;
+setInterval(() => {
+  if (!snap || replay.active() || prefs.motion === "reduced" || prefs.game !== "full" || document.hidden || prefs.view !== "floor" || Date.now() - visitAt < 150000) return;
+  const by = new Map();                                  // repository -> the seats with someone at work in it
+  for (const s of snap.seats) {
+    if (["limited", "offline", "benched"].includes(s.status)) continue;
+    for (const x of live(s)) {
+      const r = x.git && x.git.repo;
+      if (!r || x.state !== "working") continue;
+      if (!by.has(r)) by.set(r, new Set());
+      by.get(r).add(s.id);
+    }
+  }
+  const pairs = [...by.entries()].filter(([, ids]) => ids.size >= 2);
+  if (!pairs.length) return;
+  const [repo, ids] = pairs[visitN++ % pairs.length], list = [...ids], from = list[visitN % list.length], to = list[(visitN + 1) % list.length];
+  const text = prefs.privacy ? "Got a minute? Same project." : VISIT_LINES[visitN % VISIT_LINES.length].replace("{r}", repo);
+  if (office.visit(from, to, text)) visitAt = Date.now();
+}, 20000);
+if (DEMO && QS.get("visit")) setTimeout(() => office.visit("claude2", "claude4", "Got a minute on apollo?"), 3000);   // the demo's ?visit=1, for pictures
+
 // In share-safe mode, news whose words could name a session, a project or a report says only who and what kind.
 const PRIVATE_NEWS = { report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news", external: "has news",
   reply: "replied", arrive: "started a session", leave: "finished a session", stuck: "has a quiet session", answer: "got an answer", risk: "did something risky",
