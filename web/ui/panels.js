@@ -677,6 +677,13 @@ export function makePanels(app) {
     if (left > 0) return `<span class="pill cache warm ${left < 60 ? "soon" : ""}" data-cache-until="${c.until}" title="The prompt cache holds this session's ${ctx}-token context until ${esc(clock(c.until))}. A reply before then reads it back cheaply; after, the context is written to the cache again (${extra}). Its mug steams on the floor while it is warm.">${icon("coffee", 13)}Cache warm <b>${mmss(left)}</b></span>`;
     return `<span class="pill cache cold" title="The prompt cache cooled at ${esc(clock(c.until))}. The next reply writes the ${ctx}-token context to the cache again (${extra} than while it was warm).">${icon("coffee", 13)}Cache cooled · ${ctx}</span>`;
   }
+  // Open in…: the folder, the editor, a terminal there (opener.py on the office's side; never in the demo).
+  function openIn(target, terminalLabel = null) {
+    const t = esc(JSON.stringify(target));
+    return `<button class="btn sm ghost" data-open="folder" data-open-target="${t}" title="Open the folder in the file manager">${icon("files", 14)}Folder</button>`
+      + `<button class="btn sm ghost" data-open="editor" data-open-target="${t}" title="Open the folder in your editor">${icon("file", 14)}Editor</button>`
+      + `<button class="btn sm ghost" data-open="terminal" data-open-target="${t}" title="${terminalLabel ? "A terminal in its folder, resuming its conversation" : "A terminal in the folder"}">${icon("terminal", 14)}${esc(terminalLabel || "Terminal")}</button>`;
+  }
   function session(v) {
     const s = seatById(v.seat), x = s && s.sessions.find(z => z.id === v.id);
     const conv = app.chatFor(v.seat, v.id);
@@ -920,6 +927,7 @@ export function makePanels(app) {
         <dt>Folder</dt><dd><code>${esc(x.cwd || "–")}</code></dd>
         ${x.pid ? `<dt>Process</dt><dd>${x.pid}${x.cpu_s != null ? ` · ${dur(x.cpu_s)} CPU` : ""}</dd>` : ""}
         ${x.state_file ? `<dt>Notes file</dt><dd><code>${esc(x.state_file)}</code></dd>` : ""}</dl>`)}
+      ${x.cwd && x.live !== false ? `<div class="row wrap open-in">${openIn({ seat: s.id, id: x.id })}</div>` : ""}
       ${x.resume_cmd ? section("Pick it up in a terminal", `<div class="copy"><code>${esc(x.resume_cmd)}</code><button class="btn sm" data-copy="${esc(x.resume_cmd)}">${icon("copy", 14)}Copy</button></div>`) : ""}
       <div class="row wrap" style="margin-top:18px"><button class="btn sm" data-focus-session="${esc(x.id)}">${icon("target", 15)}Show on the floor</button>${lane ? `<button class="btn sm" data-lane="${esc(lane.id)}">${icon("briefcase", 15)}Open office lane</button>` : ""}</div>`;
   }
@@ -1303,6 +1311,7 @@ export function makePanels(app) {
         <select id="lSeat" style="width:auto;height:30px;padding:0 8px"><option value="">As before</option><option value="auto">Let the divider pick</option>${S().seats.map(s => `<option value="${esc(s.id)}">${esc(P(s).name)}</option>`).join("")}</select>
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
         <button class="btn sm" id="lPack" title="The lane's brief, report, notes and runs as Markdown, to pass on">${icon("download", 15)}Handoff pack</button>
+        ${openIn({ lane: l.id }, !running && sid && (seatById(l.seat) || {}).kind === "claude" ? "Carry on in a terminal" : null)}
         ${running || scheduled ? `<button class="btn sm ghost" data-remind="${esc(JSON.stringify(["lane_end", l.id, `when lane '${l.title}' ends`]))}">${icon("bell", 14)}Remind me when it ends</button>` : ""}
       </div>
       ${(() => { const pm = ((S().promises || {}).open || []).find(p => p.lane === l.id), gone = !running && !scheduled && l.status !== "interrupted";

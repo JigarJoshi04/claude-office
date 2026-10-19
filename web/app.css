@@ -1907,3 +1907,7 @@ body.locked [data-go="inbox"], body.locked .snz { display: none !important; }   
 .announce .t { font-weight: 650; overflow-wrap: anywhere; }
 .announce .d { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .tv-ticker .tk-item.pinned { color: #ffe27a; }
+
+/* Open in… (opener.py) */
+.open-in { gap: 6px; margin-top: 12px; }
+body.locked [data-open] { display: none !important; }

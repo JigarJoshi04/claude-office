@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.180.0] - 2026-10-19
+
+### Added
+- Open in…: a running session's page (Overview) and every lane's page have Folder, Editor and Terminal buttons that
+  open its folder in the file manager, your editor (code, codium or zed) or a terminal there (ptyxis,
+  gnome-terminal, kitty, konsole or xterm). A finished lane's terminal carries its conversation on with
+  `claude --resume`. The folder is looked up by the office, never taken from the page; your own programs go in
+  config `"open": {"terminal": [...], "editor": [...], "folder": [...]}` with `{dir}` for the folder.
+
 ## [3.179.0] - 2026-10-19
 
 ### Added

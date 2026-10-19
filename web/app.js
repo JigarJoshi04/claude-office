@@ -1514,6 +1514,12 @@ function bindCommon(p) {
     else if (a.dataset.seat) go({ kind: "seat", seat: a.dataset.seat });
   }));
   p.querySelectorAll("[data-prog-msg]").forEach(b => b.addEventListener("click", () => broadcast("", "programme", b.dataset.progMsg)));
+  p.querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", async () => {   // Open in… (opener.py)
+    try {
+      const r = await app.post("/api/open", { what: b.dataset.open, ...JSON.parse(b.dataset.openTarget || "{}") });
+      toast(r.demo ? "Demo office: nothing opens here." : `Opening it in ${r.program}.`, r.demo ? "info" : "good", { ic: "external" });
+    } catch (e) { toast("Could not open it: " + e.message, "bad"); }
+  }));
   p.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); toast(b.dataset.copyNote ? "Copied. " + b.dataset.copyNote : "Copied.", "good", b.dataset.copyNote ? 5000 : 1800); } catch { toast("Copy failed: select the text instead.", "warn"); }
   }));

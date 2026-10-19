@@ -194,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
     port = config.DEFAULT_PORT
     demo = False
     same_user = True       # only this Unix user (peer.py); config "same_user_only": false turns it off
-    server_version = "ClaudeOffice/3.179.0"
+    server_version = "ClaudeOffice/3.180.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -658,6 +658,9 @@ class Handler(BaseHTTPRequestHandler):
                                                                   "ranking": ev["ranking"]}})
             if path == "/api/message":
                 return self._json(200, talk.send(self.office, body, seat_ids))
+            if path == "/api/open":                        # a folder, the editor or a terminal on your desktop (opener.py)
+                from . import opener
+                return self._json(200, opener.open_target(self.office, body))
             if path == "/api/broadcast":                   # one message to a group (talk.broadcast); "dry" lists who
                 return self._json(200, talk.broadcast(self.office, body, seat_ids))
             if path == "/api/nudge":                      # the stuck rescuer's first step: a standard nudge (rescue.py)
