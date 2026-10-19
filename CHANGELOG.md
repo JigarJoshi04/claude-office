@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.171.0] - 2026-10-19
+
+### Added
+- The installed app: shortcuts on its icon (Hire a lane, Tokens, TV mode, Replay the last six hours) that bring the
+  open window forward and go there instead of opening another; separate maskable icons with the art inside the safe
+  zone; `?replay=6` opens the floor replaying the last hours.
+
 ## [3.170.0] - 2026-10-19
 
 ### Added

@@ -1782,6 +1782,19 @@ sound.set(prefs.sound);
 setView(QS.get("view") || prefs.view || "floor");
 view = viewFromHash();
 connect();
-const startT = setInterval(() => { if (snap) { clearInterval(startT); go(view, true); if (QS.get("tv") === "1" || location.pathname === "/tv") floor.setTv(true); } }, 100);
+const replayHours = (v) => Math.min(24, Math.max(1, Math.round(+v) || 6));
+const startT = setInterval(() => { if (snap) { clearInterval(startT); go(view, true); if (QS.get("tv") === "1" || location.pathname === "/tv") floor.setTv(true); else if (QS.get("replay")) { setView("floor"); replay.open(replayHours(QS.get("replay"))); } } }, 100);
+// The installed app's shortcuts (manifest.webmanifest) focus the open window instead of a new one: the link they were
+// opened with comes here, and goes where it points.
+if ("launchQueue" in window) window.launchQueue.setConsumer((p) => {
+  let u = null;
+  try { u = p && p.targetURL ? new URL(p.targetURL) : null; } catch { return; }
+  if (!u || u.origin !== location.origin || !snap) return;                 // the first launch: the page's own start reads it
+  const q = u.searchParams;
+  if (["floor", "timeline", "board", "stats", "tokens", "lanes"].includes(q.get("view"))) setView(q.get("view"));
+  if (q.get("tv") === "1") floor.setTv(true);
+  else if (q.get("replay")) { setView("floor"); replay.open(replayHours(q.get("replay"))); }
+  if (u.hash && u.hash !== location.hash) location.hash = u.hash;           // hashchange opens it
+});
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !es) pollOnce(); });
 export { app };
