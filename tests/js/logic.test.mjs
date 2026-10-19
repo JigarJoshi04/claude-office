@@ -557,17 +557,38 @@ test("Daily Squash: the same bugs all day, kept 30 days, a streak", async () => 
 });
 
 test("the game save merges copies from two screens", async () => {
-  const { mergeKey, SYNC } = await import("../../web/ui/sync.js");
+  const { mergeKey, merge3, MERGE, SYNC } = await import("../../web/ui/sync.js");
   assert.ok(SYNC.has("album") && !SYNC.has("prefs") && !SYNC.has("hireDraft") && !SYNC.has("scrapbook"));
   const album = mergeKey("album", { duck: { n: 2, first: 5 }, mug: { n: 1, first: 9 } }, { duck: { n: 1, first: 3 }, gem: { n: 1, first: 7 } }, 1, 2);
   assert.deepEqual(album, { duck: { n: 2, first: 3 }, mug: { n: 1, first: 9 }, gem: { n: 1, first: 7 } });
   assert.deepEqual(mergeKey("badges", { a: 10 }, { a: 5, b: 7 }), { a: 5, b: 7 });
   assert.deepEqual(mergeKey("goalDays", ["2026-10-01", "2026-10-03"], ["2026-10-02", "2026-10-03"]), ["2026-10-01", "2026-10-02", "2026-10-03"]);
   assert.equal(mergeKey("squashBest", 40, 52), 52);
-  assert.deepEqual(mergeKey("gifts", [1], [2], 100, 200), [2]);                      // the newer write
-  assert.deepEqual(mergeKey("gifts", [1], [2], 300, 200), [1]);
-  assert.deepEqual(mergeKey("gifts", undefined, [2], 0, 200), [2]);
-  assert.deepEqual(mergeKey("gifts", [1], undefined, 100, 0), [1]);
+  assert.equal(mergeKey("giftDay", "d1", "d2", 100, 200), "d2");                   // no base: the newer write
+  assert.equal(mergeKey("giftDay", "d1", "d2", 300, 200), "d1");
+  assert.deepEqual(mergeKey("gifts", undefined, [{ id: 2 }], 0, 200), [{ id: 2 }]);
+  // A browser's own progress from before the save, on its first sync: nothing is thrown away.
+  assert.deepEqual(merge3("myTemplates", [{ name: "B" }], [{ name: "A" }], undefined, undefined, 5).map(t => t.name).sort(), ["A", "B"]);
+  assert.deepEqual(merge3("visits", ["2026-10-11", "2026-10-12", "2026-10-19"], ["2026-10-18", "2026-10-19"], undefined), ["2026-10-11", "2026-10-12", "2026-10-18", "2026-10-19"]);
+  assert.deepEqual(merge3("mailroom", [{ id: "m1" }], [{ id: "m2" }], undefined).map(g => g.id).sort(), ["m1", "m2"]);
+  // Two open screens: what each changed since the office's copy it last saw goes on top of the other's.
+  assert.deepEqual(merge3("myTemplates", [{ name: "Flaky" }], [{ name: "Nightly" }], []).map(t => t.name), ["Nightly", "Flaky"]);
+  assert.deepEqual(merge3("myTemplates", [], [{ name: "X" }, { name: "Y" }], [{ name: "X" }]).map(t => t.name), ["Y"]);    // removed here
+  assert.deepEqual(merge3("myTemplates", [{ name: "X", brief: "new" }], [{ name: "X", brief: "old" }, { name: "Y" }], [{ name: "X", brief: "old" }]),
+    [{ name: "X", brief: "new" }, { name: "Y" }]);                                   // only this screen changed X
+  assert.deepEqual(merge3("gifts", [], [{ id: "g1" }, { id: "g2" }], [{ id: "g1" }]), [{ id: "g2" }]);   // opened here stays opened
+  // Stickers: a swap stays swapped, and two screens' finds add up.
+  assert.equal(merge3("album", { duck: { n: 1 } }, { duck: { n: 6 } }, { duck: { n: 6 } }).duck.n, 1);
+  assert.equal(merge3("album", { duck: { n: 6 } }, { duck: { n: 1 } }, { duck: { n: 6 } }).duck.n, 1);
+  assert.equal(merge3("album", { duck: { n: 8 } }, { duck: { n: 8 } }, { duck: { n: 6 } }).duck.n, 10);
+  assert.equal(merge3("album", { duck: { n: 1 } }, { duck: { n: 1 } }, {}).duck.n, 2);
+  assert.equal(merge3("counts", { opened: 5 }, { opened: 7 }, { opened: 4 }).opened, 8);
+  assert.equal(merge3("freezes", 0, 2, 1), 1);
+  // Unchanged on one side: the other side's copy, whatever it is.
+  assert.equal(merge3("giftDay", "d1", "d2", "d1"), "d2");
+  assert.equal(merge3("giftDay", "d3", "d2", "d2"), "d3");
+  // Importing an older save keeps the streak.
+  assert.deepEqual(MERGE.visits(["2026-10-10", "2026-10-19"], ["2026-10-10", "2026-10-14"], undefined, false), ["2026-10-10", "2026-10-14", "2026-10-19"]);
 });
 
 test("help topics are searchable and each one can be found", async () => {

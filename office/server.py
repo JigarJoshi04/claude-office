@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.133.0"
+    server_version = "ClaudeOffice/3.134.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -423,7 +423,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/save":                          # one key of the CEO's game save; the demo keeps nothing
                 if self.demo:
                     return self._json(200, {"ok": True, "demo": True})
-                return self._json(200, self.office.save.put(body.get("key"), body.get("v"), body.get("at")))
+                return self._json(200, self.office.save.put(body.get("key"), body.get("v"), body.get("at"), body.get("base")))
             if path == "/api/reminders":                     # notes to yourself (reminders.py); the demo keeps them in memory
                 rem = self.office.reminders
                 if body.get("action") == "delete":

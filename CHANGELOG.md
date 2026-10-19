@@ -3,6 +3,18 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.134.0] - 2026-10-19
+
+### Fixed
+- Credentials after a prefix were shown in clear again since 3.125 (`PGPASSWORD=…`, `authToken=…`, `clientSecret: …`,
+  `"SessionToken": …`) in risk alerts, notifications and activity lines. They are masked again.
+- The game save no longer loses anything between screens. Each screen keeps the office's copy it last saw and merges
+  three ways, so what it changed goes on top of what the others did: templates, gifts and the mailroom keep everyone's
+  additions and removals, a sticker swapped away stays swapped and two screens' finds add up, and the visit streak
+  joins. A browser's own progress from before the save survives its first sync. A write carries the version it was
+  based on; the office refuses a stale one with its copy, and the screen merges and sends again. Screens merge again
+  when they come back into view, unchanged values are not sent, and importing an older save keeps the streak.
+
 ## [3.133.0] - 2026-10-19
 
 ### Added

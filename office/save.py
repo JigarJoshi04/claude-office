@@ -29,25 +29,35 @@ class Save:
         with self.lock:
             return {"keys": {k: dict(v) for k, v in self.keys.items()}, "at": max((v.get("at") or 0 for v in self.keys.values()), default=0)}
 
-    def put(self, key, value, at) -> dict:
-        """One key's new value and when the page changed it (ms). An older write than the one kept is ignored."""
+    def put(self, key, value, at, base=None) -> dict:
+        """One key's new value, when the page changed it (ms) and the version of the office's copy it was merged
+        against. A write based on an older version is refused with the current copy, for the page to merge and send
+        again (two screens never undo each other). A page that sends no version gets the old rule: an older write
+        than the one kept is ignored."""
         if not isinstance(key, str) or not KEY.fullmatch(key):
             raise ValueError("A save key is a short name")
         if isinstance(at, bool) or not isinstance(at, (int, float)) or not 0 < at < (time.time() + 86400) * 1000:
             raise ValueError("at is when it changed, in milliseconds")
+        if base is not None and (isinstance(base, bool) or not isinstance(base, int) or base < 0):
+            raise ValueError("base is the version the write was merged against")
         raw = json.dumps(value, separators=(",", ":"))
         if len(raw) > MAX_VALUE:
             raise ValueError("That value is too big to keep")
         with self.lock:
             old = self.keys.get(key)
-            if old and (old.get("at") or 0) > at:
-                return {"ok": True, "kept": "newer"}
+            ver = (old or {}).get("ver") or 0
+            if base is not None and base != ver:
+                return {"ok": False, "conflict": True, "v": old["v"] if old else None, "ver": ver, "at": (old or {}).get("at") or 0}
+            if base is None and old and (old.get("at") or 0) > at:
+                return {"ok": True, "kept": "newer", "ver": ver}
+            if old and json.dumps(old.get("v"), separators=(",", ":")) == raw:
+                return {"ok": True, "ver": ver, "same": True}          # nothing changed: the file is not written again
             total = sum(len(json.dumps(v.get("v"), separators=(",", ":"))) for k, v in self.keys.items() if k != key) + len(raw)
             if total > MAX_TOTAL:
                 raise ValueError("The save is full")
-            self.keys[key] = {"v": value, "at": at}
+            self.keys[key] = {"v": value, "at": at, "ver": ver + 1}
             self._write()
-        return {"ok": True}
+        return {"ok": True, "ver": ver + 1}
 
     def _write(self) -> None:
         if not self.path:

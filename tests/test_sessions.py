@@ -467,8 +467,16 @@ class RedactTests(unittest.TestCase):
         self.assertEqual(redact("mysql -u root -pSecret123 db"), "mysql -u root -p…[hidden] db")
         self.assertEqual(redact("curl -u alice:hunter22 https://api"), "curl -u alice:…[hidden] https://api")
         self.assertEqual(redact("psql postgres://u:pa55word@host/db"), "psql postgres://u:…[hidden]@host/db")
-        for keep in ("git log --oneline", "find . -print", "ssh -p 2222 host", "https://github.com/x/y"):
+        for keep in ("git log --oneline", "find . -print", "ssh -p 2222 host", "https://github.com/x/y", '"input_tokens": 123456', "max_tokens=4096"):
             self.assertEqual(redact(keep), keep)
+
+    def test_a_secret_word_after_a_prefix_is_still_masked(self):
+        from office.sessions import redact
+        for text, secret in (("PGPASSWORD=hunter2abc psql -c 'select 1'", "hunter2abc"), ("authToken=abcd1234efgh", "abcd1234efgh"),
+                             ("GITHUBTOKEN=zzzz9999yyyy", "zzzz9999yyyy"), ("clientSecret: s3cr3tvalue", "s3cr3tvalue"),
+                             ('{"SessionToken": "AQoDYXdzEJr1234"}', "AQoDYXdzEJr1234")):
+            self.assertNotIn(secret, redact(text), text)
+        self.assertEqual(redact("tokentoken" * 5000)[:10], "tokentoken")      # long runs of the word stay quick
 
 
 class HeredocTests(unittest.TestCase):

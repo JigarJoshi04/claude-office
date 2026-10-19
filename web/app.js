@@ -250,7 +250,7 @@ const office = createOffice($("stage"), {
 office.setPersonas((s) => { const p = panels.persona(s); return { ...p, lines: { ...p.lines, arrive: line(p, "arrive") } }; });
 const replay = makeReplay(app, office, document.querySelector(".floor-frame"));   // the floor plays back the day (ui/replay.js)
 const recorder = makeRecorder({ office, replay, frame: document.querySelector(".floor-frame") });   // clips and timelapses (ui/recorder.js)
-syncSave({ post: (path, body) => app.post(path, body), demo: DEMO });   // one game save for every screen (ui/sync.js)
+syncSave({ post: (path, body) => app.post(path, body), demo: DEMO, changed: () => { renderMain(); renderPanel(true, true); } });   // one game save for every screen (ui/sync.js)
 const director = makeDirector({ office, prefs, replay });   // the camera flies to what just happened (ui/director.js)
 function setDirector(on) {
   setPref("director", !!on); office.setDirector(!!on);

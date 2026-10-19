@@ -30,7 +30,7 @@ SECRET_RE = re.compile(
     r"(sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}"
     r"|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{16,}"
-    r"|(?i:(?<![A-Za-z])(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)\w{0,30}[\"']?\s*[=:]\s*[\"']?)(?=[^\s'\",}]*[A-Za-z])[^\s'\",}]{6,}"
+    r"|(?i:(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)\w{0,30}[\"']?\s*[=:]\s*[\"']?)(?=[^\s'\",}]*[A-Za-z])[^\s'\",}]{6,}"
     r"|(?i:aws_secret_access_key|aws_session_token)\s+[^\s'\"]{12,})")   # (bounded, so a long run of "token" never backtracks)
 # Credentials that sit next to something worth keeping: the password in `user:pass@host`, `curl -u user:pass` and
 # `mysql -pSecret` (the user and the host stay readable).
