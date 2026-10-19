@@ -113,7 +113,10 @@ class DayLedger:
                         "limited_min": {sid: (s or {}).get("limited_min") or 0 for sid, s in seats.items() if (s or {}).get("limited_min")},
                         "avail_min": sum((s or {}).get("avail_min") or 0 for s in seats.values()),
                         "busy_min": sum((s or {}).get("busy_min") or 0 for s in seats.values()),
-                        "all_out_min": o.get("all_out_min") or 0})
+                        "all_out_min": o.get("all_out_min") or 0,
+                        # each character's day, for the week's awards: [hours at work in minutes, reports, tool calls, fresh tokens]
+                        "per_seat": {sid: [(s or {}).get("active_min") or 0, (s or {}).get("reports") or 0, (s or {}).get("tool_calls") or 0,
+                                           (s or {}).get("tokens_fresh") or 0] for sid, s in seats.items() if isinstance(s, dict)}})
         return out
 
     def _save(self):

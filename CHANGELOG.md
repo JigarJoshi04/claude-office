@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.176.0] - 2026-10-19
+
+### Added
+- The week's awards: the week in review gets a slide naming who led the week, from the real days: The long haul
+  (hours at work), The closer (reports), Busy hands (tool calls) and The furnace (fresh tokens), one card a
+  character, and "A clean sweep" (with a crown) when one character takes them all.
+
 ## [3.175.0] - 2026-10-19
 
 ### Added

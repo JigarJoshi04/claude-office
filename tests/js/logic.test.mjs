@@ -268,6 +268,11 @@ test("the week in review sums the last seven days and what was collected in them
   assert.deepEqual(w.badges, ["welcome"]);
   assert.equal(w.goalDays, 1);
   assert.equal(weekSummary(days.slice(-6)), null);
+  assert.deepEqual(w.awards, []);                                       // no per-character rows, no awards
+  days.slice(-7).forEach((d, i) => { d.per_seat = { a: [120, 1, 50, 2e6], b: [60, 2, 80 + i, 1e6], old: [0, 0, 0, 0] }; });
+  days[0].per_seat = { b: [9999, 99, 9999, 9e9] };                      // the week before does not count
+  const aw = Object.fromEntries(weekSummary(days).awards.map(x => [x.key, [x.seat, x.value]]));
+  assert.deepEqual(aw, { hours: ["a", 840], reports: ["b", 14], calls: ["b", 581], tokens: ["a", 14e6] });
 });
 
 test("Bug Squash: features and red bugs grow more common, spawns speed up, golden bugs stay rare", async () => {
