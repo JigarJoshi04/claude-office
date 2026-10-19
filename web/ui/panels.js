@@ -390,8 +390,14 @@ export function makePanels(app) {
     const stopped = all.filter(x => x.state === "limited" || x.state === "stuck").length;
     const idle = all.length - working - stopped;
     const num = (n, label, dot, tip = "") => `<div class="b-n ${n ? "" : "zero"}"${tip ? ` title="${tip}"` : ""}><b>${n}</b><span><i class="sdot ${dot}"></i>${label}</span></div>`;
-    // Three blocks, always in this order: how the office is doing, what needs you, who is on the team.
-    return { html: `${awayHtml()}${rhythmHtml()}
+    // The CEO's pinned notes (announce.py), at the very top until they expire; the x takes one down.
+  function announceHtml() {
+    const list = S().announcements || [];
+    return list.map(a => `<div class="announce" role="note"><span class="ico">${icon("pin", 16)}</span><div class="grow"><div class="t">${esc(a.text)}</div>
+      <div class="d">Pinned ${esc(relTime(a.at))} · up until ${esc(clock(a.until))}</div></div>${app.locked && app.locked() ? "" : `<button class="btn sm ghost icon" data-unpin="${esc(a.id)}" aria-label="Take it down" title="Take it down">${icon("x", 14)}</button>`}</div>`).join("");
+  }
+  // Three blocks, always in this order: how the office is doing, what needs you, who is on the team.
+    return { html: `${announceHtml()}${awayHtml()}${rhythmHtml()}
       ${snap.office.config_error ? `<div class="need bad"><span class="ico">${icon("alert", 16)}</span><div class="grow"><div class="t">Config problem</div><div class="d">${esc(snap.office.config_error)}</div></div></div>` : ""}
       ${(snap.office.faults || []).length ? `<div class="need bad faults" role="status"><span class="ico">${icon("alert", 16)}</span><div class="grow"><div class="t">Office problem${snap.office.faults.length > 1 ? "s" : ""}</div>${snap.office.faults.slice(0, 3).map(f => `<div class="d">${esc(f.part)} keeps failing: ${f.count} time${f.count === 1 ? "" : "s"} since ${esc(clock(f.since))}${app.privacy() ? "" : ` · ${esc(f.what)}`}</div>`).join("")}</div><button class="btn sm ghost" data-go="doctor">${icon("heart", 14)}Doctor</button></div>` : ""}
       <section class="b-status" aria-label="Sessions right now">
@@ -418,6 +424,10 @@ export function makePanels(app) {
         <button data-go="services">${icon("server", 16)}Services</button><button data-go="cabinet">${icon("files", 16)}Filing cabinet</button><button data-go="inbox">${icon("bell", 16)}Inbox${(S().asks || []).some(a => a.status === "open") ? `<span class="count">${(S().asks || []).filter(a => a.status === "open").length}</span>` : ""}</button><button data-go="prs">${icon("send", 16)}Pull requests${prsCount()}</button><button data-go="loose">${icon("branch", 16)}Loose ends${looseCount()}</button><button data-go="doctor">${icon("heart", 16)}Doctor</button><button data-go="help">${icon("sparkles", 16)}Help</button><button data-go="divider">${icon("sliders", 16)}Divider</button></nav>`,
       bind(root) {
         const da = root.querySelector("[data-dismiss-away]"); if (da) da.addEventListener("click", () => app.dismissAway());
+        root.querySelectorAll("[data-unpin]").forEach(b => b.addEventListener("click", async () => {
+          try { const r = await app.post("/api/announce", { action: "clear", id: b.dataset.unpin }); toast(r.demo ? "Demo office: nothing was changed." : "Taken down.", "info", { ic: "pin" }); app.refresh(); }
+          catch (e) { toast(e.message, "bad"); }
+        }));
         root.querySelectorAll("[data-share-day]").forEach(b => b.addEventListener("click", () => app.shareDay()));
         root.querySelectorAll("[data-standup]").forEach(b => b.addEventListener("click", () => app.openStandup()));
         const sx = root.querySelector("[data-setup-x]"); if (sx) sx.addEventListener("click", () => { store.set("setupDismissed", true); app.rerender(true); });

@@ -701,6 +701,7 @@ function apply(next) {
   const first = !snap;
   prevLive = snap ? snap.seats.reduce((n, s) => n + live(s).length, 0) : null;   // who was in before this refresh (First one in)
   snap = next; setNow(snap.now);
+  office.setAnnounce((next.announcements || []).length);
   if (!newsReadTs) { newsReadTs = snap.now; store.set("newsReadTs", newsReadTs); }
   if (DEMO && QS.get("levels") === "tiers") snap.seats.forEach((s, i) => { if (s.career) s.career.level = [50, 35, 25, 18, 12][i % 5]; });   // the demo's ?levels=tiers: every room tier
   if (DEMO && QS.has("faults")) snap.office.faults = [{ part: "The token ledger", what: "PermissionError: [Errno 13] Permission denied: 'tokens.json'", count: 37, since: snap.now - 1500, last: snap.now - 4 }];   // the demo's ?faults=1
@@ -1340,7 +1341,7 @@ function openMenu(focusItem) {
     + item("text", "textSize", "Text size", TEXT_LABEL[prefs.textSize] || "Auto")
     + item("dnd", "moon", "Do not disturb", dndOn() ? `Until ${clock(snap.office.dnd_until)}` : "Off", dndOn())
     + item("night", lightsOut() ? "sun" : "moon", lightsOut() ? "Lights on" : "Goodnight…")
-    + "<hr>" + item("daycard", "star", "Share today's card") + item("clip", "play", "Record a 15-second clip") + item("timelapse", "rewind", "Record today's timelapse") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("lock", "lock", "Lock this screen") + item("broadcast", "send", "Message a group") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
+    + "<hr>" + item("daycard", "star", "Share today's card") + item("clip", "play", "Record a 15-second clip") + item("timelapse", "rewind", "Record today's timelapse") + item("week", "play", "Your week in review") + item("wrapped", "star", "Last month, wrapped") + item("arcade", "bug", "Play Bug Squash") + item("radio", "volume", radio.on ? "Office radio: on" : "Office radio: off", "M") + item("tv", "tv", "TV mode", "V") + item("replay", "rewind", "Replay the day", "R") + item("announce", "pin", "Post an announcement") + item("lock", "lock", "Lock this screen") + item("broadcast", "send", "Message a group") + item("picture", "copy", "Save a picture of the office") + item("checkpoint", "pin", "Take a checkpoint") + item("news", "news", "Office news") + item("divider", "sliders", "Load divider")
     + "<hr>" + (installPrompt ? item("install", "monitor", "Install as an app") : "") + item("tour", "sparkles", "Take the tour") + item("settings", "settings", "Settings");
   document.body.appendChild(m);
   $("btnMenu").setAttribute("aria-expanded", "true");
@@ -1366,6 +1367,7 @@ function openMenu(focusItem) {
     else if (k === "checkpoint") checkpoint();
     else if (k === "tv") floor.setTv(true);
     else if (k === "lock") setLocked(true);
+    else if (k === "announce") announceDialog();
     else if (k === "daycard") shareDay();
     else if (k === "week") weekReview.play();
     else if (k === "wrapped") wrapped.play();
@@ -1539,6 +1541,30 @@ async function checkpoint() {
     const cp = $("dCopyPath"); if (cp) cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(r.path); toast("Copied.", "good", 1800); } catch { /* ignore */ } });
   } catch (e) { toast("Checkpoint failed: " + e.message, "bad"); }
 }
+// Post an announcement (announce.py): pinned to the briefing, the TV ticker and the CEO desk until it is taken down
+// or runs out; it can go to every lane as a message too.
+function announceDialog() {
+  $("dialogBody").innerHTML = `<div class="dh"><b>Post an announcement</b><button class="btn sm ghost" id="anClose" aria-label="Close">${icon("x", 16)}</button></div>
+    <div class="db"><label class="f">The note<textarea id="anText" maxlength="280" placeholder="e.g. Merge freeze until 5 pm: the release is cut at 4." style="min-height:80px"></textarea></label>
+      <div class="row wrap" style="gap:12px;align-items:flex-end"><label class="f" style="margin:0">Up for<select id="anHours">${[[1, "an hour"], [4, "4 hours"], [8, "the day (8 h)"], [24, "a day"], [72, "three days"]].map(([h, l]) => `<option value="${h}" ${h === 4 ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label class="row" style="gap:6px;margin-bottom:8px"><input type="checkbox" id="anSend">Also message every lane</label></div>
+      <p class="hint">It is pinned to the top of the briefing, leads the TV news strip and sits as a note on your desk on the floor.</p>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="btn primary" id="anPost">${icon("pin", 15)}Pin it</button></div></div>`;
+  if (!$("dialog").open) $("dialog").showModal();
+  $("anText").focus();
+  $("anClose").addEventListener("click", () => $("dialog").close());
+  $("anPost").addEventListener("click", async () => {
+    const text = $("anText").value.trim();
+    if (!text) { toast("Write the note first.", "warn"); return; }
+    try {
+      const r = await app.post("/api/announce", { text, hours: +$("anHours").value });
+      const also = $("anSend").checked;
+      $("dialog").close(); pollOnce();
+      toast(r.demo ? "Demo office: nothing was changed." : "Pinned.", "good", { ic: "pin" });
+      if (also) broadcast(text, "lanes");
+    } catch (e) { toast(e.message, "bad"); }
+  });
+}
 // One message to a group (talk.broadcast on the office): every lane, the stuck ones, one seat's or one programme's.
 // The office says who is in the group (a dry run), the CEO can untick some, and the send carries how many it showed,
 // so a list that changed meanwhile is refused instead of messaging more sessions than were on screen.
@@ -1658,6 +1684,7 @@ function paletteItems() {
     { icon: icon("play", 16), label: "Your week in review", keywords: "week review wrapped story recap summary", run: () => weekReview.play() },
     { icon: icon("tv", 16), label: "TV mode", hint: "V", keywords: "fullscreen wall display monitor kiosk", run: () => floor.setTv(true) },
     { icon: icon("check", 16), label: "Mark all news read", keywords: "unread new news clear seen", run: () => { markNewsRead(); for (const s of snap.seats) for (const x of live(s)) seenTalk[s.id + "/" + x.id] = [textHash(x.last_text), snap.now]; store.set("seenTalk", seenTalk); rnSig = ""; renderRightNow(); toast("All caught up.", "good", { ic: "check" }); } },
+    { icon: icon("pin", 16), label: "Post an announcement: a note pinned for everyone", keywords: "announce announcement notice pin note board freeze tell everyone", run: () => announceDialog() },
     { icon: icon("lock", 16), label: "Lock this screen: share-safe and read-only", keywords: "lock presenter screen share present meeting tv kiosk read only", run: () => setLocked(true) },
     { icon: icon("rewind", 16), label: "Replay the last 6 hours", hint: "R", keywords: "history playback rewind day", run: () => { setView("floor"); replay.open(6); } },
     { icon: icon("rewind", 16), label: "Replay the last 24 hours", keywords: "history playback rewind day yesterday", run: () => { setView("floor"); replay.open(24); } },

@@ -19,7 +19,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, brain, rescue, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, sdnotify, seats as seatmod, sessions, standup, trust, weeks
+from . import announce, asks, brain, rescue, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, sdnotify, seats as seatmod, sessions, standup, trust, weeks
 from .career import CATALOGUE, Career
 from . import save as save_mod
 from . import utilities
@@ -365,6 +365,7 @@ class Office(LiveOffice):
         self.weeks = weeks.Weeks(config.STATE_DIR / "weeks.json")
         self.presence = Presence()
         self.reminders = Reminders(config.STATE_DIR / "reminders.json")
+        self.announcements = announce.default()          # the CEO's pinned notes (announce.py)
         self.tokens = TokenLedger(config.STATE_DIR / "tokens.json", [], config.HOME / ".codex" / "sessions")
         self.snapshot: dict = {}
         self._prev: dict | None = None
@@ -620,7 +621,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.178.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.179.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -684,6 +685,7 @@ class Office(LiveOffice):
                 self.emit("promise", f"Promise broken: '{p['title']}' {p.get('why') or 'was not done in time'}", p.get("seat"), "bad")
         snap["api_weather"] = self.tokens.weather(now)          # the API's errors in the last half hour (tokens.api_kind)
         snap["promises"] = self.promises.view(now)
+        snap["announcements"] = self.announcements.active(now)
         snap["promise_due"] = self.promises.attention(now)
         stuck_now = {x["id"] for s in seats_out for x in s.get("sessions", []) if rescue.needs_rescue(x)}
         self.nudged = {k: v for k, v in self.nudged.items() if k in stuck_now and now - v < 6 * 3600}   # a new stuck spell starts at a nudge again

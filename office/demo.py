@@ -548,7 +548,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.178.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.179.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
@@ -587,6 +587,11 @@ class DemoOffice(LiveOffice):
                  "status": "broken", "settled_at": now - 86400, "why": "it was not done in time"}]
         snap["promises"] = self.promises.view(now)
         snap["promise_due"] = self.promises.attention(now)
+        if not hasattr(self, "announcements"):             # the demo's notes live in memory: one pinned
+            from .announce import Announcements
+            self.announcements = Announcements(None)
+            self.announcements.items = [{"id": "a-freeze", "text": "Merge freeze until 5 pm: the release is cut at 4.", "at": now - 1200, "until": now + 3 * 3600}]
+        snap["announcements"] = self.announcements.active(now)
         snap["attention"] = Office._attention(snap)
         if not hasattr(self, "quiet"):
             from .snapshot import Quiet

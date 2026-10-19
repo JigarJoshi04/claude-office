@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.179.0] - 2026-10-19
+
+### Added
+- Announcements: post a note ("Merge freeze until 5 pm") from the menu or the palette. It is pinned at the top of
+  the briefing until it runs out (an hour to three days) or you take it down, leads the TV news strip, sits as a
+  sticky note on the CEO desk, goes into the news and the day's replay, and can go to every lane as a message too.
+
 ## [3.178.0] - 2026-10-19
 
 ### Added

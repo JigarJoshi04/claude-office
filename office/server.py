@@ -194,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
     port = config.DEFAULT_PORT
     demo = False
     same_user = True       # only this Unix user (peer.py); config "same_user_only": false turns it off
-    server_version = "ClaudeOffice/3.178.0"
+    server_version = "ClaudeOffice/3.179.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -573,6 +573,13 @@ class Handler(BaseHTTPRequestHandler):
                     lane = next((l for l in self.office.get().get("lanes", []) if l.get("id") == body.get("lane")), None)
                     return self._json(200, pr.make(str(body.get("lane", "")), body.get("due"), load=lambda lid: lane if lane and lid == lane["id"] else None))
                 return self._json(200, pr.make(str(body.get("lane", "")), body.get("due")))
+            if path == "/api/announce":                      # the CEO's announcements (announce.py): post one, or take one down
+                an = self.office.announcements
+                if body.get("action") == "clear":
+                    return self._json(200, {"ok": an.clear(body.get("id"))})
+                item = an.post(body.get("text"), body.get("hours", 4))
+                self.office.emit("announce", f"CEO: {item['text']}", None, "info")
+                return self._json(200, {"ok": True, "announcement": item})
             if path == "/api/reminders":                     # notes to yourself (reminders.py); the demo keeps them in memory
                 rem = self.office.reminders
                 if body.get("action") == "delete":

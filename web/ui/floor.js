@@ -172,7 +172,8 @@ export function makeFloor(ctx) {
     const WORD = { report: "filed a report", levelup: "levelled up", achievement: "won a trophy", limit: "reached a plan limit", reset: "has a fresh plan",
       arrive: "started a session", leave: "finished a session", lane: "office lane news", shipped: "shipped a PR", commit: "committed work", reply: "replied", ask: "has a question" };
     const said = (e) => { if (!prefs.privacy) return panels.humanise(e.text); const s = e.seat && snap.seats.find(x => x.id === e.seat); return `${s ? panels.persona(s).name : "The office"} ${WORD[e.kind] || "has news"}`; };
-    const items = (snap.events || []).slice(-8).reverse().map(e => `<span class="tk-item ${esc(e.level || "")}"><b>${ICON[e.kind] || "•"}</b>${esc(said(e))}<em>${esc(relTime(e.ts))}</em></span>`).join("");
+    const pinned = (snap.announcements || []).map(a => `<span class="tk-item info pinned"><b>📌</b>${esc(a.text)}</span>`).join("");   // the CEO's notes lead
+    const items = pinned + (snap.events || []).slice(-8).reverse().map(e => `<span class="tk-item ${esc(e.level || "")}"><b>${ICON[e.kind] || "•"}</b>${esc(said(e))}<em>${esc(relTime(e.ts))}</em></span>`).join("");
     const html = items || `<span class="tk-item">Quiet in the office.</span>`;
     if (el.dataset.html !== html) { el.innerHTML = html + html; el.dataset.html = html; el.style.setProperty("--tk-dur", Math.max(30, (snap.events || []).slice(-8).length * 9) + "s"); }
   }

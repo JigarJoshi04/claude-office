@@ -1900,3 +1900,10 @@ body.locked [data-go="inbox"], body.locked .snz { display: none !important; }   
 .room-tiers .rt { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 99px; font-size: 12.5px; background: var(--surface-2); color: var(--faint); }
 .room-tiers .rt.on { background: color-mix(in srgb, var(--seat) 18%, var(--surface-2)); color: var(--text); }
 .room-tiers .rt small { font: 600 10.5px var(--mono); opacity: .7; }
+
+/* The CEO's announcements (announce.py): pinned at the top of the briefing */
+.announce { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; margin-bottom: 12px; border-radius: 14px; background: color-mix(in srgb, #ffe27a 14%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffe27a 45%, transparent); }
+.announce .ico { color: #e0b43a; margin-top: 2px; }
+.announce .t { font-weight: 650; overflow-wrap: anywhere; }
+.announce .d { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.tv-ticker .tk-item.pinned { color: #ffe27a; }

@@ -794,6 +794,10 @@ export function createOffice(stage, handlers) {
     if (sets.has("legendary")) S.drawGoldDuck(ctx, dx + 51, dy + 3, t);   // the legendary set
     drawBoombox(dx + 2, dy + 14, t);
     S.rect(ctx, dx + 16, dy + 5, 8, 6, S.P.white); S.rect(ctx, dx + 17, dy + 6, 6, 1, "#9aa3b5"); S.rect(ctx, dx + 17, dy + 8, 4, 1, "#9aa3b5");
+    if (announceN) {                                     // the CEO's announcement: a sticky note pinned by the paper
+      S.rect(ctx, dx + 25, dy + 1, 7, 7, "#ffe27a"); S.rect(ctx, dx + 25, dy + 7, 7, 1, "#c9a93a"); S.rect(ctx, dx + 27, dy, 2, 2, "#e8475a");
+      S.rect(ctx, dx + 26, dy + 3, 5, 1, "#8a6d1e"); S.rect(ctx, dx + 26, dy + 5, 3, 1, "#8a6d1e");
+    }
     S.drawDeskLamp(ctx, dx + 50, dy - 4, true);
     lights.push({ x: dx + 39, y: dy + 4, r: 60, c: "#ffcf7a", i: 0.65 });
   }
@@ -916,6 +920,7 @@ export function createOffice(stage, handlers) {
 
   function windowExtras() { return has("balloon") || has("fireworks") ? { balloon: has("balloon"), fireworks: has("fireworks") } : null; }
   // A room's mood weather in its window: rain while the seat is out of plan, clouds while its plan runs low.
+  let announceN = 0;                         // the CEO's pinned announcements (a sticky note on the desk)
   let apiSky = "clear";                      // the connection's weather (tokens.weather): a storm over every window
   function weatherOf(s) {
     if (apiSky === "stormy") return "storm";
@@ -1796,6 +1801,7 @@ export function createOffice(stage, handlers) {
     petsCheer(seatId) { const pod = L && L.pods.find(p => p.seat.id === seatId); if (!pod) return; petVisit(cat, pod, "sit", 12000, 28); if (has("dog")) petVisit(dog, pod, "sit", 12000, 40); },
     standup: (lines) => startStandup(lines),
     visit: (from, to, text) => startVisit(from, to, text),
+    setAnnounce(n) { announceN = n || 0; },
     setApiSky(sky) { apiSky = sky === "stormy" || sky === "cloudy" ? sky : "clear"; },
     help: (seat, text) => sendHelp(seat, text),
     setSquash(n) { squashToday = n == null ? null : Math.max(0, Math.min(999, Math.round(n))); },
