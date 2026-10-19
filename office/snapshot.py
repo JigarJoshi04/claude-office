@@ -18,7 +18,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, brain, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, trust, weeks
+from . import asks, brain, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, sdnotify, seats as seatmod, sessions, standup, trust, weeks
 from .career import CATALOGUE, Career
 from . import save as save_mod
 from . import utilities
@@ -362,6 +362,9 @@ class Office(LiveOffice):
         self._codex: dict | None = None
         self._codex_at = 0.0
         self.stop = threading.Event()
+        self.perf: deque = deque(maxlen=120)              # the last refreshes: (seconds, {phase: seconds}) for the doctor
+        self._phases: dict = {}
+        self.light = False                                # refreshing every 12 s instead of 4 while the machine is busy
 
     # -- events --------------------------------------------------------------------------------------------
     def _load_events(self) -> None:
@@ -449,7 +452,45 @@ class Office(LiveOffice):
     # -- build ---------------------------------------------------------------------------------------------
     def build(self) -> dict:
         with self._build_lock:
-            return self._build()
+            t = time.perf_counter()
+            self._phases, self._lap = {}, t
+            snap = self._build()
+            took = time.perf_counter() - t
+            self._phases["publish"] = max(0.0, took - sum(self._phases.values()))
+            self.perf.append((took, self._phases))
+            return snap
+
+    def _mark(self, phase: str) -> None:
+        """The time since the last mark goes to this phase of the refresh (perf_view)."""
+        t = time.perf_counter()
+        self._phases[phase] = self._phases.get(phase, 0.0) + t - getattr(self, "_lap", t)
+        self._lap = t
+
+    def perf_view(self) -> dict:
+        """What a refresh costs: median and 95th percentile over the last ones, and where the time goes."""
+        runs = list(self.perf)
+        if not runs:
+            return {"builds": 0, "light": self.light}
+        ms = lambda xs, q: round(sorted(xs)[min(len(xs) - 1, int(q * len(xs)))] * 1000, 1)
+        totals = [t for t, _ in runs]
+        names = {k for _, ph in runs for k in ph}
+        phases = {k: ms([ph.get(k, 0.0) for _, ph in runs], 0.5) for k in sorted(names)}
+        slow = max(phases, key=phases.get) if phases else None
+        return {"builds": len(runs), "p50_ms": ms(totals, 0.5), "p95_ms": ms(totals, 0.95), "max_ms": round(max(totals) * 1000, 1),
+                "phases_p50_ms": phases, "slowest_phase": slow, "light": self.light}
+
+    def _busy(self) -> bool:
+        """Run light while refreshes are slow (p95 over 1.5 s) or the machine is loaded past its cores; back to normal
+        below 1 s and the core count, so it does not flap."""
+        recent = sorted(t for t, _ in list(self.perf)[-30:])
+        p95 = recent[min(len(recent) - 1, int(0.95 * len(recent)))] if recent else 0.0
+        try:
+            load = os.getloadavg()[0] / (os.cpu_count() or 1)
+        except OSError:
+            load = 0.0
+        if self.light:
+            return p95 > 1.0 or load > 1.0
+        return p95 > 1.5 or load > 1.5
 
     def _build(self) -> dict:
         now = time.time()
@@ -481,6 +522,7 @@ class Office(LiveOffice):
                 self._codex = _codex_seat(self.codex_meta, now)
                 self._codex_at = now
             seats_out.append(self._codex)
+        self._mark("seats")
         limits = lanes.read_limits()
         for s in seats_out:
             self.history.record(s["id"], s.get("usage"), now)
@@ -512,6 +554,7 @@ class Office(LiveOffice):
         if now - self._units_at > 10:
             self._units = list_units(cfg.get("watch_units") or [])
             self._units_at = now
+        self._mark("units")
         lane_list = lanes.list_lanes()
         from . import messaging
         direct = {l.get("pid") for l in lane_list if l.get("allow_messages") is True and l.get("pid")}
@@ -539,6 +582,7 @@ class Office(LiveOffice):
                 label = next((s.get("label") or s["id"] for s in seats_out if s["id"] == sid), sid)
                 self.emit("checkpoint", f"Asked {', '.join(names[:3])}{' and more' if len(names) > 3 else ''} on {label} to write "
                           f"{'its' if len(names) == 1 else 'their'} notes before its {window} runs out", sid)
+        self._mark("lanes")
         evaluation = divider.evaluate(seats_out, div, limited_until=limits, now=now)
         if evaluation["pick"] and not getattr(self, "_pick_was", None) and any(l.get("status") == "waiting" for l in lane_list if isinstance(l, dict)):
             lanes.wake_waiting()                           # a seat can take a lane again: waiting lanes go now, not in 30 min
@@ -554,7 +598,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.163.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.164.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -578,6 +622,7 @@ class Office(LiveOffice):
                         self.emit("risk", f"{x.get('name') or 'A session'} on {s['label']}: {risk.RULES[r['rule']]}: {r['text']}", s["id"], "bad")
         snap["risks"] = self.risk_seen.within(now)        # Needs you keeps them after their session has gone
         self.risk_seen.save()
+        self._mark("risks")
         for s in seats_out:                                # what each session and lane has cost so far (the ledger)
             for x in s.get("sessions", []):
                 x["spent"] = self.tokens.spent([x["id"]]) if s.get("kind") == "claude" else None
@@ -597,6 +642,7 @@ class Office(LiveOffice):
                 if s["ghost"] and now - self._ghost_said.get(s["id"], 0) > 3600:
                     self._ghost_said[s["id"]] = now
                     self.emit("ghost", f"{s['label']}'s 5-hour use rose {s['ghost']['rise']:.0f}% in {s['ghost']['minutes']} min with nothing running on this machine", s["id"], "warn")
+        self._mark("costs")
         mine = self.prs.mine_view() if self.prs.available else None     # your review queue (prs.fetch_mine)
         if mine:
             self._gh_repos(now)
@@ -637,6 +683,7 @@ class Office(LiveOffice):
         snap["reminders"] = self.reminders.view()
         snap["attention"] = [a for a in snap["attention"] if quiet["snoozed"].get(a["key"], 0) <= now]
         snap["office"]["dnd_until"] = quiet["dnd_until"] if quiet["dnd_until"] > now else None
+        self._mark("attention")
         snap["totals"] = self._totals(snap)
         for seat_id, kind, text in self.career.observe(snap):
             self.emit(kind, text, seat_id, "good")
@@ -647,6 +694,7 @@ class Office(LiveOffice):
         if self._prev:
             self._diff(self._prev, snap)
         self._prev = snap
+        self._mark("career")
         self._reported.update(x["id"] for s in snap["seats"] for x in s["sessions"] if x.get("report_status"))
         with self._lock:
             snap["events"] = list(self.events)[-60:]
@@ -829,7 +877,12 @@ class Office(LiveOffice):
                 self.build()
             except Exception as e:  # keep serving the last good picture
                 self.emit("error", f"Snapshot failed: {type(e).__name__}: {e}", level="bad")
-            self.stop.wait(4)
+            sdnotify.notify("WATCHDOG=1")                  # the loop is alive (a hung refresh stops this, and systemd restarts us)
+            light = self._busy()
+            if light != self.light:
+                self.light = light
+                sdnotify.notify("STATUS=" + ("Running light: refreshing every 12 s while the machine is busy" if light else "Refreshing every 4 s"))
+            self.stop.wait(12 if self.light else 4)
 
     def _tokens_run(self) -> None:
         """The token ledger: a first full read once the seats are known, then what was appended, every minute. PRs

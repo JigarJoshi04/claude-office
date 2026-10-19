@@ -5,6 +5,8 @@ office), and every write must carry the per-install token that only the office's
 """
 from __future__ import annotations
 
+import gzip
+import hashlib
 import hmac
 import json
 import re
@@ -18,10 +20,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import askabout, asks, brain, checkpoint, coach, conversation, export, rescue, config, divider, lanes, messaging, sessions, talk, settings, tokens
+from . import askabout, asks, brain, checkpoint, coach, conversation, export, rescue, config, divider, lanes, messaging, sdnotify, sessions, talk, settings, tokens
 from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
+_STATIC: dict = {}                 # path -> (mtime_ns, size, body, gzipped body or None, etag): each file read once per change
+_STATIC_LOCK = threading.Lock()
+_GZIP_TYPES = ("text/", "application/javascript", "application/json", "image/svg+xml")
 
 
 def _fmt_tok(n: float) -> str:
@@ -171,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.163.0"
+    server_version = "ClaudeOffice/3.164.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -201,7 +206,8 @@ class Handler(BaseHTTPRequestHandler):
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _json(self, code: int, obj) -> None:
         self._send(code, json.dumps(obj, default=str).encode(), "application/json")
@@ -221,6 +227,13 @@ class Handler(BaseHTTPRequestHandler):
         return data
 
     # -- GET -----------------------------------------------------------------------------------------------
+    def do_HEAD(self):
+        """Headers only, for the page, its files and the health check (monitors and curl -I); never for a stream."""
+        path = urlparse(self.path).path
+        if path in ("/", "/index.html", "/healthz") or path.startswith("/static/"):
+            return self.do_GET()
+        return self._send(405, b"", "text/plain", {"Allow": "GET"})
+
     def do_GET(self):
         if not self._host_ok():
             return self._send(403, b"forbidden", "text/plain")
@@ -336,8 +349,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self._lane_detail(q.get("id", "")))
             if url.path == "/api/conversation":
                 return self._json(200, talk.conversation_view(self.office, q.get("seat", ""), q.get("id", "")))
-            if url.path == "/healthz":
-                return self._json(200, {"ok": True, "age_s": round(time.time() - (self.office.get().get("now") or 0), 1)})
+            if url.path == "/healthz":                       # 503 once the picture is 30 s old; ?deep=1 says which part (doctor.health)
+                from . import doctor
+                ok, body = doctor.health(self.office, self.office.get(), q.get("deep") == "1")
+                return self._json(200 if ok else 503, body)
         except (ValueError, KeyError) as e:
             return self._json(400, {"error": str(e)})
         except Exception as e:  # never drop the connection on a surprise; say what kind of failure it was
@@ -403,8 +418,29 @@ class Handler(BaseHTTPRequestHandler):
         ctype = mimetypes.guess_type(p.name)[0] or ("font/woff2" if p.suffix == ".woff2" else "application/octet-stream")
         if p.suffix == ".js":
             ctype = "text/javascript"
-        # Fonts never change between versions: kept a week. Code and styles are always fetched fresh (an update shows at once).
-        return self._send(200, p.read_bytes(), ctype, {"Cache-Control": "public, max-age=604800"} if p.suffix == ".woff2" else None)
+        st = p.stat()
+        with _STATIC_LOCK:
+            hit = _STATIC.get(str(p))
+        if not hit or hit[:2] != (st.st_mtime_ns, st.st_size):
+            raw = p.read_bytes()
+            packed = gzip.compress(raw, 6, mtime=0) if ctype.startswith(_GZIP_TYPES) and len(raw) > 1024 else None
+            hit = (st.st_mtime_ns, st.st_size, raw, packed, '"' + hashlib.sha256(raw).hexdigest()[:20] + '"')
+            with _STATIC_LOCK:
+                _STATIC[str(p)] = hit
+        _, _, raw, packed, etag = hit
+        # Fonts never change between versions: kept a week. Code and styles are checked every load (an update shows at
+        # once) but only sent again when they changed: the ETag answers 304 otherwise.
+        extra = {"ETag": etag, "Vary": "Accept-Encoding",
+                 "Cache-Control": "public, max-age=604800" if p.suffix == ".woff2" else "no-cache"}
+        if etag in [t.strip() for t in (self.headers.get("If-None-Match") or "").split(",")]:
+            self.send_response(304)
+            for k, v in extra.items():
+                self.send_header(k, v)
+            self.end_headers()
+            return None
+        if packed and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+            return self._send(200, packed, ctype, dict(extra, **{"Content-Encoding": "gzip"}))
+        return self._send(200, raw, ctype, extra)
 
     def _session_detail(self, seat_id: str, session_id: str) -> dict:
         if self.demo:
@@ -666,6 +702,7 @@ def serve(port: int, demo: bool = False) -> None:
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
     print(f"Claude Office {'(demo) ' if demo else ''}is open at http://127.0.0.1:{port}", flush=True)
+    sdnotify.notify("READY=1\nSTATUS=Refreshing every 4 s")   # under Type=notify: started (and watched from here on)
     def _term(*_):
         raise KeyboardInterrupt   # systemd stops us with SIGTERM: shut down cleanly so careers and the inbox close
 
@@ -678,6 +715,7 @@ def serve(port: int, demo: bool = False) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        sdnotify.notify("STOPPING=1")
         httpd.server_close()
         office.stop.set()
         if getattr(office, "inbox", None):

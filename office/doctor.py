@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import shutil
 import sys
+import threading
 import time
 
-from . import config
+from . import config, sdnotify
 
 
 def _check(name: str, state: str, detail: str, fix: str | None = None) -> dict:
@@ -87,6 +88,46 @@ def checkup(office, snap: dict) -> list[dict]:
         out.append(_check("The page", "warn", f"It reported {len(errs)} error{'s' if len(errs) > 1 else ''} in the last day; the latest: {errs[-1]['message']}"
                           + (f" ({errs[-1]['where']})" if errs[-1].get("where") else ""),
                           "Reload the page. If it keeps happening, report it with these words."))
+    perf = office.perf_view() if hasattr(office, "perf_view") else {}
+    if perf.get("builds"):
+        slow = f"; the slowest part is {perf['slowest_phase']}" if perf.get("slowest_phase") else ""
+        busy = perf.get("p95_ms", 0) > 1500
+        out.append(_check("Refresh cost", "warn" if busy else "ok",
+                          f"A refresh takes {perf['p50_ms']:.0f} ms (95% within {perf['p95_ms']:.0f} ms){slow}"
+                          + (". Running light: every 12 s while the machine is busy" if perf.get("light") else ""),
+                          "Nothing to do: the office refreshes less often until it is quick again." if busy else None))
+    if not getattr(office, "is_demo", False):
+        wd = sdnotify.watchdog_s()
+        out.append(_check("Watchdog", "ok" if wd else "info", f"systemd restarts the office if its loop stops for {wd:.0f} s" if wd
+                          else "Not watched: a hung office is not restarted by itself", None if wd else "Run bin/install.sh again to install the watched service."))
     out.append(_check("Version", "ok", f"Claude Office {snap.get('office', {}).get('version', '?')} on Python {sys.version.split()[0]}"))
     order = {"bad": 0, "warn": 1, "info": 2, "ok": 3}
     return sorted(out, key=lambda c: order.get(c["state"], 4))
+
+
+THREADS = ("office", "usage", "tokens", "presence")
+
+
+def health(office, snap: dict, deep: bool = False) -> tuple[bool, dict]:
+    """For /healthz: ok while the picture is fresh (under 30 s old). Deep adds each part's age, the refresh cost, the
+    background threads and the watchdog, so a monitor can tell a stuck loop from a slow plan reading."""
+    now = time.time()
+    age = round(now - (snap.get("now") or 0), 1)
+    ok = age <= 30
+    out = {"ok": ok, "age_s": age}
+    if not deep:
+        return ok, out
+    led = getattr(office, "tokens", None)
+    alive = {t.name for t in threading.enumerate() if t.is_alive()}
+    out.update({
+        "version": (snap.get("office") or {}).get("version"),
+        "up_s": round(now - ((snap.get("office") or {}).get("started_at") or now)),
+        "refresh": office.perf_view() if hasattr(office, "perf_view") else {},
+        "tokens": {"age_s": round(now - led.scanned_at) if led is not None and getattr(led, "scanned_at", 0) else None,
+                   "scanning": bool(getattr(led, "scanning", False))},
+        "usage": {s["id"]: {"age_s": round(now - s["usage"]["fetched_at"]) if (s.get("usage") or {}).get("fetched_at") else None,
+                            "error": (s.get("usage") or {}).get("error")} for s in snap.get("seats", []) if s.get("kind") == "claude"},
+        "threads": {name: name in alive for name in THREADS},
+        "watchdog": {"on": sdnotify.enabled(), "timeout_s": sdnotify.watchdog_s()},
+    })
+    return ok, out

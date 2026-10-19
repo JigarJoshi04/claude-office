@@ -275,6 +275,35 @@ class ServerTests(unittest.TestCase):
                 self.assertNotIn(b"CLAUDE_OFFICE_HOME", body)
         self.assertEqual(self.request(path="/static/app.js")[0], 200)
 
+    def test_static_files_answer_304_gzip_and_head(self):
+        import gzip
+        status, headers, raw = self.request(path="/static/app.js")
+        self.assertEqual((status, headers["Cache-Control"], headers["Vary"]), (200, "no-cache", "Accept-Encoding"))
+        etag = headers["ETag"]
+        status, headers, body = self.request(path="/static/app.js", headers={"If-None-Match": etag})
+        self.assertEqual((status, body, headers["ETag"]), (304, b"", etag))
+        self.assertEqual(self.request(path="/static/app.js", headers={"If-None-Match": '"old"'})[0], 200)
+        status, headers, body = self.request(path="/static/app.js", headers={"Accept-Encoding": "gzip, br"})
+        self.assertEqual((status, headers["Content-Encoding"]), (200, "gzip"))
+        self.assertEqual(gzip.decompress(body), raw)
+        status, headers, body = self.request("HEAD", "/static/app.js")
+        self.assertEqual((status, body, int(headers["Content-Length"])), (200, b"", len(raw)))
+        self.assertEqual(self.request("HEAD", "/")[0], 200)
+        self.assertEqual(self.request("HEAD", "/api/stream")[0], 405)          # never a stream
+        self.assertEqual(self.request(path="/")[1]["Cache-Control"], "no-store")   # the page carries the token: never kept
+
+    def test_health_says_which_part_is_slow(self):
+        status, _, body = self.request(path="/healthz")
+        self.assertEqual((status, json.loads(body)["ok"]), (200, True))
+        status, _, body = self.request(path="/healthz?deep=1")
+        deep = json.loads(body)
+        self.assertEqual(status, 200)
+        for key in ("refresh", "tokens", "usage", "threads", "watchdog", "version"):
+            self.assertIn(key, deep)
+        self.assertEqual(deep["refresh"]["builds"], 1)
+        self.assertEqual(deep["watchdog"], {"on": False, "timeout_s": None})
+        self.assertNotIn(ACCESS, body.decode())
+
     def test_lane_id_traversal_does_not_read_outside_lanes(self):
         for value in ("../outside", "%2e%2e%2foutside", "%2Fetc%2Fpasswd"):
             with self.subTest(value=value):

@@ -3,6 +3,21 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.164.0] - 2026-10-19
+
+### Added
+- A watched service: the office says when it answers (systemd `Type=notify`) and pings a watchdog from its refresh
+  loop, so a loop stuck for two minutes gets it restarted; a crash loop stops after five tries in ten minutes, and
+  memory is capped well above what it uses. Run `bin/install.sh` again to install the new service file.
+- `/healthz` answers 503 once the picture is 30 seconds old, and `?deep=1` gives each part's age (plan readings, the
+  token ledger), the refresh cost, the background threads and the watchdog. HEAD works for the page, its files and
+  the health check.
+- What a refresh costs: the doctor shows the median and 95th percentile and the slowest part. While refreshes are
+  slow or the machine is loaded past its cores, the office runs light (every 12 seconds instead of 4) until it is
+  quick again.
+- Faster reloads: the page's code and styles carry an ETag and come back as 304 when unchanged, gzipped when sent;
+  the page itself (it carries the token) is still never cached.
+
 ## [3.163.0] - 2026-10-19
 
 ### Added

@@ -256,6 +256,13 @@ build step. The live view needs Linux, because sessions are read from `/proc` an
 
 Handy links: `/?view=timeline`, `/?view=board`, `/?view=stats`, `/#hire`, `/#divider`, `/#trophies`, `/#seat=claude2`, `/?theme=light`.
 
+The service is watched: the office tells systemd when it answers and pings from its refresh loop, so a loop stuck
+for two minutes gets it restarted (and a crash loop stops after five tries). `GET /healthz` answers 503 once the
+picture is 30 seconds old; `/healthz?deep=1` adds each part's age (plan readings, the token ledger), what a refresh
+costs and where the time goes, the background threads and the watchdog. While the machine is busy (refreshes over
+1.5 s, or more load than cores) the office refreshes every 12 seconds instead of 4. Run `bin/install.sh` again after
+an update to pick up a changed service file.
+
 ## How talking to a session works
 
 Claude Code sessions listen on a private Unix socket for messages from other sessions (the mechanism behind its

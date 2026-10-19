@@ -1,9 +1,17 @@
 [Unit]
 Description=Claude Office: a pixel office for every Claude seat (http://127.0.0.1:7420)
 After=network-online.target
+# A crash loop stops after five tries in ten minutes instead of spinning.
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
-Type=simple
+# The office says when it answers (READY=1), then pings from its refresh loop (office/sdnotify.py): a loop stuck
+# for two minutes gets it restarted. The first read of the transcripts runs on its own thread, so it never trips this.
+Type=notify
+NotifyAccess=main
+WatchdogSec=120
+TimeoutStartSec=180
 WorkingDirectory=@REPO@
 ExecStart=@PYTHON@ -m office serve
 Environment=HOME=@HOME@
@@ -12,6 +20,9 @@ Environment=PYTHONUNBUFFERED=1
 # A dashboard should never compete with real work (or games) for the CPU.
 Nice=10
 CPUWeight=20
+# It uses about 100 MB: slowed past 768 MB, stopped (and restarted) past 1.5 GB, never the machine's problem.
+MemoryHigh=768M
+MemoryMax=1536M
 # Lanes run in their own units, so restarting the office never kills one.
 KillMode=control-group
 Restart=on-failure
