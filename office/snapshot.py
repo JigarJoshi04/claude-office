@@ -554,7 +554,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.154.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.155.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -613,6 +613,7 @@ class Office(LiveOffice):
                 self.emit("promise", f"Promise kept: '{p['title']}' is done{', ' + promises.early_words(early) if early >= 60 else ''}", p.get("seat"), "good")
             else:
                 self.emit("promise", f"Promise broken: '{p['title']}' {p.get('why') or 'was not done in time'}", p.get("seat"), "bad")
+        snap["api_weather"] = self.tokens.weather(now)          # the API's errors in the last half hour (tokens.api_kind)
         snap["promises"] = self.promises.view(now)
         snap["promise_due"] = self.promises.attention(now)
         self.nudged = {k: v for k, v in self.nudged.items() if now - v < 6 * 3600}

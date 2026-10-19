@@ -845,7 +845,7 @@ export function createOffice(stage, handlers) {
     const lo = L.lounge;
     if (!lo) return;
     const wr = windowRect(lo);
-    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night);
+    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night, apiSky === "stormy" ? "storm" : "clear");
     S.drawPoster(ctx, lo.x + 18, lo.y + 7, 1);
     if (has("posters")) { S.drawPoster(ctx, lo.x + 44, lo.y + 7, 0); S.drawPoster(ctx, lo.x + 70, lo.y + 7, 2); }   // office level 7
     if (sets.has("team")) {                              // the team photo: the whole album team set, framed
@@ -916,7 +916,9 @@ export function createOffice(stage, handlers) {
 
   function windowExtras() { return has("balloon") || has("fireworks") ? { balloon: has("balloon"), fireworks: has("fireworks") } : null; }
   // A room's mood weather in its window: rain while the seat is out of plan, clouds while its plan runs low.
+  let apiSky = "clear";                      // the connection's weather (tokens.weather): a storm over every window
   function weatherOf(s) {
+    if (apiSky === "stormy") return "storm";
     if (s.status === "limited") return "rain";
     if (s.status === "benched" || s.status === "offline") return "clear";
     const lefts = ["five_hour", "weekly"].map(k => { const w = (s.usage || {})[k]; return w && w.pct != null ? 100 - w.pct : null; }).filter(v => v != null);
@@ -1787,6 +1789,7 @@ export function createOffice(stage, handlers) {
     petsCheer(seatId) { const pod = L && L.pods.find(p => p.seat.id === seatId); if (!pod) return; petVisit(cat, pod, "sit", 12000, 28); if (has("dog")) petVisit(dog, pod, "sit", 12000, 40); },
     standup: (lines) => startStandup(lines),
     visit: (from, to, text) => startVisit(from, to, text),
+    setApiSky(sky) { apiSky = sky === "stormy" || sky === "cloudy" ? sky : "clear"; },
     help: (seat, text) => sendHelp(seat, text),
     setSquash(n) { squashToday = n == null ? null : Math.max(0, Math.min(999, Math.round(n))); },
     focusShipBoard() { if (L) { const b = BOARD(); focusRect(b.x - 6, b.y - 18, 60, 64); } },

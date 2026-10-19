@@ -92,6 +92,22 @@ class TokenLedgerTests(unittest.TestCase):
         per = {e["seat"]: e["median"] for e in su["seats"]}
         self.assertEqual(per, {"claude": 42_004, "claude2": 50_006})
 
+    def test_the_connections_weather(self):
+        now = time.time()
+        iso = lambda ago: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - ago))
+        err = lambda ago, kind, text: json.dumps({"type": "assistant", "timestamp": iso(ago), "isApiErrorMessage": True, "error": kind,
+                                                 "message": {"content": [{"type": "text", "text": text}]}}) + "\n"
+        (self.proj / "s-main.jsonl").write_text(line("m1", iso(3000)) + err(600, "server_error", "API Error: 529 Overloaded")
+                                                + err(500, "server_error", "API Error: Can't reach the API server") + err(400, "x", "API Error: 500")
+                                                + err(300, "rate_limit", "You've hit your session limit") + err(200, "authentication_failed", "Failed to authenticate"))
+        self.ledger.scan()
+        w = self.ledger.weather(now)
+        self.assertEqual((w["sky"], w["errors"], w["by_kind"]), ("stormy", 3, {"server": 2, "connection": 1}))   # limits and logins left out
+        self.assertEqual(self.ledger.weather(now + 3600)["sky"], "clear")
+        day = time.strftime("%Y-%m-%d", time.gmtime(now))
+        v = self.ledger.view(self.seats, today=day, rng="7")
+        self.assertEqual(v["api_errors"]["by_kind"], {"server": 2, "connection": 1, "login": 1, "other": 0})
+
     def test_counts_dedupes_attributes_and_resumes(self):
         (self.proj / "s-main.jsonl").write_text(line("m1", "2026-10-17T10:00:00Z") + line("m1", "2026-10-17T10:00:00Z")
                                                 + '{"type":"user","message":{"content":"hi"}}\n' + line("m2", "2026-10-18T10:00:00Z"))

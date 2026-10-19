@@ -506,7 +506,9 @@ export function drawBookshelf(ctx, x, y, w) {
 export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear", extras = null) {
   rect(ctx, x - 2, y - 2, w + 4, h + 4, P.trim);
   const g = ctx.createLinearGradient(0, y, 0, y + h);
-  const grey = weather === "rain" ? 0.7 : weather === "cloudy" ? 0.45 : 0;
+  const storm = weather === "storm", flash = storm && t % 5200 < 140;   // a storm: rain, and lightning now and then
+  if (storm) weather = "rain";
+  const grey = weather === "rain" ? (storm ? 0.82 : 0.7) : weather === "cloudy" ? 0.45 : 0;
   const mix = (c) => grey ? blend(c, night ? "#1b2030" : "#7c8698", grey) : c;
   g.addColorStop(0, mix(sky[0])); g.addColorStop(1, mix(sky[1]));
   ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
@@ -517,10 +519,11 @@ export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear", ex
       const cx = x + ((drift + i * 19) % (w + 20)) - 10, cy = y + 2 + i * 3;
       rect(ctx, cx, cy + 1, 12, 3, cloud); rect(ctx, cx + 2, cy, 7, 1, cloud);
     }
-    if (weather === "rain") for (let i = 0; i < 9; i++) {
-      const rx = x + (hashOf("r" + i + x) % w) - ((t / 40 + i * 5) % 6), ry = y + ((t / 22 + i * 7) % (h + 4)) - 4;
+    if (weather === "rain") for (let i = 0; i < (storm ? 15 : 9); i++) {
+      const rx = x + (hashOf("r" + i + x) % w) - ((t / 40 + i * 5) % 6), ry = y + ((t / (storm ? 14 : 22) + i * 7) % (h + 4)) - 4;
       rect(ctx, rx, ry, 1, 3, night ? "rgba(150,170,210,0.6)" : "rgba(220,232,250,0.85)");
     }
+    if (flash) { ctx.fillStyle = "rgba(255,255,240,0.55)"; ctx.fillRect(x, y, w, h); const bx = x + (hashOf("bolt" + x + Math.floor(t / 5200)) % Math.max(1, w - 6)); rect(ctx, bx + 3, y, 1, 4, "#fffbe0"); rect(ctx, bx + 2, y + 4, 1, 3, "#fffbe0"); rect(ctx, bx + 3, y + 7, 1, 4, "#fffbe0"); }
     ctx.restore();
   }
   if (night) {

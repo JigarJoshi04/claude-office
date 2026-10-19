@@ -279,6 +279,21 @@ function renderTokensInner(el, app) {
       <div class="tok-parts" style="margin:12px 0 0">${w.output ? `<span title="Thinking is part of the output: what the models reasoned before they wrote">${icon("sparkles", 13)}${tp}% of the output was thinking (${big(w.thinking)})</span>` : ""}
         ${w.searches || w.fetches ? `<span>${icon("search", 13)}${w.searches.toLocaleString()} web search${w.searches === 1 ? "" : "es"} · ${w.fetches.toLocaleString()} page fetch${w.fetches === 1 ? "" : "es"}</span>` : ""}</div></div>`;
   }
+  // The connection: the API errors sessions met (not usage limits), per kind and per day.
+  function apiCard() {
+    const a = t.api_errors;
+    if (!a) return "";
+    const k = a.by_kind || {}, total = (k.server || 0) + (k.connection || 0) + (k.login || 0) + (k.other || 0);
+    const days = Object.entries(a.days || {}).slice(-30), most = Math.max(1, ...days.map(([, e]) => Object.values(e).reduce((x, y) => x + y, 0)));
+    return `<div class="view-card"><h5>The connection · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+      ${total ? `<div class="tok-parts" style="margin-top:0"><span>${icon("zap", 13)}${(k.server || 0).toLocaleString()} server error${k.server === 1 ? "" : "s"} (5xx, overloaded)</span>
+        <span>${icon("alert", 13)}${(k.connection || 0).toLocaleString()} connection drop${k.connection === 1 ? "" : "s"}</span><span>${icon("lock", 13)}${(k.login || 0).toLocaleString()} expired login${k.login === 1 ? "" : "s"}</span>
+        ${k.other ? `<span>${k.other.toLocaleString()} other</span>` : ""}</div>
+        <div class="api-days" role="img" aria-label="API errors per day">${days.map(([d, e]) => { const n = Object.values(e).reduce((x, y) => x + y, 0);
+          return `<i style="height:${Math.max(4, n / most * 100)}%" title="${esc(new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${n} error${n === 1 ? "" : "s"}"></i>`; }).join("")}</div>`
+        : `<div class="tok-parts" style="margin-top:0"><span>${icon("check", 13)}No API errors ${esc(rangeWord[rng])}</span></div>`}
+      <p class="hint">Errors Claude Code met talking to the API, from the transcripts: the service failing or overloaded, the connection dropping, a login expiring. Usage limits are the plan, not the weather, and are left out. Sessions retry on their own.</p></div>`;
+  }
   // Start-up weight: the first prompt of each session (system prompt, tools, MCP servers, CLAUDE.md, first message).
   function startCard() {
     const su = t.startup;
@@ -352,6 +367,7 @@ function renderTokensInner(el, app) {
     ${whereCard()}
     ${cacheCard()}
     ${startCard()}
+    ${apiCard()}
     ${timeCard()}
     ${waitCard(t, { label: RANGES.find(r => r[0] === rng)[1].toLowerCase(), who, priv })}
     ${shipCard()}

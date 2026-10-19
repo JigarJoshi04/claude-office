@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.155.0] - 2026-10-19
+
+### Added
+- The connection's weather. API errors that sessions meet (the service failing or overloaded, the connection
+  dropping, a login expiring; not usage limits, which are the plan) are read from the transcripts. With one or two in
+  the last half hour an "API cloudy" chip shows in the header; with three or more it is "API stormy" and a storm
+  (rain and lightning) passes over every window on the floor. The tokens page counts them per kind and per day. The
+  ledger reads its transcripts once more. The demo shows the storm with `?storm=1`.
+
 ## [3.154.0] - 2026-10-19
 
 ### Added

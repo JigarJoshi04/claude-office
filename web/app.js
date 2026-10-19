@@ -361,6 +361,18 @@ const wrapped = makeWrapped({ app, panels, store, DEMO, prefs, toast });
 // full game intensity, never in replay.
 function helpDesk(seat, text) { if (seat && !replay.active() && prefs.game === "full" && prefs.view === "floor" && !document.hidden) office.help(seat, text); }
 app.helpDesk = (seat) => helpDesk(seat, "Saw the nudge. Need a hand?");
+// The connection's weather (tokens.weather): API errors in the last half hour, as a chip and a storm on the floor.
+function apiWeather(w) {
+  if (DEMO && QS.has("storm")) w = { sky: "stormy", errors: 4, by_kind: { server: 3, connection: 1 } };   // the demo's ?storm=1
+  const chip = $("apiwx"), sky = (w && w.sky) || "clear";
+  office.setApiSky && office.setApiSky(sky);
+  if (sky === "clear") { chip.hidden = true; return; }
+  const kinds = Object.entries(w.by_kind || {}).map(([k, n]) => `${n} ${k}`).join(", ");
+  chip.hidden = false; chip.className = "wxchip " + sky;
+  chip.innerHTML = `${icon(sky === "stormy" ? "zap" : "alert", 13)}API ${sky}`;
+  chip.title = `${w.errors} API error${w.errors === 1 ? "" : "s"} in the last 30 minutes (${kinds}). Sessions retry on their own; the Tokens page has the days.`;
+}
+$("apiwx").addEventListener("click", () => setView("tokens"));
 // Chapters (ui/chapters.js): the team's XP since the chapter began fills a 30-tier track; each new tier brings a gift.
 let chapter = null;
 app.chapter = () => chapter;
@@ -598,6 +610,7 @@ function apply(next) {
   const first = !snap;
   prevLive = snap ? snap.seats.reduce((n, s) => n + live(s).length, 0) : null;   // who was in before this refresh (First one in)
   snap = next; setNow(snap.now);
+  apiWeather(snap.api_weather);
   chapterTick();
   if (!DEMO && snap.promises && snap.promises.kept >= 5) badge(award("reliable"));   // the fifth kept promise (award says it once)
   setLooks(Object.fromEntries([...snap.seats.filter(s => s.look).map(s => ["mascot-" + s.id, s.look]),   // the character creator's looks

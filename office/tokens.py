@@ -20,6 +20,7 @@ transcript Claude Code has since deleted keeps what the old file had.
 from __future__ import annotations
 
 import json
+from collections import deque
 import os
 import re
 import statistics
@@ -31,7 +32,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 15               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 16               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -63,6 +64,24 @@ _COMMIT_NO = re.compile(r"nothing (?:added )?to commit|no changes added|aborting
 
 REBUILD_MIN = 20_000           # a cache write this big after the cache expired counts as a cold rebuild
 TOOL_MAX_S = 4 * 3600          # a tool call longer than this is a session left open, not a slow tool
+
+
+def api_kind(d: dict) -> str | None:
+    """An API error line's kind: server (5xx, overloaded), connection, login or other; None for a usage limit."""
+    err = str(d.get("error") or "")
+    text = ""
+    for c in ((d.get("message") or {}).get("content") or []) if isinstance(d.get("message"), dict) else []:
+        if isinstance(c, dict) and c.get("type") == "text":
+            text = str(c.get("text") or "")
+    if err == "rate_limit" or "hit your" in text and "limit" in text:
+        return None
+    if "authentication" in err or "authenticate" in text.lower():
+        return "login"
+    if "reach the API" in text or "connection" in text.lower() or "ECONN" in text or "timed out" in text.lower():
+        return "connection"
+    if err in ("server_error", "overloaded_error", "api_error") or "overloaded" in text.lower() or re.search(r"API Error: 5\d\d", text):
+        return "server"
+    return "other"
 
 
 def tool_group(name: str) -> str:
@@ -265,6 +284,7 @@ class TokenLedger:
         self._counted = None                    # what the response being read (self._last) has been counted at so far
         self._helper_file = False               # the file being read is a helper's (a subagent's)
         self._tool_open: dict = {}
+        self.api_recent: deque = deque(maxlen=500)   # (when, kind, seat) of the last day's API errors, as they are read
         self._xusd = 0                          # the same, for its price
         self.data = self._load()
 
@@ -285,7 +305,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
-                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm", "tt", "su") if k in r}
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm", "tt", "su", "ae") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
@@ -492,6 +512,8 @@ class TokenLedger:
         priced = self._cost(raw, sid) if b'"usage"' in raw and b'"assistant"' in raw else False   # a line can carry both
         if not self._helper_file and (b'"tool_use"' in raw or b'"tool_result"' in raw):
             priced |= self._tool_time(raw, sid)
+        if b'"isApiErrorMessage"' in raw:
+            priced |= self._api_error(raw, sid)
         if b'"tool_use"' in raw and (b'"WebSearch"' in raw or b'"WebFetch"' in raw):
             priced |= self._web(raw, sid)
         if b'"tool_use"' in raw and b'"Bash"' in raw and (b"git" in raw or b"gh " in raw):
@@ -603,6 +625,26 @@ class TokenLedger:
             if gap > w[2]:
                 w[2], w[4] = round(gap), round(end)
             w[5 + next(i for i, e in enumerate(WAIT_EDGES) if gap <= e)] += 1
+        return True
+
+    def _api_error(self, raw: bytes, sid: str) -> bool:
+        """An API error a session met (Claude Code writes them into the transcript): per day and kind. Usage limits are
+        the plan, counted elsewhere; the rest is the connection's weather. The last day's are kept for "now"."""
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return False
+        kind = api_kind(d) if isinstance(d, dict) and d.get("isApiErrorMessage") is True else None
+        if not kind:
+            return False
+        day, _ = _when(d.get("timestamp"))
+        at = _epoch(d.get("timestamp"))
+        with self.lock:
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+            e = s.setdefault("ae", {}).setdefault(day or "?", {})
+            e[kind] = e.get(kind, 0) + 1
+            if at and time.time() - at < 86400:
+                self.api_recent.append((at, kind, s.get("s")))
         return True
 
     def _tool_time(self, raw: bytes, sid: str) -> bool:
@@ -887,6 +929,18 @@ class TokenLedger:
             self._last_call = (self.scanned_at, out)
             return out
 
+    def weather(self, now: float | None = None) -> dict:
+        """The connection's weather now: the API errors sessions met in the last 30 minutes (not logins, which Needs
+        you covers): clear, cloudy (one or two) or stormy (three or more)."""
+        now = now or time.time()
+        with self.lock:
+            recent = [(at, k) for at, k, _ in self.api_recent if now - at < 1800 and k != "login"]
+        by: dict = {}
+        for _, k in recent:
+            by[k] = by.get(k, 0) + 1
+        n = len(recent)
+        return {"sky": "stormy" if n >= 3 else "cloudy" if n else "clear", "errors": n, "by_kind": by, "last_at": max((a for a, _ in recent), default=None)}
+
     def per_day_seat(self, known: set, codex: str | None = None) -> dict:
         """Every day's tokens and shipped work per seat (for exports and the monthly report):
         {(day, seat or None): [fresh, cache, output, usd, commits, prs_opened, prs_merged]}."""
@@ -1161,6 +1215,13 @@ class TokenLedger:
             for d, v in (r.get("web") or {}).items():                    # counted from the calls (see _web)
                 if cur is None or d in cur:
                     where[2] += v[0]; where[3] += v[1]
+        api: dict = {}                                                    # the connection's weather: errors per day and kind
+        for r in mine.values():
+            for d, per in (r.get("ae") or {}).items():
+                if cur is None or d in cur:
+                    e = api.setdefault(d, {})
+                    for k, n in per.items():
+                        e[k] = e.get(k, 0) + n
         starts: dict = {}                                                 # start-up weight: per seat, each session's first prompt
         for r in mine.values():
             su = r.get("su")
@@ -1253,6 +1314,7 @@ class TokenLedger:
             "where": {"helpers": where[0], "main": max(0, tot[0] + tot[1] - where[0]), "thinking": where[1], "output": tot[2],
                       "searches": where[2], "fetches": where[3],
                       "rebuilds": rebuilt[0], "rebuild_tokens": rebuilt[1], "rebuild_usd": round(rebuilt[2] / 1e6, 2)},
+            "api_errors": {"days": dict(sorted(api.items())), "by_kind": {k: sum(e.get(k, 0) for e in api.values()) for k in ("server", "connection", "login", "other")}},
             "startup": {"sessions": sum(len(v) for v in starts.values()), "tokens": sum(sum(v) for v in starts.values()),
                         "median": round(statistics.median([x for v in starts.values() for x in v])) if starts else None,
                         "seats": sorted(({"seat": k, "sessions": len(v), "median": round(statistics.median(v)), "tokens": sum(v)} for k, v in starts.items()),
