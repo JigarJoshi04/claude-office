@@ -3,6 +3,16 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.148.0] - 2026-10-19
+
+### Added
+- A lane in its own git worktree. A switch on the hiring desk gives the lane a new branch (`lane/<id>`) checked out
+  beside the repository (`<repo>.lanes/<id>`, never inside it, where tests and searches would find the copy), and the
+  lane works at the same place inside the copy. A list hire gives each lane its own. The lane's page names the branch
+  and how to remove the worktree; it stays when the lane is done. The lane policy applies to the copy too.
+- The hiring desk's collision guard: when live sessions wrote in the working tree of the chosen folder lately, it
+  says who, and suggests a worktree or another folder.
+
 ## [3.147.0] - 2026-10-19
 
 ### Fixed (QA round 22)

@@ -350,7 +350,8 @@ def start_scheduled(seats: list[dict], now: float | None = None, can_hire: bool 
 def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, permission_mode: str,
                 seat_ids: list[str], cfg: dict, launch: bool = True, allow_messages: bool = True,
                 resume_session: str | None = None, chain: list[dict] | None = None, chain_of: dict | None = None,
-                schedule: dict | None = None, max_minutes: int | None = None, bakeoff: dict | None = None) -> dict:
+                schedule: dict | None = None, max_minutes: int | None = None, bakeoff: dict | None = None,
+                worktree: bool = False) -> dict:
     title = " ".join(str(title).split())[:80]
     if max_minutes is not None and (isinstance(max_minutes, bool) or not isinstance(max_minutes, int) or not 5 <= max_minutes <= 1440):
         raise ValueError("A time limit is 5 to 1440 minutes")
@@ -372,6 +373,14 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
     lane_id = f"{time.strftime('%m%d-%H%M%S')}-{_slug(title)}"
     if lane_dir(lane_id).exists():                       # two hires in the same second with the same title
         lane_id = f"{lane_id[:-4] if len(lane_id) > 40 else lane_id}-{os.urandom(2).hex()}"
+    tree = None
+    if worktree:                                         # its own checkout on a new branch, next to the repository
+        workdir, tree = make_worktree(workdir, lane_id)
+        try:
+            check_policy(workdir, permission_mode, cfg)
+        except ValueError:
+            remove_worktree(tree)
+            raise
     d = lane_dir(lane_id)
     d.mkdir(parents=True, exist_ok=False)
     d.chmod(0o700)   # briefs and logs can hold private details
@@ -387,6 +396,7 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
         "schedule": schedule,
         "max_minutes": max_minutes,                            # its time budget, from when it first starts (None: none)
         "bakeoff": bakeoff,                                    # {"id", "side": "A" | "B", "winner"}: one of two contenders
+        "worktree": tree,                                      # {"path", "branch", "repo"}: its own git worktree, or None
     }
     if schedule:                                       # starts later: the office starts it when it is due
         lane["status"] = "scheduled"
@@ -394,6 +404,31 @@ def create_lane(title: str, brief: str, workdir: str, seat: str, model: str, per
     if launch and not schedule:
         start_unit(lane_id)
     return load_lane(lane_id) or lane
+
+
+def make_worktree(workdir: str, lane_id: str) -> tuple[str, dict]:
+    """A git worktree for a lane: a new branch lane/<id> from the repository's HEAD, checked out in <repo>.lanes/<id>
+    beside the repository (never inside it, where its tests and searches would find the copy). Returns the folder the
+    lane works in (the same place inside the copy as workdir was in the repository) and {path, branch, repo}."""
+    git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True, timeout=60)
+    r = git("-C", workdir, "rev-parse", "--show-toplevel")
+    if r.returncode != 0:
+        raise ValueError(f"{workdir} is not in a git repository, so the lane cannot have its own worktree there")
+    top = r.stdout.strip()
+    dest, branch = os.path.join(os.path.dirname(top), os.path.basename(top) + ".lanes", lane_id), f"lane/{lane_id}"
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    r = git("-C", top, "worktree", "add", "-q", "-b", branch, dest, "HEAD")
+    if r.returncode != 0:
+        raise ValueError("Could not make the lane's worktree: " + (r.stderr or r.stdout).strip()[:200])
+    rel = os.path.relpath(workdir, top)
+    return (dest if rel == "." else os.path.join(dest, rel)), {"path": dest, "branch": branch, "repo": top}
+
+
+def remove_worktree(tree: dict | None) -> None:
+    """Take a lane's worktree away again (its branch stays), when the lane could not be hired after all."""
+    if not tree:
+        return
+    subprocess.run(["git", "-C", tree["repo"], "worktree", "remove", "--force", tree["path"]], capture_output=True, text=True, timeout=60)
 
 
 def policy(cfg: dict) -> dict:

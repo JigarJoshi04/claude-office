@@ -1271,7 +1271,8 @@ export function makePanels(app) {
       ${section("Runs", runs.length ? runs.slice().reverse().map(r => `<div class="act ${r.ended_by === "limit" ? "warn" : r.rc === 0 ? "good" : r.rc == null ? "" : "bad"}">${icon(r.ended_by === "limit" ? "sleep" : r.rc === 0 ? "check" : r.rc == null ? "play" : "alert", 16)}<span>${esc(nameOf(r.seat))}${r.rc != null ? ` · exit ${r.rc}` : " · running"}${r.ended_by ? " · hit its limit, moved on" : ""}</span><span class="when">${clock(r.started_at)}</span></div>`).join("") : `<div class="muted">Not started yet.</div>`)}
       ${section("Brief", `<div class="quote">${esc(d ? d.brief : "")}</div>`)}
       ${section("Log", `<pre class="pre">${esc((d && d.log) || "")}</pre>`)}
-      ${section("Details", `<dl class="facts"><dt>Lane id</dt><dd><code>${esc(l.id)}</code></dd><dt>Unit</dt><dd><code>${esc(l.unit)}</code></dd><dt>Folder</dt><dd><code>${esc(l.workdir)}</code></dd></dl>`)}`,
+      ${section("Details", `<dl class="facts"><dt>Lane id</dt><dd><code>${esc(l.id)}</code></dd><dt>Unit</dt><dd><code>${esc(l.unit)}</code></dd><dt>Folder</dt><dd><code>${esc(l.workdir)}</code></dd>
+        ${l.worktree ? `<dt>Worktree</dt><dd>Branch <code>${esc(l.worktree.branch)}</code>, its own checkout. It stays when the lane is done; to remove it: <code>git -C ${esc(l.worktree.repo)} worktree remove ${esc(l.worktree.path)}</code></dd>` : ""}</dl>`)}`,
       bind(root) {
         const stop = root.querySelector("#lStop"), res = root.querySelector("#lResume"), clone = root.querySelector("#lClone"), chat = root.querySelector("[data-chat-session]");
         const front = root.querySelector("#lFront");
@@ -1331,6 +1332,19 @@ export function makePanels(app) {
       ${lm.pace.length > 2 ? `<div class="card">${usageSpark(lm.pace, { color: s.color, now: lm.at, label: p.name + (wk ? " week" : " 5-hour window") + " before it ran out" })}</div>` : ""}
       ${lm.sessions.length ? `<div class="pm-who">${lm.sessions.map(x => `<div class="pm-row"><span class="grow ${priv ? "private" : ""}">${esc(priv ? (x.kind === "lane" ? "A lane" : "A session") : x.name)}</span><span class="tb-bar"><i style="width:${x.share}%"></i></span><b>${x.share}%</b><small>${fmtTok(x.tokens)}</small></div>`).join("")}</div>` : ""}
       ${tip ? `<p class="hint">${icon("sparkles", 13)} ${esc(tip)}</p>` : ""}</div>`);
+  }
+  // The hiring desk's collision guard: live sessions that wrote in the working tree this folder belongs to, lately.
+  function clashHtml(dir) {
+    const d = String(dir || "").trim().replace(/\/+$/, "");
+    if (!d) return "";
+    const inside = (a, b) => a === b || a.startsWith(b + "/");
+    const who = [];
+    for (const s of S().seats) for (const x of s.sessions || []) {
+      if (x.live === false || !x.touch) continue;
+      if (Object.keys(x.touch.roots || {}).some(r => inside(d, r) || inside(r, d))) who.push(`${x.name || "a session"} on ${P(s).name}`);
+    }
+    if (!who.length) return "";
+    return `<p class="hint bad-t" style="margin:-6px 0 10px">${icon("branch", 13)} ${esc(app.privacy() ? `${who.length} session${who.length > 1 ? "s are" : " is"}` : who.slice(0, 2).join(" and ") + (who.length > 2 ? ` and ${who.length - 2} more` : "") + (who.length > 1 ? " are" : " is"))} editing in this working tree right now. Give the lane its own worktree, or pick another folder.</p>`;
   }
   // Promises (promises.py): by when a lane's work will be done, kept or broken by its own report.
   const PROMISE_BY = [["2h", "In 2 hours"], ["eod", "Today, 6 pm"], ["tom", "Tomorrow, 10 am"], ["fri", "Friday, 6 pm"], ["mon", "Monday, 10 am"]];
@@ -1548,6 +1562,8 @@ export function makePanels(app) {
         <div class="row" style="gap:8px;margin:-6px 0 12px;flex-wrap:wrap"><button class="btn sm" id="hSharpen" ${coachState && coachState.pending ? "disabled" : ""}>${icon("sparkles", 14)}Sharpen the brief</button><span class="hint">How big jobs like it have been, and the analyst's read when it is on</span></div>
         <div id="hCoach" aria-live="polite">${coachHtml(coachState, { now: d.brief, model: d.model || ld.model, privacy: app.privacy() })}</div>
         <label class="f">Working folder<input type="text" id="hDir" list="hDirs" value="${esc(d.workdir || snap.office.default_workdir || "")}"><datalist id="hDirs">${dirs.map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
+        <div id="hClash" aria-live="polite">${clashHtml(d.workdir || snap.office.default_workdir || "")}</div>
+        <label class="check" style="margin:-4px 0 12px"><input type="checkbox" id="hTree" ${d.worktree ? "checked" : ""}> Its own git worktree: a new branch, checked out beside the repository</label>
         <div class="grid2">
           <label class="f">Who does it<select id="hSeat"><option value="auto" ${d.seat === "auto" ? "selected" : ""}>Let the divider pick (now ${esc(np.seat ? nameOf(np.seat) : "nobody")})</option>
             ${snap.seats.map(s => `<option value="${esc(s.id)}" ${d.seat === s.id ? "selected" : ""}>${esc(P(s).name)} · ${esc(SEAT_LABEL[s.status] || s.status)}</option>`).join("")}</select></label>
@@ -1584,7 +1600,7 @@ export function makePanels(app) {
       ${section("Office lanes", `<div id="laneList">${laneListHtml()}</div>`)}`,
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
-        const save = () => { hireDraft = { ...hireDraft, promise: q("hPromise").value, title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
+        const save = () => { hireDraft = { ...hireDraft, promise: q("hPromise").value, worktree: q("hTree").checked, title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
           start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "", each: q("hEach").value, max_minutes: +q("hMax").value || null }; store.set("hireDraft", hireDraft); };
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen", "hEach"].forEach(id => q(id).addEventListener("input", save));
         for (const id of ["hSeat", "hModel"]) q(id).addEventListener("change", () => { q("hModelHint").innerHTML = modelHint(q("hSeat").value, q("hModel").value); });
@@ -1627,6 +1643,8 @@ export function makePanels(app) {
         });
         q("hMsg").addEventListener("change", save);
         q("hMax").addEventListener("change", save);
+        q("hTree").addEventListener("change", () => { hireDraft = { ...hireDraft, worktree: q("hTree").checked }; store.set("hireDraft", hireDraft); });
+        q("hDir").addEventListener("input", debounce(() => { q("hClash").innerHTML = clashHtml(q("hDir").value); }, 250));
         q("hPromise").addEventListener("change", () => { hireDraft = { ...hireDraft, promise: q("hPromise").value }; store.set("hireDraft", hireDraft); });
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
         q("hStart").addEventListener("change", () => { save(); app.rerender(true); });

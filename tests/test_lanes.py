@@ -262,6 +262,42 @@ class MemoryCapTests(unittest.TestCase):
         self.assertEqual(lanes.unit_limits({"lane_policy": {"memory_max": "0", "tasks_max": 0}}), [])
 
 
+class WorktreeTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.repo = self.root / "proj"
+        (self.repo / "src").mkdir(parents=True)
+        (self.repo / "src" / "a.py").write_text("x = 1\n")
+        git = lambda *a: subprocess.run(["git", "-C", str(self.repo), *a], capture_output=True, text=True, check=True)
+        git("init", "-q"); git("-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "first")
+        p = patch.object(config, "DATA_DIR", self.root / "data")
+        p.start(); self.addCleanup(p.stop)
+        self.cfg = {"default_workdir": str(self.repo), "lane_policy": {}, "lane_defaults": {"model": "opus"}}
+
+    def test_a_lane_in_its_own_worktree_on_a_new_branch(self):
+        with patch.object(lanes, "start_unit"):
+            lane = lanes.create_lane("Fix it", "Brief.", str(self.repo / "src"), "auto", "opus", "acceptEdits", ["c1"], self.cfg, worktree=True)
+        t = lane["worktree"]
+        self.assertEqual(Path(t["path"]).parent, self.root / "proj.lanes")              # beside the repository, never inside it
+        self.assertEqual(lane["workdir"], os.path.join(t["path"], "src"))               # the same place inside the copy
+        self.assertTrue((Path(lane["workdir"]) / "a.py").exists())
+        branches = subprocess.run(["git", "-C", str(self.repo), "branch", "--list", t["branch"]], capture_output=True, text=True).stdout
+        self.assertIn(t["branch"], branches)
+
+    def test_not_a_repository_or_refused_by_the_policy(self):
+        plain = self.root / "plain"
+        plain.mkdir()
+        with patch.object(lanes, "start_unit"), self.assertRaisesRegex(ValueError, "not in a git repository"):
+            lanes.create_lane("X", "Brief.", str(plain), "auto", "opus", "acceptEdits", ["c1"], self.cfg, worktree=True)
+        cfg = dict(self.cfg, lane_policy={"roots": [str(self.repo)]})                    # the copy beside it is outside the roots
+        with patch.object(lanes, "start_unit"), self.assertRaisesRegex(ValueError, "Lanes work only under"):
+            lanes.create_lane("Y", "Brief.", str(self.repo), "auto", "opus", "acceptEdits", ["c1"], cfg, worktree=True)
+        self.assertEqual(list((self.root / "proj.lanes").iterdir()), [])                  # its worktree was taken away again
+
+
 class BakeoffTests(unittest.TestCase):
     def test_two_contenders_one_brief_and_a_verdict(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(lanes, "lanes_dir", return_value=Path(tmp) / "lanes"):
