@@ -11,6 +11,10 @@ fixes target the current repository version.
 
 - **Local service:** HTTP binds to 127.0.0.1. Host and Origin validation defend against foreign pages and DNS
   rebinding; exposing it through a public proxy is outside the supported deployment model.
+- **Other accounts on the machine:** a loopback port has no notion of who is asking, so the office looks up the
+  owner of each client socket in `/proc/net/tcp` and answers only the user it runs as. Another Unix account gets a
+  refusal for every request, reads included (conversations, briefs, the cabinet). `"same_user_only": false` in
+  `config.json` turns this off.
 - **Write authority:** all HTTP writes require the per-install office token and JSON. The local page receives
   that token; a remote page must never receive it through CORS or caching.
 - **Account secrets:** account credentials are used locally for usage queries, never intentionally exposed to

@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.173.0] - 2026-10-19
+
+### Security
+- Only you: the office answers only the Unix user it runs as. It looks up who owns each loopback connection in
+  `/proc/net/tcp`, so another account on the same machine can no longer read conversations, briefs, the cabinet or
+  session details through 127.0.0.1 (writes already needed the token). `"same_user_only": false` turns it off.
+
 ## [3.172.0] - 2026-10-19
 
 ### Fixed (QA round 24: data, server and command line)

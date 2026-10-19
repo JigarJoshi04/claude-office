@@ -180,7 +180,7 @@ class StreamTests(unittest.TestCase):
             self.office.emit("report", "Demo report")
             self.office.build()
         self.assertEqual(self.office.get()["office"]["started_at"], before)
-        self.assertEqual(self.office.get()["office"]["version"], "3.172.0")
+        self.assertEqual(self.office.get()["office"]["version"], "3.173.0")
 
 
 class StatusLineTests(unittest.TestCase):

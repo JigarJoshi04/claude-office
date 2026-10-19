@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import askabout, asks, brain, checkpoint, coach, conversation, export, rescue, config, divider, lanes, messaging, sdnotify, sessions, talk, settings, tokens
+from . import askabout, asks, brain, checkpoint, coach, conversation, export, peer, rescue, config, divider, lanes, messaging, sdnotify, sessions, talk, settings, tokens
 from . import reminders as reminders_mod
 
 MAX_BODY = 256 * 1024
@@ -193,7 +193,8 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.172.0"
+    same_user = True       # only this Unix user (peer.py); config "same_user_only": false turns it off
+    server_version = "ClaudeOffice/3.173.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -226,6 +227,9 @@ class Handler(BaseHTTPRequestHandler):
             return False
         origin = self.headers.get("Origin")
         if origin and origin.lower() not in {"http://" + h for h in allowed}:
+            return False
+        addr, srv = getattr(self, "client_address", None), getattr(self, "server", None)    # (absent on a handler built by hand)
+        if self.same_user and addr and srv and not peer.same_user(addr[1], srv.server_port):   # another account on this machine
             return False
         return True
 
@@ -771,6 +775,7 @@ def serve(port: int, demo: bool = False) -> None:
     Handler.token = config.api_token() if not demo else "demo"
     Handler.port = port
     Handler.demo = demo
+    Handler.same_user = (getattr(office, "cfg", {}) or {}).get("same_user_only", True) is not False
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     httpd.daemon_threads = True
     print(f"Claude Office {'(demo) ' if demo else ''}is open at http://127.0.0.1:{port}", flush=True)
