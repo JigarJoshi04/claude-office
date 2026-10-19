@@ -845,7 +845,7 @@ export function createOffice(stage, handlers) {
     const lo = L.lounge;
     if (!lo) return;
     const wr = windowRect(lo);
-    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night, apiSky === "stormy" ? "storm" : "clear");
+    S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, reduced ? 0 : t, env.night, apiSky === "stormy" ? "storm" : "clear");   // no flashes under reduced motion
     S.drawPoster(ctx, lo.x + 18, lo.y + 7, 1);
     if (has("posters")) { S.drawPoster(ctx, lo.x + 44, lo.y + 7, 0); S.drawPoster(ctx, lo.x + 70, lo.y + 7, 2); }   // office level 7
     if (sets.has("team")) {                              // the team photo: the whole album team set, framed
@@ -1041,9 +1041,10 @@ export function createOffice(stage, handlers) {
     // Wear and tear: a long session leaves its desk messier, crumpled paper after two hours, a cold cup after four,
     // a takeaway box after eight.
     const hrs = a.sess.started_at ? (Date.now() / 1000 - a.sess.started_at) / 3600 : 0, wy = top ? pod.y + 46 : pod.y + 61;
-    if (hrs >= 2) { S.rect(ctx, x - 6, wy - 1, 2, 2, "#e6e8ee"); S.rect(ctx, x - 5, wy - 1, 1, 1, "#aab0be"); }
-    if (hrs >= 4) { S.rect(ctx, x - 9, wy, 2, 2, "#dfe2ea"); S.rect(ctx, x - 13, wy - 3, 3, 4, "#d9d4c4"); S.rect(ctx, x - 13, wy - 3, 3, 1, "#6b4a2e"); }
-    if (hrs >= 8) { S.rect(ctx, x - 20, wy - 2, 6, 3, "#f4f1e8"); S.rect(ctx, x - 20, wy - 2, 6, 1, "#d64545"); S.rect(ctx, x - 18, wy - 3, 2, 1, "#b8b2a2"); }
+    const fits = (left) => left >= deskFor(pod).x + 3;      // the leftmost seat has little desk beside it: nothing on the rug
+    if (hrs >= 2 && fits(x - 6)) { S.rect(ctx, x - 6, wy - 1, 2, 2, "#e6e8ee"); S.rect(ctx, x - 5, wy - 1, 1, 1, "#aab0be"); }
+    if (hrs >= 4 && fits(x - 13)) { S.rect(ctx, x - 9, wy, 2, 2, "#dfe2ea"); S.rect(ctx, x - 13, wy - 3, 3, 4, "#d9d4c4"); S.rect(ctx, x - 13, wy - 3, 3, 1, "#6b4a2e"); }
+    if (hrs >= 8 && fits(x - 20)) { S.rect(ctx, x - 20, wy - 2, 6, 3, "#f4f1e8"); S.rect(ctx, x - 20, wy - 2, 6, 1, "#d64545"); S.rect(ctx, x - 18, wy - 3, 2, 1, "#b8b2a2"); }
     const c = a.sess.cache;
     if (c && c.window && c.context) {
       const fill = Math.min(1, c.context / c.window), sheets = Math.max(1, Math.round(fill * 7)), px = x + 16, py = top ? pod.y + 46 : pod.y + 61;

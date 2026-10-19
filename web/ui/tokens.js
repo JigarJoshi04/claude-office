@@ -4,6 +4,7 @@
 import { esc, fmtTok, relTime, hydratePortraits, portrait } from "./util.js";
 import { icon } from "./icons.js";
 import { personaFor } from "./personas.js";
+import { localDay } from "./goals.js";
 
 export const TOKEN_METRICS = {   // [button label, what it means, how a sentence says it]
   all: ["All tokens", "everything the models processed, cache reads included", "all tokens"],
@@ -297,13 +298,15 @@ function renderTokensInner(el, app) {
     const a = t.api_errors;
     if (!a) return "";
     const k = a.by_kind || {}, total = (k.server || 0) + (k.connection || 0) + (k.login || 0) + (k.other || 0);
-    const days = Object.entries(a.days || {}).slice(-30), most = Math.max(1, ...days.map(([, e]) => Object.values(e).reduce((x, y) => x + y, 0)));
+    const keys = Object.keys(a.days || {}).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort(), span = [];   // every day, a quiet one too
+    if (keys.length) for (let d = new Date(keys[0] + "T12:00:00"), end = localDay(); localDay(d) <= end && span.length < 800; d.setDate(d.getDate() + 1)) span.push(localDay(d));
+    const days = span.slice(-30).map(d => [d, (a.days || {})[d] || {}]), most = Math.max(1, ...days.map(([, e]) => Object.values(e).reduce((x, y) => x + y, 0)));
     return `<div class="view-card"><h5>The connection · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
       ${total ? `<div class="tok-parts" style="margin-top:0"><span>${icon("zap", 13)}${(k.server || 0).toLocaleString()} server error${k.server === 1 ? "" : "s"} (5xx, overloaded)</span>
         <span>${icon("alert", 13)}${(k.connection || 0).toLocaleString()} connection drop${k.connection === 1 ? "" : "s"}</span><span>${icon("lock", 13)}${(k.login || 0).toLocaleString()} expired login${k.login === 1 ? "" : "s"}</span>
         ${k.other ? `<span>${k.other.toLocaleString()} other</span>` : ""}</div>
         <div class="api-days" role="img" aria-label="API errors per day">${days.map(([d, e]) => { const n = Object.values(e).reduce((x, y) => x + y, 0);
-          return `<i style="height:${Math.max(4, n / most * 100)}%" title="${esc(new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${n} error${n === 1 ? "" : "s"}"></i>`; }).join("")}</div>`
+          return `<i style="height:${n ? Math.max(4, n / most * 100) : 0}%" title="${esc(new Date(d + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }))}: ${n} error${n === 1 ? "" : "s"}"></i>`; }).join("")}</div>`
         : `<div class="tok-parts" style="margin-top:0"><span>${icon("check", 13)}No API errors ${esc(rangeWord[rng])}</span></div>`}
       <p class="hint">Errors Claude Code met talking to the API, from the transcripts: the service failing or overloaded, the connection dropping, a login expiring. Usage limits are the plan, not the weather, and are left out. Sessions retry on their own.</p></div>`;
   }

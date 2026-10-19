@@ -207,10 +207,11 @@ export function makeFloor(ctx) {
   }
   app.setTv = setTv;
   setInterval(() => { const c = document.querySelector(".tv-clock"); if (c) c.textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }, 1000);
-  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("tv") && QS.get("tv") !== "1") setTv(false); });
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && document.body.classList.contains("tv") && QS.get("tv") !== "1" && location.pathname !== "/tv") setTv(false); });
 
   // The room menu (right-click, or Shift+F10 / the context-menu key on a focused room): quick actions for one seat.
   function roomMenu(id, x, y, origin) {
+    if (app.locked && app.locked()) return;              // its actions change things
     const snap = app.snap();
     closeRoomMenu();
     const s = snap && snap.seats.find(z => z.id === id);

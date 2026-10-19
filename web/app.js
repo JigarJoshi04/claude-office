@@ -97,6 +97,7 @@ const app = {
   away: () => away,
   dismissAway: () => { away = null; renderPanel(true); $("panel").focus({ preventScroll: true }); },
   broadcast: (preset, group, value) => broadcast(preset, group, value),
+  locked: () => locked,
   snap: () => snap,
   prefs: () => prefs,
   privacy: () => prefs.privacy,
@@ -410,11 +411,15 @@ async function downloadExport(qs, name) {
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   } catch (e) { toast("Could not export it: " + e.message, "bad"); }
 }
-async function openExport(month = localDay().slice(0, 7)) {
+let exportSeq = 0;
+async function openExport(month = localDay().slice(0, 7), from = null) {
+  if (HARD_LOCK) { toast("This is the read-only TV page: exports are on the office's own page.", "info", { ic: "lock" }); return; }
   const prev = (() => { const d = new Date(month + "-15T12:00:00"); d.setMonth(d.getMonth() - 1); return localDay(d).slice(0, 7); })();
   const next = (() => { const d = new Date(month + "-15T12:00:00"); d.setMonth(d.getMonth() + 1); return localDay(d).slice(0, 7); })();
   let text = "";
+  const seq = ++exportSeq;
   try { text = await (await fetchExport("what=report&month=" + month)).text(); } catch (e) { text = "Could not read the report: " + e.message; }
+  if (seq !== exportSeq || (from && !$("dialog").open)) return;   // a later month was asked for, or the dialog was closed meanwhile
   const files = [["days", "csv", "Days per character"], ["careers", "csv", "Careers"], ["tokens", "csv", "Tokens per day"], ["lanes", "csv", "Lanes"], ["events", "json", "News"]];
   $("dialogBody").innerHTML = `<div class="dh"><b>Your data</b><button class="btn sm ghost" id="exClose" aria-label="Close">${icon("x", 16)}</button></div>
     <div class="db"><div class="row between" style="margin:0 0 8px"><b>The month's report</b><span class="row" style="gap:6px"><button class="btn sm ghost" data-ex-month="${prev}" aria-label="The month before">${icon("back", 14)}</button>
@@ -429,7 +434,8 @@ async function openExport(month = localDay().slice(0, 7)) {
   $("exCopy").addEventListener("click", () => navigator.clipboard.writeText(text).then(() => toast("The report is on the clipboard.", "good"), () => toast("Could not copy.", "warn")));
   $("exSave").addEventListener("click", () => downloadExport("what=report&month=" + month, `claude-office-${month}.md`));
   $("dialogBody").querySelectorAll("[data-ex]").forEach(b => b.addEventListener("click", () => { const [w, f] = b.dataset.ex.split("|"); downloadExport(`what=${w}&format=${f}`, `claude-office-${w}.${f}`); }));
-  $("dialogBody").querySelectorAll("[data-ex-month]").forEach(b => b.addEventListener("click", () => openExport(b.dataset.exMonth)));
+  $("dialogBody").querySelectorAll("[data-ex-month]").forEach(b => b.addEventListener("click", () => openExport(b.dataset.exMonth, b.getAttribute("aria-label"))));
+  if (from) ($("dialogBody").querySelector(`[aria-label="${from}"]`) || $("exClose")).focus();   // the keyboard stays on the arrow
   $("exCal").addEventListener("click", downloadCalendar);
 }
 // The week's plan resets and run-outs as a calendar file (export.plan_calendar), named as the page names the characters.
@@ -437,7 +443,7 @@ function downloadCalendar() {
   const names = encodeURIComponent(JSON.stringify(Object.fromEntries(snap.seats.map(s => [s.id, panels.persona(s).name]))));
   const a = document.createElement("a");
   a.href = "/api/calendar.ics?names=" + names; a.download = "claude-office-plans.ics"; document.body.appendChild(a); a.click(); a.remove();
-  toast("The plan calendar is saved: open it to add the resets to your calendar.", "good", { ic: "calendar" });
+  toast("The plan calendar is downloading: open the file to add the resets to your calendar.", "good", { ic: "calendar" });
 }
 app.openExport = () => openExport();
 app.downloadExport = (qs, name) => downloadExport(qs, name);
@@ -493,6 +499,7 @@ const lightOs = window.matchMedia ? matchMedia("(prefers-color-scheme: light)") 
 function applyTheme() { document.documentElement.dataset.theme = prefs.theme === "system" ? (lightOs && lightOs.matches ? "light" : "dark") : prefs.theme; }
 if (lightOs) lightOs.addEventListener("change", () => { if (prefs.theme === "system") applyTheme(); });
 function setPref(k, v) {
+  if (locked && k === "privacy") { toast(HARD_LOCK ? "This is the read-only TV page: share-safe stays on." : "The screen is locked: share-safe stays on until you unlock it.", "info", { ic: "lock" }); return; }
   delete qsOver[k];
   prefs[k] = v; savePrefs();
   if (k === "theme") applyTheme();
@@ -528,8 +535,11 @@ function setLocked(on) {
     if ($("dialog").open) $("dialog").close();
     if (!("privacy" in qsOver)) { qsOver.privacy = prefs.privacy; prefs.privacy = true; }
   } else if ("privacy" in qsOver) { prefs.privacy = qsOver.privacy; delete qsOver.privacy; }
+  if (!on && QS.get("lock") === "1") { const u = new URL(location.href); u.searchParams.delete("lock"); history.replaceState(null, "", u.pathname + u.search + u.hash); }   // a reload stays unlocked
+  if (on && view && LOCKED_PAGES.includes(view.kind)) go({ kind: "ceo" });
   document.body.classList.toggle("locked", on); lockChip();
   office.setPrivacy(prefs.privacy); renderPanel(true); renderMain(); rnSig = ""; if (snap) renderRightNow();
+  if (!on) $("btnMenu").focus({ preventScroll: true });
   toast(on ? "Screen locked: share-safe and read-only. Hold Esc (or the padlock) for 2 seconds to unlock." : "Screen unlocked.", "info", { ic: "lock", ms: 5000 });
 }
 function holdStart() {
@@ -546,16 +556,21 @@ function lockChip() {
     c.id = "lockChip"; c.type = "button"; c.className = "lockchip";
     c.innerHTML = `${icon("lock", 14)}<span>${HARD_LOCK ? "TV page: read-only" : "Locked · hold to unlock"}</span>`;
     c.title = HARD_LOCK ? "The read-only TV page: the office refuses its writes" : "Share-safe and read-only. Hold here, or hold Esc, for 2 seconds to unlock.";
+    c.setAttribute("aria-label", c.title);                  // on a phone it shows the padlock alone
     c.addEventListener("pointerdown", holdStart);
     for (const ev of ["pointerup", "pointerleave", "pointercancel"]) c.addEventListener(ev, holdStop);
     c.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) { e.preventDefault(); holdStart(); } });
     c.addEventListener("keyup", (e) => { if (e.key === "Enter" || e.key === " ") holdStop(); });
-    document.body.appendChild(c);
   }
+  const home = document.body.classList.contains("tv") ? document.querySelector(".tv-hud") : document.querySelector(".top .actions");
+  if (home && c.parentElement !== home) home.prepend(c);   // in the layout: in the header, or in TV mode's strip
   c.hidden = !locked;
 }
+new MutationObserver(() => { if (locked) lockChip(); }).observe(document.body, { attributes: true, attributeFilter: ["class"] });   // TV on or off
+// Pages that change things are closed while locked; the rest (seats, sessions, lanes, the floor) can be looked at.
+const LOCKED_PAGES = ["hire", "settings", "divider", "inbox", "bakeoff"];
 // While locked only looking around works: views, the floor's camera, TV, replay and the radio.
-const LOCK_KEYS = /^(?:[ftbsklvrgm?0-9=+-]|Arrow\w+| )$/;
+const LOCK_KEYS = /^(?:[ftbsklvrm?0-9=+-]|Arrow\w+| )$/;
 addEventListener("keyup", (e) => { if (e.key === "Escape") holdStop(); });
 
 // ------------------------------------------------------------------------------------------------ routing
@@ -585,6 +600,11 @@ function viewFromHash() {
 window.addEventListener("hashchange", () => { const v = viewFromHash(); if (hashFor(v) !== hashFor(view)) go(v, true); });
 let revealT = 0;
 function go(v, fromHash, opt = {}) {
+  if (locked && v && LOCKED_PAGES.includes(v.kind)) {
+    toast(HARD_LOCK ? "This is the read-only TV page." : "The screen is locked: hold Esc for 2 seconds to unlock it.", "info", { ic: "lock" });
+    if (!fromHash) return;
+    v = { kind: "ceo" };                                  // a link straight to one opens the briefing instead
+  }
   // Opening anything brings a hidden inspector back; from the floor it waits out a double-click (which only flies the
   // camera), so the building does not re-plan under the second click.
   if (!fromHash && !prefs.panel) { clearTimeout(revealT); if (opt.floor) revealT = setTimeout(() => setPref("panel", true), 420); else setPref("panel", true); }
@@ -1557,7 +1577,7 @@ function verbItems(q) {
   if (!snap) return out;
   // "message" needs a colon after who ("message atlas: status?"), so typing a command's name ("Message a group")
   // never turns into a message; the short "msg atlas status?" is clearly meant.
-  let m = /^msg\s+(\S+)\s*:?\s+([\s\S]{1,2000})$/i.exec(q) || /^message\s+(\S+)\s*:\s*([\s\S]{1,2000})$/i.exec(q);
+  let m = /^msg\s+(\S+?)\s*:?\s+([\s\S]{1,2000})$/i.exec(q) || /^message\s+(\S+?)\s*:\s*([\s\S]{1,2000})$/i.exec(q);
   if (m) {
     const who = m[1].toLowerCase(), text = m[2].trim();
     for (const s of snap.seats) {
@@ -1573,12 +1593,13 @@ function verbItems(q) {
       }
     }
   }
+  const seatName = (id) => { const s = id && snap.seats.find(x => x.id === id); return s ? panels.persona(s).name : "any seat"; };
   const laneVerb = (re, statuses, word, path, done) => {
     const mm = re.exec(q);
     if (!mm) return;
     const words = mm[1].toLowerCase().split(/\s+/).filter(Boolean);
     for (const l of (snap.lanes || []).filter(l => statuses.includes(l.status) && words.every(w => (l.title || "").toLowerCase().includes(w))).slice(0, 4))
-      out.push({ verb: true, icon: icon(word === "Stop" ? "stop" : "play", 16), label: `${word} lane ${priv ? "(a lane)" : `“${l.title}”`}`, hint: `${l.status} · ↵ to ${word.toLowerCase()}`, run: async () => {
+      out.push({ verb: true, icon: icon(word === "Stop" ? "stop" : "play", 16), label: `${word} lane ${priv ? `on ${seatName(l.seat || l.seat_pref)}, hired ${dayTime(l.created_at)}` : `“${l.title}”`}`, hint: `${l.status} · ↵ to ${word.toLowerCase()}`, run: async () => {
         if (word === "Stop" && !confirm(`Stop the lane “${l.title}”? Its notes stay, so you can resume it.`)) return;
         try { const r = await app.post(path, { id: l.id, seat: null }); toast(r.demo ? "Demo office: nothing was changed." : done, r.demo ? "info" : "good"); pollOnce(); }
         catch (e) { toast(e.message, "bad"); } } });
@@ -1721,12 +1742,12 @@ document.addEventListener("keydown", (e) => {
   setTimeout(() => office.setHappy(giftBox.happy()), 20000);   // back to normal (or to the real happy hour)
 });
 document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (snap && !locked) openPalette(landFocus(paletteItems()), commandItems); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); if (locked) toast("The screen is locked: search opens again once it is unlocked.", "info", { ic: "lock" }); else if (snap) openPalette(landFocus(paletteItems()), commandItems); return; }
   // A dialog or the palette owns the keyboard while it is open (Escape closes it and nothing else).
   if ((e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) || e.metaKey || e.ctrlKey || e.altKey || document.querySelector(".palette-back, dialog[open]")) return;
   const k = e.key;
   if (locked) {
-    if (k === "Escape") { if (!e.repeat) holdStart(); return; }
+    if (k === "Escape") { if (!e.repeat) { if (replay.active()) replay.close(); holdStart(); } return; }
     if (!LOCK_KEYS.test(k)) return;
   }
   if (replay.active()) {

@@ -135,7 +135,11 @@ def price_tag(office, est: dict | None, seat: str | None) -> dict | None:
     if not sid:
         return None
     ex = office.samples.exchange(snap, sid)
-    pct = {k: round(est["fresh"] / ex[k]) for k in ("five_hour", "weekly") if ex.get(k)}
+    pct = {}
+    for k in ("five_hour", "weekly"):
+        if ex.get(k):
+            v = est["fresh"] / ex[k]
+            pct[k] = round(v) if v >= 1 else max(0.1, round(v, 1))   # a small job is under 1%, not nothing
     return {"seat": sid, **pct} if pct else None
 
 

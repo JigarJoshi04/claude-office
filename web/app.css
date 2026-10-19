@@ -639,7 +639,7 @@ body.resizing .stage, body.resizing .panel { pointer-events: none; }
 .switch input:checked + span { background: var(--good); box-shadow: none; }
 .switch input:checked + span::after { transform: translateX(17px); }
 .switch input:focus-visible + span { outline: 2px solid var(--info); outline-offset: 2px; }
-.seg-ctl { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--surface-2); gap: 2px; }
+.seg-ctl { display: inline-flex; flex-wrap: wrap; max-width: 100%; padding: 3px; border-radius: 10px; background: var(--surface-2); gap: 2px; }   /* wraps on a phone */
 .seg-ctl button { border: 0; background: transparent; padding: 0 12px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--muted); font-weight: 550; white-space: nowrap; }
 .seg-ctl button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .seg-ctl.sm button { height: 26px; padding: 0 9px; font-size: 12px; }
@@ -827,6 +827,7 @@ dialog .db { padding: 16px 20px; max-height: 70vh; overflow: auto; }
 .pk-bar.mid i { background: var(--warn); } .pk-bar.low i { background: var(--bad); }
 .pk-h { margin: 10px 0 4px; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 .pk-row { display: grid; grid-template-columns: 10px auto 1fr; align-items: center; gap: 7px; padding: 3px 0; font-size: 13px; min-width: 0; }
+.pk-row:has(.mdl) { grid-template-columns: 10px auto auto 1fr; }                /* the model tag is a fourth item */
 .pk-row b { font-weight: 600; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 .pk-row span { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pk-more { font-size: 12.5px; color: var(--faint); padding: 2px 0 0 17px; }
@@ -1198,8 +1199,8 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .api-days i { flex: 1; min-width: 3px; background: color-mix(in srgb, var(--bad) 55%, transparent); border-radius: 2px 2px 0 0; }
 .vs-img { width: 100%; border-radius: 12px; display: block; }
 .wxchip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px; border-radius: 99px; border: 0; cursor: pointer; font: 700 12px var(--mono); margin-right: 6px; }
-.wxchip.cloudy { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
-.wxchip.stormy { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }
+.wxchip.cloudy { background: color-mix(in srgb, var(--warn) 18%, transparent); color: color-mix(in srgb, var(--warn) 62%, var(--text)); }   /* readable in both themes */
+.wxchip.stormy { background: color-mix(in srgb, var(--bad) 20%, transparent); color: color-mix(in srgb, var(--bad) 62%, var(--text)); }
 .prm { display: flex; align-items: center; gap: 6px; padding: 6px 4px 6px 10px; border-radius: 10px; background: var(--surface-2); margin-bottom: 6px; box-shadow: inset 3px 0 0 var(--info); }
 .prm.soon { box-shadow: inset 3px 0 0 var(--warn); }
 .prm-go { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; padding: 2px 0; font: inherit; min-width: 0; }
@@ -1864,11 +1865,14 @@ body.tv.tv-night #viewFloor .floor-frame { filter: brightness(.55) saturate(.8);
 .sh-who { color: var(--muted); font-size: 12px; white-space: nowrap; } .sh-pr { font-size: 12.5px; } .good-t { color: var(--good); }
 
 /* The presenter lock (app.js setLocked): read-only and share-safe until the padlock or Esc is held for 2 s */
-body.locked #btnHire, body.locked #btnMenu, body.locked #btnPalette, body.locked .composer, body.locked [data-tv-exit] { display: none !important; }
-.lockchip { position: fixed; top: calc(12px * var(--ui-zoom, 1)); right: 16px; z-index: 60; display: inline-flex; align-items: center; gap: 6px;
+body.locked #btnHire, body.locked #btnMenu, body.locked #btnPalette, body.locked .composer, body.locked [data-tv-exit],
+body.locked .g-need button, body.locked [data-go="hire"], body.locked [data-go="settings"], body.locked [data-go="divider"],
+body.locked [data-go="inbox"], body.locked .snz { display: none !important; }                    /* they change things */
+.lockchip { position: relative; display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap;
   padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
   font: 600 13px var(--font, inherit); cursor: pointer; overflow: hidden; touch-action: none; user-select: none; }
 .lockchip svg { color: var(--accent, #ff7a45); }
 .lockchip::after { content: ""; position: absolute; inset: auto 0 0 0; height: 3px; background: var(--accent, #ff7a45); transform: scaleX(0); transform-origin: left; }
 .lockchip.holding::after { transform: scaleX(1); transition: transform 2s linear; }
-body.tv .lockchip { top: auto; bottom: calc(52px * var(--ui-zoom, 1)); right: 12px; }
+.tv-hud .lockchip { padding: 4px 10px; font-size: 12px; }                     /* in TV mode it sits in the strip, beside the clock */
+@media (max-width: 560px) { .top .lockchip span { display: none; } .top .lockchip { padding: 6px 9px; } }   /* a phone: the padlock alone */

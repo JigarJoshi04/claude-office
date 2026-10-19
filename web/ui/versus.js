@@ -74,11 +74,11 @@ export async function openVersus(app, panels, seatId, otherId) {
     <div class="db"><img class="vs-img" src="${url}" alt="${esc(pa.name)} versus ${esc(pb.name)} over the last seven days">
     <div class="row wrap" style="gap:6px;margin-top:10px"><label class="f" style="margin:0">Against<select data-vs-other>${seats.filter(s => s.id !== a.id).map(s => `<option value="${esc(s.id)}" ${s.id === b.id ? "selected" : ""}>${esc(panels.persona(s).name)}</option>`).join("")}</select></label>
       <span class="grow"></span><button class="btn sm primary" data-vs-save>${icon("download", 14)}Save</button><button class="btn sm" data-vs-copy>${icon("copy", 14)}Copy</button></div>
-    <p class="hint">Codex counts its tokens its own way, so a duel with Codex compares unlike things.</p></div>`;
+    ${a.kind === "codex" || b.kind === "codex" ? `<p class="hint">Codex counts its tokens its own way, so a duel with Codex compares unlike things.</p>` : ""}</div>`;
   if (!d.open) d.showModal();
   d.querySelector("[data-vs-close]").addEventListener("click", () => d.close());
-  d.querySelector("[data-vs-other]").addEventListener("change", (e) => openVersus(app, panels, a.id, e.target.value));
-  d.querySelector("[data-vs-save]").addEventListener("click", () => { const l = document.createElement("a"); l.download = `${pa.name}-vs-${pb.name}.png`.toLowerCase().replace(/[^a-z0-9.-]+/g, "-"); l.href = url; l.click(); });
+  d.querySelector("[data-vs-other]").addEventListener("change", async (e) => { await openVersus(app, panels, a.id, e.target.value); d.querySelector("[data-vs-other]")?.focus(); });   // the keyboard stays on the picker
+  d.querySelector("[data-vs-save]").addEventListener("click", () => { const l = document.createElement("a"); l.download = `${pa.name}-vs-${pb.name}`.toLowerCase().replace(/[^\p{L}\p{N}.-]+/gu, "-").replace(/^-+|-+$/g, "") + ".png"; l.href = url; l.click(); });   // names in any alphabet
   d.querySelector("[data-vs-copy]").addEventListener("click", () => c.toBlob(bl => {
     if (!bl || !navigator.clipboard || !window.ClipboardItem) { toast("Copying pictures is not supported here: use Save.", "info"); return; }
     navigator.clipboard.write([new ClipboardItem({ "image/png": bl })]).then(() => toast("The versus card is on the clipboard.", "good"), () => toast("Could not copy: use Save.", "warn"));

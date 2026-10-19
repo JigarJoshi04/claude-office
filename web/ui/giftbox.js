@@ -111,6 +111,7 @@ export function makeGiftBox(ctx) {
   let opening = false;
   function open(id) {
     if (opening) return;
+    if (app.locked && app.locked()) { toast("The screen is locked: the gift waits until it is unlocked.", "info", { ic: "lock" }); return; }
     office.unwrap(id);
     const before = doneSets();
     const res = gifts.open(id);

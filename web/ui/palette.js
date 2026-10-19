@@ -30,25 +30,25 @@ export function openPalette(items, commands = null) {
   };
   function render() {
     const q = input.value.trim();
-    shown = [...(commands && q ? commands(q) : []), ...items.map(it => [score(it, q), it]).filter(([s]) => s > 0).sort((a, b) => b[0] - a[0]).slice(0, 40).map(([, it]) => it)];
+    shown = [...(commands && q ? commands(q).map(c => ({ ...c, once: true })) : []), ...items.map(it => [score(it, q), it]).filter(([s]) => s > 0).sort((a, b) => b[0] - a[0]).slice(0, 40).map(([, it]) => it)];
     sel = Math.min(sel, Math.max(0, shown.length - 1));
     const recent = !q ? used() : {};
     ul.innerHTML = shown.length ? shown.map((it, i) => `<li role="option" id="pal-${i}" data-i="${i}" class="${i === sel ? "on" : ""}" aria-selected="${i === sel}">
       <span class="ico">${it.icon || "›"}</span><span>${esc(it.label)}</span><small>${esc(recent[it.label] ? "recent" : it.hint || "")}</small></li>`).join("")
-      : `<div class="empty">Nothing matches “${esc(q)}”.</div>`;
-    ul.querySelectorAll("li").forEach(li => {
+      : `<li class="empty" role="presentation">Nothing matches “${esc(q)}”.</li>`;
+    ul.querySelectorAll("li[data-i]").forEach(li => {
       li.addEventListener("mousemove", () => { if (sel !== +li.dataset.i) { sel = +li.dataset.i; mark(); } });
       li.addEventListener("click", () => run(+li.dataset.i));
     });
   }
   function mark() {
-    ul.querySelectorAll("li").forEach((li, i) => { li.classList.toggle("on", i === sel); li.setAttribute("aria-selected", String(i === sel)); });
+    ul.querySelectorAll("li[data-i]").forEach((li, i) => { li.classList.toggle("on", i === sel); li.setAttribute("aria-selected", String(i === sel)); });
     const on = ul.querySelector("li.on");
     if (on) { on.scrollIntoView({ block: "nearest" }); input.setAttribute("aria-activedescendant", on.id); } else input.removeAttribute("aria-activedescendant");   // the screen reader follows the selection
   }
   function close() { back.remove(); }
-  function run(i) { const it = shown[i]; close(); if (it) { if (!it.verb) remember(it); it.run(); } }
-  input.addEventListener("input", () => { sel = 0; render(); });
+  function run(i) { const it = shown[i]; close(); if (it) { if (!it.verb && !it.once) remember(it); it.run(); } }   // a typed one-off is no "recent"
+  input.addEventListener("input", () => { sel = 0; render(); mark(); });
   input.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown") { e.preventDefault(); sel = Math.min(shown.length - 1, sel + 1); mark(); }
     else if (e.key === "ArrowUp") { e.preventDefault(); sel = Math.max(0, sel - 1); mark(); }

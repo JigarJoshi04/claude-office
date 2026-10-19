@@ -166,9 +166,10 @@ def report(office, month: str, private: bool = False, names: dict | None = None)
         out.append(f"- Usage limits hit: {tot['limits']}.")
     if settled:
         out.append(f"- Promises: {sum(p['status'] == 'kept' for p in settled)} kept of {len(settled)}.")
-    out += ["", "## Who did what", "", "| Character | Hours at work | Reports | Sessions | Employee of the day |", "| --- | ---: | ---: | ---: | ---: |"]
-    for sid, e in sorted(who.items(), key=lambda kv: -kv[1]["min"]):
-        out.append(f"| {label.get(sid, sid)} | {e['min'] / 60:.1f} | {e['reports']} | {e['sessions']} | {e['mvp']} |")
+    if who:                                                # a month with tokens but no days on record has no table
+        out += ["", "## Who did what", "", "| Character | Hours at work | Reports | Sessions | Employee of the day |", "| --- | ---: | ---: | ---: | ---: |"]
+        for sid, e in sorted(who.items(), key=lambda kv: -kv[1]["min"]):
+            out.append(f"| {label.get(sid, sid)} | {e['min'] / 60:.1f} | {e['reports']} | {e['sessions']} | {e['mvp']} |")
     if best:
         out += ["", "## Best days", ""]
         for d, (rep, mins) in best:

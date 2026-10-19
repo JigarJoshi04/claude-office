@@ -510,7 +510,7 @@ export function moonPhase(ms) {
 }
 // A 5-pixel moon lit as it is tonight: the shadow comes in from the left as it waxes and from the right as it wanes.
 export function drawMoon(ctx, x, y, phase, skyColor) {
-  const lit = (1 - Math.cos(phase * 2 * Math.PI)) / 2, dark = Math.round((1 - lit) * 5), waxing = phase < 0.5;
+  const lit = (1 - Math.cos(phase * 2 * Math.PI)) / 2, dark = Math.min(4, Math.round((1 - lit) * 5)), waxing = phase < 0.5;   // a thin crescent keeps a column
   if (lit < 0.04) { rect(ctx, x + 1, y, 3, 1, "#3a3f55"); rect(ctx, x, y + 1, 5, 3, "#3a3f55"); rect(ctx, x + 1, y + 4, 3, 1, "#3a3f55"); return; }   // a new moon: just its outline
   const rows = [[1, 3], [0, 5], [0, 5], [0, 5], [1, 3]];
   rows.forEach(([from, n], i) => rect(ctx, x + from, y + i, n, 1, "#f4f1d0"));
@@ -524,7 +524,7 @@ export function drawMoon(ctx, x, y, phase, skyColor) {
 export function drawWindow(ctx, x, y, w, h, sky, t, night, weather = "clear", extras = null) {
   rect(ctx, x - 2, y - 2, w + 4, h + 4, P.trim);
   const g = ctx.createLinearGradient(0, y, 0, y + h);
-  const storm = weather === "storm", flash = storm && t % 5200 < 140;   // a storm: rain, and lightning now and then
+  const storm = weather === "storm", flash = storm && t > 0 && t % 5200 < 140;   // a storm: rain, and lightning now and then (never still: t 0 is reduced motion)
   if (storm) weather = "rain";
   const grey = weather === "rain" ? (storm ? 0.82 : 0.7) : weather === "cloudy" ? 0.45 : 0;
   const mix = (c) => grey ? blend(c, night ? "#1b2030" : "#7c8698", grey) : c;

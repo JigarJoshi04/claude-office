@@ -3,6 +3,36 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.174.0] - 2026-10-19
+
+### Fixed (QA round 24: the page)
+- The presenter lock held only the header: Settings could still be reached and share-safe switched off (losing the
+  viewer's own setting), Goodnight (G) could dim the floor and message lanes, the room menu offered Hire and holiday,
+  the hiring desk could delete templates, and gifts opened. Now share-safe cannot change while locked, the pages that
+  change things (Hire, Settings, Divider, Inbox, bake-offs) stay closed (a link to one opens the briefing), G and the
+  room menu are off, gifts wait, and the buttons that would change things are hidden. Ctrl+K says why it does
+  nothing, Esc still closes a replay, unlocking takes `?lock=1` out of the address and puts the keyboard back.
+- The lock chip sits in the header's buttons (the padlock alone on a phone) and in TV mode's strip, so it never
+  covers the gift chip, the status line or the replay. `/tv` has no exports (they need the token) and stays in TV
+  mode after leaving full screen.
+- A conversation export under share-safe showed the whole chat: the office refuses it now (3.172).
+- The palette: `msg Atlas: hi` works, share-safe stop and resume rows say which lane (its seat and when it was
+  hired), the screen reader's selection follows typing, "Nothing matches" is no longer a list item, and one-off
+  commands (a reminder's text) no longer fill "recent".
+- Phone: the week chart's measures wrap instead of widening the page. The API weather chip is readable in the light
+  theme.
+- With a storm and reduced motion, every window showed a frozen lightning flash; there is none now.
+- Your data: the keyboard stays on the month arrows, a slow month cannot draw over a later one, a dialog closed while
+  loading stays closed, and the plan calendar says it is downloading rather than saved. The month's report leaves
+  out an empty "Who did what" table.
+- The week chart's tooltips give that day's tokens and API value, its measures say which is pressed, and a day before
+  the office opened that the ledger knows is no longer hatched. The connection card shows quiet days as gaps.
+- The moon keeps a sliver of light a day or so either side of new moon. A long session's cup and takeaway box stay
+  on the desk at the leftmost seat. The room card's model tag no longer squeezes its activity to one letter.
+- The price tag shows jobs under 1% (as 0.4%), and says when the seat was changed after it was worked out. The versus
+  card mentions Codex only when Codex is in the duel, keeps the keyboard on its picker, and names its file in any
+  alphabet.
+
 ## [3.173.0] - 2026-10-19
 
 ### Security

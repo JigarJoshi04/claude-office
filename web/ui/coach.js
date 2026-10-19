@@ -31,7 +31,8 @@ const MODEL = (m) => m ? m[0].toUpperCase() + m.slice(1) : "";
 // state: null, {pending}, {error}, or {brief, data, applied}: brief is what was read, applied once its rewrite is on
 // the form (Undo puts the brief back). now: the brief on the form, so a brief changed since says so. model: the
 // model chosen on the form.
-export function coachHtml(state, { now, model, privacy, nameOf = (id) => id }) {
+export function coachHtml(state, opts) {
+  const { now, model, privacy, nameOf = (id) => id } = opts;
   if (!state) return "";
   if (state.pending) return `<div class="coach"><p class="hint">${icon("sparkles", 14)} Reading the brief and looking for similar past lanes…</p></div>`;
   if (state.error) return `<div class="coach err"><button class="btn sm ghost icon" data-coach-x aria-label="Close">${icon("x", 14)}</button><p>${esc(state.error)}</p></div>`;
@@ -40,7 +41,8 @@ export function coachHtml(state, { now, model, privacy, nameOf = (id) => id }) {
   const past = est
     ? `<p><b>Jobs like this:</b> ${est.n} similar lanes ran${est.minutes != null ? ` a median <b>${mins(est.minutes)}</b>` : ""}${est.tokens ? `${est.minutes != null ? " and" : ""} <b>${fmtTok(est.tokens)}</b> tokens` : ""}; ${est.done} of ${est.n} ended done.${est.models.length > 1 ? ` By model: ${est.models.map(m => `${MODEL(m.model)} ${m.done} of ${m.n}`).join(", ")}.` : ""}</p>`
     : `<p class="muted">${sim.length ? `Only ${sim.length} similar past lane${sim.length > 1 ? "s" : ""}: too few to say how big this is.` : "No similar past lanes yet, so no estimate of its size."}</p>`;
-  const pr = d.price, price = pr && (pr.five_hour || pr.weekly) ? `<p class="coach-price">${icon("coin", 14)} <b>Price tag:</b> about ${[pr.five_hour ? `<b>${pr.five_hour}%</b> of ${esc(nameOf(pr.seat))}'s 5-hour window` : "", pr.weekly ? `<b>${pr.weekly}%</b> of its week` : ""].filter(Boolean).join(" and ")}, at what 1% bought it lately.</p>` : "";
+  const pr = d.price, moved = pr && opts.seat && opts.seat !== "auto" && opts.seat !== pr.seat;   // the seat was changed since
+  const price = pr && (pr.five_hour || pr.weekly) ? `<p class="coach-price">${icon("coin", 14)} <b>Price tag:</b> about ${[pr.five_hour ? `<b>${pr.five_hour}%</b> of ${esc(nameOf(pr.seat))}'s 5-hour window` : "", pr.weekly ? `<b>${pr.weekly}%</b> of its week` : ""].filter(Boolean).join(" and ")}, at what 1% bought it lately.${moved ? ` <span class="muted">Priced for ${esc(nameOf(pr.seat))}: sharpen again for ${esc(nameOf(opts.seat))}.</span>` : ""}</p>` : "";
   const list = sim.length ? `<details class="coach-sim"><summary>The similar lanes</summary><ul>${sim.map(r => `<li><span class="${privacy ? "private" : ""}">${esc(privacy ? "A past lane" : r.title)}</span>
       <small>${esc(MODEL(r.model))}${r.minutes != null ? ` · ${mins(r.minutes)}` : ""}${r.tokens ? ` · ${fmtTok(r.tokens)}` : ""} · <b class="o-${esc(r.outcome)}">${esc(OUT[r.outcome] || r.outcome)}</b></small></li>`).join("")}</ul></details>` : "";
   let ai = "";
