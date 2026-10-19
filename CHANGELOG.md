@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.149.0] - 2026-10-19
+
+### Added
+- The lanes board (L, or the Lanes tab): every office lane as a card in four columns, up next, at work, needs you
+  and done, each with its character, model, how long, its report's first line and tags (trust verdict, promise,
+  bake-off side, own worktree, chain stage, tokens). Find by title or report, filter by character and model, and
+  finished lanes older than a week are archived unless you show them. A card opens its lane; backlog cards move to
+  the front and cut-off or failed ones resume in place.
+
 ## [3.148.0] - 2026-10-19
 
 ### Added

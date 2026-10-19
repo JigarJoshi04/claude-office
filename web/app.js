@@ -6,6 +6,7 @@ import * as scrapbook from "./ui/scrapbook.js";
 import { openStandupMode } from "./ui/standupmode.js";
 import { makeRecorder } from "./ui/recorder.js";
 import { syncSave } from "./ui/sync.js";
+import { renderLanesBoard } from "./ui/lanesboard.js";
 import { TOPICS as HELP_TOPICS } from "./ui/help.js";
 import { openPoster } from "./ui/poster.js";
 import { makeDirector } from "./ui/director.js";
@@ -1139,7 +1140,7 @@ function whatsNew() {
 }
 
 function shortcuts() {
-  const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S K", "Floor, Timeline, Team, Today, Tokens"],
+  const keys = [["Ctrl K", "Search seats, sessions and actions"], ["H", "Hire a lane"], ["D", "Load divider"], ["F T B S K L", "Floor, Timeline, Team, Today, Tokens, Lanes"],
     ["+ − 0", "Zoom in, out, fit (floor)"], ["Arrows", "Pan the floor while zoomed"], ["Double-click", "Fly to a desk, person or room"],
     ["P", "Share-safe mode"], [",", "Settings"], ["1…9", "Open a character"], ["R", "Replay the day (space, arrows, Esc)"], ["V", "TV mode: the floor full screen"], ["G", "Goodnight (again: lights on)"], ["M", "Office radio: lo-fi on or off"], ["Z", "Game intensity: Full, Calm, Off"], ["\\", "Hide or show the inspector"],
     ["Enter", "Send a chat message (Shift+Enter for a new line)"], ["Esc", "Close, or back to the briefing"], ["?", "This list"]];
@@ -1219,18 +1220,18 @@ async function installApp() {
 
 // ------------------------------------------------------------------------------------------------ views
 function setView(v) {
-  if (!["floor", "timeline", "board", "stats", "tokens"].includes(v)) v = "floor";
+  if (!["floor", "timeline", "board", "stats", "tokens", "lanes"].includes(v)) v = "floor";
   if (v !== "floor" && document.body.classList.contains("tv")) floor.setTv(false);   // TV mode is the floor alone
   if (v !== "floor" && typeof replay !== "undefined" && replay.active()) replay.close();   // replay lives on the floor
   mainDrawn.delete(v);
   setPref("view", v);
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.view === v));
-  for (const [k, id] of [["floor", "viewFloor"], ["timeline", "viewTimeline"], ["board", "viewBoard"], ["stats", "viewStats"], ["tokens", "viewTokens"]]) $(id).hidden = k !== v;
+  for (const [k, id] of [["floor", "viewFloor"], ["timeline", "viewTimeline"], ["board", "viewBoard"], ["stats", "viewStats"], ["tokens", "viewTokens"], ["lanes", "viewLanes"]]) $(id).hidden = k !== v;
   if (v === "timeline") loadHistory(prefs.tlHours);
   if (v === "stats") loadStats(prefs.statsDay);
   renderMain();
 }
-let mainSig = "";
+let mainSig = "", lanesSig = "";
 const mainDrawn = new Set();
 function renderMain(fromSnap) {
   if (!snap) return;
@@ -1238,7 +1239,13 @@ function renderMain(fromSnap) {
   if (v === "floor") return;
   if (fromSnap && !mainDrawn.has(v)) fromSnap = false;
   mainDrawn.add(v);
-  const el = $({ timeline: "viewTimeline", board: "viewBoard", stats: "viewStats", tokens: "viewTokens" }[v]);
+  const el = $({ timeline: "viewTimeline", board: "viewBoard", stats: "viewStats", tokens: "viewTokens", lanes: "viewLanes" }[v]);
+  if (v === "lanes") {                                  // the lanes board: drawn again only when a lane changes
+    const sig = JSON.stringify([(snap.lanes || []).map(l => [l.id, l.status, l.seat, l.report_status, l.backlog_pos, l.trust && l.trust.level, l.spent && l.spent.tokens]), (snap.promises || {}).open, prefs.privacy]);
+    if (fromSnap && sig === lanesSig) return;
+    lanesSig = sig; keepFocus(el, () => renderLanesBoard(el, app, (s) => panels.persona(s)));
+    return;
+  }
   if (v === "board") { const sig = JSON.stringify(snap.seats.map(s => [s.status, s.usage && [s.usage.five_hour, s.usage.weekly], live(s).map(x => [x.id, x.state, x.activity])])) + prefs.privacy; if (fromSnap && sig === mainSig) return; mainSig = sig; keepFocus(el, () => renderBoard(el, app)); }
   // Timeline and Today come from their own endpoints: refresh them on a clock (they redraw when the data lands),
   // keeping the old picture on screen meanwhile.
@@ -1420,6 +1427,7 @@ function paletteItems() {
     { icon: icon("timeline", 16), label: "Timeline", hint: "T", keywords: "gantt history", run: () => setView("timeline") },
     { icon: icon("users", 16), label: "Team", hint: "B", keywords: "board cards", run: () => setView("board") },
     { icon: icon("trophy", 16), label: "Today: stats and MVP", hint: "S", keywords: "league employee of the day", run: () => setView("stats") },
+    { icon: icon("briefcase", 16), label: "Lanes board", hint: "L", keywords: "kanban backlog lanes running done blocked", run: () => setView("lanes") },
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("star", 16), label: "Scrapbook", keywords: "photos moments memories album pictures", run: () => go({ kind: "scrapbook" }) },
@@ -1471,7 +1479,7 @@ $("btnPalette").innerHTML = `${icon("search", 17)}<span class="lbl">Search</span
 $("btnHire").innerHTML = `${icon("plus", 17)}<span>Hire</span>`;
 $("btnMenu").innerHTML = icon("menu", 19);
 document.querySelectorAll(".tab").forEach(t => {
-  const [ic, label] = { floor: ["floor", "Floor"], timeline: ["timeline", "Timeline"], board: ["users", "Team"], stats: ["trophy", "Today"], tokens: ["flame", "Tokens"] }[t.dataset.view];
+  const [ic, label] = { floor: ["floor", "Floor"], timeline: ["timeline", "Timeline"], board: ["users", "Team"], stats: ["trophy", "Today"], tokens: ["flame", "Tokens"], lanes: ["briefcase", "Lanes"] }[t.dataset.view];
   t.innerHTML = `${icon(ic, 17)}${label}`;
   t.addEventListener("click", () => { sound.play("click"); setView(t.dataset.view); });
 });
@@ -1536,6 +1544,7 @@ document.addEventListener("keydown", (e) => {
   else if (k === "b") setView("board");
   else if (k === "s") setView("stats");
   else if (k === "k") setView("tokens");
+  else if (k === "l") setView("lanes");
   else if (k === "p") setPref("privacy", !prefs.privacy);
   else if (k === ",") go({ kind: "settings" });
   else if (k === "?") shortcuts();

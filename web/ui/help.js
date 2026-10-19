@@ -37,7 +37,7 @@ export const TOPICS = [
   { id: "terminal", title: "In a terminal", icon: "terminal", go: null,
     text: "claude-office top shows the office in a terminal (SSH, tmux). claude-office status, pick-seat, hire, lanes, stop, resume, checkpoint, ask and post do the rest; agents can ask you a question with python3 -m office ask." },
   { id: "keys", title: "Keyboard", icon: "sliders", go: null,
-    text: "Ctrl or Cmd K: search and commands. F T B S: floor, timeline, team, today. H hire, D divider, P share-safe, R replay, V TV mode, G goodnight, M radio, Z game intensity, 1 to 9 a character, Esc back, \\ hide the inspector, + − 0 zoom." },
+    text: "Ctrl or Cmd K: search and commands. F T B S K L: floor, timeline, team, today, tokens, lanes. H hire, D divider, P share-safe, R replay, V TV mode, G goodnight, M radio, Z game intensity, 1 to 9 a character, Esc back, \\ hide the inspector, + − 0 zoom." },
 ];
 
 export function findTopics(q) {

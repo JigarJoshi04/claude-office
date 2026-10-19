@@ -657,3 +657,22 @@ test("the save keeps removals: an item another screen removed never comes back, 
   assert.equal(g.waiting().length, 0);
   assert.equal(g.open(a.id), null);
 });
+
+test("the lanes board: four columns, filters, the backlog in its order and old lanes archived", async () => {
+  const { boardColumns } = await import("../../web/ui/lanesboard.js");
+  const now = 1_800_000_000;
+  const lanes = [
+    { id: "a", title: "Fix the export", status: "running", seat: "c2", model: "opus", created_at: now - 100 },
+    { id: "b", title: "Docs", status: "scheduled", schedule: { backlog: true }, backlog_pos: 1, model: "sonnet", created_at: now - 50 },
+    { id: "c", title: "Billing", status: "scheduled", schedule: { backlog: true }, backlog_pos: 0, model: "opus", created_at: now - 40 },
+    { id: "d", title: "Old one", status: "done", finished_at: now - 10 * 86400, model: "opus" },
+    { id: "e", title: "Fresh one", status: "done", finished_at: now - 3600, model: "opus", report_status: "STATUS: DONE - export fixed" },
+    { id: "f", title: "Stuck", status: "interrupted", model: "opus" }];
+  const v = boardColumns(lanes, { now });
+  assert.deepEqual(Object.fromEntries(Object.entries(v.cols).map(([k, x]) => [k, x.map(l => l.id)])), { next: ["c", "b"], work: ["a"], needs: ["f"], done: ["e"] });
+  assert.equal(v.hidden, 1);
+  assert.deepEqual(boardColumns(lanes, { now, archived: true }).cols.done.map(l => l.id), ["e", "d"]);
+  assert.deepEqual(boardColumns(lanes, { now, q: "export" }).total, 2);          // the title, or what its report says
+  assert.deepEqual(boardColumns(lanes, { now, model: "sonnet" }).cols.next.map(l => l.id), ["b"]);
+  assert.equal(boardColumns(lanes, { now, seat: "c2" }).total, 1);
+});
