@@ -1155,6 +1155,18 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .pol span { padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
 .brief-check .bc.ok { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
 .brief-check .bc-n { margin-left: auto; font: 500 12px var(--mono); color: var(--faint); }
+.prm { display: flex; align-items: center; gap: 6px; padding: 6px 4px 6px 10px; border-radius: 10px; background: var(--surface-2); margin-bottom: 6px; box-shadow: inset 3px 0 0 var(--info); }
+.prm.soon { box-shadow: inset 3px 0 0 var(--warn); }
+.prm-go { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; padding: 2px 0; font: inherit; min-width: 0; }
+.prm-go b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.prm-go small, .prm small { color: var(--faint); font-size: 12px; }
+.prm.done { background: none; box-shadow: none; padding: 2px 4px; margin: 0; font-size: 13px; }
+.prm-st { display: inline-flex; align-items: center; gap: 4px; font: 700 11px var(--mono); padding: 1px 7px; border-radius: 99px; }
+.prm.kept .prm-st { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.prm.broken .prm-st { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.prm-lane { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
+.prm-lane.on { box-shadow: inset 3px 0 0 var(--info); }
+.prm-lane > .grow { flex: 1 1 calc(100% - 30px); min-width: 0; }
 .coach { position: relative; margin: 0 0 14px; padding: 12px 40px 10px 14px; border-radius: 12px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); font-size: 14px; line-height: 1.5; }
 .coach.err { box-shadow: inset 3px 0 0 var(--bad); }
 .coach > [data-coach-x] { position: absolute; top: 6px; right: 6px; }

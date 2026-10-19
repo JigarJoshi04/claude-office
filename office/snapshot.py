@@ -18,7 +18,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from . import asks, brain, cabinet, checkpoint, config, egress, prelimit, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, trust, weeks
+from . import asks, brain, cabinet, checkpoint, config, egress, prelimit, promises, divider, forecast, lanes, loose, prs, risk, seats as seatmod, sessions, standup, trust, weeks
 from .career import CATALOGUE, Career
 from . import save as save_mod
 from . import utilities
@@ -77,6 +77,8 @@ def attention_key(a: dict) -> str:
         return f"collision:{a['collision']}"
     if a.get("bakeoff"):
         return f"bakeoff:{a['bakeoff']}"
+    if a.get("promise"):
+        return f"promise:{a['promise']}"
     if a.get("trust"):                                    # a claim its transcript contradicts (before its lane's own items)
         return f"trust:{a['trust']}"
     if a.get("lane"):                                     # waiting for a seat and failed are two things to snooze
@@ -337,6 +339,7 @@ class Office(LiveOffice):
         self.save = save_mod.Save(config.STATE_DIR / "save.json")        # the CEO's game, shared by every screen
         self.utilities = utilities.Utilities(config.STATE_DIR / "utilities.json")   # disk and memory the AI team uses
         egress.init(config.STATE_DIR / "egress.json")                   # outbound calls, counted across restarts
+        self.promises = promises.Promises(config.STATE_DIR / "promises.json")   # the CEO's promises, kept by lanes' reports
         self.prelimit = prelimit.PreLimit(config.STATE_DIR / "prelimit.json")   # lanes asked to save their notes before a limit
         self._gh_map: tuple = (0.0, {})            # (when, repo folder name -> owner/name on GitHub)
         self.events: deque = deque(maxlen=400)
@@ -550,7 +553,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.138.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.139.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -603,6 +606,14 @@ class Office(LiveOffice):
         snap["host"] = self.utilities.view()
         snap["asks"] = self.asks.view(30)
         snap["contradicted"] = [dict(v, session=k) for k, v in self.trust.recent(now - 12 * 3600) if v.get("level") == "contradicted"]
+        for p in self.promises.evaluate(lane_list, now):     # the CEO's promises, kept or broken by their lanes' reports
+            if p["status"] == "kept":
+                early = p.get("early_s") or 0
+                self.emit("promise", f"Promise kept: '{p['title']}' is done{', ' + promises.early_words(early) if early >= 60 else ''}", p.get("seat"), "good")
+            else:
+                self.emit("promise", f"Promise broken: '{p['title']}' {p.get('why') or 'was not done in time'}", p.get("seat"), "bad")
+        snap["promises"] = self.promises.view(now)
+        snap["promise_due"] = self.promises.attention(now)
         snap["attention"] = self._attention(snap)
         for c in collisions(snap):                           # said once an hour per working tree and set of sessions
             k = c["root"] + "|" + ",".join(sorted(w["id"] for w in c["who"]))
@@ -683,6 +694,7 @@ class Office(LiveOffice):
             items.append({"level": "warn", "seat": v.get("seat"), "session": v["session"] if v["session"] in live_ids else None,
                           "lane": None if v["session"] in live_ids else v.get("lane"), "trust": v["session"],
                           "text": f"{v.get('name') or 'A session'}{' on ' + labels[v['seat']] if v.get('seat') in labels else ''} says it is done, but {v['why']}"})
+        items += snap.get("promise_due") or []               # a promise due soon on work still out (promises.py)
         for c in collisions(snap):                           # two agents writing in the same working tree at once
             names = " and ".join(f"{x['name']} on {labels.get(x['seat'], x['seat'])}" for x in c["who"][:3])
             items.append({"level": "bad" if c["same_file"] else "warn", "seat": c["who"][0]["seat"], "session": c["who"][0]["id"],

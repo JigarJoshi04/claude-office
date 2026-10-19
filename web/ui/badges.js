@@ -19,6 +19,8 @@ export const BADGES = [
   { id: "golden", icon: "sparkles", name: "Golden duck", desc: "Find the legendary golden duck." },
   { id: "exterminator", icon: "bug", name: "Exterminator", desc: "Score 40 in Bug Squash, the lounge's arcade game." },
   { id: "cat_person", icon: "heart", name: "Pet person", desc: "Pet the office cat (or the dog) ten times." },
+  { id: "word_kept", icon: "flag", name: "Word kept", desc: "Keep a promise: a lane done by the time you said." },
+  { id: "reliable", icon: "flag", name: "Reliable", desc: "Keep five promises." },
   { id: "old_school", icon: "sparkles", name: "Old school", desc: "Enter the code everybody knows.", secret: true },
   { id: "night_owl", icon: "moon", name: "Night owl", desc: "Check on the office between midnight and 4 AM." },
   { id: "early_bird", icon: "sun", name: "Early bird", desc: "Check on the office between 5 and 7 AM." },

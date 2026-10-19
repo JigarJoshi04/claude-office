@@ -3,6 +3,19 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.139.0] - 2026-10-19
+
+### Added
+- Promises. Promise a lane's work by a time (in 2 hours, today at 6 pm, tomorrow, Friday, Monday) from its page or the
+  hiring desk. The lane's own report keeps the promise: kept when it, or the last stage of its chain, reports done
+  before the time; broken when the time passes first (a blocked report does not break it while there is time to
+  resume). A promise due within two hours on work still out shows in Needs you, a kept one brings a rare gift and the
+  Word kept and Reliable badges, and the briefing keeps the record: kept of made, and how many in a row. The office
+  keeps promises for every screen.
+
+### Fixed
+- Typing in the hiring desk's brief dropped the bake-off switch from the saved draft.
+
 ## [3.138.0] - 2026-10-19
 
 ### Added

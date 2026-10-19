@@ -28,7 +28,7 @@ const TEMPLATES = [
   { name: "Refactor", ic: "layers", title: "Refactor: ", brief: "Refactor <module> to <goal> with no behaviour change.\nKeep every existing test green and add tests where coverage is thin.\nDone when: a PR is open with a summary of what moved and why." },
 ];
 const KIND_ICON = { type: "terminal", read: "search", think: "sparkles", talk: "chat", delegate: "bot", wait: "clock" };
-const EVENT_ICON = { levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert",
+const EVENT_ICON = { promise: "flag", levelup: "star", achievement: "trophy", arrive: "play", leave: "reply", report: "check", limit: "sleep", reset: "refresh", usage: "zap", login: "alert",
   stuck: "clock", lane: "briefcase", divider: "sliders", checkpoint: "pin", message: "send", reply: "chat", error: "alert", par: "flag", risk: "alert", collision: "branch", reminder: "bell", bond: "heart" };
 
 export function makePanels(app) {
@@ -391,6 +391,7 @@ export function makePanels(app) {
           ${att.length > 3 ? `<button class="btn sm ghost b-more" data-toggle-needs>${showAllNeeds ? "Show less" : `Show all ${att.length}`}</button>` : ""}</section>`
         : `<div class="g-clear">${icon("check", 16)}All clear. Nothing needs you.</div>`}
       ${reviewQueueHtml(snap.mine)}
+      ${promisesHtml(snap.promises)}
       ${setupHtml()}
       ${remindersHtml()}
       ${unusedHtml()}
@@ -433,6 +434,10 @@ export function makePanels(app) {
           store.set("hireDraft", hireDraft); app.go({ kind: "hire" });
         }));
         root.querySelectorAll("[data-lane-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: "lane", id: b.dataset.laneGo })));
+        root.querySelectorAll("[data-promise-drop]").forEach(b => b.addEventListener("click", async () => {
+          if (!confirm("Drop this promise? It is not counted as kept or broken.")) return;
+          try { await app.post("/api/promises", { action: "drop", id: b.dataset.promiseDrop }); app.refresh(); } catch (e) { toast(e.message, "bad"); }
+        }));
         const rr = root.querySelector("[data-goals-reroll]");
         if (rr) rr.addEventListener("click", () => { if (rerollGoals(app.statsCache(null))) { toast("New goals for today. That was today's one reroll.", "good", { ic: "goal" }); app.rerender(true); } });
         root.querySelectorAll("[data-resume-all]").forEach(b => b.addEventListener("click", async () => {
@@ -1232,6 +1237,10 @@ export function makePanels(app) {
         <button class="btn sm" id="lClone">${icon("copy", 15)}Re-hire</button>
         ${running || scheduled ? `<button class="btn sm ghost" data-remind="${esc(JSON.stringify(["lane_end", l.id, `when lane '${l.title}' ends`]))}">${icon("bell", 14)}Remind me when it ends</button>` : ""}
       </div>
+      ${(() => { const pm = ((S().promises || {}).open || []).find(p => p.lane === l.id), gone = !running && !scheduled && l.status !== "interrupted";
+        if (gone && !pm) return "";
+        return `<div class="prm-lane ${pm ? "on" : ""}">${icon("flag", 15)}<span class="grow">${pm ? `Promised by <b>${esc(dayTime(pm.due))}</b> (${esc(dueWords(pm.due))}). Its report keeps it.` : "Promise it by a time: its report keeps the promise."}</span>
+          ${promiseSelect("lPromise")}<button class="btn sm" id="lPromiseGo">${pm ? "Change" : "Promise it"}</button>${pm ? `<button class="btn sm ghost" data-promise-drop-lane="${esc(pm.id)}">Drop</button>` : ""}</div>`; })()}
       ${l.report_status ? section("Report", `${trustChip(l.trust)}<div class="doc md">${md((d && d.report) || l.report_status)}</div>`, `<button class="btn sm ghost" data-copy="${esc((d && d.report) || l.report_status)}">${icon("copy", 14)}Copy</button>`) : ""}
       ${section("Progress notes", `<div class="doc md">${md((d && d.state) || l.state_tail || "Nothing yet.")}</div>`)}
       ${section("Runs", runs.length ? runs.slice().reverse().map(r => `<div class="act ${r.ended_by === "limit" ? "warn" : r.rc === 0 ? "good" : r.rc == null ? "" : "bad"}">${icon(r.ended_by === "limit" ? "sleep" : r.rc === 0 ? "check" : r.rc == null ? "play" : "alert", 16)}<span>${esc(nameOf(r.seat))}${r.rc != null ? ` · exit ${r.rc}` : " · running"}${r.ended_by ? " · hit its limit, moved on" : ""}</span><span class="when">${clock(r.started_at)}</span></div>`).join("") : `<div class="muted">Not started yet.</div>`)}
@@ -1251,6 +1260,10 @@ export function makePanels(app) {
           store.set("hireDraft", hireDraft); app.go({ kind: "hire" }); toast("Brief copied to the hiring desk.");
         });
         if (chat) chat.addEventListener("click", () => { const [seatId, id] = chat.dataset.chatSession.split("|"); sessTab.set(id, "chat"); app.go({ kind: "session", seat: seatId, id }); });
+        const pg = root.querySelector("#lPromiseGo");
+        if (pg) pg.addEventListener("click", () => makePromise(l.id, root.querySelector("#lPromise").value));
+        const pd = root.querySelector("[data-promise-drop-lane]");
+        if (pd) pd.addEventListener("click", async () => { try { await app.post("/api/promises", { action: "drop", id: pd.dataset.promiseDropLane }); toast("Promise dropped."); app.refresh(); } catch (e) { toast(e.message, "bad"); } });
       } };
   }
 
@@ -1279,6 +1292,36 @@ export function makePanels(app) {
       pol.memory_max ? `Memory capped at ${pol.memory_max}${/%$/.test(pol.memory_max) ? " of RAM" : ""}` : "",
       pol.tasks_max ? `At most ${pol.tasks_max.toLocaleString()} processes` : ""].filter(Boolean);
     return `<div class="pol" title="The lane policy, set in config.json (lane_policy)">${icon("lock", 13)}${chips.map(c => `<span>${esc(c)}</span>`).join("")}</div>`;
+  }
+  // Promises (promises.py): by when a lane's work will be done, kept or broken by its own report.
+  const PROMISE_BY = [["2h", "In 2 hours"], ["eod", "Today, 6 pm"], ["tom", "Tomorrow, 10 am"], ["fri", "Friday, 6 pm"], ["mon", "Monday, 10 am"]];
+  function promiseDue(key) {
+    const d = new Date(), at = (days, h) => { const x = new Date(d); x.setDate(x.getDate() + days); x.setHours(h, 0, 0, 0); return x.getTime() / 1000; };
+    if (key === "2h") return Math.round(Date.now() / 1000 + 7200);
+    if (key === "eod") return d.getHours() < 17 ? at(0, 18) : at(1, 18);
+    if (key === "tom") return at(1, 10);
+    if (key === "fri") return at(((5 - d.getDay() + 7) % 7) || (d.getHours() < 17 ? 0 : 7), 18);
+    if (key === "mon") return at(((1 - d.getDay() + 7) % 7) || 7, 10);
+    return null;
+  }
+  const promiseSelect = (id, none) => `<select id="${id}" style="width:auto;height:30px;padding:0 8px">${none ? `<option value="">${esc(none)}</option>` : ""}${PROMISE_BY.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`;
+  const dueWords = (t) => { const s = t - Date.now() / 1000, m = Math.round(s / 60); return s < 0 ? "overdue" : m < 60 ? `in ${Math.max(1, m)} min` : s < 86400 ? `in ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : dayTime(t); };
+  function promisesHtml(pr) {
+    if (!pr || (!pr.open.length && !pr.recent.length)) return "";
+    const priv = app.privacy(), name = (p) => priv ? "A lane" : p.title;
+    const settled = pr.kept + pr.broken;
+    return `<section class="b-sec"><h3 class="b-h">${icon("flag", 16)}Promises${pr.open.length ? `<span class="count">${pr.open.length}</span>` : ""}<span class="grow"></span>${settled ? `<span class="hint" style="margin:0">Kept ${pr.kept} of ${settled}${pr.streak >= 2 ? ` · ${pr.streak} in a row` : ""}</span>` : ""}</h3>
+      ${pr.open.map(p => { const soon = p.due - Date.now() / 1000 < 7200; return `<div class="prm ${soon ? "soon" : ""}"><button class="grow prm-go" data-lane-go="${esc(p.lane)}"><b class="${priv ? "private" : ""}">${esc(name(p))}</b><small>${esc(p.state || "out")} · due ${esc(dueWords(p.due))}</small></button>
+        <button class="btn sm ghost icon" data-promise-drop="${esc(p.id)}" title="Drop this promise" aria-label="Drop this promise">${icon("x", 14)}</button></div>`; }).join("")}
+      ${pr.recent.slice(0, pr.open.length ? 2 : 3).map(p => `<div class="prm done ${p.status}"><span class="prm-st">${icon(p.status === "kept" ? "check" : "x", 13)}${p.status === "kept" ? "Kept" : "Broken"}</span><span class="grow ${priv ? "private" : ""}">${esc(name(p))}</span><small>${p.status === "kept" && p.early_s >= 60 ? esc(earlyWords(p.early_s)) : esc(relTime(p.settled_at))}</small></div>`).join("")}
+      ${!pr.open.length ? `<p class="hint">Promise a lane's work by a time from its page or the hiring desk; its own report keeps it.</p>` : ""}</section>`;
+  }
+  const earlyWords = (s) => { const m = Math.round(s / 60); return m < 60 ? `${m} min early` : m < 1440 ? `${Math.floor(m / 60)} h early` : `${Math.floor(m / 1440)} d early`; };
+  async function makePromise(laneId, key) {
+    const due = promiseDue(key);
+    if (!due) return;
+    try { const r = await app.post("/api/promises", { lane: laneId, due }); toast(`Promised by ${dayTime(r.due)}. Its report will keep it.`, "good"); app.refresh(); app.rerender(true); }
+    catch (e) { toast("Could not promise it: " + e.message, "bad"); }
   }
   // Your review queue: open PRs that ask for your review (gh search), with a reviewer lane in one click, and a count
   // of your own open PRs. Share-safe keeps to numbers.
@@ -1487,6 +1530,7 @@ export function makePanels(app) {
           <option value="left" ${d.start === "left" ? "selected" : ""}>When a seat has 30% of its window left</option>
           <option value="backlog" ${d.start === "backlog" ? "selected" : ""}>Add to the backlog (oldest first, as seats free up)</option></select></label>
           ${d.start === "at" ? `<label class="f">At<input type="datetime-local" id="hStartAt" value="${esc(d.startAt || "")}"></label>` : "<span></span>"}</div>
+        <label class="f">Promise it by<select id="hPromise"><option value="">No promise</option>${PROMISE_BY.map(([k, lb]) => `<option value="${k}" ${d.promise === k ? "selected" : ""}>${esc(lb)}</option>`).join("")}</select></label>
         <label class="f">Time limit<select id="hMax">${[["", "None"], ["30", "30 minutes"], ["60", "1 hour"], ["120", "2 hours"], ["240", "4 hours"]].map(([v, l]) => `<option value="${v}" ${String(d.max_minutes || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="f">Then, in the same folder<select id="hThen">
           <option value="" ${!d.chain ? "selected" : ""}>Nothing: it reports and stops</option>
@@ -1501,7 +1545,7 @@ export function makePanels(app) {
       ${section("Office lanes", `<div id="laneList">${laneListHtml()}</div>`)}`,
       bind(root) {
         const q = (id) => root.querySelector("#" + id);
-        const save = () => { hireDraft = { title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
+        const save = () => { hireDraft = { ...hireDraft, promise: q("hPromise").value, title: q("hTitle").value, brief: q("hBrief").value, workdir: q("hDir").value, seat: q("hSeat").value, model: q("hModel").value, permission_mode: q("hPerm").value, allow_messages: q("hMsg").checked, chain: q("hThen").value || "",
           start: q("hStart").value || "", startAt: q("hStartAt") ? q("hStartAt").value : hireDraft.startAt || "", each: q("hEach").value, max_minutes: +q("hMax").value || null }; store.set("hireDraft", hireDraft); };
         ["hTitle", "hBrief", "hDir", "hModel", "hPerm", "hThen", "hEach"].forEach(id => q(id).addEventListener("input", save));
         for (const id of ["hSeat", "hModel"]) q(id).addEventListener("change", () => { q("hModelHint").innerHTML = modelHint(q("hSeat").value, q("hModel").value); });
@@ -1542,6 +1586,7 @@ export function makePanels(app) {
         });
         q("hMsg").addEventListener("change", save);
         q("hMax").addEventListener("change", save);
+        q("hPromise").addEventListener("change", () => { hireDraft = { ...hireDraft, promise: q("hPromise").value }; store.set("hireDraft", hireDraft); });
         q("hSeat").addEventListener("change", () => { save(); app.rerender(true); });
         q("hStart").addEventListener("change", () => { save(); app.rerender(true); });
         if (q("hStartAt")) q("hStartAt").addEventListener("input", save);
@@ -1637,7 +1682,8 @@ export function makePanels(app) {
             const one = list.length === 1 ? { title: fill(hireDraft.title, list[0], " · ").slice(0, 80), brief: fill(hireDraft.brief, list[0], "\n\nThis lane's item: ") } : {};   // a single line still fills {{item}}
             const r = await app.post("/api/lanes", { ...hireDraft, ...one, start: hireDraft.start === "at" ? { at: startAt } : hireDraft.start === "left" ? { left: 30 } : hireDraft.start === "backlog" ? { backlog: true } : null });
             if (r.demo) toast("Demo office: no lane was started.");
-            else { sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true, chain: "" }; store.set("hireDraft", hireDraft); }
+            else { if (hireDraft.promise && r.lane) makePromise(r.lane.id, hireDraft.promise);
+              sound.play("hire"); toast(`Hired “${r.lane.title}”. Watch the elevator.`, "good"); app.badge("hiring"); hireDraft = { title: "", brief: "", workdir: hireDraft.workdir, seat: "auto", model: "", permission_mode: "", allow_messages: true, chain: "" }; store.set("hireDraft", hireDraft); }
             app.refresh(); app.rerender(true);
           } catch (e) { toast("Could not hire: " + e.message, "bad"); q("hGo").disabled = false; }
         });

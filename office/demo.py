@@ -532,7 +532,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.138.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.139.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
@@ -559,6 +559,18 @@ class DemoOffice(LiveOffice):
         snap["risks"] = [dict(r, ts=now - r["ago"], seat=st["id"], session=x["id"], name=x["name"]) for st in seats for x in st["sessions"] for r in DEMO_RISKS.get(x["id"], [])]
         snap["contradicted"] = [{"session": "d-old", "seat": "claude3", "lane": "1016-031200-migrate-the-billing-tables", "name": "billing-migration",
                                  "level": "contradicted", "why": "its last test run failed", "at": now - 1800}]
+        if not hasattr(self, "promises"):                  # the demo's promises live in memory: two open, two settled
+            from .promises import Promises
+            self.promises = Promises(None)
+            self.promises.items = [
+                {"id": "p-docs", "lane": "1016-140212-refresh-the-api-docs", "title": "Refresh the API docs", "seat": "astra", "due": now + 5400, "made_at": now - 1500, "status": "open", "state": "running"},
+                {"id": "p-flake", "lane": "1016-150000-nightly-flake-hunt", "title": "Nightly flake hunt", "seat": None, "due": now + 20 * 3600, "made_at": now - 300, "status": "open", "state": "waiting"},
+                {"id": "p-deps", "lane": "1016-101500-weekly-dependency-bump", "title": "Weekly dependency bump", "seat": "claude4", "due": now - 3000, "made_at": now - 14000,
+                 "status": "kept", "settled_at": now - 9000, "done_at": now - 9000, "early_s": 6000, "trust": "verified"},
+                {"id": "p-search", "lane": "1015-090000-search-ranking", "title": "Fix the search ranking", "seat": "claude3", "due": now - 86400, "made_at": now - 3 * 86400,
+                 "status": "broken", "settled_at": now - 86400, "why": "it was not done in time"}]
+        snap["promises"] = self.promises.view(now)
+        snap["promise_due"] = self.promises.attention(now)
         snap["attention"] = Office._attention(snap)
         if not hasattr(self, "quiet"):
             from .snapshot import Quiet

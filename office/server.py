@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.138.0"
+    server_version = "ClaudeOffice/3.139.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -426,6 +426,14 @@ class Handler(BaseHTTPRequestHandler):
                 if self.demo:
                     return self._json(200, {"ok": True, "demo": True})
                 return self._json(200, self.office.save.put(body.get("key"), body.get("v"), body.get("at"), body.get("base")))
+            if path == "/api/promises":                      # the CEO's promises (promises.py): make one on a lane, or drop it
+                pr = self.office.promises
+                if body.get("action") == "drop":
+                    return self._json(200, pr.drop(str(body.get("id", ""))))
+                if self.demo:
+                    lane = next((l for l in self.office.get().get("lanes", []) if l.get("id") == body.get("lane")), None)
+                    return self._json(200, pr.make(str(body.get("lane", "")), body.get("due"), load=lambda lid: lane if lane and lid == lane["id"] else None))
+                return self._json(200, pr.make(str(body.get("lane", "")), body.get("due")))
             if path == "/api/reminders":                     # notes to yourself (reminders.py); the demo keeps them in memory
                 rem = self.office.reminders
                 if body.get("action") == "delete":

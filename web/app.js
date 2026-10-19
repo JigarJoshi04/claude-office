@@ -717,6 +717,17 @@ function onNews(e) {
       notify(merged ? "PR merged" : "PR opened", text);
       break;
     }
+    case "promise": {                                  // a promise the CEO made, kept or broken by its lane's report (promises.py)
+      const kept = e.level === "good";
+      if (kept) {
+        fx.celebrate(e.seat, null, "Promise kept!");
+        if (prefs.game !== "off") { giftBox.grant(e.seat, "promise", "rare"); if (!DEMO) { const n = ((snap && snap.promises) || {}).kept || 0; badge(award("word_kept")); if (n >= 5) badge(award("reliable")); } }
+        if (prefs.game === "full") sound.play("report");
+      }
+      toast(text, kept ? "good" : "warn", { ic: "flag", ms: 7000 });
+      notify(kept ? "Promise kept" : "Promise broken", text);
+      break;
+    }
     case "par": {                                      // a seat's weekly plan closed, scored like a round of golf
       const good = /: (Eagle|Birdie|Par) \(/.test(e.text);
       const grade = (/: (Eagle|Birdie|Par) \(/.exec(e.text) || [])[1];
