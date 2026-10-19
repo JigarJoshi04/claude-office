@@ -354,6 +354,10 @@ const game = makeGame({ app, office, panels, replay, store, DEMO, prefs, gifts: 
 const weekReview = makeWeekReview({ app, panels, store, DEMO, prefs, gifts: giftBox, earned, toast });
 app.playWeek = () => weekReview.play();
 const wrapped = makeWrapped({ app, panels, store, DEMO, prefs, toast });
+// The help desk's IT helper walks to a room with a stuck, looping or blocked session (office.help), on the floor in
+// full game intensity, never in replay.
+function helpDesk(seat, text) { if (seat && !replay.active() && prefs.game === "full" && prefs.view === "floor" && !document.hidden) office.help(seat, text); }
+app.helpDesk = (seat) => helpDesk(seat, "Saw the nudge. Need a hand?");
 app.badge = (id) => badge(award(id));            // badges from the panels (a hire, a replay)
 app.bump = (key, n, id) => badge(bump(key, n, id)); // counter badges (messages sent)
 app.badgeProgress = () => progress({ visits: game.visits(), stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });
@@ -643,6 +647,7 @@ setInterval(() => {
   if (office.visit(from, to, text)) visitAt = Date.now();
 }, 20000);
 if (DEMO && QS.get("visit")) setTimeout(() => office.visit("claude2", "claude4", "Got a minute on apollo?"), 3000);   // the demo's ?visit=1, for pictures
+if (DEMO && QS.get("help")) setTimeout(() => office.help("claude2", "Quiet in here. Need a hand?"), 3000);            // and ?help=1, the help desk
 
 // In share-safe mode, news whose words could name a session, a project or a report says only who and what kind.
 const PRIVATE_NEWS = { report: "filed a report", shipped: "shipped a PR", commit: "committed work", lane: "has office lane news", external: "has news",
@@ -684,7 +689,7 @@ function onNews(e) {
       const ok = e.level === "good";
       const sid = findSessionByText(e.text);
       if (ok) { lastReport = Date.now(); lastReportSeat = e.seat; fx.celebrate(e.seat, sid, "Shipped!"); if (who) fx.say(sid, line(who, "report"), 7000); sound.play("report"); teammateReacts(e, "report"); game.comboHit(e); giftBox.earn(e.seat, "report"); }
-      else sound.play("bad");
+      else { sound.play("bad"); helpDesk(e.seat, /\(Contradicted:/.test(e.text) ? "Tests say otherwise? Let's look." : "Blocked? Let's see what's in the way."); }
       toast(text, ok ? "good" : "warn"); notify(ok ? "Report filed" : /\(Contradicted:/.test(e.text) ? "Report contradicted by its tests" : "Report: blocked", text);
       break;
     }
@@ -716,7 +721,7 @@ function onNews(e) {
     case "login": fx.alarm(e.seat, "Logged out"); sound.play("bad"); toast(text, "bad"); notify("Seat logged out", text); break;
     case "usage": if (e.level === "bad") { sound.play("bad"); toast(text, "bad"); notify("Seat nearly empty", text); } break;
     case "reset": toast(text, "good"); fx.celebrate(e.seat, null, "Fresh plan!"); sound.play("arrive"); if (who) fx.sayAtSeat(e.seat, line(who, "reset"), 6000); teammateReacts(e, "reset"); break;
-    case "stuck": if (who) fx.sayAtSeat(e.seat, line(who, "stuck"), 7000); break;
+    case "stuck": if (who) fx.sayAtSeat(e.seat, line(who, "stuck"), 7000); helpDesk(e.seat, "Quiet in here. Need a hand?"); break;
     case "bond": if (prefs.game !== "off") { fx.celebrate(e.seat, null, "Teammates!"); sound.play("achievement"); toast(text, "good", { ic: "heart" }); } break;
     case "risk": case "collision": sound.play("bad"); toast(text, "bad"); notify(e.kind === "risk" ? "Risky action" : "Two sessions, one working tree", text); break;
     case "levelup":

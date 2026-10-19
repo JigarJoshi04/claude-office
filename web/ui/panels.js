@@ -442,7 +442,7 @@ export function makePanels(app) {
         root.querySelectorAll("[data-nudge]").forEach(b => b.addEventListener("click", async () => {
           const [seatId, id] = b.dataset.nudge.split("|");
           b.disabled = true;
-          try { const r = await app.post("/api/nudge", { seat: seatId, id }); toast(r.demo ? "Demo office: nothing was sent." : r.delivery === "review" ? "Nudged: it waits for approval at its terminal." : "Nudged. If it is still stuck in ten minutes, the next step shows here.", r.demo ? "info" : "good"); app.refresh(); }
+          try { const r = await app.post("/api/nudge", { seat: seatId, id }); app.helpDesk(seatId); toast(r.demo ? "Demo office: nothing was sent." : r.delivery === "review" ? "Nudged: it waits for approval at its terminal." : "Nudged. If it is still stuck in ten minutes, the next step shows here.", r.demo ? "info" : "good"); app.refresh(); }
           catch (e) { toast("Could not nudge it: " + e.message, "bad"); b.disabled = false; }
         }));
         root.querySelectorAll("[data-restart-lane]").forEach(b => b.addEventListener("click", async () => {

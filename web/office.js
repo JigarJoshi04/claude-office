@@ -276,12 +276,28 @@ export function createOffice(stage, handlers) {
     if (!L || reduced || standup || visits.length >= 2 || visits.some(v => v.seat === fromId || v.host === toId)) return false;
     const a = L.pods.find(p => p.seat.id === fromId), b = L.pods.find(p => p.seat.id === toId);
     if (!a || !b || a === b) return false;
-    const wa = podWay(a), wb = podWay(b), spot = [wb.doorX + 26, wb.aisleY];
+    const wa = podWay(a), wb = podWay(b), spot = [wb.doorX + 26, wb.aisleY - 12];   // above the name plate
     const spine = a.corr === b.corr ? [] : [[SPINE_X, wa.corrY], [SPINE_X, wb.corrY]];   // the lobby's spine only between rows
     const route = [[wa.doorX, wa.aisleY], [wa.doorX, wa.corrY], ...spine, [wb.doorX, wb.corrY], [wb.doorX, wb.aisleY], spot]
       .filter((q, k, arr) => k === 0 || q[0] !== arr[k - 1][0] || q[1] !== arr[k - 1][1]);
     visits.push({ seat: fromId, host: toId, text, look: S.lookFor("mascot-" + fromId, a.seat.color), x: route[0][0], y: route[0][1],
                   path: route.slice(1), back: route.slice(0, -1).reverse(), facing: "down", speed: SPEED * 1.8, phase: "in", until: 0, hold: 0, gone: false });
+    return true;
+  }
+  // The help desk: for a session that is stuck, looping or blocked, an IT helper with a toolbox comes up in the
+  // elevator, walks to its room, offers a hand and goes back down. One at a time; the same room once in ten minutes.
+  const HELPDESK = S.lookFor("helpdesk-it", "#2f63d6"), helpSeen = new Map();
+  function sendHelp(seatId, text) {
+    if (!L || reduced || standup || visits.some(v => v.help)) return false;
+    const pod = L.pods.find(p => p.seat.id === seatId);
+    if (!pod || performance.now() - (helpSeen.get(seatId) || -1e9) < 600000) return false;
+    helpSeen.set(seatId, performance.now());
+    const w = podWay(pod), ex = ELEVATOR.x + 8, ey = ELEVATOR.y + 18, spot = [w.doorX + 40, w.aisleY - 12];
+    const route = [[ex, ey], [ex, WALK_Y], [SPINE_X, WALK_Y], [SPINE_X, w.corrY], [w.doorX, w.corrY], [w.doorX, w.aisleY], spot]
+      .filter((q, k, arr) => k === 0 || q[0] !== arr[k - 1][0] || q[1] !== arr[k - 1][1]);
+    visits.push({ help: true, seat: "helpdesk", host: seatId, text, look: HELPDESK, color: "#2f63d6", x: route[0][0], y: route[0][1],
+                  path: route.slice(1), back: route.slice(0, -1).reverse(), facing: "down", speed: SPEED * 1.8, phase: "in", until: 0, hold: 0, gone: false });
+    openElevator();
     return true;
   }
   function stepVisits(dt, now) {
@@ -291,7 +307,7 @@ export function createOffice(stage, handlers) {
         pops.push({ el: div("bubble persona", v.text, v.x + 5, v.y - 2), until: now + 4200 });
         if (!reduced) burst(v.x + 5, v.y - 4, 4, "spark");
       } else if (v.phase === "stay" && now >= v.until) { v.phase = "out"; v.hold = 0; v.path = v.back; }
-      else if (v.phase === "out" && walkStep(v, dt)) v.gone = true;
+      else if (v.phase === "out" && walkStep(v, dt)) { v.gone = true; if (v.help) openElevator(); }
     }
     if (visits.some(v => v.gone)) visits = visits.filter(v => !v.gone);
   }
@@ -445,7 +461,8 @@ export function createOffice(stage, handlers) {
     const walkers = [...[...agents.values()].filter(a => a.mode === "walking"), ...leavers, ...couriers, ...(standup ? standup.walkers.filter(w => !w.gone) : []), ...visits].sort((a, b) => a.y - b.y);
     for (const a of walkers) {
       S.drawWalker(ctx, a.x, a.y, a.look, a.facing, t, !(a.hold && performance.now() < a.hold));   // a held worker stands still
-      if (a.phase === "in" || a.carry) { S.rect(ctx, a.x + 2, a.y + 8, 7, 5, a.color); S.rect(ctx, a.x + 5, a.y + 8, 1, 5, "#ffd24a"); S.rect(ctx, a.x + 2, a.y + 8, 7, 1, "#ffffff"); }   // the box in both hands
+      if (a.help) { S.rect(ctx, a.x + (a.facing === "left" ? -3 : 9), a.y + 10, 5, 4, "#c0392b"); S.rect(ctx, a.x + (a.facing === "left" ? -2 : 10), a.y + 9, 3, 1, "#7f8c8d"); continue; }   // the toolbox
+      if ((a.gift && a.phase === "in") || a.carry) { S.rect(ctx, a.x + 2, a.y + 8, 7, 5, a.color); S.rect(ctx, a.x + 5, a.y + 8, 1, 5, "#ffd24a"); S.rect(ctx, a.x + 2, a.y + 8, 7, 1, "#ffffff"); }   // the box in both hands
     }
     if (env.late >= 0 && L.corridors.length) drawJanitor(reduced ? 0 : t);
     S.drawCat(ctx, Math.round(cat.x), Math.round(cat.y), cat.mode, cat.facing, t);
@@ -1764,6 +1781,7 @@ export function createOffice(stage, handlers) {
     petsCheer(seatId) { const pod = L && L.pods.find(p => p.seat.id === seatId); if (!pod) return; petVisit(cat, pod, "sit", 12000, 28); if (has("dog")) petVisit(dog, pod, "sit", 12000, 40); },
     standup: (lines) => startStandup(lines),
     visit: (from, to, text) => startVisit(from, to, text),
+    help: (seat, text) => sendHelp(seat, text),
     setSquash(n) { squashToday = n == null ? null : Math.max(0, Math.min(999, Math.round(n))); },
     focusShipBoard() { if (L) { const b = BOARD(); focusRect(b.x - 6, b.y - 18, 60, 64); } },
     setDirector(on) { const b = document.querySelector('[data-cam="director"]'); if (b) { b.setAttribute("aria-pressed", String(!!on)); b.classList.toggle("on", !!on); } },

@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.143.0] - 2026-10-19
+
+### Added
+- The help desk on the floor. When a session goes quiet in the background, files a blocked or contradicted report,
+  or the CEO nudges it, an IT helper with a toolbox comes up in the elevator, walks to that room, offers a hand and
+  goes back down. One at a time, each room at most once in ten minutes; full game intensity only. The demo shows it
+  with `?help=1`.
+
+### Fixed
+- Collab visitors were drawn carrying a parcel (the courier's box); and they now stand above the room's name plate.
+
 ## [3.142.0] - 2026-10-19
 
 ### Added
