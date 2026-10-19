@@ -71,10 +71,10 @@ export async function openVersus(app, panels, seatId, otherId) {
   const c = await versusCanvas({ a, b, ra: board[a.id], rb: board[b.id], pa, pb });
   const url = c.toDataURL("image/png"), d = document.getElementById("dialog");
   document.getElementById("dialogBody").innerHTML = `<div class="dh"><b>${esc(pa.name)} versus ${esc(pb.name)}</b><button class="btn sm ghost" data-vs-close aria-label="Close">${icon("x", 16)}</button></div>
-    <img class="vs-img" src="${url}" alt="${esc(pa.name)} versus ${esc(pb.name)} over the last seven days">
+    <div class="db"><img class="vs-img" src="${url}" alt="${esc(pa.name)} versus ${esc(pb.name)} over the last seven days">
     <div class="row wrap" style="gap:6px;margin-top:10px"><label class="f" style="margin:0">Against<select data-vs-other>${seats.filter(s => s.id !== a.id).map(s => `<option value="${esc(s.id)}" ${s.id === b.id ? "selected" : ""}>${esc(panels.persona(s).name)}</option>`).join("")}</select></label>
       <span class="grow"></span><button class="btn sm primary" data-vs-save>${icon("download", 14)}Save</button><button class="btn sm" data-vs-copy>${icon("copy", 14)}Copy</button></div>
-    <p class="hint">Codex counts its tokens its own way, so a duel with Codex compares unlike things.</p>`;
+    <p class="hint">Codex counts its tokens its own way, so a duel with Codex compares unlike things.</p></div>`;
   if (!d.open) d.showModal();
   d.querySelector("[data-vs-close]").addEventListener("click", () => d.close());
   d.querySelector("[data-vs-other]").addEventListener("change", (e) => openVersus(app, panels, a.id, e.target.value));

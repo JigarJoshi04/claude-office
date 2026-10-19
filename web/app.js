@@ -413,19 +413,27 @@ async function openExport(month = localDay().slice(0, 7)) {
   try { text = await (await fetchExport("what=report&month=" + month)).text(); } catch (e) { text = "Could not read the report: " + e.message; }
   const files = [["days", "csv", "Days per character"], ["careers", "csv", "Careers"], ["tokens", "csv", "Tokens per day"], ["lanes", "csv", "Lanes"], ["events", "json", "News"]];
   $("dialogBody").innerHTML = `<div class="dh"><b>Your data</b><button class="btn sm ghost" id="exClose" aria-label="Close">${icon("x", 16)}</button></div>
-    <div class="row between" style="margin:4px 0 8px"><b>The month's report</b><span class="row" style="gap:6px"><button class="btn sm ghost" data-ex-month="${prev}" aria-label="The month before">${icon("back", 14)}</button>
+    <div class="db"><div class="row between" style="margin:0 0 8px"><b>The month's report</b><span class="row" style="gap:6px"><button class="btn sm ghost" data-ex-month="${prev}" aria-label="The month before">${icon("back", 14)}</button>
       <span class="hint" style="margin:0">${esc(new Date(month + "-15T12:00:00").toLocaleDateString([], { month: "long", year: "numeric" }))}</span>
       ${month < localDay().slice(0, 7) ? `<button class="btn sm ghost" data-ex-month="${next}" aria-label="The month after">${icon("chevronRight", 14)}</button>` : ""}</span></div>
     <div class="doc md ex-md">${md(text)}</div>
     <div class="row" style="gap:6px;margin:8px 0 14px"><button class="btn sm primary" id="exCopy">${icon("copy", 14)}Copy as Markdown</button><button class="btn sm" id="exSave">${icon("download", 14)}Save as .md</button></div>
-    <b>Download</b><div class="row wrap" style="gap:6px;margin-top:8px">${files.map(([w, f, l]) => `<button class="btn sm" data-ex="${w}|${f}">${icon("download", 14)}${l} (${f.toUpperCase()})</button>`).join("")}</div>
-    <p class="hint">From the office's own records: days for 120 days, the token ledger since the first transcript, the newest lanes, the news it kept.${prefs.privacy ? " Share-safe is on, so titles, reports and news text are left out." : ""}</p>`;
+    <b>Download</b><div class="row wrap" style="gap:6px;margin-top:8px">${files.map(([w, f, l]) => `<button class="btn sm" data-ex="${w}|${f}">${icon("download", 14)}${l} (${f.toUpperCase()})</button>`).join("")}<button class="btn sm" id="exCal">${icon("calendar", 14)}Plan calendar (ICS)</button></div>
+    <p class="hint">From the office's own records: days for 120 days, the token ledger since the first transcript, the newest lanes, the news it kept.${prefs.privacy ? " Share-safe is on, so titles, reports and news text are left out." : ""}</p></div>`;
   if (!$("dialog").open) $("dialog").showModal();
   $("exClose").addEventListener("click", () => $("dialog").close());
   $("exCopy").addEventListener("click", () => navigator.clipboard.writeText(text).then(() => toast("The report is on the clipboard.", "good"), () => toast("Could not copy.", "warn")));
   $("exSave").addEventListener("click", () => downloadExport("what=report&month=" + month, `claude-office-${month}.md`));
   $("dialogBody").querySelectorAll("[data-ex]").forEach(b => b.addEventListener("click", () => { const [w, f] = b.dataset.ex.split("|"); downloadExport(`what=${w}&format=${f}`, `claude-office-${w}.${f}`); }));
   $("dialogBody").querySelectorAll("[data-ex-month]").forEach(b => b.addEventListener("click", () => openExport(b.dataset.exMonth)));
+  $("exCal").addEventListener("click", downloadCalendar);
+}
+// The week's plan resets and run-outs as a calendar file (export.plan_calendar), named as the page names the characters.
+function downloadCalendar() {
+  const names = encodeURIComponent(JSON.stringify(Object.fromEntries(snap.seats.map(s => [s.id, panels.persona(s).name]))));
+  const a = document.createElement("a");
+  a.href = "/api/calendar.ics?names=" + names; a.download = "claude-office-plans.ics"; document.body.appendChild(a); a.click(); a.remove();
+  toast("The plan calendar is saved: open it to add the resets to your calendar.", "good", { ic: "calendar" });
 }
 app.openExport = () => openExport();
 app.downloadExport = (qs, name) => downloadExport(qs, name);
@@ -434,8 +442,8 @@ app.showMarkdown = async (title, qs, name) => {
   let text = "";
   try { text = await (await fetchExport(qs)).text(); } catch (e) { toast("Could not export it: " + e.message, "bad"); return; }
   $("dialogBody").innerHTML = `<div class="dh"><b>${esc(title)}</b><button class="btn sm ghost" id="mdClose" aria-label="Close">${icon("x", 16)}</button></div>
-    <div class="doc md ex-md">${md(text)}</div>
-    <div class="row" style="gap:6px;margin-top:10px"><button class="btn sm primary" id="mdCopy">${icon("copy", 14)}Copy as Markdown</button><button class="btn sm" id="mdSave">${icon("download", 14)}Save as .md</button></div>`;
+    <div class="db"><div class="doc md ex-md">${md(text)}</div>
+    <div class="row" style="gap:6px;margin-top:10px"><button class="btn sm primary" id="mdCopy">${icon("copy", 14)}Copy as Markdown</button><button class="btn sm" id="mdSave">${icon("download", 14)}Save as .md</button></div></div>`;
   if (!$("dialog").open) $("dialog").showModal();
   $("mdClose").addEventListener("click", () => $("dialog").close());
   $("mdCopy").addEventListener("click", () => navigator.clipboard.writeText(text).then(() => toast("On the clipboard.", "good"), () => toast("Could not copy.", "warn")));
@@ -1549,6 +1557,7 @@ function paletteItems() {
     { icon: icon("briefcase", 16), label: "Lanes board", hint: "L", keywords: "kanban backlog lanes running done blocked", run: () => setView("lanes") },
     ...(snap && snap.seats.length > 1 ? [{ icon: icon("flag", 16), label: "Versus card: two characters head to head", keywords: "versus duel compare battle rival week card", run: () => openVersus(app, panels, snap.seats[0].id) }] : []),
     { icon: icon("download", 16), label: "Your data: export and the month's report", keywords: "export csv json download report month status update data", run: () => openExport() },
+    { icon: icon("calendar", 16), label: "Plan calendar: this week's resets as an .ics file", keywords: "calendar ics ical reset limit window week plan google outlook", run: () => downloadCalendar() },
     { icon: icon("news", 16), label: "Office news", run: () => go({ kind: "news" }) },
     { icon: icon("star", 16), label: "Trophy room", keywords: "achievements levels xp leaderboard career", run: () => go({ kind: "trophies" }) },
     { icon: icon("star", 16), label: "Scrapbook", keywords: "photos moments memories album pictures", run: () => go({ kind: "scrapbook" }) },

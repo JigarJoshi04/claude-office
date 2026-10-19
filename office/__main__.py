@@ -168,6 +168,53 @@ def cmd_lanes(_args) -> int:
     return 0
 
 
+def cmd_events(args) -> int:
+    """The office's news in this terminal: the last lines, and with --follow every new one as it comes."""
+    path = config.STATE_DIR / "events.jsonl"
+    def show(line: str) -> None:
+        try:
+            e = json.loads(line)
+        except ValueError:
+            return
+        if not isinstance(e, dict) or (args.kind and e.get("kind") != args.kind):
+            return
+        if args.json:
+            print(json.dumps(e), flush=True)
+        else:
+            print(f"{time.strftime('%d %b %H:%M', time.localtime(e.get('ts') or 0))}  {e.get('kind', ''):<11} {e.get('seat') or '-':<9} {e.get('text', '')}", flush=True)
+    try:
+        with open(path) as f:
+            lines = f.readlines()
+            for line in lines[-args.lines:]:
+                show(line)
+            if not args.follow:
+                return 0
+            while True:                                   # tail -f: new news as it is written
+                line = f.readline()
+                if line:
+                    show(line)
+                else:
+                    time.sleep(1.5)
+    except FileNotFoundError:
+        print("No news yet.", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 0
+
+
+def cmd_token(args) -> int:
+    """Show where the office's write token is kept, or make a new one (the office reads it when it starts)."""
+    path = config.CONFIG_DIR / "token"
+    if not args.rotate:
+        print(f"The office token is kept in {path} (mode 0600). Rotate it with: claude-office token --rotate")
+        return 0
+    path.unlink(missing_ok=True)
+    config.api_token()
+    print("A new token is written. Restart the office (systemctl --user restart claude-office) and reload open pages;"
+          " scripts that use ask and post read the file each time.")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="office", description="Claude Office")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -209,6 +256,13 @@ def main(argv=None) -> int:
     po.add_argument("--port", type=int)
     tp = sub.add_parser("top", help="the office in this terminal (for SSH and tmux)")
     tp.add_argument("--port", type=int)
+    ev = sub.add_parser("events", help="the office's news in this terminal")
+    ev.add_argument("--follow", "-f", action="store_true", help="keep printing new news as it comes")
+    ev.add_argument("--lines", "-n", type=int, default=20)
+    ev.add_argument("--kind", help="only this kind: report, limit, lane, risk, promise, …")
+    ev.add_argument("--json", action="store_true")
+    tk = sub.add_parser("token", help="the office's write token: where it is, or --rotate for a new one")
+    tk.add_argument("--rotate", action="store_true")
     rl = sub.add_parser("run-lane")
     rl.add_argument("id")
     args = p.parse_args(argv)
@@ -223,6 +277,10 @@ def main(argv=None) -> int:
         return 0
     if args.cmd == "status":
         return cmd_status(args)
+    if args.cmd == "events":
+        return cmd_events(args)
+    if args.cmd == "token":
+        return cmd_token(args)
     if args.cmd == "pick-seat":
         return cmd_pick(args)
     if args.cmd == "hire":

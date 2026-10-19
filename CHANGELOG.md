@@ -3,6 +3,24 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.163.0] - 2026-10-19
+
+### Added
+- `claude-office events`: the office's news in a terminal, the last lines and with `--follow` every new one as it
+  comes; `--kind` keeps one kind, `--json` prints the records for scripts.
+- `claude-office token --rotate` makes a new write token (the old one stops working when the office restarts);
+  without `--rotate` it says where the token is kept, never the token itself.
+- A plan calendar: Your data → Plan calendar (or the palette) downloads an .ics file with each Claude seat's
+  5-hour and weekly resets in the next eight days and, at the pace it runs now, when one would run out first.
+
+### Security
+- On start the office makes its folders 0700 and the files in its config and state folders 0600 (links are never
+  followed). A new token is written 0600 from its first byte, so it is never readable by others, even briefly.
+
+### Fixed
+- The export dialog, the Markdown dialog and the versus card had no side margins; the export dialog now fits its
+  report and its downloads in one view.
+
 ## [3.162.0] - 2026-10-19
 
 ### Fixed (QA round 23)

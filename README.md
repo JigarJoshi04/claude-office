@@ -281,6 +281,8 @@ claude-office hire --title T --brief-file F [--workdir D] [--seat auto|ID] [--mo
 claude-office lanes | stop ID | resume ID [--seat ID]
 claude-office checkpoint             write the office down
 claude-office top                    the office in this terminal (SSH, tmux): seats, Needs you, sessions, lanes, news
+claude-office events [-f] [--kind K] the news, and with --follow every new line as it comes (--json for scripts)
+claude-office token [--rotate]      where the write token is kept; --rotate makes a new one (restart the office)
 ```
 
 ## Configuration
@@ -328,6 +330,9 @@ curl -X POST http://127.0.0.1:7420/api/event -H "Content-Type: application/json"
 
 `level` is good, info, warn or bad; `seat` puts it at a character's desk; at most 30 events a minute.
 
+On start the office makes its folders readable only by you (0700) and the files in its config and state folders
+0600, since they hold the token, briefs and the game save.
+
 ## A status line for your terminal
 
 `GET /api/status.txt` returns one line: how many sessions work, what needs you, the burn and the tightest plan
@@ -336,6 +341,12 @@ curl -X POST http://127.0.0.1:7420/api/event -H "Content-Type: application/json"
 ```
 set -g status-right '#(curl -s 127.0.0.1:7420/api/status.txt?style=plain)'
 ```
+
+## Plan resets in your calendar
+
+`GET /api/calendar.ics` (Your data → Plan calendar, or the palette) is an iCalendar file of the next eight days:
+when each Claude seat's 5-hour window and week reset, and, at the pace it runs now, when one would run out before
+its reset. Open it to add the events to Google Calendar, Outlook or Apple Calendar; download it again for fresh times.
 
 ## How it knows things
 

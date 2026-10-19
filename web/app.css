@@ -1139,6 +1139,7 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 
 /* reports and progress notes, formatted (the log stays raw) */
 .doc.md { display: grid; gap: 8px; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); font-size: 14px; line-height: 1.55; max-height: 460px; overflow: auto; overflow-wrap: anywhere; }
+.doc.md.ex-md { max-height: max(160px, min(460px, calc(70vh - 300px))); }                 /* the export dialog fits its report and its downloads in one view */
 .doc.md p { margin: 0; } .doc.md .md-h { font-weight: 700; margin-top: 6px; }
 .doc.md ul, .doc.md ol { margin: 0; padding-left: 20px; display: grid; gap: 3px; }
 .doc.md code { font: 500 .88em var(--mono); padding: 1px 5px; border-radius: 5px; background: var(--surface-3); }

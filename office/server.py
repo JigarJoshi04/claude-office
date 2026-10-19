@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.162.0"
+    server_version = "ClaudeOffice/3.163.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -272,6 +272,9 @@ class Handler(BaseHTTPRequestHandler):
                 what, fmt = q.get("what", ""), q.get("format", "csv")
                 body, ctype = export.render(export.rows(self.office, what, private, names), fmt)
                 return self._send(200, body, ctype, {"Content-Disposition": f'attachment; filename="claude-office-{what}.{fmt}"'})
+            if url.path == "/api/calendar.ics":              # plan resets and run-outs, for a calendar (export.plan_calendar)
+                body = export.plan_calendar(self.office.get(), export.names_from(q.get("names"))).encode()
+                return self._send(200, body, "text/calendar; charset=utf-8", {"Content-Disposition": 'attachment; filename="claude-office-plans.ics"'})
             if url.path == "/api/postmortem":                # why a seat last ran out of plan (history.postmortem)
                 snap = self.office.get()
                 if not any(x["id"] == q.get("seat") for x in snap.get("seats", [])):
@@ -633,6 +636,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(port: int, demo: bool = False) -> None:
     config.ensure_dirs()
+    if not demo and config.lock_down():                    # folders 0700, the files in them 0600
+        print("Tightened the permissions of the office's own files.", flush=True)
     if demo:
         from .demo import DemoOffice
         office = DemoOffice()

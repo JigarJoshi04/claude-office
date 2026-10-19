@@ -217,3 +217,38 @@ def lane_pack(lane: dict, brief: str, report: str, state: str, names: dict | Non
         out.append("")
     out.append(f"*From Claude Office, {time.strftime('%d %b %Y %H:%M')}. Credentials are masked.*")
     return "\n".join(out) + "\n"
+
+
+def plan_calendar(snap: dict, names: dict | None = None) -> str:
+    """The seats' plan resets and, at this pace, run-outs, as an iCalendar file for the week ahead."""
+    now = time.time()
+    stamp = lambda t: time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(t))
+    out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Claude Office//plans//EN", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Claude Office plans"]
+    text = lambda v: v.replace("\\", "\\\\").replace("\n", " ").replace(",", "\\,").replace(";", "\\;")
+    def event(uid, t, title, desc):
+        out.extend(["BEGIN:VEVENT", f"UID:{uid}@claude-office", f"DTSTAMP:{stamp(now)}", f"DTSTART:{stamp(t)}", f"DTEND:{stamp(t + 900)}",
+                    "SUMMARY:" + text(title), "DESCRIPTION:" + text(desc), "END:VEVENT"])
+    for s in snap.get("seats", []):
+        if s.get("kind") != "claude":
+            continue
+        name = (names or {}).get(s["id"]) or s.get("nickname") or s.get("label") or s["id"]
+        u, fc = s.get("usage") or {}, s.get("forecast") or {}
+        for key, word in (("five_hour", "5-hour window"), ("weekly", "week")):
+            w, f = u.get(key) or {}, fc.get(key) or {}
+            if w.get("resets_at") and now < w["resets_at"] < now + 8 * 86400:
+                event(f"{s['id']}-{key}-reset-{int(w['resets_at'])}", w["resets_at"], f"{name}: {word} resets", f"{name}'s {word} starts again.")
+            if f.get("state") == "runs_out" and f.get("out_at") and now < f["out_at"] < (w.get("resets_at") or now + 8 * 86400):
+                event(f"{s['id']}-{key}-out-{int(f['out_at'] // 900)}", f["out_at"], f"{name}: {word} runs out (at this pace)",
+                      f"At {f.get('per_hour')}% an hour {name}'s {word} runs out before it resets.")
+    out.append("END:VCALENDAR")
+    return "\r\n".join(_fold(line) for line in out) + "\r\n"
+
+
+def _fold(line: str) -> str:
+    """An iCalendar line kept to 75 bytes: longer ones go on as lines that start with a space (RFC 5545 3.1)."""
+    parts, cur = [], ""
+    for ch in line:
+        if len((cur + ch).encode()) > (75 if not parts else 74):
+            parts.append(cur); cur = ""
+        cur += ch
+    return "\r\n ".join(parts + [cur])

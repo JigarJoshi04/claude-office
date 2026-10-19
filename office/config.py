@@ -185,9 +185,31 @@ def api_token() -> str:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     path = CONFIG_DIR / "token"
     if not path.exists():
-        path.write_text(secrets.token_urlsafe(32))
-        path.chmod(0o600)
+        try:                                              # 0600 from the first byte: never readable by others, even briefly
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:                           # another process made it first: use theirs
+            return path.read_text().strip()
+        with os.fdopen(fd, "w") as f:
+            f.write(secrets.token_urlsafe(32))
     return path.read_text().strip()
+
+
+def lock_down() -> int:
+    """On start: the office's folders 0700 and the files directly in its config and state folders 0600, since they hold
+    the token, briefs, transcripts' summaries and the save. Returns how many it had to fix."""
+    fixed = 0
+    for d in (CONFIG_DIR, STATE_DIR, DATA_DIR):
+        try:
+            if d.is_dir() and d.stat().st_mode & 0o077:
+                d.chmod(0o700); fixed += 1
+            if d is DATA_DIR:
+                continue
+            for f in d.iterdir():
+                if f.is_file() and not f.is_symlink() and f.stat().st_mode & 0o077:
+                    f.chmod(0o600); fixed += 1
+        except OSError:
+            continue
+    return fixed
 
 
 def ensure_dirs() -> None:
