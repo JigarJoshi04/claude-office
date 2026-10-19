@@ -88,6 +88,14 @@ class CoachTests(unittest.TestCase):
         self.assertEqual(coach.outcome({"status": "done", "report_status": "STATUS: DONE - all of it"}), "done")
         self.assertNotIn("file", coach.words("Edit the files"))                                 # a plural of a stop word is one too
 
+    def test_the_price_tag(self):
+        office = SimpleNamespace(get=lambda: {"next_pick": {"seat": "claude2"}}, samples=SimpleNamespace(exchange=lambda snap, sid: {"five_hour": 1000, "weekly": 10000}))
+        self.assertEqual(coach.price_tag(office, {"fresh": 50_000}, None), {"seat": "claude2", "five_hour": 50, "weekly": 5})
+        self.assertEqual(coach.price_tag(office, {"fresh": 50_000}, "claude4")["seat"], "claude4")
+        self.assertIsNone(coach.price_tag(office, {"fresh": None}, None))
+        office.samples = SimpleNamespace(exchange=lambda snap, sid: {"five_hour": None, "weekly": None})
+        self.assertIsNone(coach.price_tag(office, {"fresh": 50_000}, None))
+
     def test_brief_length_is_checked(self):
         with self.assertRaisesRegex(ValueError, "20 to"):
             coach.coach(self.office(FakeBrain()), {"brief": "too short"})

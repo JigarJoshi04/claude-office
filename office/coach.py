@@ -100,7 +100,7 @@ def similar(title: str, brief: str, spent=None) -> list[dict]:
         cost = spent(sids) if spent and sids else None
         lane["report_status"] = lanes._first_line(p / "REPORT.md")
         out.append({"id": lane["id"], "title": lane.get("title") or "", "model": lane.get("model"), "score": round(s, 2),
-                    "minutes": round(secs / 60) if secs else None, "tokens": (cost or {}).get("tokens"),
+                    "minutes": round(secs / 60) if secs else None, "tokens": (cost or {}).get("tokens"), "fresh": (cost or {}).get("fresh"),
                     "outcome": outcome(lane), "report": redact(lane.get("report_status") or "")[:200]})
     out.sort(key=lambda r: -r["score"])
     return out[:SHOW]
@@ -112,6 +112,7 @@ def estimate(samples: list[dict]) -> dict | None:
         return None
     mins = [r["minutes"] for r in samples if r["minutes"]]           # a median needs ESTIMATE_FROM values: one lane is not a size
     toks = [r["tokens"] for r in samples if r["tokens"]]
+    fresh = [r["fresh"] for r in samples if r.get("fresh")]
     models: dict[str, list[int]] = {}
     for r in samples:
         if r.get("model"):
@@ -120,7 +121,22 @@ def estimate(samples: list[dict]) -> dict | None:
             e[1] += r["outcome"] == "done"
     return {"n": len(samples), "minutes": round(statistics.median(mins)) if len(mins) >= ESTIMATE_FROM else None,
             "tokens": round(statistics.median(toks)) if len(toks) >= ESTIMATE_FROM else None, "done": sum(r["outcome"] == "done" for r in samples),
+            "fresh": round(statistics.median(fresh)) if len(fresh) >= ESTIMATE_FROM else None,
             "models": [{"model": m, "n": v[0], "done": v[1]} for m, v in sorted(models.items(), key=lambda kv: -kv[1][0])]}
+
+
+def price_tag(office, est: dict | None, seat: str | None) -> dict | None:
+    """What a job like this costs the seat it would go to: the similar lanes' typical fresh tokens against what 1% of
+    that seat's 5-hour window and week buy (history.exchange). None without both."""
+    if not est or not est.get("fresh") or not hasattr(office, "samples"):
+        return None
+    snap = office.get() or {}
+    sid = seat if seat and seat != "auto" else (snap.get("next_pick") or {}).get("seat")
+    if not sid:
+        return None
+    ex = office.samples.exchange(snap, sid)
+    pct = {k: round(est["fresh"] / ex[k]) for k in ("five_hour", "weekly") if ex.get(k)}
+    return {"seat": sid, **pct} if pct else None
 
 
 def prompt_for(title: str, brief: str, model: str, samples: list[dict]) -> str:
@@ -161,9 +177,10 @@ def coach(office, body: dict, demo: bool = False) -> dict:
     if not MIN_BRIEF <= len(brief) <= MAX_BRIEF:
         raise ValueError(f"A brief to coach is {MIN_BRIEF} to {MAX_BRIEF:,} characters")
     if demo:
-        return {"similar": DEMO_SIMILAR, "estimate": estimate(DEMO_SIMILAR), "coach": DEMO, "demo": True}
+        return {"similar": DEMO_SIMILAR, "estimate": estimate(DEMO_SIMILAR), "coach": DEMO, "demo": True, "price": {"seat": "claude4", "five_hour": 18, "weekly": 3}}
     samples = similar(title, brief, office.tokens.spent)
     out = {"similar": samples, "estimate": estimate(samples), "coach": None}
+    out["price"] = price_tag(office, out["estimate"], body.get("seat"))
     if body.get("ai") is False:                   # just the past lanes
         return out
     try:

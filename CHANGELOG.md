@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.159.0] - 2026-10-19
+
+### Added
+- A price tag before you hire: Sharpen the brief now also says what a job like it costs the seat it would go to,
+  as a share of that seat's 5-hour window and week, from the similar lanes' typical fresh tokens and what 1% of the
+  seat's plan bought lately (the exchange rate).
+
 ## [3.158.0] - 2026-10-19
 
 ### Added

@@ -1592,7 +1592,7 @@ export function makePanels(app) {
           <p class="hint">Each line becomes its own lane in the backlog (at most 20), running in waves as seats free up. Write {{item}} in the title or the brief where the line goes; otherwise it is added to both.</p></details>
         <div class="brief-check" id="hCheck" aria-live="polite">${briefCheck(d.brief)}</div>
         <div class="row" style="gap:8px;margin:-6px 0 12px;flex-wrap:wrap"><button class="btn sm" id="hSharpen" ${coachState && coachState.pending ? "disabled" : ""}>${icon("sparkles", 14)}Sharpen the brief</button><span class="hint">How big jobs like it have been, and the analyst's read when it is on</span></div>
-        <div id="hCoach" aria-live="polite">${coachHtml(coachState, { now: d.brief, model: d.model || ld.model, privacy: app.privacy() })}</div>
+        <div id="hCoach" aria-live="polite">${coachHtml(coachState, { now: d.brief, model: d.model || ld.model, privacy: app.privacy(), nameOf })}</div>
         <label class="f">Working folder<input type="text" id="hDir" list="hDirs" value="${esc(d.workdir || snap.office.default_workdir || "")}"><datalist id="hDirs">${dirs.map(x => `<option value="${esc(x)}">`).join("")}</datalist></label>
         <div id="hClash" aria-live="polite">${clashHtml(d.workdir || snap.office.default_workdir || "")}</div>
         <label class="check" style="margin:-4px 0 12px"><input type="checkbox" id="hTree" ${d.worktree ? "checked" : ""}> Its own git worktree: a new branch, checked out beside the repository</label>
@@ -1650,7 +1650,7 @@ export function makePanels(app) {
           if (!el) return;
           const had = document.activeElement && el.contains(document.activeElement) ? [...document.activeElement.attributes].find(a => a.name.startsWith("data-coach")) : null;
           setTimeout(() => { const b = had && el.querySelector(`[${had.name}]`); if (b) b.focus(); else if (had) q("hBrief").focus(); }, 0);   // the keyboard stays put
-          el.innerHTML = coachHtml(coachState, { now: q("hBrief").value, model: q("hModel").value, privacy: app.privacy() });
+          el.innerHTML = coachHtml(coachState, { now: q("hBrief").value, model: q("hModel").value, privacy: app.privacy(), nameOf });
           q("hSharpen").disabled = !!(coachState && coachState.pending);
           el.querySelectorAll("[data-coach-x]").forEach(b => b.addEventListener("click", () => { coachState = null; coachPaint(); }));
           el.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => app.go({ kind: b.dataset.go })));
@@ -1670,7 +1670,7 @@ export function makePanels(app) {
           const brief = q("hBrief").value.trim();
           if (brief.length < 20) { toast("Write a few lines of the brief first.", "warn"); q("hBrief").focus(); return; }
           coachState = { pending: true }; coachPaint();
-          try { coachState = { brief, data: await app.post("/api/ai/coach", { title: q("hTitle").value, brief, model: q("hModel").value }) }; }
+          try { coachState = { brief, data: await app.post("/api/ai/coach", { title: q("hTitle").value, brief, model: q("hModel").value, seat: q("hSeat").value }) }; }
           catch (err) { coachState = { error: err.message }; }
           if (root.isConnected) coachPaint();
           else if (document.getElementById("hCoach")) app.rerender(true);   // the desk was drawn again while it read
