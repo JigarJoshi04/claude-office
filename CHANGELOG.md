@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.170.0] - 2026-10-19
+
+### Added
+- The public view: `GET /api/public` and `claude-office status --json`, built from an allow-list (names, states,
+  plan use, levels and counts; never titles, tasks, prompts, folders, sockets, accounts or commands).
+- A beacon file: config `"beacon": {"path": ...}` writes the public view every minute for other programs to read.
+- Metrics: config `"metrics": true` serves `GET /metrics` (Prometheus text) with plan use and resets, sessions,
+  lanes, tokens in the last hour, XP and levels, Needs you, office problems, refresh cost and the picture's age.
+
 ## [3.169.0] - 2026-10-19
 
 ### Added

@@ -353,6 +353,18 @@ curl -X POST http://127.0.0.1:7420/api/event -H "Content-Type: application/json"
 On start the office makes its folders readable only by you (0700) and the files in its config and state folders
 0600, since they hold the token, briefs and the game save.
 
+## The public view, a beacon file and metrics
+
+`GET /api/public` (and `claude-office status --json`) is the office with nothing private in it, built from an
+allow-list: the characters' names, states, plan use, levels and counts. Never titles, tasks, prompts, folders,
+sockets, accounts or commands. Two opt-ins in `config.json` build on it:
+
+- `"beacon": {"path": "~/public_html/office.json"}` writes it to a file every minute, readable by other programs (a
+  web server, a screen on another machine). Check its `at` before trusting it: the file stays when the office stops.
+- `"metrics": true` serves `GET /metrics` in the Prometheus text format: plan use and resets per seat and window,
+  sessions, lanes, tokens in the last hour, XP and levels, Needs you, office problems, the refresh cost and the
+  picture's age. Labelled by seat id only.
+
 ## A status line for your terminal
 
 `GET /api/status.txt` returns one line: how many sessions work, what needs you, the burn and the tightest plan

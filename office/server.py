@@ -177,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.169.0"
+    server_version = "ClaudeOffice/3.170.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -288,6 +288,15 @@ class Handler(BaseHTTPRequestHandler):
                 what, fmt = q.get("what", ""), q.get("format", "csv")
                 body, ctype = export.render(export.rows(self.office, what, private, names), fmt)
                 return self._send(200, body, ctype, {"Content-Disposition": f'attachment; filename="claude-office-{what}.{fmt}"'})
+            if url.path == "/api/public":                    # the allow-listed view for status pages and screens (public.py)
+                from . import public as public_mod
+                return self._json(200, public_mod.view(self.office.get()))
+            if url.path == "/metrics":                       # Prometheus gauges, only when config "metrics": true
+                from . import public as public_mod
+                if not (getattr(self.office, "cfg", {}) or {}).get("metrics") and not self.demo:
+                    return self._send(404, b'Metrics are off: set "metrics": true in ~/.config/claude-office/config.json\n', "text/plain; charset=utf-8")
+                perf = self.office.perf_view() if hasattr(self.office, "perf_view") else None
+                return self._send(200, public_mod.metrics(self.office.get(), perf).encode(), "text/plain; version=0.0.4; charset=utf-8")
             if url.path == "/api/templates":                 # the team's lane briefs from the config folder (teamtpl.py)
                 from . import teamtpl
                 if self.demo:

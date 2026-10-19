@@ -606,7 +606,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.169.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.170.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -903,6 +903,14 @@ class Office(LiveOffice):
             snap = self.get() or {}
             live = {x["id"]: s["id"] for s in snap.get("seats", []) if s.get("kind") == "claude" for x in s.get("sessions", []) if x.get("id")}
             config.backup_state()                          # once a day: the state files, the last 7 days kept
+            beacon = (self.cfg.get("beacon") or {}) if isinstance(self.cfg.get("beacon"), dict) else {}
+            if beacon.get("path") and snap.get("seats"):    # the public view as a file, for other programs (public.py)
+                try:
+                    from . import public as public_mod
+                    public_mod.write_beacon(snap, str(beacon["path"]))
+                    self.faults.ok("The beacon file")
+                except (OSError, ValueError, TypeError) as e:
+                    self.faults.fault("The beacon file", e)
             if time.time() - getattr(self, "_auto_cp", 0) > 3600 and snap.get("seats"):   # the hourly checkpoint, for after a restart
                 try:
                     if checkpoint.write_latest(snap, self.cfg):

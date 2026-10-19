@@ -325,6 +325,15 @@ class ServerTests(unittest.TestCase):
         self.assertIn("script-src 'self'", headers["Content-Security-Policy"])
         self.assertNotIn("Access-Control-Allow-Origin", headers)
 
+    def test_public_view_and_metrics_off_by_default(self):
+        status, _, body = self.request(path="/api/public")
+        self.assertEqual(status, 200)
+        self.assertNotIn(ACCESS, body.decode()); self.assertNotIn(".claude2", body.decode())
+        self.assertEqual(json.loads(body)["seats"][0]["five_hour"]["used_pct"], 12)
+        status, _, body = self.request(path="/metrics")
+        self.assertEqual(status, 404)
+        self.assertIn(b'"metrics": true', body)
+
     def test_the_tv_page_carries_no_token(self):
         status, headers, body = self.request(path="/tv")
         parser = MetaParser()

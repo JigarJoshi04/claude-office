@@ -30,11 +30,24 @@ def _fmt_pct(u, key):
     return f"{w['pct']:>3.0f}%" if w.get("pct") is not None else "  ? "
 
 
-def cmd_status(_args) -> int:
+def cmd_status(args) -> int:
+    if getattr(args, "json", False):                   # the public view (public.py): from the running office, else built here
+        import urllib.request
+        port = config.load_config().get("port", config.DEFAULT_PORT)
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/public", timeout=5) as r:
+                print(r.read().decode())
+            return 0
+        except OSError:
+            pass
     from .snapshot import Office
     office = Office()
     office.usage.tick()
     snap = office.build()
+    if getattr(args, "json", False):
+        from . import public
+        print(json.dumps(public.view(snap)))
+        return 0
     for s in snap["seats"]:
         live = [x for x in s["sessions"] if x.get("live", True)]
         print(f"{s['label']:<10} {s['status']:<8} 5h {_fmt_pct(s.get('usage'), 'five_hour')}  "
@@ -249,7 +262,8 @@ def main(argv=None) -> int:
     s = sub.add_parser("serve")
     s.add_argument("--port", type=int, default=None)
     s.add_argument("--demo", action="store_true", help="a made-up office, for screenshots and trying the UI")
-    sub.add_parser("status")
+    stp = sub.add_parser("status")
+    stp.add_argument("--json", action="store_true", help="the public view: names, states, plan use and counts only")
     pk = sub.add_parser("pick-seat")
     pk.add_argument("--kind", choices=["claude", "codex"])
     pk.add_argument("--exclude")
