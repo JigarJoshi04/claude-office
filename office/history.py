@@ -247,6 +247,25 @@ class HistoryStore:
                 seen.add(key)
         return sorted(events, key=lambda e: e["ts"])
 
+    def exchange(self, snapshot, seat_id):
+        """What 1% of a seat's plan buys: fresh tokens spent on it per point its 5-hour window and its week rose, over
+        the last day's minutes (a reset, or a reading that did not move, is left out). {five_hour, weekly, minutes}."""
+        with self.lock:
+            rows = self._points(snapshot)
+        prev, per = None, {"five_hour": [0, 0.0], "weekly": [0, 0.0]}
+        for r in rows:
+            x = r["seats"].get(seat_id)
+            toks = {sid: v[6] or 0 for sid, v in r["sessions"].items() if v[0] == seat_id}
+            if prev and x and prev[0]:
+                spent = sum(max(0, t - prev[1].get(sid, t)) for sid, t in toks.items())   # sessions seen both times
+                for i, key in ((0, "five_hour"), (1, "weekly")):
+                    a, b = prev[0][i], x[i]
+                    if a is not None and b is not None and 0 < b - a < 25:      # rose, and not across a reset
+                        per[key][0] += spent; per[key][1] += b - a
+            prev = (x, toks) if x else prev
+        out = {k: (round(v[0] / v[1]) if v[1] >= 3 else None) for k, v in per.items()}   # at least three points of rise
+        return public(dict(out, points={k: round(v[1], 1) for k, v in per.items()}))
+
     def postmortem(self, snapshot, seat_id):
         """Why a seat last ran out of plan, from the last day's minutes: when, how fast its window filled, and which
         sessions on it burned the fresh tokens in the five hours before. {"limit": None} when it has not run out."""

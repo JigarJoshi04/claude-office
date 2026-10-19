@@ -171,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
     token = ""
     port = config.DEFAULT_PORT
     demo = False
-    server_version = "ClaudeOffice/3.157.0"
+    server_version = "ClaudeOffice/3.158.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -276,7 +276,7 @@ class Handler(BaseHTTPRequestHandler):
                 snap = self.office.get()
                 if not any(x["id"] == q.get("seat") for x in snap.get("seats", [])):
                     raise ValueError("Unknown seat")
-                return self._json(200, self.office.samples.postmortem(snap, q.get("seat")))
+                return self._json(200, dict(self.office.samples.postmortem(snap, q.get("seat")), exchange=self.office.samples.exchange(snap, q.get("seat"))))
             if url.path == "/api/stats":
                 return self._json(200, self.office.samples.stats(self.office.get(), q.get("day"),
                                                                list(self.office.events)))

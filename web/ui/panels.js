@@ -532,6 +532,8 @@ export function makePanels(app) {
       : `${section(`At the desk · ${L.length}`, L.length ? L.map(x => sessRow(s, x)).join("") : `<div class="empty">${s.status === "limited" ? "Everyone went home: the seat is out of plan." : "Nobody here right now."}</div>`)}
         ${section("Today", `<div class="diary">${icon("news", 16)}<span>${esc(diary(p, dstats))}</span></div>`)}
         ${section("Plan, last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
+          ${(() => { const ex = (app.detailFor("p:" + s.id) || {}).exchange; if (!ex || (!ex.five_hour && !ex.weekly)) return "";
+            return `<p class="xrate">${icon("coin", 13)} 1% of its ${ex.five_hour ? `5-hour window buys about <b>${fmtTok(ex.five_hour)}</b> fresh tokens` : ""}${ex.five_hour && ex.weekly ? "; 1% of its " : ""}${ex.weekly ? `week about <b>${fmtTok(ex.weekly)}</b>` : ""}, from the last day.</p>`; })()}
           <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
         ${postmortemHtml(s, p)}
         ${(u.scoped || []).length ? section("Per-model weekly limits", `${u.scoped.map(m => { const pc = Math.max(0, Math.min(100, Math.round(m.pct))), lvl = pc >= 90 ? "bad" : pc >= 70 ? "warn" : "";

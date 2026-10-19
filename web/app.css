@@ -1156,6 +1156,7 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .brief-check .bc.ok { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
 .brief-check .bc-n { margin-left: auto; font: 500 12px var(--mono); color: var(--faint); }
 .pm p { margin: 0 0 10px; line-height: 1.5; }
+.xrate { margin: 8px 0 0; font-size: 13px; color: var(--muted); } .xrate svg { vertical-align: -2px; }
 .pm .hint svg { display: inline-block; vertical-align: -2px; }
 .pm-who { display: grid; gap: 6px; margin: 10px 0; }
 .pm-row { display: grid; grid-template-columns: minmax(0, 1fr) 30% auto auto; gap: 8px; align-items: center; font-size: 13.5px; }

@@ -3,6 +3,13 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.158.0] - 2026-10-19
+
+### Added
+- The plan's exchange rate, on a character's page: how many fresh tokens 1% of its 5-hour window, and of its week,
+  bought over the last day (the tokens its sessions spent against the points its windows rose, resets left out;
+  shown once it has three points to go on).
+
 ## [3.157.0] - 2026-10-19
 
 ### Added

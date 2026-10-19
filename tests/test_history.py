@@ -158,6 +158,18 @@ class StatsTests(unittest.TestCase):
         self.assertGreater(pm["per_hour"], 400)                      # 80 points in 9 minutes
         self.assertEqual(pm["pace"][0][1], 10)                        # from the reset, not the window before
 
+    def test_what_one_percent_of_the_plan_buys(self):
+        t = self.start
+        def one(ts, p5, wk, toks):
+            return {"now": ts, "lanes": [], "seats": [{"id": "a", "kind": "claude", "status": "working", "usage": {"five_hour": {"pct": p5}, "weekly": {"pct": wk}},
+                    "sessions": [{"id": "s1", "name": "x", "state": "working", "tokens_total": toks, "started_at": t, "live": True}]}]}
+        for i, (p5, wk, toks) in enumerate([(10, 40, 0), (12, 40, 200_000), (14, 41, 400_000), (16, 41, 600_000), (2, 41, 700_000), (4, 42, 900_000)]):
+            self.h.record(one(t + 60 * (i + 1), p5, wk, toks))
+        ex = self.h.exchange(one(t + 420, 4, 42, 900_000), "a")
+        self.assertEqual(ex["five_hour"], 100_000)                    # 800k tokens over 8 points; the reset's minute is left out
+        self.assertIsNone(ex["weekly"])                               # two points of the week is too few to say
+        self.assertEqual(ex["points"]["weekly"], 2)
+
     def test_baseline_survives_restart_without_a_previous_day_sample(self):
         t = self.start
         with tempfile.TemporaryDirectory() as tmp:
