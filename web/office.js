@@ -1243,6 +1243,16 @@ export function createOffice(stage, handlers) {
     plate.addEventListener("click", (e) => { e.stopPropagation(); if (dragMoved) return; peek(null); if (secondTap(e)) { if (handlers.onDouble) handlers.onDouble(); focusSeat(s.id); return; } handlers.openSeat(s.id); });
     plate.addEventListener("dblclick", (e) => e.stopPropagation());
     overlay.appendChild(plate);
+    if (live.length > MAX_SLOTS) {                       // more at work than there are desks: say so, honestly
+      const more = document.createElement("button");
+      more.type = "button"; more.className = "pod-more"; more.dataset.k = "more:" + s.id;
+      more.textContent = `+${live.length - MAX_SLOTS} more`;
+      more.title = more.ariaLabel = `${live.length - MAX_SLOTS} more of ${who.name}'s sessions at work than desks: the seat page lists them all`;
+      more.style.setProperty("--seat", s.color);
+      place(more, pod.room.x + pod.room.w - 58, pod.room.y + pod.room.h - 48, null, null);
+      more.addEventListener("click", (e) => { e.stopPropagation(); handlers.openSeat(s.id); });
+      overlay.appendChild(more);
+    }
     const podHot = hot("pod", `${who.name}'s desks`, pod.room.x + 2, pod.room.y + 2, pod.room.w - 4, pod.room.h - 30, () => handlers.openSeat(s.id), () => focusSeat(s.id));
     podHot.dataset.k = "pod:" + s.id;
     const f5 = (s.usage || {}).five_hour, wk = (s.usage || {}).weekly, when = (ts) => new Date(ts * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });

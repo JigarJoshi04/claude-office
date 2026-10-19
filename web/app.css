@@ -1920,3 +1920,7 @@ body.locked [data-open] { display: none !important; }
 .bud.warn .bud-bar i { background: var(--warn); } .bud.over .bud-bar i { background: var(--bad); }
 .bud-row { padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
 .bud-row select { width: auto; }
+
+/* More sessions than desks (office.js renderPod): an honest "+N more" on the room */
+.pod-more { position: absolute; z-index: 3; padding: 2px 7px; border-radius: 99px; border: 0; cursor: pointer; font: 700 11px var(--mono);
+  background: color-mix(in srgb, var(--seat) 30%, #10131e); color: #f2f4fa; box-shadow: 0 0 0 1px color-mix(in srgb, var(--seat) 60%, transparent); }

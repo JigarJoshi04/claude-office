@@ -708,6 +708,7 @@ function apply(next) {
     const born = Math.min(...snap.seats.map(z => (z.career || {}).since).filter(Boolean)), years = Math.round((snap.now - born) / (365.25 * 86400));
     setTimeout(() => toast(`Happy birthday, office: ${years} year${years === 1 ? "" : "s"} since its first day. There is cake on your desk.`, "good", { ic: "gift", ms: 9000 }), 1500);
   }
+  if (DEMO && QS.has("crowd") && snap.seats[1]) { const s1 = snap.seats[1], base = s1.sessions.filter(x => x.live !== false); s1.sessions = [...s1.sessions, ...Array.from({ length: 6 }, (_, i) => ({ ...base[i % base.length], id: "crowd-" + i, name: "crowd-" + i }))]; }   // the demo's ?crowd=1: more at work than desks
   if (DEMO && QS.get("levels") === "tiers") snap.seats.forEach((s, i) => { if (s.career) s.career.level = [50, 35, 25, 18, 12][i % 5]; });   // the demo's ?levels=tiers: every room tier
   if (DEMO && QS.has("faults")) snap.office.faults = [{ part: "The token ledger", what: "PermissionError: [Errno 13] Permission denied: 'tokens.json'", count: 37, since: snap.now - 1500, last: snap.now - 4 }];   // the demo's ?faults=1
   apiWeather(snap.api_weather);

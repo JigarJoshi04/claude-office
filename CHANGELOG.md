@@ -3,6 +3,12 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.184.0] - 2026-10-19
+
+### Added
+- Honest overflow: a room with more sessions at work than desks says so with a "+N more" sign by the desk (a click
+  opens the seat's page with all of them), instead of leaving them out. The demo shows it with `?crowd=1`.
+
 ## [3.183.0] - 2026-10-19
 
 ### Added
