@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import statistics
 import threading
 import time
 from datetime import datetime, timedelta
@@ -30,7 +31,7 @@ from pathlib import Path
 from . import config, prices
 
 VERSION = 4
-SHIP_RULES = 14               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
+SHIP_RULES = 15               # bumped when the rules for shipped work, prices or waits change: every transcript is read again
 RANGES = {"today": 1, "7": 7, "30": 30, "90": 90, "all": None}
 # Shipped work, read from the Bash tool calls in the transcripts: what a command did, confirmed by its result.
 SHIP = ("commits", "pushes", "prs_opened", "prs_merged", "insertions", "deletions")
@@ -284,7 +285,7 @@ class TokenLedger:
                     d["files_out"] = {}
                     self._old_extras = {}
                     for sid, r in (d.get("sessions") or {}).items():
-                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm", "tt") if k in r}
+                        kept = {k: r.pop(k) for k in ("g", "$", "$m", "w", "web", "sl", "rb", "lm", "tt", "su") if k in r}
                         if kept:
                             self._old_extras[sid] = kept
                     d["sr"] = SHIP_RULES
@@ -636,6 +637,17 @@ class TokenLedger:
                 changed = True
         return changed
 
+    def _startup(self, sid: str, u: dict, ts) -> None:
+        """A session's start-up weight: the whole prompt of its first response (system prompt, tools, MCP servers,
+        CLAUDE.md and the first message), what it pays before doing any work. Kept once, with its day."""
+        with self.lock:
+            s = self.data["sessions"].setdefault(sid, {"p": None, "s": None, "fi": None, "l": None, "m": {}, "d": {}, "h": {}})
+            if s.get("su"):
+                return
+            n = lambda k: int(u.get(k) or 0)
+            day, _ = _when(ts)
+            s["su"] = [day or "?", n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens")]
+
     def _rebuild(self, sid: str, model: str, u: dict, ts) -> None:
         """A cold-cache rebuild: a response that wrote a large prompt back into the cache after the conversation sat
         longer than the cache lives (5 minutes, or an hour for 1-hour writes), so what a warm cache would have read
@@ -682,6 +694,7 @@ class TokenLedger:
             self._xusd = usd
             if not self._helper_file:
                 self._rebuild(sid, model, u, d.get("timestamp"))
+                self._startup(sid, u, d.get("timestamp"))
         if not usd:
             return False
         day, _ = _when(d.get("timestamp"))
@@ -1127,6 +1140,11 @@ class TokenLedger:
             for d, v in (r.get("web") or {}).items():                    # counted from the calls (see _web)
                 if cur is None or d in cur:
                     where[2] += v[0]; where[3] += v[1]
+        starts: dict = {}                                                 # start-up weight: per seat, each session's first prompt
+        for r in mine.values():
+            su = r.get("su")
+            if su and su[1] and (cur is None or su[0] in cur):
+                starts.setdefault(seat_of(r), []).append(su[1])
         tools: dict = {}                                                  # where the time goes: per tool, [calls, seconds, longest]
         for r in mine.values():
             for d, per in (r.get("tt") or {}).items():
@@ -1214,6 +1232,10 @@ class TokenLedger:
             "where": {"helpers": where[0], "main": max(0, tot[0] + tot[1] - where[0]), "thinking": where[1], "output": tot[2],
                       "searches": where[2], "fetches": where[3],
                       "rebuilds": rebuilt[0], "rebuild_tokens": rebuilt[1], "rebuild_usd": round(rebuilt[2] / 1e6, 2)},
+            "startup": {"sessions": sum(len(v) for v in starts.values()), "tokens": sum(sum(v) for v in starts.values()),
+                        "median": round(statistics.median([x for v in starts.values() for x in v])) if starts else None,
+                        "seats": sorted(({"seat": k, "sessions": len(v), "median": round(statistics.median(v)), "tokens": sum(v)} for k, v in starts.items()),
+                                        key=lambda e: -e["median"])},
             "tools": [{"tool": k, "calls": v[0], "seconds": round(v[1]), "avg": round(v[1] / v[0], 1) if v[0] else 0, "max": round(v[2])}
                       for k, v in sorted(tools.items(), key=lambda kv: -kv[1][1])[:14]],
             "waits": {"seconds": waits[0], "replies": waits[1], "away": waits[2], "median_s": wait_median(waits[3:]),

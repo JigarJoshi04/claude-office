@@ -279,6 +279,18 @@ function renderTokensInner(el, app) {
       <div class="tok-parts" style="margin:12px 0 0">${w.output ? `<span title="Thinking is part of the output: what the models reasoned before they wrote">${icon("sparkles", 13)}${tp}% of the output was thinking (${big(w.thinking)})</span>` : ""}
         ${w.searches || w.fetches ? `<span>${icon("search", 13)}${w.searches.toLocaleString()} web search${w.searches === 1 ? "" : "es"} · ${w.fetches.toLocaleString()} page fetch${w.fetches === 1 ? "" : "es"}</span>` : ""}</div></div>`;
   }
+  // Start-up weight: the first prompt of each session (system prompt, tools, MCP servers, CLAUDE.md, first message).
+  function startCard() {
+    const su = t.startup;
+    if (!su || !su.sessions || su.median == null) return "";
+    const rows = !seat && su.seats.length > 1 ? su.seats.map(e => { const st = seatOf(e.seat);
+      return `<tr style="--seat:${esc(st ? st.color : "#82889f")}"><td><span class="who">${st ? `<i data-portrait="mascot-${esc(e.seat)}|${esc(st.color)}|"></i>` : ""}${esc(who(e.seat))}</span></td>
+        <td class="num">${e.sessions.toLocaleString()}</td><td class="num"><b>${big(e.median)}</b></td><td class="num">${big(e.tokens)}</td></tr>`; }).join("") : "";
+    return `<div class="view-card"><h5>Start-up weight · ${esc(RANGES.find(r => r[0] === rng)[1].toLowerCase())}</h5>
+      <div class="tok-parts" style="margin-top:0"><span>${icon("layers", 13)}<b>${big(su.median)}</b>&nbsp;tokens in a typical first prompt</span><span>${icon("chat", 13)}${su.sessions.toLocaleString()} sessions started: ${big(su.tokens)} tokens before any work</span></div>
+      ${rows ? `<div class="table-scroll"><table class="league ship"><thead><tr><th>Character</th><th class="num">Sessions</th><th class="num">Typical first prompt</th><th class="num">In all</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+      <p class="hint">The whole prompt of each session's first response: Claude Code's system prompt and tools, the MCP servers' tools, CLAUDE.md and the first message. After the first turn most of it is read from the cache; fewer MCP servers or a shorter CLAUDE.md make every session lighter.</p></div>`;
+  }
   // Where the time goes: each tool's calls, from the call to its result, slowest first (MCP servers as one).
   function timeCard() {
     const ts = (t.tools || []).filter(x => x.calls);
@@ -339,6 +351,7 @@ function renderTokensInner(el, app) {
     ${valueCard()}
     ${whereCard()}
     ${cacheCard()}
+    ${startCard()}
     ${timeCard()}
     ${waitCard(t, { label: RANGES.find(r => r[0] === rng)[1].toLowerCase(), who, priv })}
     ${shipCard()}

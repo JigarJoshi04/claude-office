@@ -3,6 +3,17 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.146.0] - 2026-10-19
+
+### Added
+- Start-up weight, on the tokens page: the whole prompt of each session's first response (Claude Code's system prompt
+  and tools, the MCP servers' tools, CLAUDE.md and the first message), as a typical size and a total for the range,
+  and per character, since seats with more MCP servers start heavier. The ledger reads its transcripts once more.
+
+### Fixed
+- The utilities' first disk reading started with the office and could write its state while the folder was being
+  replaced (a flaky test); it starts half a minute in and never makes the state folder again.
+
 ## [3.145.0] - 2026-10-19
 
 ### Added

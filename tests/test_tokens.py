@@ -82,6 +82,16 @@ class TokenLedgerTests(unittest.TestCase):
         self.assertNotIn("Read", tools)
         self.assertNotIn("Grep", tools)
 
+    def test_start_up_weight_is_the_first_prompt(self):
+        (self.proj / "s-main.jsonl").write_text(line("f1", "2026-10-18T10:00:00Z", inp=4, cw=30_000, cr=12_000)
+                                                + line("f2", "2026-10-18T10:01:00Z", inp=4, cw=2_000, cr=42_000))
+        (self.proj / "s-two.jsonl").write_text(line("g1", "2026-10-18T11:00:00Z", inp=6, cw=50_000, cr=0))
+        self.ledger.scan()
+        su = self.ledger.view(self.seats, today="2026-10-18")["startup"]
+        self.assertEqual((su["sessions"], su["tokens"]), (2, 42_004 + 50_006))
+        per = {e["seat"]: e["median"] for e in su["seats"]}
+        self.assertEqual(per, {"claude": 42_004, "claude2": 50_006})
+
     def test_counts_dedupes_attributes_and_resumes(self):
         (self.proj / "s-main.jsonl").write_text(line("m1", "2026-10-17T10:00:00Z") + line("m1", "2026-10-17T10:00:00Z")
                                                 + '{"type":"user","message":{"content":"hi"}}\n' + line("m2", "2026-10-18T10:00:00Z"))

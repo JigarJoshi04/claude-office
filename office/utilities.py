@@ -132,7 +132,8 @@ class Utilities:
         self.history: dict[str, int] = d.get("days", {}) if isinstance(d, dict) and isinstance(d.get("days"), dict) else {}
         self.disk: dict | None = None
         self.memory: dict | None = None
-        self._disk_at = self._mem_at = 0.0
+        self._mem_at = 0.0
+        self._disk_at = time.time() - 570           # the first disk reading half a minute after start, not during it
 
     def measure_disk(self) -> None:
         d = disk(config.HOME, [config.STATE_DIR, config.DATA_DIR])
@@ -141,9 +142,8 @@ class Utilities:
             self.disk, self._disk_at = d, time.time()
             self.history[day] = d["bytes"]
             self.history = dict(sorted(self.history.items())[-30:])
-            if self.path:
+            if self.path and self.path.parent.is_dir():      # never make the state folder again (it may be going away)
                 try:
-                    self.path.parent.mkdir(parents=True, exist_ok=True)
                     tmp = self.path.with_suffix(".tmp")
                     tmp.write_text(json.dumps({"days": self.history}))
                     tmp.replace(self.path)

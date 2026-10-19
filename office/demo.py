@@ -199,6 +199,8 @@ def _demo_token_ledger() -> TokenLedger:
                     for x in waits:
                         hist[next(j for j, e in enumerate(tokens.WAIT_EDGES) if x <= e)] += 1
                     sessions[sid]["w"] = {d.isoformat(): [sum(waits), n, waits[-1], int(rnd("wa", d, seat, k) < 0.3), int(start + 1800)] + hist}
+                if seat != "astra":                                   # the first prompt: system, tools, MCP, CLAUDE.md
+                    sessions[sid]["su"] = [d.isoformat(), int({"claude2": 61000, "claude3": 38000}.get(seat, 44000) * (0.85 + 0.3 * rnd("su", d, seat, k)))]
                 if seat != "astra":                                   # where the time went, tool by tool
                     q = lambda key: rnd(key, d, seat, k)
                     sessions[sid]["tt"] = {d.isoformat(): {"Bash": [int(20 + q("tb") * 60), round(600 + q("tbs") * 2400, 1), round(60 + q("tbm") * 500, 1)],
@@ -542,7 +544,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.145.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.146.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
