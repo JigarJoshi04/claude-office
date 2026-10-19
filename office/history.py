@@ -293,11 +293,12 @@ class HistoryStore:
             per_hour = round((pace[-1][1] - pace[0][1]) / ((pace[-1][0] - pace[0][0]) / 3600), 1)
             hours = {}
             for (t0, p0), (t1, p1) in zip(pace, pace[1:]):
-                if p1 >= p0:
-                    hours[int(t1 // 3600)] = hours.get(int(t1 // 3600), 0) + p1 - p0
+                if p1 >= p0:                                          # by the hour on the clock here
+                    h = datetime.fromtimestamp(t1).replace(minute=0, second=0, microsecond=0).timestamp()
+                    hours[h] = hours.get(h, 0) + p1 - p0
             if hours:
                 h = max(hours, key=hours.get)
-                busiest = {"start": h * 3600, "pct": round(hours[h])}
+                busiest = {"start": h, "pct": round(hours[h])}
         return public({"limit": {"at": at, "from": start, "window": "weekly" if weekly else "five_hour", "per_hour": per_hour, "busiest": busiest,
                                  "sessions": sessions, "tokens": total, "pace": pace[::step] + ([pace[-1]] if pace and step > 1 else [])}})
 
