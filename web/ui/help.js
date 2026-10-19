@@ -27,7 +27,7 @@ export const TOPICS = [
   { id: "analyst", title: "The office analyst", icon: "sparkles", go: { kind: "settings" },
     text: "Off until you turn it on in Settings. It asks Claude small questions on one of your seats (Haiku by default, no tools, nothing saved, a daily token budget): Ask about it on a session, the written While you were away card, and a tighter brief with a model to give it when you Sharpen one on the hiring desk." },
   { id: "game", title: "Levels, gifts and the album", icon: "trophy", go: { kind: "trophies" },
-    text: "Real work earns XP: characters level up and earn trophies, the office levels up and unlocks things on the floor, goals and quests give gifts, gifts hold stickers for the album (seasonal ones only in their season), and big moments go in the scrapbook. One save is kept by the office for every screen; Settings exports it. Game intensity (Z) turns it down or off." },
+    text: "Real work earns XP: characters level up and earn trophies, the office levels up and unlocks things on the floor, goals and quests give gifts, gifts hold stickers for the album (seasonal ones only in their season, and each character's own in its gifts), a six-week chapter track turns the team's XP into gifts, and big moments go in the scrapbook. One save is kept by the office for every screen; Settings exports it. Game intensity (Z) turns it down or off." },
   { id: "share", title: "Share-safe and pictures", icon: "eyeOff", go: null,
     text: "Share-safe (P) hides what sessions are doing, questions, reports, commands and names in the news before a screen share. Pictures of the floor, the day card, standup mode and clips carry only names, levels and counts." },
   { id: "screens", title: "TV mode, replay and clips", icon: "tv", go: null,

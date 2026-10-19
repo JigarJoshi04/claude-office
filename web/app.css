@@ -1185,6 +1185,11 @@ body.tv .minimap { top: calc(62px * var(--ui-zoom, 1)); }
 .lb-tag.t-verified { color: var(--good); } .lb-tag.t-contradicted { color: var(--bad); } .lb-tag.t-unverified { color: var(--warn); }
 .lb-card .btn { justify-self: start; }
 .lb-none { margin: 6px 4px; font-size: 13px; }
+.ch-track { display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; margin: 4px 0 8px; }
+.ch-track i { height: 8px; border-radius: 2px; background: var(--surface-2); }
+.ch-track i.big { height: 12px; margin-top: -2px; }
+.ch-track i.on { background: linear-gradient(180deg, #ffd24a, #ff9b3d); }
+.ch-line { margin: 0 0 4px; font-size: 13.5px; }
 .prm { display: flex; align-items: center; gap: 6px; padding: 6px 4px 6px 10px; border-radius: 10px; background: var(--surface-2); margin-bottom: 6px; box-shadow: inset 3px 0 0 var(--info); }
 .prm.soon { box-shadow: inset 3px 0 0 var(--warn); }
 .prm-go { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; padding: 2px 0; font: inherit; min-width: 0; }

@@ -7,6 +7,7 @@ import { openStandupMode } from "./ui/standupmode.js";
 import { makeRecorder } from "./ui/recorder.js";
 import { syncSave } from "./ui/sync.js";
 import { renderLanesBoard } from "./ui/lanesboard.js";
+import { trackNow, claim as claimChapter } from "./ui/chapters.js";
 import { TOPICS as HELP_TOPICS } from "./ui/help.js";
 import { openPoster } from "./ui/poster.js";
 import { makeDirector } from "./ui/director.js";
@@ -359,6 +360,22 @@ const wrapped = makeWrapped({ app, panels, store, DEMO, prefs, toast });
 // full game intensity, never in replay.
 function helpDesk(seat, text) { if (seat && !replay.active() && prefs.game === "full" && prefs.view === "floor" && !document.hidden) office.help(seat, text); }
 app.helpDesk = (seat) => helpDesk(seat, "Saw the nudge. Need a hand?");
+// Chapters (ui/chapters.js): the team's XP since the chapter began fills a 30-tier track; each new tier brings a gift.
+let chapter = null;
+app.chapter = () => chapter;
+function chapterTick() {
+  if (!snap || prefs.game === "off") return;
+  const xp = snap.seats.reduce((a, s) => a + ((s.career || {}).xp || 0), 0);
+  if (!xp) return;
+  chapter = trackNow(localDay(), xp, DEMO);
+  if (DEMO || replay.active()) return;
+  const got = claimChapter(chapter, giftBox.grant);
+  if (!got.length) return;
+  const top = got[got.length - 1], words = top.key ? `Chapter ${chapter.n}: vault key ${top.key}` : `Chapter ${chapter.n}: tier ${top.tier}${top.tier === 30 ? ", the whole track" : ""}`;
+  if (prefs.game === "full" && prefs.view === "floor") office.banner(top.tier === 30 ? "Chapter complete!" : "New tier!", words, "#ffd24a");
+  toast(`${words}. ${top.label}.`, "good", { ic: "star", ms: 6000 });
+  if (!DEMO && top.tier === 30) badge(award("chapter"));
+}
 app.badge = (id) => badge(award(id));            // badges from the panels (a hire, a replay)
 app.bump = (key, n, id) => badge(bump(key, n, id)); // counter badges (messages sent)
 app.badgeProgress = () => progress({ visits: game.visits(), stickers: Object.keys(giftBox.album()).length, best: store.get("squashBest", 0) });
@@ -543,6 +560,7 @@ function apply(next) {
   const first = !snap;
   prevLive = snap ? snap.seats.reduce((n, s) => n + live(s).length, 0) : null;   // who was in before this refresh (First one in)
   snap = next; setNow(snap.now);
+  chapterTick();
   if (!DEMO && snap.promises && snap.promises.kept >= 5) badge(award("reliable"));   // the fifth kept promise (award says it once)
   setLooks(Object.fromEntries([...snap.seats.filter(s => s.look).map(s => ["mascot-" + s.id, s.look]),   // the character creator's looks
     ...(snap.office.ceo && snap.office.ceo.look ? [["ceo-" + (snap.office.ceo.name || "CEO"), snap.office.ceo.look]] : [])]));

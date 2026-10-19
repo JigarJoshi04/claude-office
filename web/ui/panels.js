@@ -12,6 +12,7 @@ import { STICKERS, RARITY } from "../engine/stickers.js";
 import { SETS, setsDone, teamDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
 import { md } from "./md.js";
 import { pageHtml as scrapHtml, bindPage as bindScrap } from "./scrapbook.js";
+import { TIERS, rewardFor } from "./chapters.js";
 import { exportSave, importSave } from "./sync.js";
 import { helpHtml } from "./help.js";
 import { coachHtml } from "./coach.js";
@@ -400,7 +401,7 @@ export function makePanels(app) {
       ${setupHtml()}
       ${remindersHtml()}
       ${unusedHtml()}
-      ${app.prefs().game === "off" ? "" : goalsHtml() + weeklyHtml() + almostHtml()}
+      ${app.prefs().game === "off" ? "" : goalsHtml() + weeklyHtml() + chapterHtml() + almostHtml()}
       ${snap.seats.length ? `<section class="b-sec"><h3 class="b-h">Team<span class="count">${snap.seats.length}</span></h3>
       <div class="crew">${snap.seats.map(mate).join("")}</div></section>` : ""}
       <nav class="b-links" aria-label="More">
@@ -1332,6 +1333,16 @@ export function makePanels(app) {
       ${lm.pace.length > 2 ? `<div class="card">${usageSpark(lm.pace, { color: s.color, now: lm.at, label: p.name + (wk ? " week" : " 5-hour window") + " before it ran out" })}</div>` : ""}
       ${lm.sessions.length ? `<div class="pm-who">${lm.sessions.map(x => `<div class="pm-row"><span class="grow ${priv ? "private" : ""}">${esc(priv ? (x.kind === "lane" ? "A lane" : "A session") : x.name)}</span><span class="tb-bar"><i style="width:${x.share}%"></i></span><b>${x.share}%</b><small>${fmtTok(x.tokens)}</small></div>`).join("")}</div>` : ""}
       ${tip ? `<p class="hint">${icon("sparkles", 13)} ${esc(tip)}</p>` : ""}</div>`);
+  }
+  // The chapter's track (ui/chapters.js): its tier, the XP to the next and what it brings, days left.
+  function chapterHtml() {
+    const c = app.chapter && app.chapter();
+    if (!c) return "";
+    const next = c.tier < TIERS ? rewardFor(c.tier + 1).label : "A vault key: a rare gift";
+    return `<section class="b-sec chapter"><h3 class="b-h">${icon("star", 16)}Chapter ${c.n}<span class="grow"></span><span class="hint" style="margin:0">${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left</span></h3>
+      <div class="ch-track" role="img" aria-label="Tier ${c.tier} of ${TIERS}">${Array.from({ length: TIERS }, (_, i) => `<i class="${i < c.tier ? "on" : ""} ${(i + 1) % 5 === 0 ? "big" : ""}"></i>`).join("")}</div>
+      <p class="ch-line"><b>Tier ${c.tier}</b> of ${TIERS}${c.keys ? ` · ${c.keys} vault key${c.keys === 1 ? "" : "s"}` : ""} · ${fmtTok(c.need - c.into)} XP to the next: ${esc(next.toLowerCase())}</p>
+      <p class="hint">Every six weeks a new track, filled by the XP the whole team earns from real work. Each tier brings a gift.</p></section>`;
   }
   // The hiring desk's collision guard: live sessions that wrote in the working tree this folder belongs to, lately.
   function clashHtml(dir) {

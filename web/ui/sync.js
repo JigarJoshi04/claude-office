@@ -10,7 +10,7 @@ import { store, setStoreHook, toast } from "./util.js";
 
 export const SYNC = new Set(["album", "badges", "counts", "gifts", "giftLog", "giftMiss", "giftDay", "mailroom", "goalDays", "questStamps",
   "squashBest", "squashDays", "squashGiftDay", "visits", "combo", "officeLevel", "milestone", "milestoneGift", "tokRecords", "tokRecordsDay",
-  "weeklyDone", "frozenDays", "freezes", "freezeDay", "happyDay", "anniversaries", "lanesHired", "myTemplates", "belt", "giftOpened"]);
+  "weeklyDone", "frozenDays", "freezes", "freezeDay", "happyDay", "anniversaries", "lanesHired", "myTemplates", "belt", "giftOpened", "chapterBase", "chapterClaimed"]);
 
 const obj = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
 const arr = (x) => (Array.isArray(x) ? x : []);
@@ -64,6 +64,9 @@ export const MERGE = {
   frozenDays: days(90),
   visits: days(400),
   giftOpened: (l, s) => [...new Set([...arr(l), ...arr(s)])].slice(-400),   // every gift opened anywhere stays opened
+  // A chapter's start: the earliest XP any screen saw for it; a later chapter replaces an earlier one.
+  chapterBase: (l, s) => { const a = obj(l), b = obj(s); return a.id === b.id ? { id: a.id, xp: Math.min(num(a.xp), num(b.xp)) } : num(a.id) > num(b.id) ? a : b; },
+  chapterClaimed: (l, s) => { const a = obj(l), b = obj(s); return a.id === b.id ? { id: a.id, tier: Math.max(num(a.tier), num(b.tier)), keys: Math.max(num(a.keys), num(b.keys)) } : num(a.id) > num(b.id) ? a : b; },
   squashDays: (l, s) => { const o = { ...obj(l) }; for (const [d, v] of Object.entries(obj(s))) o[d] = Math.max(o[d] || 0, v || 0); return Object.fromEntries(Object.entries(o).sort().slice(-30)); },
   squashBest: (l, s) => Math.max(num(l), num(s)),
   officeLevel: (l, s) => Math.max(num(l), num(s)),

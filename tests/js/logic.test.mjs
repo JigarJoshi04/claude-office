@@ -676,3 +676,22 @@ test("the lanes board: four columns, filters, the backlog in its order and old l
   assert.deepEqual(boardColumns(lanes, { now, model: "sonnet" }).cols.next.map(l => l.id), ["b"]);
   assert.equal(boardColumns(lanes, { now, seat: "c2" }).total, 1);
 });
+
+test("chapters: six weeks each from the epoch, 30 tiers that cost a little more each, then vault keys", async () => {
+  const { chapterOf, tierXp, tierOf, rewardFor, LENGTH, TIERS } = await import("../../web/ui/chapters.js");
+  assert.deepEqual(chapterOf("2026-01-05"), { n: 1, start: "2026-01-05", end: "2026-02-15", daysLeft: LENGTH });
+  assert.equal(chapterOf("2026-02-15").n, 1);
+  assert.equal(chapterOf("2026-02-15").daysLeft, 1);
+  assert.equal(chapterOf("2026-02-16").n, 2);
+  assert.equal(chapterOf("2026-10-19").start, "2026-09-14");
+  assert.ok(tierXp(2) - tierXp(1) < tierXp(30) - tierXp(29));
+  assert.deepEqual(tierOf(0), { tier: 0, into: 0, need: tierXp(1), keys: 0 });
+  assert.equal(tierOf(tierXp(5)).tier, 5);
+  assert.equal(tierOf(tierXp(5) - 1).tier, 4);
+  const done = tierOf(tierXp(TIERS) + 2 * 25000 + 10);
+  assert.deepEqual([done.tier, done.keys, done.into], [TIERS, 2, 10]);
+  assert.equal(rewardFor(5).min, "rare");
+  assert.equal(rewardFor(15).min, "epic");
+  assert.equal(rewardFor(7).min, null);
+  assert.match(rewardFor(30).label, /trophy/);
+});

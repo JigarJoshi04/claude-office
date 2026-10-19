@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.150.0] - 2026-10-19
+
+### Added
+- Chapters. Every six weeks a free 30-tier track, filled by the XP the whole team earns from real work. Each tier
+  brings a gift (rare every fifth, epic at 15 and 25, and at 30 the chapter's trophy, an epic gift and the Chapter
+  complete badge); past tier 30 every 25,000 XP is a vault key, another rare gift. The briefing shows the chapter,
+  its tiers and what the next one brings. A chapter's start and the tiers claimed are kept in the game save, so every
+  screen counts from the same XP and no tier's gift is given twice.
+
 ## [3.149.0] - 2026-10-19
 
 ### Added
