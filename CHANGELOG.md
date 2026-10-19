@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.175.0] - 2026-10-19
+
+### Added
+- The office in your agents: `claude-office mcp` is an MCP server (stdio, the standard library only). Added to a seat
+  (`claude mcp add --scope user office -- …/bin/claude-office mcp`), its sessions can read how the seats and plans
+  stand, which seat the next lane goes to, the lanes and their reports, put news on the floor and ask you a
+  question. It cannot hire, stop or resume lanes. The doctor lists which seats have it and how to add it.
+
 ## [3.174.0] - 2026-10-19
 
 ### Fixed (QA round 24: the page)

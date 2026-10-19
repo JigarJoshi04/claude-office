@@ -354,6 +354,7 @@ def main(argv=None) -> int:
     ms.add_argument("--terminals", action="store_true", help="terminal sessions too (each waits for approval there)")
     ms.add_argument("--dry", action="store_true", help="only list who would get it")
     ms.add_argument("--port", type=int)
+    sub.add_parser("mcp", help="the office as an MCP server on stdio (claude mcp add office -- claude-office mcp)")
     tp = sub.add_parser("top", help="the office in this terminal (for SSH and tmux)")
     tp.add_argument("--port", type=int)
     ev = sub.add_parser("events", help="the office's news in this terminal")
@@ -403,6 +404,9 @@ def main(argv=None) -> int:
         return cmd_post(args)
     if args.cmd == "message":
         return cmd_message(args)
+    if args.cmd == "mcp":
+        from . import mcp
+        return mcp.serve()
     if args.cmd == "ask":
         return cmd_ask(args)
     if args.cmd == "backups":

@@ -303,6 +303,7 @@ claude-office top                    the office in this terminal (SSH, tmux): se
 claude-office events [-f] [--kind K] the news, and with --follow every new line as it comes (--json for scripts)
 claude-office token [--rotate]      where the write token is kept; --rotate makes a new one (restart the office)
 claude-office message [--stuck|--all|--seat ID|--programme KEY] [--terminals] [--dry] TEXT   one message to a group
+claude-office mcp                    the office as an MCP server for your agents (see below)
 ```
 
 ## Configuration
@@ -329,6 +330,19 @@ python3 -m office ask "Ship the rate limiter behind a flag today, or wait for re
 and keeps working on what does not depend on it. The CEO's desk phone rings, Needs you shows the question with an
 Answer button, and the Inbox keeps it; your answer goes back to that session as a message. Office lanes are told they
 may ask, once, when a decision is truly yours.
+
+## The office in your agents (MCP)
+
+`claude-office mcp` is an MCP server on stdio. Add it to a seat and its sessions can ask the office things:
+
+```sh
+claude mcp add --scope user office -- /path/to/claude-office/bin/claude-office mcp
+CLAUDE_CONFIG_DIR=~/.claude2 claude mcp add --scope user office -- /path/to/claude-office/bin/claude-office mcp
+```
+
+Its tools: `office_status` (each seat's state and plan use, lanes, what needs you), `next_seat` (who the next lane
+goes to), `list_lanes`, `lane_report`, `post_news` and `ask_ceo`. It cannot hire, stop or resume lanes: work that
+spends a plan stays with you. The doctor says which seats have it.
 
 ## News from your scripts
 

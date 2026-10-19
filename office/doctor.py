@@ -99,6 +99,13 @@ def checkup(office, snap: dict) -> list[dict]:
                           f"A refresh takes {perf['p50_ms']:.0f} ms (95% within {perf['p95_ms']:.0f} ms){slow}"
                           + (". Running light: every 12 s while the machine is busy" if perf.get("light") else ""),
                           "Nothing to do: the office refreshes less often until it is quick again." if busy else None))
+    if claude and not getattr(office, "is_demo", False):         # agents that can ask the office things (mcp.py)
+        has = [s for s in claude if "office" in (_user_mcp(s.get("account_file")) or {})]
+        cmd = f"CLAUDE_CONFIG_DIR=<seat folder> claude mcp add --scope user office -- {config.REPO_DIR / 'bin' / 'claude-office'} mcp"
+        out.append(_check("Office for agents (MCP)", "ok" if len(has) == len(claude) else "info",
+                          f"On {', '.join(x.get('label', x['id']) for x in has) or 'no seat yet'}: agents can see the plans and lanes, post news and ask you"
+                          + ("" if len(has) == len(claude) else f"; not on {', '.join(x.get('label', x['id']) for x in claude if x not in has)}"),
+                          None if len(has) == len(claude) else f"Add it to a seat with `{cmd}`."))
     if not getattr(office, "is_demo", False):
         wd = sdnotify.watchdog_s()
         out.append(_check("Watchdog", "ok" if wd else "info", f"systemd restarts the office if its loop stops for {wd:.0f} s" if wd
@@ -106,6 +113,16 @@ def checkup(office, snap: dict) -> list[dict]:
     out.append(_check("Version", "ok", f"Claude Office {snap.get('office', {}).get('version', '?')} on Python {sys.version.split()[0]}"))
     order = {"bad": 0, "warn": 1, "info": 2, "ok": 3}
     return sorted(out, key=lambda c: order.get(c["state"], 4))
+
+
+def _user_mcp(account_file) -> dict | None:
+    """The user-scope MCP servers in a seat's .claude.json (read only, the names alone are used)."""
+    import json
+    try:
+        d = json.loads(open(account_file).read()) if account_file else None
+    except (OSError, ValueError):
+        return None
+    return d.get("mcpServers") if isinstance(d, dict) and isinstance(d.get("mcpServers"), dict) else None
 
 
 THREADS = ("office", "usage", "tokens", "presence")
