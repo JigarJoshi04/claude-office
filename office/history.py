@@ -260,8 +260,10 @@ class HistoryStore:
                 spent = sum(max(0, t - prev[1].get(sid, t)) for sid, t in toks.items())   # sessions seen both times
                 for i, key in ((0, "five_hour"), (1, "weekly")):
                     a, b = prev[0][i], x[i]
-                    if a is not None and b is not None and 0 < b - a < 25:      # rose, and not across a reset
-                        per[key][0] += spent; per[key][1] += b - a
+                    # Every minute's tokens count (a reading moves only every few minutes), and every point it rose;
+                    # a minute across a reset, or at the cap, says nothing.
+                    if a is not None and b is not None and b - a > -2 and a < 100:
+                        per[key][0] += spent; per[key][1] += max(0, b - a)
             prev = (x, toks) if x else prev
         out = {k: (round(v[0] / v[1]) if v[1] >= 3 else None) for k, v in per.items()}   # at least three points of rise
         return public(dict(out, points={k: round(v[1], 1) for k, v in per.items()}))

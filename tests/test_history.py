@@ -163,10 +163,12 @@ class StatsTests(unittest.TestCase):
         def one(ts, p5, wk, toks):
             return {"now": ts, "lanes": [], "seats": [{"id": "a", "kind": "claude", "status": "working", "usage": {"five_hour": {"pct": p5}, "weekly": {"pct": wk}},
                     "sessions": [{"id": "s1", "name": "x", "state": "working", "tokens_total": toks, "started_at": t, "live": True}]}]}
-        for i, (p5, wk, toks) in enumerate([(10, 40, 0), (12, 40, 200_000), (14, 41, 400_000), (16, 41, 600_000), (2, 41, 700_000), (4, 42, 900_000)]):
+        # The 5-hour reading moves every other minute; the tokens of the minutes between count too.
+        for i, (p5, wk, toks) in enumerate([(10, 40, 0), (10, 40, 100_000), (12, 40, 200_000), (12, 41, 300_000), (14, 41, 400_000),
+                                            (2, 41, 500_000), (2, 41, 600_000), (4, 42, 700_000)]):
             self.h.record(one(t + 60 * (i + 1), p5, wk, toks))
-        ex = self.h.exchange(one(t + 420, 4, 42, 900_000), "a")
-        self.assertEqual(ex["five_hour"], 100_000)                    # 800k tokens over 8 points; the reset's minute is left out
+        ex = self.h.exchange(one(t + 540, 4, 42, 700_000), "a")
+        self.assertEqual(ex["five_hour"], 100_000)                    # 600k tokens over 6 points; the reset's minute is left out
         self.assertIsNone(ex["weekly"])                               # two points of the week is too few to say
         self.assertEqual(ex["points"]["weekly"], 2)
 

@@ -10,6 +10,10 @@ Version entries describe the implemented milestones in repository history, not p
   bought over the last day (the tokens its sessions spent against the points its windows rose, resets left out;
   shown once it has three points to go on).
 
+### Fixed
+- The rate first counted only the tokens of the minutes a usage reading moved, which come every few minutes, so it
+  read far too low (and the week no dearer than the 5-hour window). Every minute's tokens count now.
+
 ## [3.157.0] - 2026-10-19
 
 ### Added
