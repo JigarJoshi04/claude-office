@@ -5,15 +5,15 @@ import { $, esc, toast } from "./util.js";
 import { icon } from "./icons.js";
 import { sound } from "./sound.js";
 import { localDay } from "./goals.js";
-import { makeGifts, SWAP, SETS, setsDone, happyNow } from "./gifts.js";
-import { STICKERS, RARITY, stickerCanvas } from "../engine/stickers.js";
+import { makeGifts, SWAP, SETS, setsDone, teamDone, happyNow } from "./gifts.js";
+import { STICKERS, RARITY, TEAM, stickerCanvas } from "../engine/stickers.js";
 import { drawGift, GIFT_BOX } from "../engine/sprites.js";
 
 export function makeGiftBox(ctx) {
   const { app, office, panels, replay, store, DEMO, setView, badge, award, onAlbum, prefs, forceHappy } = ctx;
   const happy = () => forceHappy || happyNow().on;
-  const gifts = makeGifts({ store, demo: DEMO, happy });
-  if (ctx.fullAlbum) gifts.fillDemo();
+  const gifts = makeGifts({ store, demo: DEMO, happy, team: (id) => { const s = app.snap() && app.snap().seats.find(x => x.id === id); return s ? { id, name: panels.persona(s).name, color: s.color } : null; } });
+  if (ctx.fullAlbum) { gifts.fillDemo(); const t = setInterval(() => { const sn = app.snap(); if (sn) { clearInterval(t); gifts.fillDemo(sn.seats.map(s => s.id)); sync(); } }, 200); }   // ?stickers=all: the team set too, once the seats are known
   if (DEMO && ctx.demoGifts > 0) for (let i = 0; i < Math.min(30, ctx.demoGifts); i++) gifts.grant(null, i % 2 ? "goals" : "daily");   // the demo's ?gifts=N: a full floor and a mailroom
   const seatName = (seatId) => { const s = seatId && app.snap() && app.snap().seats.find(x => x.id === seatId); return s ? panels.persona(s).name : null; };
   const nameOf = (seatId, g) => seatName(seatId) || (g && g.name) || null;   // a seat that has left keeps its name on its gifts
@@ -34,12 +34,14 @@ export function makeGiftBox(ctx) {
   const fromLine = (g) => g.from === "daily" && g.streak ? `Day ${g.streak} of your visit streak` : KINDS[g.from] ? KINDS[g.from][1] : nameOf(g.seat, g) ? `From ${nameOf(g.seat, g)}${g.from === "levelup" ? ", for levelling up" : g.from === "combo" ? ", for the combo" : ""}` : "";
 
   const off = () => (prefs.game || "full") === "off";
+  // The finished sets, with the team set when every character's sticker is in.
+  const doneSets = () => { const al = gifts.album(), d = setsDone(al), ids = ((app.snap() || {}).seats || []).map(s => s.id); if (teamDone(al, ids)) d.add("team"); return d; };
   function sync() {
     if (!off() && !replay.active()) while (gifts.restock()) { /* room on the floor: the mailroom's oldest come out */ }
     const list = off() ? [] : gifts.waiting();
     office.setGifts(list.map(g => ({ ...g, label: label(g) })));
     if (office.setMailroom) office.setMailroom(off() ? [] : gifts.mailroom().map(g => ({ id: g.id, color: boxColor(g) })));
-    office.setSets(setsDone(gifts.album()));
+    office.setSets(doneSets());
     renderChip();
   }
   // The top-bar chip: gifts waiting, and the happy hour while it lasts.
@@ -110,12 +112,12 @@ export function makeGiftBox(ctx) {
   function open(id) {
     if (opening) return;
     office.unwrap(id);
-    const before = setsDone(gifts.album());
+    const before = doneSets();
     const res = gifts.open(id);
     sync();
     if (!res) return;
     sound.play("gift", res.sticker.rarity);
-    const done = [...setsDone(gifts.album())].filter(k => !before.has(k));
+    const done = [...doneSets()].filter(k => !before.has(k));
     // The confetti gets a moment on the floor before the reveal dims it.
     opening = true;
     setTimeout(() => { opening = false; reveal(res, done); }, prefs.motion === "reduced" || (prefs.game || "full") !== "full" ? 0 : 520);   // the wait is for the confetti
@@ -140,7 +142,7 @@ export function makeGiftBox(ctx) {
   }
 
   function reveal(res, done = []) {
-    const st = res.sticker, r = RARITY[st.rarity], from = fromLine(res.gift);
+    const st = res.sticker, r = st.rarity === "team" ? TEAM : RARITY[st.rarity], from = fromLine(res.gift);
     const d = $("dialog");
     if (d.open) d.close();
     d.classList.add("gift");
@@ -157,7 +159,8 @@ export function makeGiftBox(ctx) {
       <div class="gr-rar">${esc(r.name)}</div>
       <h3 class="gr-name">${esc(st.name)}</h3>
       <p class="gr-sub">${res.isNew ? `<b>New for your album</b> · ${res.have} of ${res.total}` : `Another one: you have ${res.count}`}${from ? ` · ${esc(from)}` : ""}</p>
-      ${done.map(k => `<p class="gr-set">${icon("trophy", 15)}<span><b>${esc(RARITY[k].name)} set complete: ${esc(SETS[k].name)}.</b> ${esc(SETS[k].desc)}</span></p>`).join("")}
+      ${done.map(k => k === "team" ? `<p class="gr-set">${icon("trophy", 15)}<span><b>Team set complete: the team photo.</b> It hangs in the lounge now.</span></p>`
+        : `<p class="gr-set">${icon("trophy", 15)}<span><b>${esc(RARITY[k].name)} set complete: ${esc(SETS[k].name)}.</b> ${esc(SETS[k].desc)}</span></p>`).join("")}
       ${DEMO ? `<p class="gr-demo">The demo office keeps stickers until you reload.</p>` : ""}
       <div class="gr-act"><button class="btn primary" id="grOk">Keep it</button><button class="btn" id="grAlbum">${icon("star", 15)}Open the album</button></div></div>`;
     d.querySelector(".gr-box").appendChild(boxCanvas(res.gift));

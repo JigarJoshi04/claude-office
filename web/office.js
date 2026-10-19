@@ -848,6 +848,12 @@ export function createOffice(stage, handlers) {
     S.drawWindow(ctx, wr.x, wr.y, wr.w, wr.h, env.sky, t, env.night);
     S.drawPoster(ctx, lo.x + 18, lo.y + 7, 1);
     if (has("posters")) { S.drawPoster(ctx, lo.x + 44, lo.y + 7, 0); S.drawPoster(ctx, lo.x + 70, lo.y + 7, 2); }   // office level 7
+    if (sets.has("team")) {                              // the team photo: the whole album team set, framed
+      const crew = L.pods.slice(0, 6), gap = crew.length > 5 ? 5 : 6, px = lo.x + 96, py = lo.y + 8, fw = Math.max(22, crew.length * gap + 6);
+      S.rect(ctx, px - 2, py - 2, fw + 4, 22, "#8b5a2b"); S.rect(ctx, px - 1, py - 1, fw + 2, 20, "#c99a5b");
+      S.rect(ctx, px, py, fw, 18, "#f4ecd8"); S.rect(ctx, px, py + 12, fw, 6, "#d9cdb0");
+      crew.forEach((pod, i) => { const x = px + 4 + i * gap; S.rect(ctx, x, py + 4, 3, 3, "#e8c39e"); S.rect(ctx, x, py + 3, 3, 1, "#3a2a20"); S.rect(ctx, x - 1, py + 8, 5, 5, pod.seat.color); });
+    }
     S.drawCouch(ctx, lo.x + 14, lo.y + 52, "#c0564b");
     S.rect(ctx, lo.x + 22, lo.y + 78, 32, 14, "#5e412c"); S.rect(ctx, lo.x + 23, lo.y + 79, 30, 1, "#77543a");
     S.drawCouch(ctx, lo.x + 14, lo.y + 100, "#4b6fbf");

@@ -9,7 +9,7 @@ import { goals, streak, weekly, localDay, canReroll, rerollGoals, quests, punch,
 import { officeLevel, UNLOCKS } from "../engine/unlocks.js";
 import { BADGES, earned, nextBadge } from "./badges.js";
 import { STICKERS, RARITY } from "../engine/stickers.js";
-import { SETS, setsDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
+import { SETS, setsDone, teamDone, happyHourFor, happyNow, SWAP } from "./gifts.js";
 import { md } from "./md.js";
 import { pageHtml as scrapHtml, bindPage as bindScrap } from "./scrapbook.js";
 import { exportSave, importSave } from "./sync.js";
@@ -1163,6 +1163,13 @@ export function makePanels(app) {
         <span class="grow"><b>${esc(RARITY[k].name)} ${got}/${all.length} · ${esc(SETS[k].name)}</b><small>${k === "seasonal" ? (done.has(k) ? "A full year of stickers." : `Each turns up only in its season${seasonNow() ? `: ${esc(SEASON_NAME[seasonNow()])} is on now` : " (Halloween, Diwali, the winter holidays)"}.`)
           : `${done.has(k) ? "On the floor now: " : "Finish the set: "}${esc(SETS[k].desc.charAt(0).toLowerCase() + SETS[k].desc.slice(1))}`}</small></span>
         <span class="as-bar"><i style="width:${Math.round(got / all.length * 100)}%"></i></span></div>`; }).join("");
+    // The team set: a sticker for each character on the floor, from that character's own gifts; the photo when all are in.
+    const crew = S().seats, gotTeam = crew.filter(st => al["team-" + st.id]).length, teamOk = teamDone(al, crew.map(st => st.id));
+    const teamSet = crew.length >= 2 ? `<div class="alb-set ${teamOk ? "on" : ""}" style="--rar:#3ddc84"><span class="as-ic">${icon(teamOk ? "trophy" : "lock", 15)}</span>
+        <span class="grow"><b>Team ${gotTeam}/${crew.length} · The team photo</b><small>${teamOk ? "On the floor now: the team photo hangs in the lounge." : "A sticker of each character, found only in that character's own gifts."}</small></span>
+        <span class="as-bar"><i style="width:${Math.round(gotTeam / crew.length * 100)}%"></i></span></div>` : "";
+    const teamTiles = crew.length >= 2 ? crew.map(st => { const x = al["team-" + st.id], nm = P(st).name;
+      return `<div class="alb ${x ? "on" : ""} r-team" style="--rar:#3ddc84" title="${esc(x ? `${nm} · Team${x.n > 1 ? ` · ×${x.n}` : ""}` : `Team · in ${nm}'s gifts`)}"><i data-sticker="team-${esc(st.id)}|4|${x ? "" : "sil"}|${esc(st.color)}"></i><b>${esc(x ? nm : "?")}</b>${x && x.n > 1 ? `<em>×${x.n}</em>` : ""}</div>`; }).join("") : "";
     // The happy hour, as it stands now: coming up today, on, or (once it is over) tomorrow's.
     const hn = happyNow(), tm = new Date(); tm.setDate(tm.getDate() + 1);
     const th = happyHourFor(localDay(tm)), tAt = new Date(tm); tAt.setHours(th.hour, th.minute, 0, 0);
@@ -1177,7 +1184,7 @@ export function makePanels(app) {
         <button class="btn sm primary" data-mail-open>${icon("gift", 14)}Open the next</button></div>` : "";
     const logRows = log.length ? `<h5 class="lh" style="margin-top:14px">Where they came from</h5><ul class="alb-log">${log.map(x => { const st = byId[x.sticker], r = RARITY[st.rarity];
       return `<li style="--rar:${r.color}"><i data-sticker="${esc(st.id)}|2|"></i><span class="grow"><b>${esc(st.name)}</b>${x.isNew ? ` <em class="lc good">new</em>` : ""}<small>${esc(g.fromLine({ from: x.from, seat: x.seat, name: x.name }) || "A gift")} · ${esc(relTime(x.at))}</small></span><em class="rar">${esc(r.name)}</em></li>`; }).join("")}</ul>` : "";
-    return `<div id="album">${section(`Sticker album · ${have} of ${STICKERS.length}`, `${mailRow}<div class="alb-sets">${counts}</div><div class="alb-grid">${tiles}</div>${logRows}
+    return `<div id="album">${section(`Sticker album · ${have} of ${STICKERS.length}`, `${mailRow}<div class="alb-sets">${counts}${teamSet}</div><div class="alb-grid">${tiles}${teamTiles}</div>${logRows}
       <div class="alb-foot"><span class="hint">Your agents sometimes leave a gift when they file a report or finish a lane, and every morning a delivery waits at the CEO desk. Finishing today's goals, a ×3 combo or a level up always brings one. ${esc(happyLine)}${waiting ? ` <b>${waiting} waiting on the floor.</b>` : ""}${mail.length ? ` <b>${mail.length} in the mailroom.</b>` : ""}${app.demo ? " The demo office keeps stickers until you reload." : " Stickers are kept in this browser."}</span>
         <button class="btn sm" data-swap ${spares >= SWAP ? "" : "disabled"} title="Five spare stickers for one gift that is rare or better">${icon("gift", 14)}Swap 5 spares${spares ? ` (${spares})` : ""}</button></div>`)}</div>`;
   }

@@ -375,8 +375,26 @@ export const STICKERS = [
 const GOLD = { y: "#ffcf3a", w: "#fff6c8", k: "#5e3b24", o: "#e09a2a" };
 
 // Draw a sticker at (x, y) with each art pixel `scale` px square: (rows + 3) × scale square with the die-cut edge and shadow.
+// The team set: one sticker for each character, in its own colour (X), found only in that character's gifts.
+const TEAM_ART = [
+  "............",
+  "....NNNN....",
+  "...NNNNNN...",
+  "...NttttN...",
+  "...tktktt...",
+  "...tttttt...",
+  "....tttt....",
+  "..XXXXXXXX..",
+  ".XXXXwwXXXX.",
+  ".XXXXXXXXXX.",
+  ".XXXXXXXXXX.",
+  "............",
+];
+export const TEAM = { name: "Team", color: "#3ddc84" };
+export const teamSticker = (id, name, color) => ({ id: "team-" + id, name: name || id, rarity: "team", team: id, art: TEAM_ART, pal: { X: color || "#9aa3b8" } });
+
 export function drawSticker(ctx, st, x, y, scale = 3, opts = {}) {
-  const art = st.art, n = art.length, fill = (c) => (st.gold && GOLD[c]) || PAL[c];
+  const art = st.art, n = art.length, fill = (c) => (st.pal && st.pal[c]) || (st.gold && GOLD[c]) || PAL[c];
   const on = (i, j) => i >= 0 && j >= 0 && i < n && j < art[i].length && art[i][j] !== ".";
   const px = (j, i, c) => { ctx.fillStyle = c; ctx.fillRect(x + (j + 1) * scale, y + (i + 1) * scale, scale, scale); };
   const edge = (i, j) => !on(i, j) && [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]].some(([a, b]) => on(i + a, j + b));
@@ -403,7 +421,7 @@ export function stickerCanvas(st, scale = 3, opts = {}) {
 // Placeholders in an HTML string, <i data-sticker="id|scale|sil">, become sticker canvases after render.
 export function hydrateStickers(root) {
   root.querySelectorAll("i[data-sticker]").forEach(el => {
-    const [id, scale, sil] = el.dataset.sticker.split("|"), st = STICKERS.find(s => s.id === id);
+    const [id, scale, sil, color] = el.dataset.sticker.split("|"), st = id.startsWith("team-") ? teamSticker(id.slice(5), "", color) : STICKERS.find(s => s.id === id);
     if (st) el.replaceWith(stickerCanvas(st, +scale || 3, { silhouette: sil === "sil", t: 900 }));
   });
 }

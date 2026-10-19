@@ -3,7 +3,7 @@
 // better. No gift is lost: one that finds the floor full, or waits there unopened for a day, goes to the mailroom and
 // comes back to the floor as room frees up. The last 50 openings are logged (where each sticker came from).
 // Waiting gifts and the album live in this browser, like badges; the demo office keeps them in memory only.
-import { STICKERS, RARITY, rollSticker } from "../engine/stickers.js";
+import { STICKERS, RARITY, rollSticker, teamSticker } from "../engine/stickers.js";
 import { seasonFor } from "../engine/season.js";
 
 export const MAX_WAITING = 3;          // more than this on the floor is clutter: later gifts wait in the mailroom
@@ -43,8 +43,11 @@ export const SETS = {
 export function setsDone(album) {
   return new Set(Object.keys(RARITY).filter(k => STICKERS.filter(s => s.rarity === k).every(s => album[s.id])));
 }
+// The team set is done when every character on the floor (two or more) has its sticker in the album.
+export const teamDone = (album, seatIds) => seatIds.length >= 2 && seatIds.every(id => album["team-" + id]);
 
-export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, rand = Math.random, happy = () => false }) {
+export const TEAM_CHANCE = 0.25;    // a character's gift holds its team sticker one time in four
+export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, rand = Math.random, happy = () => false, team = () => null }) {
   const mem = new Map();
   const get = (k, d) => (demo ? (mem.has(k) ? mem.get(k) : d) : store.get(k, d));
   const set = (k, v) => (demo ? mem.set(k, v) : store.set(k, v));
@@ -71,7 +74,7 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
     return gift;
   };
   const album = () => get("album", {});
-  const spares = () => Object.values(album()).reduce((n, x) => n + Math.max(0, x.n - 1), 0);
+  const spares = () => Object.entries(album()).reduce((n, [id, x]) => n + (id.startsWith("team-") ? 0 : Math.max(0, x.n - 1)), 0);   // team stickers are never swapped
 
   return {
     waiting, album, spares, mailroom,
@@ -85,7 +88,7 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
       return back;
     },
     // The demo's ?stickers=all: a full album, in memory, to show what the sets put on the floor.
-    fillDemo() { if (demo) set("album", Object.fromEntries(STICKERS.map(s => [s.id, { n: 1, first: now() }]))); },
+    fillDemo(seatIds = []) { if (demo) set("album", Object.fromEntries([...STICKERS.map(s => s.id), ...seatIds.map(id => "team-" + id)].map(id => [id, { n: 1, first: now() }]))); },
     // A report or a finished lane: maybe a gift from that seat.
     earn(seat, from = "report", name) {
       const miss = get("giftMiss", 0);
@@ -109,7 +112,7 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
       if (spares() < SWAP) return null;
       const al = { ...album() };
       for (let left = SWAP; left > 0;) {
-        const [id] = Object.entries(al).filter(([, x]) => x.n > 1).sort((a, b) => ORDER.indexOf(STICKERS.find(s => s.id === a[0]).rarity) - ORDER.indexOf(STICKERS.find(s => s.id === b[0]).rarity) || b[1].n - a[1].n)[0];
+        const [id] = Object.entries(al).filter(([k, x]) => x.n > 1 && !k.startsWith("team-")).sort((a, b) => ORDER.indexOf(STICKERS.find(s => s.id === a[0]).rarity) - ORDER.indexOf(STICKERS.find(s => s.id === b[0]).rarity) || b[1].n - a[1].n)[0];
         al[id] = { ...al[id], n: al[id].n - 1 };
         left--;
       }
@@ -121,15 +124,16 @@ export function makeGifts({ store, demo = false, now = () => Date.now() / 1000, 
       if (!g) return null;
       if (list.includes(g)) set("gifts", list.filter(x => x.id !== id)); else set("mailroom", m.filter(x => x.id !== id));
       const min = ORDER.indexOf(g.min || "common"), season = seasonFor(new Date(now() * 1000));
-      const rank = (x) => (x.rarity === "seasonal" ? 1 : ORDER.indexOf(x.rarity));     // a seasonal sticker counts as rare
-      let st = rollSticker(rand, season);
+      const rank = (x) => (x.rarity === "seasonal" || x.rarity === "team" ? 1 : ORDER.indexOf(x.rarity));     // seasonal and team stickers count as rare
+      const mate = g.seat ? team(g.seat) : null;            // {id, name, color}: the character the gift came from
+      let st = mate && rand() < TEAM_CHANCE ? teamSticker(mate.id, mate.name, mate.color) : rollSticker(rand, season);
       for (let i = 0; i < 50 && rank(st) < min; i++) st = rollSticker(rand, season);
       if (rank(st) < min) st = STICKERS.find(s => s.rarity === g.min);
       const al = { ...album() }, had = al[st.id];
       al[st.id] = { n: (had ? had.n : 0) + 1, first: had ? had.first : now() };
       set("album", al);
       set("giftLog", [{ at: now(), sticker: st.id, from: g.from, seat: g.seat || null, name: g.name || null, isNew: !had }, ...get("giftLog", [])].slice(0, LOG));
-      return { gift: g, sticker: st, isNew: !had, count: al[st.id].n, have: Object.keys(al).length, total: STICKERS.length };
+      return { gift: g, sticker: st, isNew: !had, count: al[st.id].n, have: Object.keys(al).filter(k => !k.startsWith("team-")).length, total: STICKERS.length };
     },
   };
 }

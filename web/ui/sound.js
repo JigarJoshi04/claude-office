@@ -33,7 +33,7 @@ const SFX = {
   },
   // A gift opens: a quick rattle, a pop, then a run that climbs higher (and longer) the rarer the sticker.
   gift: (rarity = "common") => {
-    const k = { common: 0, rare: 1, seasonal: 1, epic: 2, legendary: 3 }[rarity] || 0;   // a seasonal sticker ranks with rare
+    const k = { common: 0, rare: 1, seasonal: 1, team: 1, epic: 2, legendary: 3 }[rarity] || 0;   // seasonal and team stickers rank with rare
     [220, 247, 220].forEach((f, i) => note(f, i * 0.05, 0.04, "square", 0.03));
     note(880, 0.18, 0.06, "square", 0.05);
     [784, 988, 1175, 1568, 1976, 2349].slice(0, 3 + k).forEach((f, i) => note(f, 0.26 + i * 0.07, 0.12, "triangle", 0.05));

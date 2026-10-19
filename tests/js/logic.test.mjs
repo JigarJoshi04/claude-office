@@ -613,3 +613,27 @@ test("the brief coach's diff marks words in and out and keeps the spacing", () =
   const big = Array.from({ length: 2100 }, (_, i) => "w" + i).join(" ");
   assert.deepEqual(wordDiff(big, big + " x").map(p => p.t), ["del", "add"]);       // too long for the table: out and in
 });
+
+test("the team set: a character's gift can hold its sticker, never swapped, done when everyone is in", async () => {
+  const { makeGifts, teamDone, TEAM_CHANCE } = await import("../../web/ui/gifts.js");
+  const mem = new Map(), store = { get: (k, d) => (mem.has(k) ? JSON.parse(mem.get(k)) : d), set: (k, v) => mem.set(k, JSON.stringify(v)) };
+  let r = 0;
+  const g = makeGifts({ store, rand: () => r, team: (id) => ({ id, name: id === "c2" ? "Atlas" : "Vega", color: "#3987e5" }) });
+  const give = (seat) => { const x = g.grant(seat, "levelup"); return g.open(x.id); };
+  r = TEAM_CHANCE / 2;                                   // under the chance: the team sticker
+  const a = give("c2");
+  assert.equal(a.sticker.id, "team-c2");
+  assert.equal(a.sticker.rarity, "team");
+  assert.equal(a.sticker.name, "Atlas");
+  give("c2"); give("c2"); give("c2"); give("c2"); give("c2");   // five more spares of it
+  assert.equal(g.album()["team-c2"].n, 6);
+  assert.equal(g.spares(), 0);                           // team stickers are not spares
+  assert.equal(g.swap(), null);
+  assert.ok(!teamDone(g.album(), ["c2", "c3"]));
+  give("c3");
+  assert.ok(teamDone(g.album(), ["c2", "c3"]));
+  assert.ok(!teamDone(g.album(), ["c2"]));               // one character is not a team
+  r = 0.9;                                               // over the chance: a sticker from the album
+  assert.ok(!give("c2").sticker.id.startsWith("team-"));
+  assert.ok(!give(null).sticker.id.startsWith("team-")); // an office gift never holds one
+});

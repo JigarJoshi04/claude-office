@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.145.0] - 2026-10-19
+
+### Added
+- The team set. A gift from a character holds that character's own sticker one time in four, drawn in its colour;
+  the album has a Team row with one slot per character, and when every character on the floor is in, the team photo
+  hangs in the lounge (and the gift reveal says so). Team stickers count as rare and are never swapped as spares.
+  The demo's `?stickers=all` fills the team set too.
+
 ## [3.144.0] - 2026-10-19
 
 ### Added
