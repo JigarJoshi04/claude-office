@@ -3,6 +3,15 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.190.0] - 2026-11-02
+
+### Fixed
+- A headless Copilot run (`copilot -p`) read as "Waiting for you" after two quiet minutes, though it never waits for
+  anyone: it is working until it exits, and waiting on a tool while one it started has not finished (a long build or
+  a sleep). A Copilot run in a terminal is idle between turns, as before.
+- The Copilot card keeps its refresh button by the "Read … ago" line, so the month's dollars and credits sit on one
+  line; the hiring desk shows Copilot's own model (from its settings) when the Copilot seat is picked.
+
 ## [3.189.0] - 2026-11-02
 
 ### Added

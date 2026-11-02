@@ -78,8 +78,8 @@ export function creditsCard(s, opts = {}) {
   return `<div class="cc${opts.compact ? " compact" : ""}" style="--seat:${esc(s.color || "#d55181")}">
     <div class="cc-top"><div class="grow"><div class="cc-usd">${esc(sm.usd)}</div>
       <div class="cc-sub">this month · ${esc(sm.credits)} AI credits at ${usd(sm.rate)}</div></div>
-      ${opts.compact ? "" : `<span class="cc-plan">${esc(sm.plan)}</span>`}${opts.refresh ? `<button class="btn sm ghost icon" data-refresh="${esc(opts.refresh)}" title="Read the plan now" aria-label="Read Copilot's plan now">${icon("refresh", 14)}</button>` : ""}</div>
+      ${opts.compact ? "" : `<span class="cc-plan">${esc(sm.plan)}</span>`}</div>
     ${incl}${ent}
     <div class="cc-tiles">${burn}${month}${reset}</div>
-    ${notes ? `<p class="cc-note">${notes}</p>` : ""}</div>`;
+    ${notes || opts.refresh ? `<div class="cc-foot"><p class="cc-note">${notes}</p>${opts.refresh ? `<button class="btn sm ghost icon" data-refresh="${esc(opts.refresh)}" title="Read the plan now" aria-label="Read Copilot's plan now">${icon("refresh", 14)}</button>` : ""}</div>` : ""}</div>`;
 }

@@ -171,7 +171,7 @@ class LocalRunsTests(unittest.TestCase):
         self.assertEqual(set(rows), {sid, done})                     # the ten-hour-old one is left out
         a = rows[sid]
         self.assertTrue(a["live"])
-        self.assertEqual((a["state"], a["pid"], a["unit"], a["cwd"]), ("working", 111, "apollo-lane-l12-1.service", "/work/wt-limiter"))
+        self.assertEqual((a["state"], a["pid"], a["unit"], a["cwd"]), ("waiting", 111, "apollo-lane-l12-1.service", "/work/wt-limiter"))
         self.assertEqual((a["model"], a["effort"]), ("claude-opus-5.5", "high"))
         self.assertTrue(a["activity"].startswith("Running: git push --force"))
         self.assertEqual(a["risks"][0]["rule"], "force_push")
@@ -182,6 +182,26 @@ class LocalRunsTests(unittest.TestCase):
         self.assertEqual(b["credits"], 3.38)
         self.assertEqual(b["tokens"]["total"], 4 + 14342 + 6173 + 4)
         self.assertEqual(seat["sessions"][0]["id"], sid)             # live first
+
+    def test_a_headless_run_works_until_it_exits(self):
+        sid = "1a2b3c4d-0000-4000-8000-00000000000a"
+        self.session(sid, [
+            self.ev("session.start", {"context": {"cwd": "/work"}}, ts="2026-11-02T08:00:00Z"),
+            self.ev("assistant.turn_start", {}, ts="2026-11-02T08:00:01Z"),
+            self.ev("tool.execution_start", {"toolName": "bash", "toolCallId": "t1", "arguments": {"command": "sleep 900"}},
+                    ts="2026-11-02T08:00:02Z"),
+        ], pid=5)
+        proc = {"pid": 5, "ppid": 1, "unit": None, "cwd": "/work", "log": None, "prompt": False}
+        late = cop._epoch("2026-11-02T08:20:00Z")                    # quiet for 20 minutes, but its tool still runs
+        with patch.object(cop, "scan_processes", return_value=[proc]):
+            self.assertEqual(cop.read_copilot_seat(home=str(self.home), now=late)["sessions"][0]["state"], "waiting")
+        with (self.state / sid / "events.jsonl").open("a") as f:
+            f.write(json.dumps(self.ev("tool.execution_complete", {"toolCallId": "t1"}, ts="2026-11-02T08:15:00Z")) + "\n")
+            f.write(json.dumps(self.ev("assistant.turn_end", {}, ts="2026-11-02T08:15:01Z")) + "\n")
+        with patch.object(cop, "scan_processes", return_value=[proc]):           # an interactive run between turns
+            self.assertEqual(cop.read_copilot_seat(home=str(self.home), now=late)["sessions"][0]["state"], "idle")
+        with patch.object(cop, "scan_processes", return_value=[dict(proc, prompt=True)]):   # a -p run never waits for anyone
+            self.assertEqual(cop.read_copilot_seat(home=str(self.home), now=late)["sessions"][0]["state"], "working")
 
     def test_log_credits_reads_only_what_was_added(self):
         log = self.home / "lane.log"

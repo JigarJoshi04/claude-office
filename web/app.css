@@ -1958,7 +1958,9 @@ body.locked #seatDuty, body.locked .duty .switch, body.locked [data-handoff] { d
 .cc-t b { font: 700 16.5px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cc-t span { font-size: 12px; color: var(--muted); line-height: 1.3; }
 .cc-t.burn b { color: var(--warn); }
-.cc-note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cc-foot { display: flex; align-items: flex-end; gap: 8px; margin-top: 10px; }
+.cc-note { flex: 1; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cc-foot .btn { flex: none; margin: 0 -4px -4px 0; }
 .pk-cr { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pk-bar.mid i { background: var(--warn); }
 @container panel (max-width: 380px) { .cc-tiles { grid-template-columns: 1fr 1fr; } .cc-tiles .cc-t:last-child { grid-column: 1 / -1; } .cc-usd { font-size: 26px; } }

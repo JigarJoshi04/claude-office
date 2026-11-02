@@ -429,6 +429,13 @@ def _event(entry: dict, rec) -> None:
         s["activity"] = "Thinking"
     elif kind == "assistant.turn_start":
         s["activity"] = "Thinking"
+        s["turn"] = True
+    elif kind == "assistant.turn_end":
+        s["turn"] = False
+    elif kind == "tool.execution_complete":
+        call = data.get("toolCallId")
+        if call in s["pending"]:
+            s["pending"].remove(call)
     elif kind == "assistant.message":
         text = _text(data.get("content"), 400)
         if text:
@@ -439,13 +446,15 @@ def _event(entry: dict, rec) -> None:
     elif kind == "tool.execution_start":
         s["activity"] = _activity(data)
         s["tool_calls"] += 1
+        if isinstance(data.get("toolCallId"), str):         # running until its execution_complete arrives
+            s["pending"] = (s["pending"] + [data["toolCallId"][:64]])[-20:]
         _risks(s, data)
     elif kind in ("session.usage_checkpoint", "session.shutdown"):
         n = _num(data.get("totalNanoAiu"))
         if n is not None:
             s["credits"] = round(n / NANO, 2)
         if kind == "session.shutdown":
-            s["ended"] = True
+            s["ended"], s["pending"], s["turn"] = True, [], False
             td = data.get("tokenDetails") if isinstance(data.get("tokenDetails"), dict) else {}
             count = lambda k: int(_num((td.get(k) or {}).get("tokenCount") if isinstance(td.get(k), dict) else None) or 0)
             s["tokens"] = {"input": count("input"), "cached": count("cache_read"), "written": count("cache_write"),
@@ -486,7 +495,8 @@ def _read(folder: Path) -> dict | None:
         e = {"identity": (st.st_dev, st.st_ino), "offset": 0, "pending": b"", "discarding": False,
              "session": {"id": folder.name, "cwd": None, "model": None, "effort": None, "started_at": None,
                          "updated_at": None, "task": None, "activity": None, "last_message": None, "credits": None,
-                         "tokens": None, "tool_calls": 0, "ended": False, "risks": [], "events": str(path)}}
+                         "tokens": None, "tool_calls": 0, "ended": False, "risks": [], "events": str(path),
+                         "pending": [], "turn": False}}
     if st.st_size > e["offset"]:
         try:
             with path.open("rb") as f:
@@ -506,6 +516,18 @@ def _read(folder: Path) -> dict | None:
     while len(_CACHE) > _CACHE_LIMIT:
         _CACHE.popitem(last=False)
     return e["session"]
+
+
+def _state(s: dict, now: float) -> str:
+    """A run's state: waiting while a tool it started has not finished, working while a turn is open or a headless
+    (-p) run goes on (it never waits for anyone), working for two minutes after anything happened, else idle."""
+    if not s["live"]:
+        return "done"
+    if s["pending"]:
+        return "waiting"
+    if s["turn"] or s["prompt"] or (s["updated_at"] and now - s["updated_at"] < 120):
+        return "working"
+    return "idle"
 
 
 def read_copilot_seat(home: str | None = None, now: float | None = None, recent_hours: float = 3.0) -> dict:
@@ -557,7 +579,7 @@ def read_copilot_seat(home: str | None = None, now: float | None = None, recent_
                      prompt=bool(p and p["prompt"]))
             if p and not s.get("cwd"):
                 s["cwd"] = p["cwd"]
-            s["state"] = ("working" if s["updated_at"] and now - s["updated_at"] < 120 else "idle") if s["live"] else "done"
+            s["state"] = _state(s, now)
             rows.append(s)
     for s in rows:
         s["lane_credits"] = log_credits(s["log"]) if s.get("log") else None

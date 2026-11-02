@@ -1746,7 +1746,8 @@ export function makePanels(app) {
         <div class="grid2">
           <label class="f">Who does it<select id="hSeat"><option value="auto" ${d.seat === "auto" ? "selected" : ""}>Let the divider pick (now ${esc(np.seat ? nameOf(np.seat) : "nobody")})</option>
             ${snap.seats.map(s => `<option value="${esc(s.id)}" ${d.seat === s.id ? "selected" : ""}>${esc(P(s).name)} · ${esc(SEAT_LABEL[s.status] || s.status)}</option>`).join("")}</select></label>
-          <label class="f">Model<select id="hModel" ${isCodex || copSeat ? "disabled" : ""}>${["opus", "sonnet", "fable", "haiku"].map(m => `<option ${(d.model || ld.model) === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+          <label class="f">Model<select id="hModel" ${isCodex || copSeat ? "disabled" : ""}>${copSeat ? `<option value="${esc(d.model || ld.model)}" selected>${esc(copSeat.model || "Copilot's model")}</option>`
+            : ["opus", "sonnet", "fable", "haiku"].map(m => `<option ${(d.model || ld.model) === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
         </div>
         <div id="hModelHint">${modelHint(d.seat || "auto", d.model || ld.model)}</div>
         <label class="check bake-t"><input type="checkbox" id="hBake" ${d.bake ? "checked" : ""}> Bake-off: give the same brief to a second contender, and compare</label>

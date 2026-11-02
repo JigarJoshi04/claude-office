@@ -315,7 +315,7 @@ def _copilot_seat(meta: dict, now: float, poll: dict | None, cfg: dict, faults: 
             "name": Path(x.get("cwd") or "copilot").name or "copilot", "unit": x.get("unit"), "terminal": None,
             "cwd": x.get("cwd"), "started_at": x.get("started_at"), "updated_at": x.get("updated_at"),
             "quiet_s": round(now - x["updated_at"]) if x.get("updated_at") else None,
-            "state": {"working": "working", "idle": "idle"}.get(x.get("state"), "done"), "live": bool(x.get("live")),
+            "state": {"working": "working", "waiting": "waiting", "idle": "idle"}.get(x.get("state"), "done"), "live": bool(x.get("live")),
             "activity": sessions.redact(act), "activity_kind": "type" if act.startswith(("Running", "Editing")) else "think",
             "title": None, "task": sessions.redact(x.get("task")), "last_text": sessions.redact(x.get("last_message")),
             "model": x.get("model"), "effort": x.get("effort"), "risks": list(x.get("risks") or []),
@@ -705,7 +705,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.189.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.190.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
