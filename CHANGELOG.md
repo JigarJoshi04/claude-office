@@ -3,6 +3,14 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.191.0] - 2026-11-02
+
+### Fixed
+- Copilot's "last hour" burn was worked out from the first two readings, minutes apart. Copilot adds a run's credits in
+  a lump when it reports them, so one finished run read as $100 an hour and the month end "at this hour's pace" as tens
+  of thousands of dollars. The burn now waits for 20 minutes of readings (in the last hour) and says how many minutes
+  it covers until it has the hour.
+
 ## [3.190.0] - 2026-11-02
 
 ### Fixed

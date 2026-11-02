@@ -199,16 +199,20 @@ def _month_start(reset_at: float) -> float:
     return datetime(y, m, day, d.hour, d.minute, tzinfo=timezone.utc).timestamp()
 
 
-def burn(history: list, now: float, window: float = 3600.0) -> dict | None:
-    """Credits an hour over the last `window` seconds of readings, since the last drop (a new month). None until two
-    readings at least four minutes apart are in the window."""
+BURN_MIN_S = 20 * 60                # Copilot adds a run's credits in lumps: a rate needs 20 minutes of readings at least
+
+
+def burn(history: list, now: float, window: float = 3600.0, min_span: float = BURN_MIN_S) -> dict | None:
+    """Credits an hour over the last `window` seconds of readings, since the last drop (a new month). None until the
+    readings in the window span `min_span` seconds: the credits used jump when runs report them, so a few minutes of
+    readings would make one run's credits look like an hourly rate."""
     rows = [r for r in history if r[0] <= now]
     for i in range(len(rows) - 1, 0, -1):            # only the readings since the month started again
         if rows[i][1] < rows[i - 1][1]:
             rows = rows[i:]
             break
     rows = [r for r in rows if r[0] >= now - window - 60]
-    if len(rows) < 2 or rows[-1][0] - rows[0][0] < 240:
+    if len(rows) < 2 or rows[-1][0] - rows[0][0] < min_span:
         return None
     span = rows[-1][0] - rows[0][0]
     return {"per_hour": max(0.0, (rows[-1][1] - rows[0][1]) / span * 3600), "minutes": round(span / 60)}

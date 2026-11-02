@@ -69,7 +69,8 @@ export function creditsCard(s, opts = {}) {
         : `${esc(sm.credits)} of the ${esc(creditsN(sm.included))} included credits`}</span><em>${sm.includedPct != null ? Math.round(sm.includedPct) + "%" : ""}</em></div>`
     : "";
   const ent = sm.entitlement && sm.percentLeft != null ? `<div class="cc-inc"><span>Premium requests left this month</span><em>${Math.round(sm.percentLeft)}%</em></div>` : "";
-  const burn = sm.burn ? tile("Last hour", esc(sm.burn.usd), `${esc(sm.burn.credits)}`, "burn") : tile("Last hour", "–", "Learning: a reading every 5 min");
+  const burn = sm.burn ? tile("Last hour", esc(sm.burn.usd), `${esc(sm.burn.credits)}${sm.burn.minutes < 55 ? ` · ${sm.burn.minutes} min of readings` : ""}`, "burn")
+    : tile("Last hour", "–", "Learning: 20 min of readings first");
   const month = tile("Month end", sm.month ? "~" + esc(sm.month) : "–", "at this month's pace");
   const reset = tile("Resets", esc(sm.reset.day), esc(sm.reset.left));
   const read = sm.fetchedAt && opts.relTime ? `Read ${esc(opts.relTime(sm.fetchedAt))}${sm.stale ? " (stale)" : ""}.` : "";

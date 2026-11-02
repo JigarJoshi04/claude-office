@@ -49,7 +49,7 @@ class QuotaTests(unittest.TestCase):
 
     def test_credits_view_money(self):
         poll = {"reading": cop.parse_quota(BODY), "fetched_at": NOW - 30, "error": None,
-                "history": [[NOW - 660, 2238.0], [NOW - 30, 2521.0]]}
+                "history": [[NOW - 7200, 1500.0], [NOW - 2430, 2238.0], [NOW - 1230, 2400.0], [NOW - 30, 2521.0]]}
         v = cop.credits_view(poll, {"credit_usd": 0.01, "included_credits": 1900}, NOW)
         self.assertEqual(v["usd"], 25.21)
         self.assertEqual(v["overage_credits"], 621)
@@ -58,9 +58,9 @@ class QuotaTests(unittest.TestCase):
         self.assertIsNone(v["percent_remaining"])                 # "unlimited" reads 100% left forever: not shown
         self.assertIsNone(v["entitlement"])
         self.assertTrue(v["overage_permitted"])
-        self.assertEqual(v["burn"]["minutes"], 10)
-        self.assertAlmostEqual(v["burn"]["credits_per_hour"], 283 / 630 * 3600, places=0)
-        self.assertAlmostEqual(v["burn"]["usd_per_hour"], 283 / 630 * 36, places=2)
+        self.assertEqual(v["burn"]["minutes"], 40)                 # the readings of the last hour (the 2-hour-old one is out)
+        self.assertAlmostEqual(v["burn"]["credits_per_hour"], 283 / 2400 * 3600, places=0)
+        self.assertAlmostEqual(v["burn"]["usd_per_hour"], 283 / 2400 * 36, places=2)
         p = v["projection"]
         start = RESET - 30 * 86400                                 # November 1st
         month = 2521 + 2521 / (NOW - start) * (RESET - NOW)
@@ -84,7 +84,8 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(cop.credits_view({"error": "gh api exited 1"}, {}, NOW)["error"], "gh api exited 1")
 
     def test_burn_restarts_at_a_new_month_and_needs_two_readings(self):
-        self.assertIsNone(cop.burn([[NOW - 100, 5.0], [NOW, 9.0]], NOW))          # under four minutes apart
+        self.assertIsNone(cop.burn([[NOW - 100, 5.0], [NOW, 9.0]], NOW))          # minutes apart: one run's lump, no rate
+        self.assertIsNone(cop.burn([[NOW - 1100, 5.0], [NOW, 900.0]], NOW))       # under 20 minutes of readings
         self.assertIsNone(cop.burn([[NOW - 7200, 5.0], [NOW, 9.0]], NOW))         # the older one is out of the hour
         b = cop.burn([[NOW - 1800, 2900.0], [NOW - 1200, 10.0], [NOW, 70.0]], NOW)   # the month reset in between
         self.assertAlmostEqual(b["per_hour"], 180.0)
