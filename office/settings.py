@@ -12,7 +12,7 @@ from .live import public
 VOICE_DEFAULTS = {"enabled": False, "events": ["report", "limit", "login", "lane", "risk"], "quiet_hours": [23, 8]}
 VOICE_EVENTS = {"report", "limit", "login", "lane", "usage", "stuck", "risk"}
 # A seat's personality (its voice and room style); the names match web/ui/personas.js ARCHETYPES.
-STYLES = {"The Orchestrator", "The Builder", "The Investigator", "The Perfectionist", "The Night Owl", "The Speedrunner", "The Contractor"}
+STYLES = {"The Orchestrator", "The Builder", "The Investigator", "The Perfectionist", "The Night Owl", "The Speedrunner", "The Contractor", "The Navigator"}
 _LOCK = threading.Lock()
 
 

@@ -52,7 +52,7 @@ export function renderLanesBoard(el, app, persona) {
       <div class="lb-tags">${l.trust ? `<span class="lb-tag t-${esc(l.trust.level)}">${icon(l.trust.level === "verified" ? "check" : l.trust.level === "contradicted" ? "x" : "alert", 11)}${esc(l.trust.level)}</span>` : ""}
         ${pm ? `<span class="lb-tag">${icon("flag", 11)}by ${esc(dayTime(pm.due))}</span>` : ""}${l.bakeoff ? `<span class="lb-tag">${icon("flag", 11)}bake-off ${esc(l.bakeoff.side)}</span>` : ""}
         ${l.worktree ? `<span class="lb-tag">${icon("branch", 11)}own worktree</span>` : ""}${(l.chain_of || {}).of > 1 ? `<span class="lb-tag">stage ${l.chain_of.step} of ${l.chain_of.of}</span>` : ""}
-        ${l.spent && l.spent.tokens ? `<span class="lb-tag">${fmtTok(l.spent.tokens)} tokens</span>` : ""}</div>
+        ${l.spent && l.spent.tokens ? `<span class="lb-tag">${fmtTok(l.spent.tokens)} tokens</span>` : ""}${l.credits && l.credits.runs ? `<span class="lb-tag" title="Copilot AI credits its runs printed">${Math.round(l.credits.credits).toLocaleString()} credits</span>` : ""}</div>
       ${(l.schedule || {}).backlog && l.backlog_pos > 0 ? `<button class="btn sm ghost" data-lb-front="${esc(l.id)}">${icon("chevronRight", 13)}To the front</button>` : ""}
       ${["interrupted", "failed"].includes(l.status) ? `<button class="btn sm" data-lb-resume="${esc(l.id)}">${icon("play", 13)}Resume</button>` : ""}</div>`;
   };

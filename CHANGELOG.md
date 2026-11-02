@@ -3,6 +3,28 @@
 All notable changes to Claude Office are documented here, following Keep a Changelog.
 Version entries describe the implemented milestones in repository history, not published GitHub releases.
 
+## [3.189.0] - 2026-11-02
+
+### Added
+- GitHub Copilot is a seat of its own. When the `copilot` CLI and `~/.copilot` are both here, "Copilot" (The Navigator,
+  in a pilot's cap) gets a room with a route map and a departures board, and every Copilot run on this machine sits at
+  its desk: found by its executable, with its task, model, effort, what it is doing and its working folder, and a
+  `*-lane-*` unit's run as programme work. Its plan is read with `gh api copilot_internal/user` every 5 minutes (only
+  the plan, the reset date and the quota fields are kept). The seat page and the briefing show the month in dollars:
+  AI credits used and their value, the included credits and how much of them is used, overage so far, the last hour's
+  burn, the month end at this month's pace (and at this hour's), the reset date, and whether overage is on. No 5-hour
+  or weekly rings are drawn for it. A run's credits show on its page once it ends, and a lane's running total from the
+  `AI Credits` lines in its log. News says when 80% and all of the included credits are used.
+- Lanes can be hired on Copilot: `copilot -p` with the model and reasoning effort in config `"copilot"` (default
+  `claude-opus-5.5`, high), its session id given up front so a finished run can be followed up with
+  `copilot --resume=<id> -p`. Full trust lets it reach files outside its folders. The divider starts the seat small
+  (10%, one lane at a time). The rate of a credit (`credit_usd`, $0.01) and the included credits (`included_credits`,
+  1,900) are settings there, not fixed numbers.
+
+### Fixed
+- A seat's default name and personality came from its place among the seats shown, so hiding one seat handed its name
+  and room to the next (hiding claude3 made claude4 "Vega"). They follow the seat's own id now.
+
 ## [3.188.0] - 2026-10-19
 
 ### Fixed

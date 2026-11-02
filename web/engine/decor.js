@@ -43,6 +43,12 @@ const FLOORS = {
       if (alt) r(c, x + xx, y + yy + 4, 16, 1, "#74502f"); else r(c, x + xx + 8, y + yy, 1, 8, "#74502f");
     }
   },
+  "The Navigator"(c, x, y, w, h) {                                  // a slate apron with a dashed taxiway line
+    r(c, x, y, w, h, "#363c50");
+    for (let i = 0; i < w * h / 220; i++) r(c, x + S.hashOf("ax" + i) % w, y + S.hashOf("ay" + i) % h, 1, 1, i % 3 ? "#3d4459" : "#2f3446");
+    const ty = y + h - 14;
+    for (let xx = 4; xx < w - 8; xx += 14) r(c, x + xx, ty, 7, 2, "#e5c14a");
+  },
 };
 
 // Rooms grow with their character (career level): curtains, gold trim, a skylight, a hanging plant, a brass plaque.
@@ -185,6 +191,20 @@ const STATIC = {
   },
 };
 
+STATIC["The Navigator"] = function (c, x, y) {                      // a route map, a departures board, a globe
+  r(c, x + 14, y + 6, 56, 28, "#9aa3b5"); r(c, x + 15, y + 7, 54, 26, "#2d5f8f");                  // the map: sea
+  for (const [lx, ly, lw, lh] of [[18, 10, 12, 8], [20, 18, 7, 9], [36, 9, 10, 6], [38, 15, 6, 11], [52, 10, 14, 9], [58, 22, 8, 6]])
+    r(c, x + lx, y + ly, lw, lh, "#5f9f6a");                                                    // land
+  for (const [px, py] of [[25, 13], [29, 12], [33, 11], [37, 11], [41, 11], [45, 12], [49, 13], [53, 14]]) r(c, x + px, y + py, 2, 1, "#f4f1ea");   // a route
+  r(c, x + 23, y + 13, 3, 3, "#e8475a"); r(c, x + 57, y + 14, 3, 3, "#e8475a");                  // two pins
+  r(c, x + 76, y + 8, 32, 22, "#14161e"); r(c, x + 76, y + 8, 32, 4, "#2a2d38");                // departures board
+  for (let i = 0; i < 4; i++) { r(c, x + 79, y + 14 + i * 4, 12, 2, "#ffd24a"); r(c, x + 94, y + 14 + i * 4, 10, 2, i === 1 ? "#38e07b" : "#c4cad6"); }
+  // a globe on its stand in the margin
+  r(c, x + 15, y + 92, 2, 10, "#5a4030"); r(c, x + 10, y + 101, 12, 2, "#5a4030");
+  r(c, x + 9, y + 76, 14, 14, "#2d5f8f"); r(c, x + 8, y + 79, 16, 8, "#2d5f8f"); r(c, x + 12, y + 75, 8, 16, "#2d5f8f");
+  r(c, x + 11, y + 78, 5, 4, "#5f9f6a"); r(c, x + 17, y + 83, 4, 4, "#5f9f6a"); r(c, x + 7, y + 82, 1, 4, "#c9a227"); r(c, x + 24, y + 82, 1, 4, "#c9a227");
+};
+
 // A furniture corner on the right of each room (x + w - 28 … x + w - 6, from y + 48 down), so no room is a bare floor.
 // It stays 22 px wide: the aisle to the desk's far end runs just left of it.
 const CORNER = {
@@ -223,6 +243,13 @@ const CORNER = {
     r(c, x + 1, y + 6, 8, 16, "#3d4f6e"); r(c, x + 2, y + 6, 6, 2, "#4f6389");                                   // a coat
     r(c, x + 15, y + 30, 7, 12, "#4a5070"); r(c, x + 16, y + 22, 1, 9, "#c94f4f"); r(c, x + 19, y + 24, 1, 7, "#2b3045");
   },
+};
+
+CORNER["The Navigator"] = function (c, x, y) {                      // a flight case and a wind sock
+  r(c, x + 17, y + 2, 2, 42, "#9aa3b5"); r(c, x + 13, y + 43, 10, 2, "#6b7488");
+  for (let i = 0; i < 4; i++) r(c, x + 9 - i * 2, y + 4 + i, 8 - i, 5 - (i > 2 ? 1 : 0), i % 2 ? "#f4f1ea" : "#ff8f3d");
+  r(c, x + 1, y + 28, 13, 16, "#2a2d38"); r(c, x + 1, y + 28, 13, 2, "#3d4459"); r(c, x + 5, y + 25, 5, 3, "#14161e");
+  r(c, x + 3, y + 34, 9, 1, "#c4cad6"); r(c, x + 6, y + 37, 3, 2, "#c9a227");
 };
 
 export function drawDecorStatic(c, room, arch, bloom = false) {

@@ -35,6 +35,7 @@ try:  # written by the Astra lane; the office still runs without it
     from .codex_seat import read_codex_seat
 except Exception:  # pragma: no cover
     read_codex_seat = None
+from . import copilot_seat
 
 THRESHOLDS = (50, 80, 95)
 FORECAST_WINDOWS = {"five_hour": 3600, "weekly": 6 * 3600}   # how far back the burn rate looks
@@ -291,6 +292,47 @@ def _codex_seat(meta: dict, now: float, faults: Faults | None = None) -> dict:
                 usage=view, model=data.get("model"), sessions=sess)
 
 
+def _copilot_seat(meta: dict, now: float, poll: dict | None, cfg: dict, faults: Faults | None = None) -> dict:
+    """The Copilot seat as the page sees it: its runs as sessions, and its plan's AI credits as `credits` (it has no
+    5-hour or weekly window, so `usage` stays None and nothing draws a ring it does not have)."""
+    try:
+        data = copilot_seat.read_copilot_seat(home=str(config.HOME), now=now)
+        if faults:
+            faults.ok("The Copilot reader")
+    except Exception as e:  # a format change in ~/.copilot must not take the office down
+        data = {"sessions": [], "error": f"{type(e).__name__}: {e}"}
+        if faults:
+            faults.fault("The Copilot reader", e, meta.get("id"))
+    st = config.copilot_settings(cfg)
+    sess = []
+    for x in data.get("sessions") or []:
+        if not x.get("live") and now - (x.get("updated_at") or 0) > 3 * 3600:
+            continue
+        act = x.get("activity") or ("Thinking" if x.get("live") else "Finished")
+        lane = bool(x.get("prompt")) or str(x.get("unit") or "").endswith(".service") or not x.get("live")
+        sess.append({
+            "id": x.get("id"), "seat": meta["id"], "pid": x.get("pid"), "kind": "lane" if lane else "desk",
+            "name": Path(x.get("cwd") or "copilot").name or "copilot", "unit": x.get("unit"), "terminal": None,
+            "cwd": x.get("cwd"), "started_at": x.get("started_at"), "updated_at": x.get("updated_at"),
+            "quiet_s": round(now - x["updated_at"]) if x.get("updated_at") else None,
+            "state": {"working": "working", "idle": "idle"}.get(x.get("state"), "done"), "live": bool(x.get("live")),
+            "activity": sessions.redact(act), "activity_kind": "type" if act.startswith(("Running", "Editing")) else "think",
+            "title": None, "task": sessions.redact(x.get("task")), "last_text": sessions.redact(x.get("last_message")),
+            "model": x.get("model"), "effort": x.get("effort"), "risks": list(x.get("risks") or []),
+            "tool_calls": x.get("tool_calls"), "recent": [], "tokens_total": (x.get("tokens") or {}).get("total"),
+            "credits": x.get("credits"),                     # what this run used, once Copilot writes it (at its end)
+            "lane_credits": x.get("lane_credits"),           # the AI Credits lines in the log it writes to, summed
+            "state_file": None, "report_file": None, "report_status": None, "transcript": None,
+            "resume_cmd": f"copilot --resume={x.get('id')}" if x.get("id") else None,
+        })
+    plan = copilot_seat.credits_view(poll, st, now)
+    return dict(meta, start_cmd="copilot", account={"name": "GitHub Copilot", "email": None, "org": None, "role": None},
+                health={"state": "ok", "detail": "Copilot CLI" + (f" · {st['model']}, {st['effort']} effort" if st.get("model") else ""),
+                        "tier": f"Copilot {plan['plan'].title()}" if plan and plan.get("plan") else "Copilot",
+                        "subscription": "copilot"},
+                usage=None, credits=plan, sessions=sess)
+
+
 def quick_seats(now: float | None = None) -> list[dict]:
     """Seats with health, cached usage and running lane counts: enough for the divider."""
     now = now or time.time()
@@ -317,6 +359,11 @@ def quick_seats(now: float | None = None) -> list[dict]:
     if meta:
         c = _codex_seat(meta, now)
         out.append(dict(c, lanes=sum(1 for x in c["sessions"] if x.get("live"))))
+    meta = config.copilot_seat_meta(cfg)
+    if meta:
+        poll = copilot_seat.CreditPoller(config.STATE_DIR / "copilot-usage.json").get()   # the office's last reading
+        c = _copilot_seat(meta, now, poll, cfg)
+        out.append(dict(c, lanes=sum(1 for x in c["sessions"] if x.get("live") and x["kind"] == "lane")))
     return out
 
 
@@ -335,6 +382,11 @@ class Office(LiveOffice):
         self.cfg = config.load_config()
         self.claude_seats = config.discover_claude_seats(self.cfg)
         self.codex_meta = config.codex_seat_meta(self.cfg)
+        self.copilot_meta = config.copilot_seat_meta(self.cfg)
+        self.credits = copilot_seat.CreditPoller(config.STATE_DIR / "copilot-usage.json",
+                                                 config.copilot_settings(self.cfg)["poll_seconds"])   # Copilot's plan (gh api)
+        self._copilot: dict | None = None
+        self._copilot_at = 0.0
         self.cache = sessions.TranscriptCache()
         self.usage = seatmod.UsagePoller(self.claude_seats, self.cfg.get("usage_poll_seconds", 150))
         self.history = UsageHistory()
@@ -377,6 +429,8 @@ class Office(LiveOffice):
         self.stop = threading.Event()
         self.faults = Faults(lambda kind, text, seat, level: self.emit(kind, text, seat, level))   # office problems, said once (faults.py)
         self.usage.on_fault, self.usage.on_ok = (lambda e: self.faults.fault("Plan readings", e)), (lambda: self.faults.ok("Plan readings"))
+        self.credits.on_fault = lambda e: self.faults.fault("Copilot plan readings", e, (self.copilot_meta or {}).get("id"))
+        self.credits.on_ok = lambda: self.faults.ok("Copilot plan readings")
         self.perf: deque = deque(maxlen=120)              # the last refreshes: (seconds, {phase: seconds}) for the doctor
         self._phases: dict = {}
         self.light = False                                # refreshing every 12 s instead of 4 while the machine is busy
@@ -458,6 +512,14 @@ class Office(LiveOffice):
                                   "bad" if t >= 95 else "warn" if t >= 80 else "info")
                 if a - b >= 25:
                     self.emit("reset", f"{s['label']} {label} reset: back to {b:.0f}%", s["id"], "good")
+            a, b = (p.get("credits") or {}).get("included_pct"), (s.get("credits") or {}).get("included_pct")
+            if a is not None and b is not None:                # Copilot: its included AI credits used up, then billed
+                for t in (80, 100):
+                    if a < t <= b:
+                        inc = (s.get("credits") or {}).get("included") or 0
+                        self.emit("usage", f"{s['label']} used {t}% of its {inc:,.0f} included AI credits"
+                                  + (": what follows is billed as overage" if t == 100 and (s.get("credits") or {}).get("overage_permitted") else ""),
+                                  s["id"], "warn")
             ph, ch = (p.get("health") or {}).get("state"), (s.get("health") or {}).get("state")
             if ph and ch and ph != ch and ch == "login":
                 self.emit("login", f"{s['label']} needs /login", s["id"], "bad")
@@ -524,8 +586,14 @@ class Office(LiveOffice):
         if meta != self.codex_meta:
             self._codex = None
         self.codex_meta = meta
-        div_ids = [s["id"] for s in self.claude_seats] + ([self.codex_meta["id"]] if self.codex_meta else [])
-        div = divider.load(div_ids)
+        meta = config.copilot_seat_meta(cfg)
+        if meta != self.copilot_meta:
+            self._copilot = None
+        self.copilot_meta = meta
+        self.credits.every = config.copilot_settings(cfg)["poll_seconds"]
+        extra = [m for m in (self.codex_meta, self.copilot_meta) if m]
+        div_ids = [s["id"] for s in self.claude_seats] + [m["id"] for m in extra]
+        div = divider.load(div_ids, {m["id"]: m["kind"] for m in extra})
         seats_out = []
         keep = set()
         for s in self.claude_seats:
@@ -545,9 +613,15 @@ class Office(LiveOffice):
                 self._codex = _codex_seat(self.codex_meta, now, self.faults)
                 self._codex_at = now
             seats_out.append(self._codex)
+        if self.copilot_meta:
+            if now - self._copilot_at > 8 or self._copilot is None:
+                self._copilot = _copilot_seat(self.copilot_meta, now, self.credits.get(), cfg, self.faults)
+                self._copilot_at = now
+            seats_out.append(self._copilot)
         here = {f"Reading {x['label']}" for x in self.claude_seats}      # problems of parts no longer here are dropped
         beacon = cfg.get("beacon") if isinstance(cfg.get("beacon"), dict) else {}
         self.faults.forget(lambda part: not ((part.startswith("Reading ") and part not in here) or (part == "The Codex reader" and not self.codex_meta)
+                                             or (part in ("The Copilot reader", "Copilot plan readings") and not self.copilot_meta)
                                              or (part == "The beacon file" and not beacon.get("path"))))
         self._mark("seats")
         limits = lanes.read_limits()
@@ -555,7 +629,7 @@ class Office(LiveOffice):
             self.history.record(s["id"], s.get("usage"), now)
             s["forecast"] = self.history.forecast(s["id"], s.get("usage"), now)
             live = [x for x in s["sessions"] if x.get("live", True)]
-            sc = div["seats"].get(s["id"], divider.DEFAULT_SEAT)
+            sc = div["seats"].get(s["id"], divider.default_for(s.get("kind")))
             s["lanes"] = sum(1 for x in live if x["kind"] == "lane")
             s["desks"] = sum(1 for x in live if x["kind"] == "desk")
             s["divider"] = sc
@@ -583,6 +657,10 @@ class Office(LiveOffice):
             self._units_at = now
         self._mark("units")
         lane_list = lanes.list_lanes()
+        if self.copilot_meta:                              # a Copilot lane's credits so far: its runs' AI Credits lines
+            for l in lane_list:
+                if any(r.get("seat") == self.copilot_meta["id"] for r in l.get("runs") or []):
+                    l["credits"] = copilot_seat.log_credits(lanes.lane_dir(l["id"]) / "lane.log")
         from . import messaging
         direct = {l.get("pid") for l in lane_list if l.get("allow_messages") is True and l.get("pid")}
         by_pid = {l["pid"]: l for l in lane_list if l.get("pid") and l.get("status") == "running"}
@@ -594,6 +672,8 @@ class Office(LiveOffice):
                     x["lane_id"], x["session_name"], x["name"] = lane["id"], x.get("name"), lane.get("title") or x.get("name")
                 if s.get("kind") == "codex":
                     x["talk"] = "none"
+                elif s.get("kind") == "copilot":
+                    x["talk"] = "none" if x.get("live", True) else "followup"   # a finished run continues with --resume
                 elif not x.get("live", True):
                     x["talk"] = "followup"
                 elif messaging.valid_target(x.get("socket")):
@@ -625,7 +705,7 @@ class Office(LiveOffice):
                                       "report_status": x.get("report_status")})
         snap = {
             "now": now,
-            "office": {"started_at": self.started_at, "version": "3.188.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
+            "office": {"started_at": self.started_at, "version": "3.189.0", "name": cfg.get("office_name"), "ceo": cfg.get("ceo"), "config_error": cfg.get("config_error"),
                        "default_workdir": cfg.get("default_workdir"),
                        "lane_defaults": {k: cfg["lane_defaults"].get(k) for k in ("model", "permission_mode")},
                        "lane_policy": lanes.policy(cfg),
@@ -906,6 +986,7 @@ class Office(LiveOffice):
     def run(self) -> None:
         threading.Thread(target=self.usage.run, args=(self.stop,), daemon=True, name="usage").start()
         threading.Thread(target=self._tokens_run, daemon=True, name="tokens").start()
+        threading.Thread(target=self._credits_run, daemon=True, name="copilot-credits").start()
         threading.Thread(target=self.presence.run, args=(self.stop,), daemon=True, name="presence").start()
         while not self.stop.is_set():
             try:
@@ -919,6 +1000,13 @@ class Office(LiveOffice):
                 self.light = light
                 sdnotify.notify("STATUS=" + ("Running light: refreshing every 12 s while the machine is busy" if light else "Refreshing every 4 s"))
             self.stop.wait(12 if self.light else 4)
+
+    def _credits_run(self) -> None:
+        """Copilot's plan, read every few minutes while the seat is here (the burn rate is made of these readings)."""
+        while not self.stop.is_set():
+            if self.copilot_meta:
+                self.credits.tick()
+            self.stop.wait(20)
 
     def _check_budgets(self, snap: dict) -> None:
         """The budgets against the ledger (budgets.py), once a ledger read; news once per budget, period and mark."""

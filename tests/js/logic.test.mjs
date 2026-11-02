@@ -120,7 +120,7 @@ test("seasons: Halloween, Diwali, the winter holidays, New Year, Lunar New Year,
 
 test("a personality picked in Settings sets the voice and room style", async () => {
   const { personaFor, PERSONALITIES } = await import("../../web/ui/personas.js");
-  assert.equal(PERSONALITIES.length, 7);
+  assert.equal(PERSONALITIES.length, 8);
   const auto = personaFor({ id: "a", kind: "claude" }, 0), owl = personaFor({ id: "a", kind: "claude", style: "The Night Owl" }, 0);
   assert.notEqual(auto.archetype, "The Night Owl");
   assert.equal(owl.archetype, "The Night Owl");
@@ -128,6 +128,51 @@ test("a personality picked in Settings sets the voice and room style", async () 
   assert.equal(personaFor({ id: "a", kind: "claude", style: "The Night Owl", role: "Lead" }, 0).role, "Lead");   // a custom role still wins
   assert.equal(personaFor({ id: "a", kind: "claude", style: "Nonsense" }, 0).archetype, auto.archetype);          // unknown → automatic
   assert.equal(personaFor({ id: "x", kind: "claude" }, -1).name, personaFor({ id: "x", kind: "claude" }, 0).name);  // a seat not in the list
+});
+
+test("a seat's default name and personality follow its own id, not where it sits among the seats shown", async () => {
+  const { personaFor, seatIndex } = await import("../../web/ui/personas.js");
+  // claude3 hidden: claude4 is third on the page but stays Orion, The Perfectionist (and claude2 stays Atlas)
+  const shown = [{ id: "claude", kind: "claude" }, { id: "claude2", kind: "claude" }, { id: "claude4", kind: "claude" }];
+  const cast = shown.map((s, i) => personaFor(s, i));
+  assert.deepEqual(cast.map(p => p.name), ["Ember", "Atlas", "Orion"]);
+  assert.deepEqual(cast.map(p => p.archetype), ["The Orchestrator", "The Builder", "The Perfectionist"]);
+  assert.equal(personaFor({ id: "claude3", kind: "claude" }, 0).name, "Vega");          // whatever index it is given
+  assert.equal(seatIndex({ id: "claude12" }, 0), 11);
+  assert.equal(seatIndex({ id: "astra" }, 4), 4);                                       // other seats keep their index
+  assert.equal(personaFor({ id: "claude4", kind: "claude", nickname: "Lead" }, 2).name, "Lead");   // a nickname still wins
+  // The Copilot seat is its own character wherever it sits: its label, The Navigator
+  for (const i of [0, 3, 5]) {
+    const p = personaFor({ id: "copilot", kind: "copilot", label: "Copilot" }, i);
+    assert.equal(p.name, "Copilot"); assert.equal(p.archetype, "The Navigator");
+  }
+  assert.equal(personaFor({ id: "astra", kind: "codex" }, 1).name, "Astra");
+});
+
+test("the Copilot seat's money: dollars, included credits, overage and the month end", async () => {
+  const { usd, creditsN, creditsSummary, creditsLine, creditsBar, creditsCard } = await import("../../web/ui/copilot.js");
+  assert.equal(usd(28.47), "$28.47"); assert.equal(usd(0), "$0.00"); assert.equal(usd(1234.5), "$1,235");
+  assert.equal(usd(10612), "$10.6k"); assert.equal(usd(null), "–"); assert.equal(creditsN(2847.4), "2,847");
+  const now = 1793608000, c = { credits_used: 2847, usd: 28.47, credit_usd: 0.01, included: 1900, included_pct: 149.8,
+    overage_credits: 947, overage_usd: 9.47, overage_permitted: true, unlimited: true, plan: "business", reset_at: now + 29 * 86400,
+    burn: { credits_per_hour: 1540, usd_per_hour: 15.4, minutes: 55 }, projection: { month_usd: 558.2, hour_usd: 10612 }, fetched_at: now - 60 };
+  const sm = creditsSummary(c, now);
+  assert.equal(sm.usd, "$28.47"); assert.equal(sm.overUsd, "$9.47"); assert.ok(sm.over);
+  assert.equal(sm.burn.usd, "$15.40/h"); assert.equal(sm.month, "$558.20"); assert.equal(sm.plan, "Copilot Business");
+  assert.equal(sm.reset.left, "in 29 days");
+  assert.ok(Math.abs(sm.bar.inc + sm.bar.over - 100) < 1e-9 && Math.abs(sm.bar.mark - 1900 / 2847 * 100) < 1e-9);   // the tick at 1,900
+  assert.equal(creditsLine({ credits: c }), "$28.47 this month");
+  const under = creditsSummary({ ...c, credits_used: 950, usd: 9.5, included_pct: 50, overage_credits: 0, overage_usd: 0 }, now);
+  assert.ok(!under.over); assert.equal(under.bar.mark, null); assert.equal(under.bar.inc, 50);
+  assert.match(creditsBar(under), /width:50\.0%/);
+  // no reading yet, a failed first reading, and a card with every number (no "undefined", no NaN)
+  assert.equal(creditsSummary(null, now), null);
+  assert.equal(creditsSummary({ credits_used: null, error: "gh api exited 1" }, now).error, "gh api exited 1");
+  const html = creditsCard({ color: "#d55181", credits: c }, { now, relTime: () => "1 min ago" });
+  assert.doesNotMatch(html, /undefined|NaN/);
+  for (const bit of ["$28.47", "this month · 2,847 AI credits at $0.01", "$9.47", "$15.40/h", "~$558.20", "in 29 days", "Overage is on"]) assert.ok(html.includes(bit), bit);
+  assert.match(creditsCard({ credits: null }, { now }), /Reading Copilot's plan/);
+  assert.doesNotMatch(creditsCard({ credits: { ...c, burn: null, projection: null } }, { now }), /undefined|NaN/);
 });
 
 test("banter is two filled-in lines that fit the moment", async () => {

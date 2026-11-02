@@ -29,8 +29,14 @@ def render(snap: dict) -> str:
     for s in snap.get("seats", []):
         h = s.get("health") or {}
         lines.append(f"## {s['label']} ({s['id']}): {s.get('status')}")
-        lines.append(f"- Login: {h.get('detail')}; 5-hour {_pct(s.get('usage'), 'five_hour')}; "
-                     f"weekly {_pct(s.get('usage'), 'weekly')}")
+        c = s.get("credits") or {}
+        if s.get("kind") == "copilot":                     # billed per AI credit: no 5-hour or weekly window
+            lines.append(f"- {h.get('detail')}; " + (f"{c['credits_used']:,.0f} AI credits (${c['usd']:,.2f}) this month"
+                         + (f", ${c['overage_usd']:,.2f} of it overage" if c.get("overage_usd") else "")
+                         if c.get("credits_used") is not None and c.get("usd") is not None else "no plan reading yet"))
+        else:
+            lines.append(f"- Login: {h.get('detail')}; 5-hour {_pct(s.get('usage'), 'five_hour')}; "
+                         f"weekly {_pct(s.get('usage'), 'weekly')}")
         live = [x for x in s.get("sessions", []) if x.get("live", True)]
         if not live:
             lines.append("- No live sessions.")

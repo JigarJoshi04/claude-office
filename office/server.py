@@ -194,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
     port = config.DEFAULT_PORT
     demo = False
     same_user = True       # only this Unix user (peer.py); config "same_user_only": false turns it off
-    server_version = "ClaudeOffice/3.188.0"
+    server_version = "ClaudeOffice/3.189.0"
 
     def log_message(self, fmt, *args):  # quiet: the office polls every few seconds
         pass
@@ -744,7 +744,10 @@ class Handler(BaseHTTPRequestHandler):
                     self.office.emit("checkpoint", f"Checkpoint saved to {where}", level="good")
                 return self._json(200, {"ok": True, "path": where, "markdown": text})
             if path == "/api/usage/refresh":
-                self.office.usage.poke(body.get("seat"))
+                if body.get("seat") and body.get("seat") == (getattr(self.office, "copilot_meta", None) or {}).get("id"):
+                    self.office.credits.poke()                  # the Copilot seat's plan is read by its own poller
+                else:
+                    self.office.usage.poke(body.get("seat"))
                 return self._json(200, {"ok": True})
         except (ValueError, KeyError, json.JSONDecodeError, RecursionError) as e:
             return self._json(400, {"error": str(e)})

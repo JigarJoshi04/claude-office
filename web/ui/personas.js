@@ -28,6 +28,9 @@ const COMMON = {
   achievement: ["Achievement unlocked!", "Put that on my wall.", "Another one for the trophy shelf."],
   hello: ["You rang, boss?", "Hey boss!", "Need something?", "Right here."],
 };
+// The GitHub Copilot seat: pays by the credit, reads the map, calls the turns.
+const COPILOT = { role: "The Navigator", traits: ["reads the map", "calls the turns", "keeps the meter honest"], motto: "Every mile on the meter.",
+  lines: { arrive: "Navigator aboard.", report: "Landed. Logbook's filled in.", limit: "Grounded until the reset.", stuck: "Re-plotting the route…", idle: "Cleared for the next leg.", hello: "Copilot here. Where to?" } };
 // Status in each character's own voice, for every state the office knows. t = a reset time, n = sessions at work.
 const VOICE = {
   "The Orchestrator": { working: n => n > 1 ? `Running ${n} threads. All on plan.` : "On it. Everything is on plan.", waiting: "Ready for the next step when you are.",
@@ -51,6 +54,9 @@ const VOICE = {
   "The Contractor": { working: n => n > 1 ? `${n} contracts in progress.` : "Delivering the contract.", waiting: "Deliverable ready for review.",
     free: "Available for the next contract.", limited: t => `Outside contracted hours until ${t}.`, benched: "Not on contract right now.",
     offline: "Credentials expired. /login, please.", stuck: "Reviewing the specification…" },
+  "The Navigator": { working: n => n > 1 ? `${n} flights in the air. Meter's running.` : "On course. Meter's running.", waiting: "Holding pattern. Your call.",
+    free: "Cleared for the next leg.", limited: t => `Grounded until ${t}.`, benched: "Hangar day. No flights.",
+    offline: "Grounded: run copilot login.", stuck: "Re-plotting the route…" },
 };
 // One or two words for tiles and doors, and the tone that colours them.
 const WORD = { working: ["In the zone", "good"], waiting: ["Waiting for you", "warn"], free: ["Free", "idle"], limited: ["Napping", "bad"],
@@ -119,12 +125,20 @@ export function line(p, key) {
   return pool.length ? pool[Math.floor(Math.random() * pool.length)] : "";
 }
 
+// A Claude seat's place in the default cast comes from its own id (claude is 1st, claudeN the Nth), never from where it
+// sits among the seats shown: hiding one seat must not hand its name and personality to the next. Other seats keep the
+// index they were given (a seat not in the list yet gets 0).
+export function seatIndex(seat, index = 0) {
+  const m = /^claude(\d*)$/.exec((seat && seat.id) || "");
+  return m ? Math.max(0, (m[1] ? +m[1] : 1) - 1) : Math.max(0, index);
+}
+
 export function personaFor(seat, index = 0) {
-  index = Math.max(0, index);                 // a seat not (yet) in the list still gets a character
-  const chosen = seat.style && [...ARCHETYPES, CODEX].find(a => a.role === seat.style);   // a personality picked in Settings
-  const base = chosen || (seat.kind === "codex" ? CODEX : ARCHETYPES[index % ARCHETYPES.length]);   // else one per seat, in order
+  index = seatIndex(seat, index);
+  const chosen = seat.style && [...ARCHETYPES, CODEX, COPILOT].find(a => a.role === seat.style);   // a personality picked in Settings
+  const base = chosen || (seat.kind === "codex" ? CODEX : seat.kind === "copilot" ? COPILOT : ARCHETYPES[index % ARCHETYPES.length]);
   return {
-    name: seat.nickname || (seat.kind === "codex" ? "Astra" : NAMES[index % NAMES.length]),
+    name: seat.nickname || (seat.kind === "codex" ? "Astra" : seat.kind === "copilot" ? seat.label || "Copilot" : NAMES[index % NAMES.length]),
     archetype: base.role,          // the voice and room decor follow the archetype, even under a custom role
     role: seat.role || base.role,
     motto: seat.motto || base.motto,
@@ -218,7 +232,7 @@ export function pulse(snap, persona, fmtTime) {
 function words(n) { return ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"][n] || String(n); }
 
 // The personalities a seat can take (Settings → Characters): each brings its own voice, room floor and furniture.
-export const PERSONALITIES = [...ARCHETYPES, CODEX].map(a => ({ role: a.role, motto: a.motto }));
+export const PERSONALITIES = [...ARCHETYPES, CODEX, COPILOT].map(a => ({ role: a.role, motto: a.motto }));
 
 // Banter: now and then two characters at their desks trade a line about what is going on. `a` speaks first, `b`
 // answers. {a} and {b} are their names; the lines can be about a third character, never one of the two: {n} who is

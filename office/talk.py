@@ -84,7 +84,7 @@ def conversation_view(office, seat_id: str, session_id: str) -> dict:
         "items": conversation.read(path),
         "thread": inbox.thread_for(x.get("socket") if x else None, session_id) if inbox else [],
         "live": x is not None,
-        "delivery": "none" if seat.get("kind") == "codex" else delivery_for(office, x),
+        "delivery": "none" if seat.get("kind") == "codex" or (seat.get("kind") == "copilot" and x is not None) else delivery_for(office, x),
         "name": x.get("name") if x else None,
     }
 
@@ -114,6 +114,8 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
         raise ValueError("Unknown seat")
     if seat.get("kind") == "codex":
         raise ValueError("Codex sessions cannot take messages yet")
+    if seat.get("kind") == "copilot":
+        return _copilot_followup(office, seat, x, session_id, text, seat_ids)
     inbox = getattr(office, "inbox", None)
     mode = delivery_for(office, x)
     fork = body.get("fork") is True and x is not None              # a copy of a session still open in its terminal
@@ -144,6 +146,36 @@ def send(office, body: dict, seat_ids: list[str]) -> dict:
                              seat_ids, office.cfg, resume_session=session_id, fork=fork)
     office.emit("lane", f"CEO followed up on {(x or {}).get('name') or session_id[:8]} ({lane['id']})", seat_id, "good")
     return {"ok": True, "delivery": "followup", "lane": lane}
+
+
+def _copilot_followup(office, seat: dict, x: dict | None, session_id: str, text: str, seat_ids: list[str]) -> dict:
+    """A finished Copilot run carries on as a lane on the Copilot seat: `copilot --resume=<id> -p <the message>`."""
+    if x is not None:
+        raise ValueError("A Copilot run cannot take messages while it runs: follow up once it has finished")
+    folder = config.HOME / ".copilot" / "session-state" / session_id
+    if not (folder / "events.jsonl").is_file():
+        raise ValueError("Cannot find that Copilot session to follow up on")
+    done = next((y for y in seat.get("sessions", []) if y.get("id") == session_id), None) or {}
+    cwd = done.get("cwd") or _copilot_cwd(folder)
+    if not cwd:
+        raise ValueError("Cannot tell which folder that Copilot session worked in")
+    lane = lanes.create_lane(followup_title(text, done.get("name") or session_id[:8]), text, cwd, seat["id"],
+                             office.cfg["lane_defaults"]["model"], office.cfg["lane_defaults"]["permission_mode"],
+                             seat_ids, office.cfg, resume_session=session_id)
+    office.emit("lane", f"CEO followed up on {done.get('name') or session_id[:8]} ({lane['id']})", seat["id"], "good")
+    return {"ok": True, "delivery": "followup", "lane": lane}
+
+
+def _copilot_cwd(folder: Path) -> str | None:
+    """The working folder a Copilot session recorded (workspace.yaml's `cwd:` line)."""
+    try:
+        with open(folder / "workspace.yaml", errors="replace") as f:
+            for line in f.read(65536).splitlines():
+                if line.startswith("cwd: "):
+                    return line[5:].strip().strip("'\"") or None
+    except OSError:
+        return None
+    return None
 
 
 # -- one message to a group ----------------------------------------------------------------------------------------

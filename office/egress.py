@@ -21,6 +21,7 @@ _SAVED = 0.0
 WHY = {
     "usage": ("api.anthropic.com", "Plan usage readings for each Claude seat (its own login)"),
     "github": ("api.github.com", "Pull requests, checks and review comments (gh)"),
+    "copilot": ("api.github.com", "The Copilot seat's plan and AI credits (gh api copilot_internal/user)"),
     "analyst": ("api.anthropic.com", "The office analyst's questions (claude -p, only when on)"),
 }
 

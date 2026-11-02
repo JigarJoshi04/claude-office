@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import threading
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import time
 from collections import deque
 
@@ -68,13 +68,27 @@ def _sess(seat, sid, name, kind, state, act_key, now, start_ago, title=None, tas
     }
 
 
+def _demo_credits(now):
+    """The Copilot seat's month, through the real credits view: 2,412 AI credits so far (past the 1,900 included), 232
+    of them in the last hour, the plan resetting on the 1st (copilot_seat.credits_view)."""
+    from . import copilot_seat
+    d = datetime.fromtimestamp(now, timezone.utc)
+    reset = datetime(d.year + (d.month == 12), d.month % 12 + 1, 1, tzinfo=timezone.utc).timestamp()
+    hist = [[now - 3600 + i * 300, 2180 + round(232 * i / 12)] for i in range(13)]
+    poll = {"reading": {"plan": "business", "reset_date": datetime.fromtimestamp(reset, timezone.utc).strftime("%Y-%m-%d"), "reset_at": reset,
+                        "premium_interactions": {"unlimited": True, "entitlement": 0.0, "remaining": 0.0, "percent_remaining": 100.0,
+                                                 "overage_permitted": True, "token_based_billing": True, "credits_used": 2412.0}},
+            "fetched_at": now - 95, "error": None, "history": hist}
+    return copilot_seat.credits_view(poll, {"credit_usd": 0.01, "included_credits": 1900}, now)
+
+
 DEMO_RISKS = {"l-bill": [{"id": "demo-risk-1", "ago": 420, "rule": "force_push", "label": "Force-pushed", "helper": False,
                           "text": "git push --force origin lane/billing-migration"}]}
 
 DEMO_HELPERS = {"d-orch": ["Check the overnight lanes' reports", "Read the failing CI logs", "Draft tomorrow's lane briefs"]}
 
 
-DEMO_MODEL = {"l-rate": "claude-sonnet-5-5", "l-search": "claude-haiku-5-5", "l-bill": "claude-fable-5-1", "c-docs": "gpt-5-codex", "c-visit": "gpt-5-codex"}
+DEMO_MODEL = {"g-tests": "claude-opus-5.5", "l-rate": "claude-sonnet-5-5", "l-search": "claude-haiku-5-5", "l-bill": "claude-fable-5-1", "c-docs": "gpt-5-codex", "c-visit": "gpt-5-codex"}
 
 DEMO_TOUCH = {"l-rate": ("/home/you/work/apollo", "a1f0c2"), "l-check": ("/home/you/work/apollo", "77be01")}   # two lanes in one tree
 
@@ -402,12 +416,13 @@ class DemoOffice(LiveOffice):
 
     def build(self):
         now = time.time()
-        div = divider.validate({"mode": "headroom", "global_max_lanes": 6, "five_hour_guard": 90, "weekly_guard": 90,
+        div = divider.validate({"mode": "headroom", "global_max_lanes": 7, "five_hour_guard": 90, "weekly_guard": 90,
                                 "seats": {"claude": {"enabled": False, "weight": 0, "max_lanes": 1,
                                                      "note": "Weekly is tight: keep it for interactive work"},
                                           "claude2": {"weight": 35, "max_lanes": 3}, "claude3": {"weight": 30, "max_lanes": 2},
-                                          "claude4": {"weight": 20, "max_lanes": 2}, "astra": {"weight": 15, "max_lanes": 1}}},
-                               ["claude", "claude2", "claude3", "claude4", "astra"])
+                                          "claude4": {"weight": 20, "max_lanes": 2}, "astra": {"weight": 15, "max_lanes": 1},
+                                          "copilot": {"weight": 10, "max_lanes": 1, "note": "Billed per AI credit: small jobs"}}},
+                               ["claude", "claude2", "claude3", "claude4", "astra", "copilot"])
         div["updated_at"] = now - 3600
 
         def usage(p5, pw, r5, rw):
@@ -450,6 +465,15 @@ class DemoOffice(LiveOffice):
                  usage=usage(18, 30, 3 * 3600, 6 * 86400),
                  sessions=[_sess("astra", "c-docs", "docs-refresh", "lane", "working", "docs", now, 1500,
                                  title="Refresh the API docs", cwd="/home/you/work/docs", tokens=90000)]),
+            dict(id="copilot", kind="copilot", label="Copilot", nickname=None, color=config.COPILOT_COLOR, config_dir="~/.copilot",
+                 look=dict(config.COPILOT_LOOK), model="claude-opus-5.5", effort="high", start_cmd="copilot",
+                 account={"name": "GitHub Copilot"}, health={"state": "ok", "detail": "Copilot CLI · claude-opus-5.5, high effort",
+                                                             "tier": "Copilot Business", "subscription": "copilot"},
+                 usage=None, credits=_demo_credits(now),
+                 sessions=[dict(_sess("copilot", "g-tests", "contract-tests", "lane", "working", "docs", now, 2600,
+                                      title="Contract tests for the export API", unit="apollo-lane-g2.service", tokens=60000),
+                                credits=None, lane_credits={"credits": 41.7, "runs": 3}, effort="high",
+                                resume_cmd="copilot --resume=g-tests")]),
         ]
         # A visitor lane comes and goes every 45 seconds, so the demo shows arrivals, reports and departures.
         visiting = int(now // 45) % 2 == 1
@@ -491,7 +515,7 @@ class DemoOffice(LiveOffice):
             if s["kind"] == "claude":                     # par for the week: a made-up season per seat
                 s["par"] = _demo_par(s, now)
             for x in s["sessions"]:
-                x["talk"] = "none" if s["kind"] == "codex" else ("direct" if x["kind"] == "lane" else "review")
+                x["talk"] = "none" if s["kind"] in ("codex", "copilot") else ("direct" if x["kind"] == "lane" else "review")
                 x["programme"] = ({"name": "Apollo launch", "url": "https://example.com/mission-control", "key": "apollo"}
                                   if "apollo" in (x.get("unit") or "") or x["name"].startswith("apollo") or "work/apollo" in x["cwd"]
                                   else {"name": "Billing revamp", "url": None, "key": "billing"} if "billing" in x["cwd"] else None)
@@ -548,7 +572,7 @@ class DemoOffice(LiveOffice):
             {"unit": "lane-supervisor.service", "active": "active", "sub": "running", "description": "Relaunches lanes after a limit"},
             {"unit": "nightly-report.service", "active": "failed", "sub": "failed", "description": "Nightly usage report"},
         ]
-        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.188.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
+        snap = {"now": now, "office": {"started_at": self.started_at, "version": "3.189.0", "name": self.cfg["office_name"], "ceo": self.cfg["ceo"], "config_error": None,
                                        "default_workdir": "/home/you/work",
                                        "lane_defaults": {"model": "opus", "permission_mode": "acceptEdits"},
                                        "lane_policy": {"roots": ["/home/you/work"], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
@@ -645,6 +669,7 @@ class DemoOffice(LiveOffice):
             ("old-l11", "claude2", "apollo-l11-search", "lane", 4.6 * 3600, 2.7 * 3600, "STATUS: READY #477"),
             ("old-perf", "claude3", "perf-audit", "lane", 5.9 * 3600, 4.1 * 3600, "STATUS: DONE - p95 down 38%"),
             ("old-astra", "astra", "changelog-draft", "lane", 3.9 * 3600, 3.1 * 3600, "STATUS: DONE - changelog drafted"),
+            ("old-copilot", "copilot", "lint-sweep", "lane", 2.8 * 3600, 1.9 * 3600, "STATUS: DONE - 31 lint warnings fixed"),
         ]
         rows = []
         t = start
@@ -678,6 +703,7 @@ class DemoOffice(LiveOffice):
                 "claude3": [100.0 if hrs < 0.66 else max(0.0, 100 - (hrs - 0.66) * 21), 62 - hrs * 1.9, 0 if hrs < 0.66 else 2, 2, 380000],
                 "claude4": [3.0 if hrs < 3.2 else max(0.0, 70 - (hrs - 3.2) * 24), 22 - hrs * 1.1, 0 if hrs < 3.3 else 1, 0 if hrs < 3.3 else 1, 0],
                 "astra": [18.0 - hrs * 3 if hrs < 4 else 6.0, 30 - hrs, 1 if hrs < 0.42 or 3.1 < hrs < 3.9 else 0, 1 if hrs < 0.42 else 0, 90000],
+                "copilot": [None, None, 1 if hrs < 0.72 or 1.9 < hrs < 2.8 else 0, 1 if hrs < 0.72 else 0, 0],
             }
             seats = {k: [None if v is None else (round(max(0.0, min(100.0, v)), 1) if i < 2 else v) for i, v in enumerate(vals)]
                      + [1 if k == "claude3" and hrs < 0.66 else 0] for k, vals in seats.items()}   # out of plan this minute

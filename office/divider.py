@@ -16,6 +16,8 @@ from pathlib import Path
 from . import config
 
 DEFAULT_SEAT = {"enabled": True, "weight": 25, "max_lanes": 2, "note": "", "free_hours": None}   # [from, to] local hours
+# A seat that bills per use starts small: the Copilot seat's AI credits past the included ones are paid overage.
+KIND_DEFAULTS = {"copilot": {"weight": 10, "max_lanes": 1}}
 WEEK = 7 * 86400
 FAMILIES = ("opus", "sonnet", "haiku", "fable")
 DEFAULTS = {
@@ -32,7 +34,13 @@ def path() -> Path:
     return config.CONFIG_DIR / "divider.json"
 
 
-def load(seat_ids: list[str]) -> dict:
+def default_for(kind: str | None) -> dict:
+    """A seat's divider entry before the CEO sets one: the same for every seat, smaller for one that bills per use."""
+    return dict(DEFAULT_SEAT, **KIND_DEFAULTS.get(kind or "", {}))
+
+
+def load(seat_ids: list[str], kinds: dict | None = None) -> dict:
+    """The divider, with an entry for every seat in seat_ids (kinds: seat id -> kind, for its default entry)."""
     try:
         raw = json.loads(path().read_text())
     except (OSError, ValueError):
@@ -40,7 +48,7 @@ def load(seat_ids: list[str]) -> dict:
     out = dict(DEFAULTS, **{k: v for k, v in raw.items() if k in DEFAULTS})
     seats = {}
     for sid in seat_ids:
-        seats[sid] = dict(DEFAULT_SEAT, **(raw.get("seats", {}).get(sid) or {}))
+        seats[sid] = dict(default_for((kinds or {}).get(sid)), **(raw.get("seats", {}).get(sid) or {}))
     out["seats"] = seats
     return out
 
@@ -199,7 +207,7 @@ def evaluate(seats: list[dict], cfg: dict, kind: str | None = None, exclude: tup
         # Expected lanes at this share once one more lane runs, minus what it already runs.
         deficit = target * (total_lanes + 1) - lanes
         pc = pace(s, now)
-        rows.append({"seat": s["id"], "eligible": not blockers, "blockers": blockers, "share": round(share, 3),
+        rows.append({"seat": s["id"], "kind": s.get("kind"), "eligible": not blockers, "blockers": blockers, "share": round(share, 3),
                      "target": round(target, 3), "pace": None if pc is None else round(pc, 2),
                      "headroom": round(hr, 3), "lanes": lanes, "max_lanes": sc["max_lanes"],
                      "score": round(deficit, 4)})
@@ -211,8 +219,9 @@ def evaluate(seats: list[dict], cfg: dict, kind: str | None = None, exclude: tup
     ranked = sorted(rows, key=lambda r: (not r["eligible"], -r["score"], -r["headroom"], r["lanes"]))
     pick = ranked[0] if ranked and ranked[0]["eligible"] else None
     if pick:
+        left = "billed per AI credit" if pick.get("kind") == "copilot" else f"{pick['headroom'] * 100:.0f}% of its plan left"
         why = (f"{pick['seat']}: target share {pick['target'] * 100:.0f}%, runs {pick['lanes']} of "
-               f"{total_lanes} lanes, {pick['headroom'] * 100:.0f}% of its plan left")
+               f"{total_lanes} lanes, {left}")
         if cfg["mode"] == "pace" and pick["pace"] is not None:
             why += ", " + pace_words(pick["pace"])
     else:

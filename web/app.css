@@ -1930,3 +1930,35 @@ body.locked [data-open] { display: none !important; }
 body.locked #lClone, body.locked #lResume, body.locked #lStop, body.locked #lSeat, body.locked #lFront, body.locked [data-remind],
 body.locked #seatDuty, body.locked .duty .switch, body.locked [data-handoff] { display: none !important; }
 .rp-tick.info { background: #ffe27a; }
+
+/* The Copilot seat's money card (web/ui/copilot.js): the month in dollars, the included credits, the last hour, the month end. */
+.cc { margin-top: 14px; padding: 14px 14px 12px; border-radius: 16px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.b-sec.cop .cc { margin-top: 0; }
+.cc.empty { display: flex; gap: 10px; align-items: center; font-size: 13.5px; color: var(--text-2); }
+.cc.empty.bad .cc-ic { color: var(--bad); } .cc-ic { color: var(--muted); display: inline-flex; }
+.cc-top { display: flex; align-items: flex-start; gap: 10px; }
+.cc-usd { font: 700 30px/1.05 var(--mono); letter-spacing: -.02em; color: var(--text); }
+.cc.compact .cc-usd { font-size: 26px; }
+.cc-sub { margin-top: 5px; font-size: 12.5px; color: var(--muted); }
+.cc-plan { flex: none; padding: 3px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--text-2); background: var(--surface-3); white-space: nowrap; }
+.cc-bar { position: relative; display: flex; height: 8px; margin: 14px 0 7px; border-radius: 99px; background: var(--line-2); overflow: visible; }
+.cc-bar i { display: block; height: 100%; }
+.cc-bar i.inc { background: var(--seat, var(--accent)); border-radius: 99px 0 0 99px; }
+.cc-bar i.inc:only-child, .cc-bar i.inc:last-child { border-radius: 99px; }
+.cc-bar i.ovr { background: var(--warn); border-radius: 0 99px 99px 0; }
+.cc-bar .mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 2px; background: var(--text); opacity: .7; }
+.m-plan .cc-bar { height: 6px; margin: 0; }
+.tcard .cc-bar { margin: 6px 0 0; height: 5px; }
+.cc-inc { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 12.5px; color: var(--text-2); }
+.cc-inc b { color: var(--warn); font-family: var(--mono); }
+.cc-inc em { font: 700 12.5px var(--mono); font-style: normal; color: var(--muted); }
+.cc-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.cc-t { min-width: 0; padding: 9px 10px; border-radius: 12px; background: var(--surface-3); display: grid; gap: 2px; }
+.cc-t small { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.cc-t b { font: 700 16.5px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-t span { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.cc-t.burn b { color: var(--warn); }
+.cc-note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.pk-cr { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-bar.mid i { background: var(--warn); }
+@container panel (max-width: 380px) { .cc-tiles { grid-template-columns: 1fr 1fr; } .cc-tiles .cc-t:last-child { grid-column: 1 / -1; } .cc-usd { font-size: 26px; } }

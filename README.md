@@ -3,7 +3,7 @@
 [![CI](https://github.com/JigarJoshi04/claude-office/actions/workflows/ci.yml/badge.svg)](https://github.com/JigarJoshi04/claude-office/actions/workflows/ci.yml) [![MIT license](https://img.shields.io/badge/license-MIT-ff7a45?style=flat-square)](LICENSE) ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?style=flat-square&logo=python&logoColor=white) ![Zero dependencies](https://img.shields.io/badge/zero_dependencies-standard_library_only-38e07b?style=flat-square) ![Local-first](https://img.shields.io/badge/local--first-127.0.0.1_only-5b8def?style=flat-square)
 
 **Your AI coding seats, as a living office.** Every Claude Code account on your machine becomes a character with
-its own room, and so does the Codex CLI. Every running session is a little worker at a desk in that room, acting out
+its own room, and so do the Codex CLI and the GitHub Copilot CLI. Every running session is a little worker at a desk in that room, acting out
 what it is doing right now. New sessions walk in from the elevator; spent seats nap on the couch. You run the place from the CEO's chair: see who is
 working and who is stuck, talk to any task, split new work across seats, and hire background lanes from the front
 desk.
@@ -37,7 +37,7 @@ go?* Claude Office answers them in one glance, in plain English, and lets you ac
 ## What's inside
 
 **A living floor: a room per character**
-- Every seat, found automatically (`~/.claude`, `~/.claude2`, … and `~/.codex`), gets its own room. The room has its
+- Every seat, found automatically (`~/.claude`, `~/.claude2`, …, `~/.codex` and `~/.copilot`), gets its own room. The room has its
   name on the door, a floor in its colour, a window, and decor that matches its personality. The Investigator has a
   corkboard with red string, the Builder a tool pegboard and a hard hat, the Night Owl a moon poster, string lights
   and a coffee machine, and so on.
@@ -398,7 +398,7 @@ its reset. Open it to add the events to Google Calendar, Outlook or Apple Calend
 
 | What | Where it comes from |
 |---|---|
-| Seats | `~/.claude*/` folders with a login, plus `~/.codex` |
+| Seats | `~/.claude*/` folders with a login, plus `~/.codex`, and `~/.copilot` when the `copilot` CLI is installed |
 | Plan usage | The plan's usage endpoint, called with each seat's current access token every few minutes. The office never refreshes a login itself; while a seat's token is expired, it shows the last reading, marked stale. |
 | Live sessions | `<seat>/sessions/<pid>.json`. A session counts only if its pid runs and its kernel start time matches. |
 | What a session is doing | Its transcript, read incrementally |
@@ -406,12 +406,13 @@ its reset. Open it to add the events to Google Calendar, Outlook or Apple Calend
 | All-time tokens | The `usage` of every response in the transcripts, read once and then incrementally; a session's seat from its `session-env` folder |
 | API value | Each response's `usage` (cache write split, speed, inference region) at the list prices in `office/prices.py` |
 | Codex seat | `~/.codex/sessions` rollouts and the rate limits Codex records. Codex lanes run `codex exec` with a workspace-write sandbox (or a `gpt` wrapper, when one is installed). |
+| Copilot seat | The plan from `gh api copilot_internal/user` every 5 minutes (only the plan, reset date and quota fields are kept): AI credits used this month, their dollar value, the included credits, overage, the burn an hour and a month-end projection. Runs are processes of the `copilot` binary; each one's `~/.copilot/session-state/<id>/events.jsonl` is read incrementally, and the `AI Credits` lines in its log are summed per lane. Copilot lanes run `copilot -p` with the model and effort in config `"copilot"` (default `claude-opus-5.5`, high); follow-ups use `copilot --resume=<id>`. The rate (`credit_usd`, $0.01) and the included credits (`included_credits`, 1,900) are settings there too. |
 
 ## Safety
 
 - **Network:** the server listens on `127.0.0.1` only, and rejects any request whose `Host` is not loopback. The page
   loads nothing from elsewhere (its fonts are bundled), and Settings → "What leaves this machine" lists the office's
-  own outbound calls of the last day: plan usage readings, GitHub through `gh`, and the analyst when it is on.
+  own outbound calls of the last day: plan usage readings, GitHub through `gh` (including the Copilot plan), and the analyst when it is on.
 - **Writes:** every write needs the per-install token, which only the office's own page receives.
 - **The page:** a strict Content-Security-Policy is set. Transcript text is escaped, and credential-shaped strings
   are masked before they reach it.

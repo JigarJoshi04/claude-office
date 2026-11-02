@@ -3,6 +3,7 @@
 import { $, esc, toast, live, hydratePortraits, dayTime, relTime, fmtTok } from "./util.js";
 import { icon } from "./icons.js";
 import { voice, leftOf } from "./personas.js";
+import { isCopilot, creditsSummary } from "./copilot.js";
 
 export function makeFloor(ctx) {
   const { app, office, panels, replay, prefs, QS, DEMO, go, setView, badge, award, zoomNow } = ctx;
@@ -27,7 +28,7 @@ export function makeFloor(ctx) {
         <div class="grow"><b class="pk-name">${esc(p.name)}${s.career ? `<em>Lv ${s.career.level}</em>` : ""}</b><span class="pk-role">${esc(p.role)}</span></div>
         <span class="pk-word ${v.tone}"><i></i>${esc(v.word)}</span></div>
       <p class="pk-voice">“${esc(v.line)}”</p>
-      ${plan("five_hour", "5 hours")}${plan("weekly", "This week")}
+      ${isCopilot(s) ? copilotPeek(s, snap.now) : plan("five_hour", "5 hours") + plan("weekly", "This week")}
       ${people.length ? `<div class="pk-h">At the desk · ${people.length}</div>${people.slice(0, 4).map(row).join("")}${people.length > 4 ? `<div class="pk-more">+${people.length - 4} more</div>` : ""}` : `<div class="pk-h">Nobody at the desk</div>`}
       <div class="pk-foot">Click to open · double-click to zoom in</div>`;
     hydratePortraits(peekEl, 3);
@@ -40,6 +41,14 @@ export function makeFloor(ctx) {
     peekEl.style.left = Math.max(8, left) / z + "px"; peekEl.style.top = top / z + "px";
   }
   addEventListener("scroll", () => { peekEl.hidden = true; }, { passive: true, capture: true });
+  // Copilot has no plan windows: its card says what the month has cost and the last hour's burn instead.
+  function copilotPeek(s, now) {
+    const sm = creditsSummary(s.credits, now);
+    if (!sm || sm.error) return `<div class="pk-plan"><span>AI credits</span><span class="pk-bar"><i style="width:0%"></i></span><b>–</b></div>`;
+    const w = sm.bar ? Math.min(100, sm.bar.inc + sm.bar.over) : 0;
+    return `<div class="pk-plan"><span>This month</span><span class="pk-bar ${sm.over ? "mid" : ""}"><i style="width:${w.toFixed(0)}%"></i></span><b>${esc(sm.usd)}</b></div>
+      <div class="pk-plan"><span>Last hour</span><span class="pk-cr">${sm.burn ? esc(sm.burn.credits) : "learning the pace"}</span><b>${sm.burn ? esc(sm.burn.usd) : "–"}</b></div>`;
+  }
 
   // TV mode: the floor alone, full screen, for a second monitor or a wall. A heads-up line keeps the time and the
   // office's one-sentence status; every few seconds the tour lights up the next room with people in it and shows its card,

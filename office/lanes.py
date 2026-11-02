@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 from . import config, divider, messaging
@@ -700,7 +701,7 @@ def _next_stage(lane: dict, cfg: dict) -> None:
     brief = (f"{nxt['brief']}\n\n---\nYou are stage {of['step'] + 1} of {of['of']} in a chain. The previous stage, "
              f"\"{lane['title']}\", worked in this same folder and reported:\n\n{report}")
     codex = config.codex_seat_meta(cfg)
-    seats = [s["id"] for s in config.discover_claude_seats(cfg)] + ([codex["id"]] if codex else [])
+    seats = [s["id"] for s in config.discover_claude_seats(cfg)] + [m["id"] for m in (codex, config.copilot_seat_meta(cfg)) if m]
     seat = (codex["id"] if codex else "auto") if nxt.get("seat_kind") == "codex" else lane.get("seat_pref") or "auto"   # a second opinion: another model
     try:
         new = create_lane(nxt["title"], brief, lane["workdir"], seat, lane["model"],
@@ -733,7 +734,7 @@ def _choose_seat(lane: dict, exclude: tuple = ()) -> tuple[str | None, str, floa
     from .snapshot import quick_seats
     seats = quick_seats()
     ids = [s["id"] for s in seats]
-    cfg = divider.load(ids)
+    cfg = divider.load(ids, {s["id"]: s.get("kind") for s in seats})
     if lane["seat_pref"] != "auto":
         # A pinned lane overrides the split and caps (the CEO chose), but not a dead login or a spent plan.
         pinned = next((s for s in seats if s["id"] == lane["seat_pref"]), None)
@@ -769,9 +770,12 @@ def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[l
     resume = lane.get("resume_session")
     if resume is not None and (not isinstance(resume, str) or not messaging.SESSION_ID.fullmatch(resume)):
         raise ValueError("A follow-up needs a session id")
-    if resume and seat["kind"] != "claude":
+    if resume and seat["kind"] not in ("claude", "copilot"):
         raise ValueError("Claude follow-ups require a Claude seat")
-    if seat["kind"] == "codex":
+    if seat["kind"] == "copilot":
+        cmd = copilot_command(lane, seat, prompt, d, cfg)
+        env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE")}   # never a Claude seat's settings
+    elif seat["kind"] == "codex":
         # The gpt wrapper around Codex when it is installed; otherwise the Codex CLI itself, with the same sandbox.
         local = config.HOME / ".local" / "bin" / "gpt"
         gpt = shutil.which("gpt") or (str(local) if local.exists() else None)
@@ -815,6 +819,30 @@ def _command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> tuple[l
     env.pop("DISPLAY", None)
     env.pop("WAYLAND_DISPLAY", None)
     return cmd, env
+
+
+def copilot_command(lane: dict, seat: dict, prompt: str, d: Path, cfg: dict) -> list[str]:
+    """A lane on the GitHub Copilot CLI: `copilot -p` with the seat's model and reasoning effort (Settings: config
+    "copilot"). A new run gets its session id up front (--session-id), so the office can follow up on it later with
+    `copilot --resume=<id> -p`. Every tool is allowed (a headless run cannot ask); files outside the working folder,
+    the lane's own folder and lane_defaults.add_dirs only when the lane has full trust (bypassPermissions)."""
+    exe = config.copilot_binary()
+    if not exe:
+        raise ValueError("The Copilot seat needs the copilot CLI on PATH to run a lane")
+    st = config.copilot_settings(cfg)
+    resume = lane.get("resume_session")
+    if resume:
+        head = [exe, f"--resume={resume}", "-p", messaging.FOLLOWUP_PREFIX + (d / "brief.md").read_text()]
+    else:
+        head = [exe, f"--session-id={lane['copilot_session']}" if lane.get("copilot_session") else None, "-p", prompt]
+    cmd = [x for x in head if x] + ["--model", st["model"], "--reasoning-effort", st["effort"], "--no-color", "--allow-all-tools"]
+    if lane.get("permission_mode") == "bypassPermissions":
+        cmd.append("--allow-all-paths")
+    else:
+        cmd += ["--add-dir", str(d)]
+        for extra in cfg["lane_defaults"].get("add_dirs") or []:
+            cmd += ["--add-dir", os.path.expanduser(extra)]
+    return cmd
 
 
 WAKE = ".wake"                   # the office touches it the moment a seat can take a lane again
@@ -880,6 +908,8 @@ def _wait_until_seated(seat: dict, proc, timeout: float = 30.0) -> str | None:
     t0 = time.time()
     sdir = Path(seat["config_dir"]) / "sessions"
     while time.time() - t0 < timeout and proc.poll() is None:
+        if seat["kind"] == "copilot":                  # its id was given at launch (or it resumes a known one)
+            return None
         if seat["kind"] == "codex":
             if time.time() - t0 > 8:
                 return None
@@ -937,9 +967,9 @@ def run_lane(lane_id: str) -> int:
             seat = None
             if seat_id:
                 seats = {s["id"]: s for s in config.discover_claude_seats(cfg)}
-                codex = config.codex_seat_meta(cfg)
-                if codex:
-                    seats[codex["id"]] = codex
+                for other in (config.codex_seat_meta(cfg), config.copilot_seat_meta(cfg)):
+                    if other:
+                        seats[other["id"]] = other
                 seat = seats.get(seat_id)
             if seat:
                 if lane.get("max_minutes") and not lane.get("deadline"):   # the budget runs from its first start
@@ -949,6 +979,11 @@ def run_lane(lane_id: str) -> int:
                 lane["runs"].append({"seat": seat_id, "started_at": time.time(), "why": why})
                 save_lane(lane)
                 _log(lane_id, f"start on {seat_id} ({why})")
+                if seat["kind"] == "copilot":                # a new Copilot run gets its session id now; a follow-up keeps its own
+                    lane["copilot_session"] = None if lane.get("resume_session") else str(uuid.uuid4())
+                    lane["runs"][-1]["session_id"] = lane.get("resume_session") or lane["copilot_session"]
+                    lane["last_session_id"] = lane["runs"][-1]["session_id"]
+                    save_lane(lane)
                 cmd, env = _command(lane, seat, prompt, d, cfg)
                 if lane.pop("warm_from", None):              # a warm hand-off is used once; a later start is fresh
                     save_lane(lane)
@@ -956,7 +991,7 @@ def run_lane(lane_id: str) -> int:
                 run_from = log.tell()                        # this run's own output starts here
                 try:
                     proc = subprocess.Popen(cmd, cwd=lane["workdir"], env=env, stdin=subprocess.DEVNULL,
-                                            stdout=subprocess.PIPE if seat["kind"] == "codex" or lane.get("resume_session") else log,
+                                            stdout=subprocess.PIPE if seat["kind"] in ("codex", "copilot") or lane.get("resume_session") else log,
                                             stderr=log)
                     lane["pid"] = proc.pid
                     save_lane(lane)

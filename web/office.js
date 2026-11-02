@@ -1237,7 +1237,7 @@ export function createOffice(stage, handlers) {
     const need = handlers.needsFor ? handlers.needsFor(s.id) : (snap.attention || []).filter(a => a.seat === s.id).length;   // as Needs you groups them
     if (need) plate.classList.add("needs");
     plate.innerHTML = `<span class="pl-line"><b><i></i><span class="pl-name">${esc(who.name)}</span>${lv}</b><span class="pl-chip ${line.tone}">${esc(line.main)}</span></span>` +
-      `<span class="pl-line pl-sub"><span class="bar ${line.left != null && line.left < 15 ? "low" : line.left != null && line.left < 35 ? "mid" : ""}"><i style="width:${line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>` +
+      `<span class="pl-line pl-sub"><span class="bar ${line.barCls ?? (line.left != null && line.left < 15 ? "low" : line.left != null && line.left < 35 ? "mid" : "")}"><i style="width:${line.fill ?? line.left ?? 0}%"></i></span><span>${esc(line.side)}</span></span>` +
       (need ? `<span class="pl-need" title="${need} thing${need === 1 ? "" : "s"} in Needs you">${need}</span>` : "");
     const honours = [burner === s.id && "top burner", belt === s.id && game !== "off" && "holds the Burner Belt", lean === s.id && game !== "off" && "holds the Lean ribbon"].filter(Boolean);
     plate.setAttribute("aria-label", `${who.name}${s.career ? `, level ${s.career.level}` : ""}${honours.length ? ", " + honours.join(", ") : ""}: ${line.main}, ${line.side}`);
@@ -1298,15 +1298,19 @@ export function createOffice(stage, handlers) {
 
   function plateLine(s, live) {
     const u = s.usage || {};
+    const cr = s.kind === "copilot" && s.credits && s.credits.usd != null ? s.credits : null;   // Copilot: the month in dollars, not plan left
     const l5 = u.five_hour && u.five_hour.pct != null ? Math.max(0, 100 - u.five_hour.pct) : null;
     const lw = u.weekly && u.weekly.pct != null ? Math.max(0, 100 - u.weekly.pct) : null;
     const tight = l5 == null ? (lw == null ? null : ["week", lw]) : lw == null || l5 <= lw ? ["5h", l5] : ["week", lw];
     const busy = live.filter(x => x.state === "working" || x.state === "waiting").length;
     const r5 = u.five_hour && u.five_hour.resets_at;
-    const left = tight ? `${Math.round(tight[1])}% ${tight[0] === "5h" ? "of 5 h" : "of week"} left` : "no reading";
+    const left = cr ? `$${cr.usd.toFixed(2)} this month` : tight ? `${Math.round(tight[1])}% ${tight[0] === "5h" ? "of 5 h" : "of week"} left` : "no reading";
     if (s.status === "limited") return { main: "Napping", tone: "bad", side: r5 ? "back at " + hhmm(r5) : "out of plan", left: 0 };
     if (s.status === "offline") return { main: "Locked out", tone: "bad", side: "needs /login", left: null };
-    if (s.status === "benched") return { main: "On holiday", tone: "info", side: left, left: tight ? tight[1] : null };
+    // Copilot's bar is the included credits used (amber once past them, into overage), not plan left.
+    const cost = cr ? { fill: Math.min(100, cr.included_pct || 0), barCls: (cr.overage_credits || 0) > 0 ? "mid" : "" } : {};
+    if (s.status === "benched") return { main: "On holiday", tone: "info", side: left, left: tight ? tight[1] : null, ...cost };
+    if (cr) return { main: busy ? `${busy} working` : live.length ? "Waiting for you" : "Free", tone: busy ? "good" : live.length ? "warn" : "idle", side: left, left: null, ...cost };
     return { main: busy ? `${busy} working` : live.length ? "Waiting for you" : "Free", tone: busy ? "good" : live.length ? "warn" : "idle", side: left, left: tight ? tight[1] : null };
   }
   function hhmm(ts) { return new Date(ts * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }

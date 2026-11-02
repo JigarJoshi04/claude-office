@@ -22,6 +22,7 @@ import { seasonFor, SEASON_NAME } from "../engine/season.js";
 import { money, modelName } from "./tokens.js";
 import { P as PALETTE, LOOK_STYLES } from "../engine/sprites.js";
 import { ROOM_TIERS } from "../engine/decor.js";
+import { isCopilot, creditsCard, creditsSummary, creditsBar, usd } from "./copilot.js";
 
 const TEMPLATES = [
   { name: "Fix a failing test", ic: "check", title: "Fix failing test: ", brief: "Goal: make the failing test pass without weakening it.\nWhere: <test file or CI job>\nContext: <what changed recently>\nDone when: the test passes locally and the full suite is green.\nVerify: run the suite and paste the summary in the report." },
@@ -330,6 +331,7 @@ export function makePanels(app) {
   }
   // One row per character: who, how they feel (in their words on hover), and how much plan is left.
   function mate(s) {
+    if (isCopilot(s)) return mateCopilot(s);
     const p = P(s), v = say(s), b = binding(s), c = s.career;
     const left = b.left == null ? null : Math.round(b.left);
     const lvl = left != null && left < 15 ? "low" : left != null && left < 35 ? "mid" : "";
@@ -338,6 +340,21 @@ export function makePanels(app) {
       <span class="m-who"><span class="m-name">${esc(p.name)}${c ? `<em>Lv ${c.level}</em>` : ""}</span><span class="m-word ${v.tone}"><i></i>${esc(v.word)}</span></span>
       <span class="m-plan ${lvl}"><span class="m-num"><b>${left == null ? "–" : left + "%"}</b><small>${left == null ? "no reading" : b.key === "weekly" ? "week left" : "5 h left"}</small></span><span class="m-bar"><i style="width:${left ?? 0}%"></i></span></span>
     </button>`;
+  }
+  // The Copilot seat's row: what the month has cost so far, against the included credits (it has no plan windows).
+  function mateCopilot(s) {
+    const p = P(s), v = say(s), c = s.career, sm = creditsSummary(s.credits, S().now), ok = sm && !sm.error;
+    const w = ok && sm.bar ? Math.min(100, sm.bar.inc + sm.bar.over) : 0;
+    return `<button class="mate st-${v.state}" style="--seat:${esc(s.color)}" data-seat-go="${esc(s.id)}" data-spot="${esc(s.id)}" title="${esc(p.name)}: “${esc(v.line)}”">
+      ${avatar("mascot-" + s.id, s.color, (s.status === "offline" ? "dim," : "") + "lv" + (s.career ? s.career.level : 0))}
+      <span class="m-who"><span class="m-name">${esc(p.name)}${c ? `<em>Lv ${c.level}</em>` : ""}</span><span class="m-word ${v.tone}"><i></i>${esc(v.word)}</span></span>
+      <span class="m-plan ${ok && sm.over ? "mid" : ""}"><span class="m-num"><b>${ok ? esc(sm.usd) : "–"}</b><small>${ok ? "this month" : "no reading"}</small></span>${ok && sm.bar ? creditsBar(sm) : `<span class="m-bar"><i style="width:${w}%"></i></span>`}</span>
+    </button>`;
+  }
+  // The Copilot seat in the briefing: what it costs, prominently, for as long as the seat is here.
+  function copilotHtml() {
+    return S().seats.filter(isCopilot).map(s => `<section class="b-sec cop"><h3 class="b-h">${icon("coin", 16)}${esc(P(s).name)} this month<span class="grow"></span>
+      <button class="btn sm ghost" data-seat-go="${esc(s.id)}">${icon("chevronRight", 14)}Open</button></h3>${creditsCard(s, { now: S().now, relTime, compact: true })}</section>`).join("");
   }
   // Needs you, grouped: everything caused by one seat being out of plan becomes one line about that seat.
   function needs(snap) {
@@ -408,6 +425,7 @@ export function makePanels(app) {
         <button class="b-next" data-go="divider" title="How new lanes are divided">${icon("sliders", 16)}<span>${next ? `Next lane goes to <b style="color:${esc(next.color)}">${esc(P(next).name)}</b>` : "No seat can take a new lane right now"}</span>${icon("chevronRight", 16)}</button>
       </section>
       ${!snap.seats.length ? `<div class="welcome"><h3>No seats yet</h3><p>Claude Office looks for <code>~/.claude</code>, <code>~/.claude2</code>, … and <code>~/.codex</code>. Log in with <code>claude</code> (or <code>CLAUDE_CONFIG_DIR=~/.claude2 claude</code> for a second account) and the desks appear here within a few seconds.</p></div>` : ""}
+      ${copilotHtml()}
       ${budgetsHtml()}
       ${att.length ? `<section class="b-sec"><h3 class="b-h needs">${icon("alert", 16)}Needs you<span class="count">${att.length}</span></h3>${shown.map(a => `<div class="g-need ${a.level}">
           <span class="grow"><span class="t">${esc(needText(a))}</span>${a.cmd && !app.privacy() ? `<code class="d cmd">${esc(a.cmd)}</code>` : ""}${a.nudged_at ? `<span class="d">Nudged ${esc(relTime(a.nudged_at))}${a.lane_id && S().now - a.nudged_at > 600 ? ", still stuck" : ""}</span>` : ""}${a.resets_at || a.lapses_at ? `<span class="d">${a.lapses_at ? "Lapses" : a.grouped ? "Back" : "Resets"} ${dayTime(a.resets_at || a.lapses_at)} · ${inWords(a.resets_at || a.lapses_at)}</span>` : ""}</span>${needAction(a)}${a.key ? a.risk ? `<button class="btn sm ghost icon snz" data-snooze="${esc(JSON.stringify([a.key]))}" data-snooze-min="1440" title="Seen: hide it on every screen" aria-label="Mark as seen">${icon("check", 14)}</button>`
@@ -540,18 +558,19 @@ export function makePanels(app) {
       return `<div class="pring">${ring(left, s.color, 58)}<div><b>${label}</b><small>${when}</small>${w && w.resets_at ? `<small>${inWords(w.resets_at)}</small>` : ""}</div></div>`;
     };
     const cmd = s.kind === "claude" ? `CLAUDE_CONFIG_DIR=${s.config_dir} claude` : s.start_cmd || 'codex -C "$PWD"';
+    const cop = isCopilot(s);
     const tabs = [["now", "Now", "clock"], ["career", "Career", "trophy"], ["settings", "Settings", "sliders"]];
     const tab = tabs.some(([k]) => k === seatTab) && (s.career || seatTab !== "career") ? seatTab : "now";
     const body = tab === "career" ? `${levelRow(s)}${careerHtml(s)}${S().seats.length > 1 ? `<div class="row" style="margin-top:12px"><button class="btn sm" data-versus="${esc(s.id)}">${icon("flag", 14)}Versus another character</button></div>` : ""}`
       : tab === "settings" ? `${section("Duty", `<div class="duty"><div class="grow"><b>${sc.enabled ? "On duty" : "On holiday"}</b>
           <span>${sc.enabled ? `Gets ${sc.weight}% of new lanes, up to ${sc.max_lanes} at once. Running ${s.lanes} now.` : "No new lanes go here."}${sc.note ? " " + esc(sc.note) : ""}</span></div>
           <label class="switch" title="On duty"><input type="checkbox" id="seatDuty" ${sc.enabled ? "checked" : ""} aria-label="On duty"><span></span></label></div>`)}
-        ${section(s.kind === "claude" ? "Open this seat in a terminal" : "Give Codex a task", `<div class="copy"><code>${esc(cmd)}</code><button class="btn sm" data-copy="${esc(cmd)}">${icon("copy", 14)}Copy</button></div>`)}
+        ${section(s.kind === "claude" ? "Open this seat in a terminal" : isCopilot(s) ? "Give Copilot a task" : "Give Codex a task", `<div class="copy"><code>${esc(cmd)}</code><button class="btn sm" data-copy="${esc(cmd)}">${icon("copy", 14)}Copy</button></div>`)}
         ${section("Account", `<dl class="facts">${app.privacy() ? `<dt>Account</dt><dd>Hidden (share-safe)</dd>` : [["Name", a.name], ["Email", a.email]].filter(([, x]) => x).map(([k, x]) => `<dt>${k}</dt><dd>${esc(x)}</dd>`).join("")}
           ${h.tier ? `<dt>Plan</dt><dd>${esc(h.tier)}</dd>` : ""}${h.detail ? `<dt>Status</dt><dd>${esc(h.detail)}</dd>` : ""}<dt>Seat</dt><dd>${esc(s.label)}</dd></dl>`)}`
       : `${section(`At the desk · ${L.length}`, L.length ? L.map(x => sessRow(s, x)).join("") : `<div class="empty">${s.status === "limited" ? "Everyone went home: the seat is out of plan." : "Nobody here right now."}</div>`)}
         ${section("Today", `<div class="diary">${icon("news", 16)}<span>${esc(diary(p, dstats))}</span></div>`)}
-        ${section("Plan, last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
+        ${cop ? "" : section("Plan, last 6 hours", `<div class="card">${usageSpark(ser.map(r => [r[0], r[1]]), { color: s.color, now: S().now, reset: u.five_hour && u.five_hour.resets_at, forecast: fc.five_hour, label: p.name + " 5-hour window" })}
           ${(() => { const ex = (app.detailFor("p:" + s.id) || {}).exchange; if (!ex || (!ex.five_hour && !ex.weekly)) return "";
             return `<p class="xrate">${icon("coin", 13)} 1% of its ${ex.five_hour ? `5-hour window buys about <b>${fmtTok(ex.five_hour)}</b> fresh tokens` : ""}${ex.five_hour && ex.weekly ? "; 1% of its " : ""}${ex.weekly ? `week about <b>${fmtTok(ex.weekly)}</b>` : ""}, from the last day.</p>`; })()}
           <div class="hint" style="margin-top:6px">5-hour window used; the dashed line is the current pace.${u.fetched_at ? ` Read ${relTime(u.fetched_at)}${u.stale ? " (stale: the login refreshes on its next run)" : ""}.` : ""}</div></div>`)}
@@ -570,10 +589,10 @@ export function makePanels(app) {
           <span class="m-word ${vo.tone}"><i></i>${esc(vo.word)}</span></div></div>
         <blockquote class="voice">“${esc(vo.line)}”</blockquote>
       </div>
-      <div class="prings">${planRing("five_hour", "5 hours")}${planRing("weekly", "This week")}</div>
-      ${(() => { const pc = weekPace(s, S().now); return pc ? `<div class="pace-week ${pc.tone}">${icon(pc.tone === "bad" ? "zap" : pc.tone === "warn" ? "flame" : "check", 15)}<span>${esc(pc.text)}</span></div>` : ""; })()}
+      ${cop ? creditsCard(s, { now: S().now, relTime, refresh: s.id }) : `<div class="prings">${planRing("five_hour", "5 hours")}${planRing("weekly", "This week")}</div>`}
+      ${cop ? "" : (() => { const pc = weekPace(s, S().now); return pc ? `<div class="pace-week ${pc.tone}">${icon(pc.tone === "bad" ? "zap" : pc.tone === "warn" ? "flame" : "check", 15)}<span>${esc(pc.text)}</span></div>` : ""; })()}
       ${s.ghost ? `<div class="pace ghostnote">${icon("eye", 17)}<span><b>Someone else is using this login.</b> Its 5-hour use rose ${Math.round(s.ghost.rise)}% in ${s.ghost.minutes} min with nothing running on this machine: claude.ai, the desktop app or another computer.</span></div>` : ""}
-      <div class="pace ${paceText.cls}">${icon(paceText.ic, 17)}<span>${esc(paceText.t)}</span>${s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}" title="Read the plan now" aria-label="Read the plan now">${icon("refresh", 14)}</button>` : ""}</div>
+      ${cop ? "" : `<div class="pace ${paceText.cls}">${icon(paceText.ic, 17)}<span>${esc(paceText.t)}</span>${s.kind === "claude" ? `<button class="btn sm ghost" data-refresh="${esc(s.id)}" title="Read the plan now" aria-label="Read the plan now">${icon("refresh", 14)}</button>` : ""}</div>`}
       <div class="stabs" role="tablist" aria-label="${esc(p.name)}">${tabs.filter(([k]) => k !== "career" || s.career).map(([k, label, ic]) => `<button role="tab" data-seat-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? "on" : ""}">${icon(ic, 15)}${label}</button>`).join("")}</div>
       <div class="stabs-body" role="tabpanel">${body}</div>`,
       bind(root) {
@@ -667,6 +686,15 @@ export function makePanels(app) {
       <span class="nm"><span class="sdot ${x.state}"></span>${esc(x.name)}</span><span class="pill">${x.kind === "lane" ? "Lane" : "Terminal"}</span>
       <span class="ac">${priv(x, label)}${gitChip(x)}</span></div>`;
   }
+  // A Copilot run's AI credits: this run's (Copilot writes them when it ends) and its lane's so far (the AI Credits lines
+  // its log has, one per finished run), each in dollars at the seat's rate.
+  function copilotPills(s, x) {
+    const rate = (s.credits && s.credits.credit_usd) || 0.01, cr = (n) => `${(+n).toLocaleString([], { maximumFractionDigits: 2 })} credits`;
+    const run = x.credits != null ? `<span class="pill spent" title="This run's AI credits, at ${esc(usd(rate))} each">${icon("coin", 13)}${esc(usd(x.credits * rate))} · ${esc(cr(x.credits))}</span>` : "";
+    const l = x.lane_credits;
+    const lane = l && l.runs ? `<span class="pill spent" title="What its lane's ${l.runs} finished run${l.runs === 1 ? "" : "s"} printed as AI Credits, summed from the log">${icon("coin", 13)}Lane so far ${esc(usd(l.credits * rate))} · ${esc(cr(l.credits))}</span>` : "";
+    return run + lane;
+  }
   // Where a session works: its repository and branch (blurred for terminals in share-safe mode, like what they do).
   function gitChip(x) {
     const g = x && x.git;
@@ -746,6 +774,7 @@ export function makePanels(app) {
           ${x && x.loop ? `<span class="pill ${x.loop.count >= 8 ? "warn" : ""}" title="The same call, ${x.loop.count} times in a row${app.privacy() ? "" : ": " + esc(x.loop.text)}. A session repeating itself with nothing in between may be stuck.">${icon("refresh", 13)}Same call ×${x.loop.count}</span>` : ""}
           ${x && x.ci ? `<a class="pill ci ${esc(x.ci.checks || "")}" href="${esc(x.ci.url)}" target="_blank" rel="noopener noreferrer" title="Its branch's pull request on GitHub">${icon(x.ci.checks === "fail" ? "x" : x.ci.checks === "pass" ? "check" : "clock", 13)}PR #${x.ci.number}${x.ci.checks ? ` · ${CI_WORD[x.ci.checks]}` : ""}</a>${(x.ci.threads || []).length ? `<button class="pill warn" data-forward-review="${esc(v.seat)}|${esc(v.id)}" title="Unresolved review comments on its PR: write them out as a message below (you send it)">${icon("chat", 13)}${x.ci.thread_count || x.ci.threads.length} review comment${(x.ci.thread_count || x.ci.threads.length) === 1 ? "" : "s"}</button>` : ""}` : ""}
           ${x && x.spent && x.spent.usd ? `<span class="pill spent" title="${fmtTok(x.spent.tokens)} tokens so far (its helpers included), at API list prices">${icon("coin", 13)}${esc(money(x.spent.usd))} so far</span>` : ""}
+          ${x && isCopilot(s) ? copilotPills(s, x) : ""}
           ${x && x.cache && x.cache.window ? (() => { const f = Math.min(1, x.cache.context / Math.max(x.cache.window, x.cache.context)), pc = Math.round(f * 100);
             return `<span class="pill ctx ${f >= 0.9 ? "bad" : f >= 0.7 ? "warn" : ""}" title="${fmtTok(x.cache.context)} of ${fmtTok(x.cache.window)} tokens of context: what it sends with every reply. Near full, Claude Code compacts the conversation. On the floor it is the pile of paper on its desk.">${icon("files", 13)}Context ${pc}%</span>`; })() : ""}
           ${x && x.tasks ? `<span class="pill ${x.tasks.done === x.tasks.total ? "good" : ""}" title="Its task list: ${x.tasks.done} of ${x.tasks.total} done">${icon("check", 13)}${x.tasks.done}/${x.tasks.total} tasks</span>` : ""}
@@ -1504,7 +1533,7 @@ export function makePanels(app) {
     const col = (l) => { const st = l.seat && seatById(l.seat), side = l.bakeoff.side;
       return `<div class="bake-col ${winner === side ? "won" : ""}" style="--seat:${esc(st ? st.color : "#888")}"><div class="bake-h"><b>${side}</b>${winner === side ? `<span class="pill good">${icon("trophy", 13)}Winner</span>` : ""}</div>
         <dl class="facts"><dt>Who</dt><dd>${st ? esc(P(st).name) : esc(l.seat_pref)} · ${esc(l.model)}</dd><dt>Status</dt><dd>${esc(l.status)}${l.trust ? ` · <span class="t-${l.trust.level}">${esc(l.trust.level)}</span>` : ""}</dd>
-          <dt>Took</dt><dd>${esc(took(l))}</dd>${l.spent && l.spent.usd ? `<dt>Cost</dt><dd>${esc(money(l.spent.usd))} at API prices</dd>` : ""}
+          <dt>Took</dt><dd>${esc(took(l))}</dd>${l.spent && l.spent.usd ? `<dt>Cost</dt><dd>${esc(money(l.spent.usd))} at API prices</dd>` : ""}${l.credits && l.credits.runs ? `<dt>AI credits</dt><dd>${esc(l.credits.credits.toLocaleString([], { maximumFractionDigits: 2 }))} over ${l.credits.runs} run${l.credits.runs === 1 ? "" : "s"}${(() => { const c = S().seats.find(isCopilot); return c && c.credits ? ` (${esc(usd(l.credits.credits * c.credits.credit_usd))})` : ""; })()}</dd>` : ""}
           ${l.shipped && l.shipped.commits ? `<dt>Shipped</dt><dd>${l.shipped.commits} commit${l.shipped.commits === 1 ? "" : "s"}</dd>` : ""}</dl>
         <div class="quote">${l.report_status ? esc(l.report_status.replace(/^STATUS:\s*/, "")) : "No report yet."}</div>
         <button class="btn sm" data-lane-go="${esc(l.id)}">${icon("briefcase", 14)}Open ${side}</button></div>`; };
@@ -1534,7 +1563,7 @@ export function makePanels(app) {
     const np = dvPreview || S().next_pick, who = np.seat || np.pick;
     return `<div class="pick ${who ? "" : "none"}"><b>${who ? `Next lane → ${esc(nameOf(who))}` : "No seat can take a lane"}</b>${dvPreview ? ` ${pill("preview")}` : ""}
       <div class="why">${esc(humanise(np.why))}</div><div style="margin-top:8px">
-      ${(np.ranking || []).map(r => `<div class="rk"><span>${r.eligible ? icon("check", 14) : icon("x", 14)}</span><span>${esc(nameOf(r.seat))}</span><span>${r.eligible ? `target ${Math.round((r.target ?? r.share) * 100)}% · runs ${r.lanes} · ${Math.round(r.headroom * 100)}% plan left${(dvPreview ? dv.mode : S().divider.mode) === "pace" && r.pace != null ? " · " + paceWords(r.pace) : ""}` : esc(r.blockers.join(", "))}</span></div>`).join("")}</div></div>`;
+      ${(np.ranking || []).map(r => `<div class="rk"><span>${r.eligible ? icon("check", 14) : icon("x", 14)}</span><span>${esc(nameOf(r.seat))}</span><span>${r.eligible ? `target ${Math.round((r.target ?? r.share) * 100)}% · runs ${r.lanes} · ${r.kind === "copilot" || isCopilot(seatById(r.seat)) ? "billed per credit" : Math.round(r.headroom * 100) + "% plan left"}${(dvPreview ? dv.mode : S().divider.mode) === "pace" && r.pace != null ? " · " + paceWords(r.pace) : ""}` : esc(r.blockers.join(", "))}</span></div>`).join("")}</div></div>`;
   }
   function paintPick() { const el = document.getElementById("dvPick"); if (el) el.innerHTML = pickHtml(); }
   function divider() {
@@ -1552,7 +1581,7 @@ export function makePanels(app) {
       <div id="dvPick" style="margin-top:14px">${pickHtml()}</div>
       ${section("Seats", S().seats.map(s => { const c = dv.seats[s.id], u = s.usage || {};
         return `<div class="dseat">${avatar("mascot-" + s.id, s.color, c.enabled ? "" : "dim")}
-          <div><b>${esc(P(s).name)}</b> <span class="hint">${esc(SEAT_LABEL[s.status] || s.status)} · 5-hour ${pct(u, "five_hour") == null ? "–" : Math.round(100 - pct(u, "five_hour")) + "% left"} · week ${pct(u, "weekly") == null ? "–" : Math.round(100 - pct(u, "weekly")) + "% left"}${dv.mode === "pace" && seatPace(s) != null ? " · " + paceWords(seatPace(s)) : ""}</span></div>
+          <div><b>${esc(P(s).name)}</b> <span class="hint">${esc(SEAT_LABEL[s.status] || s.status)} · ${isCopilot(s) ? `${(() => { const sm = creditsSummary(s.credits, S().now); return sm && !sm.error ? `${esc(sm.usd)} this month${sm.over ? `, ${esc(sm.overUsd)} overage` : ""}${sm.burn ? ` · ${esc(sm.burn.usd)} last hour` : ""}` : "AI credits: no reading yet"; })()} · billed per use` : `5-hour ${pct(u, "five_hour") == null ? "–" : Math.round(100 - pct(u, "five_hour")) + "% left"} · week ${pct(u, "weekly") == null ? "–" : Math.round(100 - pct(u, "weekly")) + "% left"}`}${dv.mode === "pace" && seatPace(s) != null ? " · " + paceWords(seatPace(s)) : ""}</span></div>
           <label class="switch" title="On duty"><input type="checkbox" data-duty="${esc(s.id)}" ${c.enabled ? "checked" : ""} aria-label="${esc(P(s).name)} on duty"><span></span></label>
           <div class="ctl"><label>Share <input type="number" min="0" max="100" value="${c.weight}" data-w="${esc(s.id)}" ${c.enabled ? "" : "disabled"}> %</label>
             <label>At most <input type="number" min="0" max="16" value="${c.max_lanes}" data-cap="${esc(s.id)}"> lanes</label><span>running ${s.lanes}</span></div>
@@ -1694,6 +1723,7 @@ export function makePanels(app) {
     }
     const dirs = [...new Set([snap.office.default_workdir, ...snap.seats.flatMap(s => s.sessions.map(x => x.cwd))].filter(Boolean))];
     const isCodex = d.seat && seatById(d.seat) && seatById(d.seat).kind === "codex";
+    const copSeat = d.seat && isCopilot(seatById(d.seat)) ? seatById(d.seat) : null;
     return { html: `${crumbs("Hiring desk")}
       <h2>Hire a lane</h2>
       <p class="lede">A lane is an agent that works in the background on one brief. It keeps notes, moves to another seat if its seat runs out of plan, and files a report when it is done.</p>
@@ -1716,7 +1746,7 @@ export function makePanels(app) {
         <div class="grid2">
           <label class="f">Who does it<select id="hSeat"><option value="auto" ${d.seat === "auto" ? "selected" : ""}>Let the divider pick (now ${esc(np.seat ? nameOf(np.seat) : "nobody")})</option>
             ${snap.seats.map(s => `<option value="${esc(s.id)}" ${d.seat === s.id ? "selected" : ""}>${esc(P(s).name)} · ${esc(SEAT_LABEL[s.status] || s.status)}</option>`).join("")}</select></label>
-          <label class="f">Model<select id="hModel" ${isCodex ? "disabled" : ""}>${["opus", "sonnet", "fable", "haiku"].map(m => `<option ${(d.model || ld.model) === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+          <label class="f">Model<select id="hModel" ${isCodex || copSeat ? "disabled" : ""}>${["opus", "sonnet", "fable", "haiku"].map(m => `<option ${(d.model || ld.model) === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
         </div>
         <div id="hModelHint">${modelHint(d.seat || "auto", d.model || ld.model)}</div>
         <label class="check bake-t"><input type="checkbox" id="hBake" ${d.bake ? "checked" : ""}> Bake-off: give the same brief to a second contender, and compare</label>
@@ -1745,8 +1775,10 @@ export function makePanels(app) {
           ${snap.seats.some(s => s.kind === "codex") ? `<option value="second-opinion" ${d.chain === "second-opinion" ? "selected" : ""}>Codex gives a second opinion on its work</option>` : ""}</select></label>
         <div class="hint" style="margin:-6px 0 14px">Each stage starts when the one before reports done, with that report in its brief. A blocked report stops the chain.</div>
         <div class="setrow" style="border-top:0;padding-top:0"><div class="grow">Let me message it while it works<small>Messages from the office reach this lane directly instead of waiting for approval.</small></div>
-          <label class="switch"><input type="checkbox" id="hMsg" ${d.allow_messages !== false ? "checked" : ""} ${isCodex ? "disabled" : ""} aria-label="Allow messages"><span></span></label></div>
-        <div class="hint">${isCodex ? "Codex seat: it runs through the gpt bridge, so model, permissions and messages do not apply." : "Runs as a background service at low priority, with no windows."}</div>
+          <label class="switch"><input type="checkbox" id="hMsg" ${d.allow_messages !== false ? "checked" : ""} ${isCodex || copSeat ? "disabled" : ""} aria-label="Allow messages"><span></span></label></div>
+        <div class="hint">${isCodex ? "Codex seat: it runs through the gpt bridge, so model, permissions and messages do not apply."
+          : copSeat ? `Copilot seat: it runs copilot -p with ${esc(copSeat.model || "its model")} at ${esc(copSeat.effort || "high")} effort (config "copilot"), billed in AI credits. Full trust lets it reach files outside the working folder; messages do not apply.`
+          : "Runs as a background service at low priority, with no windows."}</div>
         <div class="row" style="margin-top:16px;gap:8px"><button class="btn primary" id="hGo">${icon("briefcase", 16)}Hire and start</button><button class="btn" id="hSaveTpl" title="Keep this title and brief as a template (in this browser)">${icon("star", 15)}Save as a template</button><button class="btn ghost" id="hImportTpl" title="Paste a brief code a teammate shared">${icon("download", 15)}Import a code</button><button class="btn ghost" id="hClear">Clear</button></div>`)}
       ${section("Office lanes", `<div id="laneList">${laneListHtml()}</div>`)}`,
       bind(root) {

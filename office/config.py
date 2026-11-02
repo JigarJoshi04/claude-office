@@ -25,6 +25,8 @@ DEFAULT_PORT = 7420
 # Seat colours, in fixed order: validated for lightness, chroma, colour-blind separation and contrast on dark.
 PALETTE = ["#d95926", "#3987e5", "#199e70", "#9085e9", "#c98500", "#d55181"]
 ASTRA_COLOR = "#008300"
+COPILOT_COLOR = "#d55181"     # the palette's last colour: no other seat takes it by default (see copilot_seat_meta)
+COPILOT_LOOK = {"style": 4, "glasses": True}   # a pilot's cap and aviators, until one is picked in the character creator
 
 DEFAULTS: dict = {
     "port": DEFAULT_PORT,
@@ -54,6 +56,11 @@ DEFAULTS: dict = {
     "lane_policy": {"roots": [], "allow_full_trust": True, "memory_max": "50%", "tasks_max": 4096},
     "usage_poll_seconds": 150,
     "codex": {"enabled": True, "label": "Astra", "seat_id": "astra"},
+    # The GitHub Copilot CLI seat. Its lanes run `copilot -p` with this model and reasoning effort; its plan is read
+    # with `gh api copilot_internal/user` every poll_seconds. An AI credit is worth credit_usd, and the seat includes
+    # included_credits a month (Copilot Business: 1,900, its $19 seat); what is used past them is overage.
+    "copilot": {"enabled": True, "label": "Copilot", "seat_id": "copilot", "model": "claude-opus-5.5", "effort": "high",
+                "poll_seconds": 300, "credit_usd": 0.01, "included_credits": 1900},
 }
 
 _SEAT_DIR = re.compile(r"^\.claude(\d*)$")
@@ -139,6 +146,55 @@ def codex_seat_meta(cfg: dict) -> dict | None:
     }
 
 
+def copilot_binary() -> str | None:
+    """The copilot CLI: on PATH, or where npm puts it for one user (~/.local/bin)."""
+    found = shutil.which("copilot")
+    local = HOME / ".local" / "bin" / "copilot"
+    return found or (str(local) if local.exists() else None)
+
+
+COPILOT_EFFORTS = ("low", "medium", "high", "xhigh")
+
+
+def copilot_settings(cfg: dict) -> dict:
+    """The Copilot seat's settings with their defaults, each checked (a bad value falls back to the default)."""
+    d, c = DEFAULTS["copilot"], cfg.get("copilot") if isinstance(cfg.get("copilot"), dict) else {}
+    num = lambda k, lo, hi: (float(c[k]) if isinstance(c.get(k), (int, float)) and not isinstance(c.get(k), bool)
+                             and lo <= c[k] <= hi else float(d[k]))
+    model = c.get("model")
+    return {"model": model if isinstance(model, str) and re.fullmatch(r"[a-z0-9][a-z0-9.\-]{1,60}", model) else d["model"],
+            "effort": c.get("effort") if c.get("effort") in COPILOT_EFFORTS else d["effort"],
+            "poll_seconds": max(60.0, min(300.0, num("poll_seconds", 60, 86400))),   # 5 minutes at most: the burn rate needs it
+            "credit_usd": num("credit_usd", 0, 100), "included_credits": num("included_credits", 0, 10_000_000)}
+
+
+def copilot_seat_meta(cfg: dict) -> dict | None:
+    """The Copilot seat, when the copilot CLI and ~/.copilot are both here (and it is not turned off or hidden)."""
+    c = cfg.get("copilot") if isinstance(cfg.get("copilot"), dict) else {}
+    if not c.get("enabled", True) or not (HOME / ".copilot").is_dir() or not copilot_binary():
+        return None
+    seat_id = c.get("seat_id") or "copilot"
+    over = cfg.get("seats", {}).get(seat_id, {})
+    if over.get("hidden"):
+        return None
+    st = copilot_settings(cfg)
+    return {
+        "id": seat_id,
+        "kind": "copilot",
+        "config_dir": str(HOME / ".copilot"),
+        "label": over.get("label", c.get("label", "Copilot")),
+        "nickname": over.get("nickname"),
+        "role": over.get("role"),
+        "motto": over.get("motto"),
+        "style": over.get("style"),
+        "plan_usd": over.get("plan_usd"),
+        "look": over.get("look") or dict(COPILOT_LOOK),
+        "color": over.get("color", COPILOT_COLOR),
+        "model": st["model"],
+        "effort": st["effort"],
+    }
+
+
 def read_state(path: Path | None):
     """A state file's JSON, or None when it is missing. A file that no longer parses is moved aside as
     "<name>.broken-<when>" first, so a fresh one never writes over what might still be rescued."""
@@ -158,7 +214,7 @@ def read_state(path: Path | None):
         return None
 
 
-STATE_FILES = ("tokens.json", "career.json", "asks.json", "days.json", "usage-history.json", "loose-roots.json", "quiet.json", "weeks.json", "reminders.json", "risks-seen.json", "trust.json", "save.json", "utilities.json")
+STATE_FILES = ("copilot-usage.json", "tokens.json", "career.json", "asks.json", "days.json", "usage-history.json", "loose-roots.json", "quiet.json", "weeks.json", "reminders.json", "risks-seen.json", "trust.json", "save.json", "utilities.json")
 
 
 def backup_state(now: float | None = None, keep: int = 7) -> Path | None:

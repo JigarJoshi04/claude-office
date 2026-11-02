@@ -3,6 +3,7 @@ import { esc, fmtTok, live, hydratePortraits, avatar, dayTime, STATE_LABEL, cloc
 import { timeline, bindTips } from "./charts.js";
 import { icon } from "./icons.js";
 import { personaFor, leftOf, voice, diary } from "./personas.js";
+import { isCopilot, creditsSummary, creditsBar } from "./copilot.js";
 import { localDay } from "./goals.js";
 import { tokensCard, bindTokens, focusKey, refocus as refocusTokens, waitCard, waitFor } from "./tokens.js";
 
@@ -39,7 +40,11 @@ export function renderBoard(el, app) {
         <span class="pill ${vo.tone}">${esc(vo.word)}</span></div>
       <div class="moodline">“${esc(vo.line)}”</div>
       ${s.career ? `<div class="tlevel"><span class="lvchip">Lv ${s.career.level}</span><span>${esc(s.career.title)}</span><div class="xpbar"><i style="width:${Math.round(s.career.progress * 100)}%"></i></div><span class="tro">${icon("trophy", 13)}${Object.keys(s.career.unlocked).length}</span></div>` : ""}
-      ${meter("five_hour", "5-hour window")}${meter("weekly", "This week")}
+      ${isCopilot(s) ? (() => { const sm = creditsSummary(s.credits, snap.now), ok = sm && !sm.error;
+        return `<div style="margin-top:10px"><div class="row between" style="font-size:13px"><span class="muted">AI credits this month</span><b>${ok ? esc(sm.usd) : "–"}</b></div>
+          ${ok ? creditsBar(sm) : `<div class="minibar"><i style="width:0%"></i></div>`}
+          <div class="hint" style="margin-top:4px">${ok ? `${esc(sm.credits)} credits${sm.over ? ` · ${esc(sm.overUsd)} overage` : ""}${sm.burn ? ` · ${esc(sm.burn.usd)} last hour` : ""} · resets ${esc(sm.reset.day)}` : "No reading yet"}</div></div>`; })()
+        : meter("five_hour", "5-hour window") + meter("weekly", "This week")}
       <div style="margin-top:14px">${L.length ? L.map(x => `<div class="sess" data-seat="${esc(s.id)}" data-id="${esc(x.id)}" role="button" tabindex="0" aria-label="Open ${esc(x.name)}, ${esc(STATE_LABEL[x.state] || x.state)}">${avatar(x.id, s.color, x.kind === "desk" ? "headset" : "")}
         <span class="nm"><span class="sdot ${x.state}"></span>${esc(x.name)}</span><span class="pill">${esc(STATE_LABEL[x.state] || x.state)}</span>
         <span class="ac">${app.privacy() && x.kind === "desk" ? "<span class='private'>hidden</span>" : esc(x.activity || "")}</span></div>`).join("") : `<div class="muted" style="font-size:14px">Nobody at the desk.</div>`}</div>
